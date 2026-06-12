@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -7,9 +7,7 @@ import pytest
 from kumoapi.pquery import ValidatedPredictiveQuery
 from kumoapi.pquery.AST import Column, Condition, Constant
 from kumoapi.rfm import (
-    RegressionInferenceConfig,
     RFMExplanationResponse,
-    RFMPredictRequest,
     RFMPredictResponse,
 )
 from kumoapi.rfm.context import REV_REL, EdgeLayout
@@ -22,7 +20,7 @@ from kumoai.rfm.rfm import Explanation
 
 
 class MockAPI:
-    def predict(self, request: bytes) -> RFMPredictResponse:
+    def predict(self, request: dict[str, Any]) -> RFMPredictResponse:
         return RFMPredictResponse(prediction={
             'columns': ['ENTITY', 'True_PROB'],
             'data': [[0, 0.15]],
@@ -732,10 +730,9 @@ def test_regression_quantile_output_config(
     captured_config = None
 
     class MockQuantileAPI:
-        def predict(self, request: bytes) -> RFMPredictResponse:
+        def predict(self, request: dict[str, Any]) -> RFMPredictResponse:
             nonlocal captured_config
-            captured_config = RFMPredictRequest.from_bytes(
-                request).inference_config
+            captured_config = request['inference']['inference_config']
             return RFMPredictResponse(
                 prediction={
                     'columns': columns,
@@ -752,8 +749,8 @@ def test_regression_quantile_output_config(
         verbose=False,
     )
 
-    assert isinstance(captured_config, RegressionInferenceConfig)
-    assert captured_config.output_type == 'quantiles'
+    assert captured_config['kind'] == 'regression'
+    assert captured_config['output_type'] == 'quantiles'
     assert list(df.columns) == columns
 
 
@@ -1035,7 +1032,7 @@ def test_explanation_warning_flows_from_api_response(
     mock_resp.warning = "Cross-region fallback used."
 
     class MockExplainAPI:
-        def explain(self, request: bytes,
+        def explain(self, request: dict[str, Any],
                     skip_summary: bool = False) -> RFMExplanationResponse:
             return mock_resp
 
