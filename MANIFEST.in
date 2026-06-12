@@ -1,0 +1,4 @@
+# We don't release source code (aka sdist), so we technically do not need to
+# write MANIFEST.in at all, but it is useful to avoid including kumolib in the
+# source distribution when someone accidentally build and distribute sdist.
+global-exclude *
