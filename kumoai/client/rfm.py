@@ -14,6 +14,7 @@ from kumoapi.rfm import (
 
 from kumoai.client import KumoClient
 from kumoai.client.endpoints import RFMEndpoints
+from kumoai.client.generated.tfm_api import TFMOperations
 from kumoai.client.utils import parse_response, raise_on_error
 
 
@@ -32,7 +33,7 @@ class RFMAPI:
             RFMPredictResponse containing the predictions
         """
         response = self._client._request(
-            RFMEndpoints.predictions,
+            TFMOperations.create_prediction.endpoint,
             json=request,
             headers={'Content-Type': 'application/json'},
         )
@@ -59,7 +60,7 @@ class RFMAPI:
         metadata['explain'] = {'generate_summary': not skip_summary}
         request['metadata'] = metadata
         response = self._client._request(
-            RFMEndpoints.predictions,
+            TFMOperations.create_prediction.endpoint,
             json=request,
             headers={'Content-Type': 'application/json'},
         )
@@ -76,7 +77,7 @@ class RFMAPI:
             RFMEvaluateResponse containing the computed metrics
         """
         response = self._client._request(
-            RFMEndpoints.predictions,
+            TFMOperations.create_prediction.endpoint,
             json=request,
             headers={'Content-Type': 'application/json'},
         )

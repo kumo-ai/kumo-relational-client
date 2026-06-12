@@ -61,7 +61,7 @@ def test_predict_posts_universal_json_payload(
     assert payload['schema']['relationships']
     assert payload['context']['instance_table']['format'] == 'arrays'
     assert payload['predict']['instance_table']['format'] == 'arrays'
-    assert 'embedding' in payload['output']['fields']
+    assert 'embeddings' in payload['output']['fields']
     assert payload['inference']['run_mode'] == 'fast'
     assert payload['inference']['inference_config']['kind'] == 'regression'
     assert payload['inference']['inference_config']['output_type'] == (

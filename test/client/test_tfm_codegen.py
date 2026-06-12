@@ -1,0 +1,177 @@
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+import pytest
+
+from kumoai.client.endpoints import HTTPMethod
+from kumoai.client.generated.tfm_api import (
+    TFM_API_VERSION,
+    TFM_ENDPOINTS_BY_OPERATION_ID,
+    TFM_MODEL_KUMO_RFM,
+    TFM_OUTPUT_FIELD_EMBEDDINGS,
+    TFMOperations,
+)
+
+
+CANONICAL_SPEC = Path('../docs/v0_tfm_nim_release/api_spec.yaml')
+
+
+def test_generated_tfm_api_runtime_metadata() -> None:
+    operation = TFMOperations.create_prediction
+
+    assert TFM_API_VERSION == 'v1'
+    assert TFM_MODEL_KUMO_RFM == 'kumo-rfm'
+    assert TFM_OUTPUT_FIELD_EMBEDDINGS == 'embeddings'
+    assert operation.operation_id == 'createPrediction'
+    assert operation.request_schema == 'PredictionRequest'
+    assert operation.response_schema == 'PredictionResponse'
+    assert operation.endpoint.method == HTTPMethod.POST
+    assert operation.endpoint.get_path() == '/predictions'
+    assert TFM_ENDPOINTS_BY_OPERATION_ID['createPrediction'] == (
+        operation.endpoint)
+
+
+def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
+    spec = tmp_path / 'api_spec.json'
+    output = tmp_path / 'generated.py'
+    spec.write_text(json.dumps(_minimal_openapi_spec()))
+
+    subprocess.run(
+        [
+            sys.executable,
+            'scripts/generate_tfm_api.py',
+            '--spec',
+            str(spec),
+            '--output',
+            str(output),
+        ],
+        check=True,
+    )
+
+    generated = output.read_text()
+    assert "Source: " in generated
+    assert "class TFMOperations" in generated
+    assert "create_prediction: Final[TFMOperation]" in generated
+    assert "path='/predictions'" in generated
+    assert "TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'" in generated
+    assert "TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'" in generated
+
+    subprocess.run(
+        [
+            sys.executable,
+            'scripts/generate_tfm_api.py',
+            '--spec',
+            str(spec),
+            '--output',
+            str(output),
+            '--check',
+        ],
+        check=True,
+    )
+
+    output.write_text(generated + '\n# stale edit\n')
+    result = subprocess.run(
+        [
+            sys.executable,
+            'scripts/generate_tfm_api.py',
+            '--spec',
+            str(spec),
+            '--output',
+            str(output),
+            '--check',
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert 'not up to date' in result.stderr
+
+
+@pytest.mark.skipif(
+    not CANONICAL_SPEC.exists(),
+    reason='canonical docs checkout is not available beside this repo',
+)
+def test_generated_tfm_api_matches_local_canonical_spec() -> None:
+    pytest.importorskip('yaml')
+    from scripts.generate_tfm_api import generate_code_from_source
+
+    output = Path('kumoai/client/generated/tfm_api.py')
+    expected = generate_code_from_source(
+        str(CANONICAL_SPEC),
+        output_path=output,
+    )
+    assert output.read_text() == expected
+
+
+def _minimal_openapi_spec() -> dict:
+    return {
+        'openapi': '3.0.0',
+        'paths': {
+            '/v1/predictions': {
+                'post': {
+                    'operationId': 'createPrediction',
+                    'summary': 'Run a one-shot TFM prediction',
+                    'requestBody': {
+                        'content': {
+                            'application/json': {
+                                'schema': {
+                                    '$ref':
+                                    '#/components/schemas/PredictionRequest',
+                                },
+                            },
+                        },
+                    },
+                    'responses': {
+                        '200': {
+                            'content': {
+                                'application/json': {
+                                    'schema': {
+                                        '$ref':
+                                        '#/components/schemas/'
+                                        'PredictionResponse',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        },
+        'components': {
+            'schemas': {
+                'PredictionRequest': {
+                    'properties': {
+                        'version': {
+                            'enum': ['v1'],
+                        },
+                        'model': {
+                            'enum': ['tabicl', 'kumo-rfm'],
+                        },
+                    },
+                },
+                'PredictionResponse': {},
+                'OutputSpec': {
+                    'properties': {
+                        'fields': {
+                            'items': {
+                                'enum': [
+                                    'prediction',
+                                    'probabilities',
+                                    'embeddings',
+                                ],
+                            },
+                        },
+                    },
+                },
+                'TaskSpec': {
+                    'properties': {
+                        'kind': {
+                            'enum': ['classification', 'regression'],
+                        },
+                    },
+                },
+            },
+        },
+    }

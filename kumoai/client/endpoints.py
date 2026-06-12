@@ -31,6 +31,5 @@ class Endpoint:
 class RFMEndpoints:
     BASE: Final[str] = "/rfm"
 
-    predictions = Endpoint("/predictions", HTTPMethod.POST)
     validate_query = Endpoint(f"{BASE}/validate_query", HTTPMethod.POST)
     parse_query = Endpoint(f"{BASE}/parse_query", HTTPMethod.POST)

@@ -14,6 +14,13 @@ from kumoapi.rfm.inference import (
 )
 from kumoapi.task import TaskType
 from kumoapi.typing import Stype
+from kumoai.client.generated.tfm_api import (
+    TFM_API_VERSION,
+    TFM_MODEL_KUMO_RFM,
+    TFM_OUTPUT_FIELD_EMBEDDINGS,
+    TFM_OUTPUT_FIELD_PREDICTION,
+    TFM_OUTPUT_FIELD_PROBABILITIES,
+)
 
 INSTANCE_ID = 'instance_id'
 SYNTHETIC_NODE_ID = '__node_id'
@@ -121,8 +128,8 @@ def _base_payload(
     metadata['num_prediction_examples'] = context.num_test
 
     return {
-        'version': 'v1',
-        'model': 'kumo-rfm',
+        'version': TFM_API_VERSION,
+        'model': TFM_MODEL_KUMO_RFM,
         'task': _task_spec(context),
         'schema': _schema_spec(context, tables),
         'context': {
@@ -516,11 +523,11 @@ def _output_fields(
     return_embeddings: bool,
     explain: bool,
 ) -> list[str]:
-    fields = ['prediction']
+    fields = [TFM_OUTPUT_FIELD_PREDICTION]
     if TaskType(task_type).is_classification:
-        fields.append('probabilities')
+        fields.append(TFM_OUTPUT_FIELD_PROBABILITIES)
     if return_embeddings:
-        fields.append('embedding')
+        fields.append(TFM_OUTPUT_FIELD_EMBEDDINGS)
     if explain:
         fields.extend(['explanation', 'summary'])
     return fields
