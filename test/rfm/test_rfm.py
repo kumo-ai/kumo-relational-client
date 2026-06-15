@@ -1032,7 +1032,7 @@ def test_explanation_warning_flows_from_api_response(
     mock_resp.warning = "Cross-region fallback used."
 
     class MockExplainAPI:
-        def explain(self, request: dict[str, Any],
+        def explain(self, request: bytes,
                     skip_summary: bool = False) -> RFMExplanationResponse:
             return mock_resp
 

@@ -44,7 +44,6 @@ from kumoai.rfm.base import DataBackend, Sampler
 from kumoai.rfm.base.utils import Timestamp
 from kumoai.rfm.payload import (
     context_size_stats,
-    evaluate_request_to_json,
     payload_size_bytes,
     predict_request_to_json,
 )
@@ -731,19 +730,23 @@ class KumoRFM:
                     inference_config=inference_config,
                     return_embeddings=return_embeddings,
                 )
-                request_payload = predict_request_to_json(
-                    request,
-                    explain=explain_config is not None,
-                    skip_summary=explain_config.skip_summary
-                    if explain_config is not None else False,
-                )
-                request_size = payload_size_bytes(request_payload)
+                if explain_config is not None:
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings('ignore', message='gencode')
+                        request_msg = request.to_protobuf()
+                        request_data = request_msg.SerializeToString()
+                    request_size = len(request_data)
+                else:
+                    request_payload = predict_request_to_json(request)
+                    request_size = payload_size_bytes(request_payload)
                 if start == 0:
                     logger.log(f"Generated context of size "
                                f"{request_size / (1024*1024):.2f}MB")
 
                 if request_size > _MAX_SIZE:
-                    stats = context_size_stats(context)
+                    stats = (Context.get_memory_stats(request_msg.context)
+                             if explain_config is not None else
+                             context_size_stats(context))
                     raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats))
 
                 if start == 0 and task.num_prediction_examples > batch_size:
@@ -754,7 +757,7 @@ class KumoRFM:
                     try:
                         if explain_config is not None:
                             resp = self._api_client.explain(
-                                request=request_payload,
+                                request=request_data,
                                 skip_summary=explain_config.skip_summary,
                             )
                             summary = resp.summary
@@ -1035,18 +1038,20 @@ class KumoRFM:
                 use_prediction_time=use_prediction_time,
                 inference_config=inference_config,
             )
-            request_payload = evaluate_request_to_json(request)
-            request_size = payload_size_bytes(request_payload)
+            with warnings.catch_warnings():
+                warnings.filterwarnings('ignore', message='Protobuf gencode')
+                request_msg = request.to_protobuf()
+                request_bytes = request_msg.SerializeToString()
             logger.log(f"Generated context of size "
-                       f"{request_size / (1024*1024):.2f}MB")
+                       f"{len(request_bytes) / (1024*1024):.2f}MB")
 
-            if request_size > _MAX_SIZE:
-                stats_msg = context_size_stats(context)
+            if len(request_bytes) > _MAX_SIZE:
+                stats_msg = Context.get_memory_stats(request_msg.context)
                 raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats_msg))
 
             for attempt in range(self._num_retries + 1):
                 try:
-                    resp = self._api_client.evaluate(request_payload)
+                    resp = self._api_client.evaluate(request_bytes)
                     break
                 except HTTPException as e:
                     if attempt == self._num_retries:

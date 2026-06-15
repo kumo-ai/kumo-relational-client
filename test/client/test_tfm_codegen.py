@@ -7,6 +7,7 @@ import pytest
 
 from kumoai.client.endpoints import HTTPMethod
 from kumoai.client.generated.tfm_api import (
+    PredictionResponse,
     TFM_API_VERSION,
     TFM_ENDPOINTS_BY_OPERATION_ID,
     TFM_MODEL_KUMO_RFM,
@@ -33,6 +34,36 @@ def test_generated_tfm_api_runtime_metadata() -> None:
         operation.endpoint)
 
 
+def test_generated_prediction_response_parser() -> None:
+    response = PredictionResponse.from_dict({
+        'id': 'pred-1',
+        'model': 'kumo-rfm',
+        'predictions': [{
+            'id': 7,
+            'prediction': True,
+            'probabilities': {
+                'false': 0.25,
+                'true': 0.75,
+            },
+            'embeddings': [0.1, 0.2],
+        }],
+        'metadata': {
+            'version': 'v1',
+            'task_kind': 'classification',
+        },
+    })
+
+    assert response.id == 'pred-1'
+    assert response.model == 'kumo-rfm'
+    assert response.metadata['version'] == 'v1'
+    assert len(response.predictions) == 1
+    item = response.predictions[0]
+    assert item.id == '7'
+    assert item.prediction is True
+    assert item.probabilities == {'false': 0.25, 'true': 0.75}
+    assert item.embeddings == (0.1, 0.2)
+
+
 def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     spec = tmp_path / 'api_spec.json'
     output = tmp_path / 'generated.py'
@@ -53,6 +84,7 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     generated = output.read_text()
     assert "Source: " in generated
     assert "class TFMOperations" in generated
+    assert "class PredictionResponse" in generated
     assert "create_prediction: Final[TFMOperation]" in generated
     assert "path='/predictions'" in generated
     assert "TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'" in generated
@@ -151,6 +183,7 @@ def _minimal_openapi_spec() -> dict:
                         },
                     },
                 },
+                'PredictionItem': {},
                 'PredictionResponse': {},
                 'OutputSpec': {
                     'properties': {

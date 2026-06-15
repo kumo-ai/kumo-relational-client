@@ -3,7 +3,7 @@
 # Source SHA256: f4858fb51cca64df4326196fb4ba63afc7c0cb3097d5e08caaf0dd230dca8158
 
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final, Mapping
 
 from kumoai.client.endpoints import Endpoint, HTTPMethod
 
@@ -59,6 +59,77 @@ TFM_TASK_KIND_VALUES: Final[tuple[str, ...]] = (
 )
 
 
+@dataclass(frozen=True)
+class PredictionItem:
+    id: str
+    prediction: Any | None = None
+    probabilities: dict[str, float] | None = None
+    scores: tuple[float, ...] | None = None
+    rankings: tuple[dict[str, Any], ...] | None = None
+    embeddings: tuple[float, ...] | None = None
+    quantiles: dict[str, float] | None = None
+    metadata: dict[str, Any] | None = None
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionItem":
+        return cls(
+            id=str(data['id']),
+            prediction=data.get('prediction'),
+            probabilities=_float_dict(data.get('probabilities')),
+            scores=_float_tuple(data.get('scores')),
+            rankings=_mapping_tuple(data.get('rankings')),
+            embeddings=_float_tuple(data.get('embeddings')),
+            quantiles=_float_dict(data.get('quantiles')),
+            metadata=_dict_or_none(data.get('metadata')),
+        )
+
+
+@dataclass(frozen=True)
+class PredictionResponse:
+    id: str
+    model: str
+    predictions: tuple[PredictionItem, ...]
+    metadata: dict[str, Any]
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionResponse":
+        return cls(
+            id=str(data['id']),
+            model=str(data['model']),
+            predictions=tuple(
+                PredictionItem.from_dict(item)
+                for item in data.get('predictions', [])
+            ),
+            metadata=dict(data.get('metadata', {})),
+        )
+
+
+def _float_dict(value: Any) -> dict[str, float] | None:
+    if value is None:
+        return None
+    if not isinstance(value, Mapping):
+        raise TypeError('Expected mapping value')
+    return {str(key): float(val) for key, val in value.items()}
+
+
+def _float_tuple(value: Any) -> tuple[float, ...] | None:
+    if value is None:
+        return None
+    return tuple(float(item) for item in value)
+
+
+def _mapping_tuple(value: Any) -> tuple[dict[str, Any], ...] | None:
+    if value is None:
+        return None
+    return tuple(dict(item) for item in value)
+
+
+def _dict_or_none(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return dict(value)
+
+
 TFM_SCHEMA_NAMES: Final[tuple[str, ...]] = (
     'ArraysTableData',
     'ArrowIpcBase64TableData',
@@ -108,6 +179,8 @@ __all__ = [
     'TFMOperations',
     'TFM_ENDPOINTS_BY_OPERATION_ID',
     'TFM_SCHEMA_NAMES',
+    'PredictionItem',
+    'PredictionResponse',
     'TFM_API_VERSION',
     'TFM_API_VERSION_VALUES',
     'TFM_MODEL_KUMO_RFM',

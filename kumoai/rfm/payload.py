@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from kumoapi.model_plan import RunMode
-from kumoapi.rfm import RFMEvaluateRequest, RFMPredictRequest
+from kumoapi.rfm import RFMPredictRequest
 from kumoapi.rfm.context import Context, EdgeLayout, REV_REL
 from kumoapi.rfm.inference import (
     ClassificationInferenceConfig,
@@ -41,14 +41,10 @@ class PayloadTables:
 
 def predict_request_to_json(
     request: RFMPredictRequest,
-    *,
-    explain: bool = False,
-    skip_summary: bool = False,
 ) -> dict[str, Any]:
     output_fields = _output_fields(
         request.context.task_type,
         return_embeddings=request.return_embeddings,
-        explain=explain,
     )
     payload = _base_payload(
         context=request.context,
@@ -58,28 +54,9 @@ def predict_request_to_json(
         output={'fields': output_fields},
         metadata={
             'source_query': request.query,
-            'operation': 'explain' if explain else 'predict',
         },
     )
-    if explain:
-        payload['metadata']['explain'] = {
-            'generate_summary': not skip_summary,
-        }
     return payload
-
-
-def evaluate_request_to_json(request: RFMEvaluateRequest) -> dict[str, Any]:
-    output: dict[str, Any] = {'fields': ['metrics']}
-    if request.metrics is not None:
-        output['metrics'] = request.metrics
-    return _base_payload(
-        context=request.context,
-        run_mode=request.run_mode,
-        use_prediction_time=request.use_prediction_time,
-        inference_config=request.inference_config,
-        output=output,
-        metadata={'operation': 'evaluate'},
-    )
 
 
 def payload_size_bytes(payload: dict[str, Any]) -> int:
@@ -521,15 +498,12 @@ def _output_fields(
     task_type: TaskType,
     *,
     return_embeddings: bool,
-    explain: bool,
 ) -> list[str]:
     fields = [TFM_OUTPUT_FIELD_PREDICTION]
     if TaskType(task_type).is_classification:
         fields.append(TFM_OUTPUT_FIELD_PROBABILITIES)
     if return_embeddings:
         fields.append(TFM_OUTPUT_FIELD_EMBEDDINGS)
-    if explain:
-        fields.extend(['explanation', 'summary'])
     return fields
 
 

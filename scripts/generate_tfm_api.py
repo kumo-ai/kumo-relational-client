@@ -106,7 +106,9 @@ def generate_code(
 ) -> str:
     operations = _extract_operations(spec, strip_prefix=strip_prefix)
     constants = _extract_constants(spec)
-    schema_names = tuple(sorted(spec.get('components', {}).get('schemas', {})))
+    schemas = spec.get('components', {}).get('schemas', {})
+    schema_names = tuple(sorted(schemas))
+    response_model_names = _generated_response_model_names(schemas)
     spec_hash = hashlib.sha256(spec_text.encode()).hexdigest()
 
     lines = [
@@ -115,7 +117,7 @@ def generate_code(
         f'# Source SHA256: {spec_hash}',
         '',
         'from dataclasses import dataclass',
-        'from typing import Final',
+        'from typing import Any, Final, Mapping',
         '',
         'from kumoai.client.endpoints import Endpoint, HTTPMethod',
         '',
@@ -132,6 +134,7 @@ def generate_code(
     ]
 
     lines.extend(_constant_lines(constants))
+    lines.extend(_response_model_lines(schemas))
     lines.extend(_tuple_constant_lines('TFM_SCHEMA_NAMES', schema_names))
     lines.extend(['', '', 'class TFMOperations:'])
     if operations:
@@ -159,6 +162,7 @@ def generate_code(
         "    'TFM_ENDPOINTS_BY_OPERATION_ID',",
         "    'TFM_SCHEMA_NAMES',",
     ])
+    lines.extend(f"    {name!r}," for name in response_model_names)
     lines.extend(f"    {name!r}," for name in sorted(constants))
     lines.extend([
         ']',
@@ -277,6 +281,93 @@ def _constant_lines(
             lines.append(f'{name}: Final[str] = {value!r}')
     lines.extend(['', ''])
     return lines
+
+
+def _generated_response_model_names(schemas: dict[str, Any]) -> tuple[str, ...]:
+    names = []
+    if 'PredictionItem' in schemas:
+        names.append('PredictionItem')
+    if 'PredictionResponse' in schemas:
+        names.append('PredictionResponse')
+    return tuple(names)
+
+
+def _response_model_lines(schemas: dict[str, Any]) -> list[str]:
+    if not {'PredictionItem', 'PredictionResponse'} <= set(schemas):
+        return []
+    return [
+        '@dataclass(frozen=True)',
+        'class PredictionItem:',
+        '    id: str',
+        '    prediction: Any | None = None',
+        '    probabilities: dict[str, float] | None = None',
+        '    scores: tuple[float, ...] | None = None',
+        '    rankings: tuple[dict[str, Any], ...] | None = None',
+        '    embeddings: tuple[float, ...] | None = None',
+        '    quantiles: dict[str, float] | None = None',
+        '    metadata: dict[str, Any] | None = None',
+        '',
+        '    @classmethod',
+        '    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionItem":',
+        '        return cls(',
+        "            id=str(data['id']),",
+        "            prediction=data.get('prediction'),",
+        "            probabilities=_float_dict(data.get('probabilities')),",
+        "            scores=_float_tuple(data.get('scores')),",
+        "            rankings=_mapping_tuple(data.get('rankings')),",
+        "            embeddings=_float_tuple(data.get('embeddings')),",
+        "            quantiles=_float_dict(data.get('quantiles')),",
+        "            metadata=_dict_or_none(data.get('metadata')),",
+        '        )',
+        '',
+        '',
+        '@dataclass(frozen=True)',
+        'class PredictionResponse:',
+        '    id: str',
+        '    model: str',
+        '    predictions: tuple[PredictionItem, ...]',
+        '    metadata: dict[str, Any]',
+        '',
+        '    @classmethod',
+        '    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionResponse":',
+        '        return cls(',
+        "            id=str(data['id']),",
+        "            model=str(data['model']),",
+        '            predictions=tuple(',
+        '                PredictionItem.from_dict(item)',
+        "                for item in data.get('predictions', [])",
+        '            ),',
+        "            metadata=dict(data.get('metadata', {})),",
+        '        )',
+        '',
+        '',
+        'def _float_dict(value: Any) -> dict[str, float] | None:',
+        '    if value is None:',
+        '        return None',
+        '    if not isinstance(value, Mapping):',
+        "        raise TypeError('Expected mapping value')",
+        '    return {str(key): float(val) for key, val in value.items()}',
+        '',
+        '',
+        'def _float_tuple(value: Any) -> tuple[float, ...] | None:',
+        '    if value is None:',
+        '        return None',
+        '    return tuple(float(item) for item in value)',
+        '',
+        '',
+        'def _mapping_tuple(value: Any) -> tuple[dict[str, Any], ...] | None:',
+        '    if value is None:',
+        '        return None',
+        '    return tuple(dict(item) for item in value)',
+        '',
+        '',
+        'def _dict_or_none(value: Any) -> dict[str, Any] | None:',
+        '    if value is None:',
+        '        return None',
+        '    return dict(value)',
+        '',
+        '',
+    ]
 
 
 def _tuple_constant_lines(name: str, values: tuple[str, ...]) -> list[str]:

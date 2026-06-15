@@ -14,7 +14,11 @@ from kumoapi.rfm import (
 
 from kumoai.client import KumoClient
 from kumoai.client.endpoints import RFMEndpoints
-from kumoai.client.generated.tfm_api import TFMOperations
+from kumoai.client.generated.tfm_api import (
+    PredictionItem,
+    PredictionResponse,
+    TFMOperations,
+)
 from kumoai.client.utils import parse_response, raise_on_error
 
 
@@ -38,49 +42,46 @@ class RFMAPI:
             headers={'Content-Type': 'application/json'},
         )
         raise_on_error(response)
-        return parse_response(RFMPredictResponse, response)
+        prediction_response = PredictionResponse.from_dict(response.json())
+        return _prediction_response_to_rfm(prediction_response)
 
     def explain(
         self,
-        request: Mapping[str, Any],
+        request: bytes,
         skip_summary: bool = False,
     ) -> RFMExplanationResponse:
         """Explain the RFM model on the given context.
 
         Args:
-            request: The predict request as a universal TFM JSON envelope.
+            request: The predict request as serialized protobuf.
             skip_summary: Whether to skip generating a human-readable summary
                 of the explanation.
 
         Returns:
             RFMPredictResponse containing the explanations
         """
-        request = dict(request)
-        metadata = dict(request.get('metadata', {}))
-        metadata['explain'] = {'generate_summary': not skip_summary}
-        request['metadata'] = metadata
+        # TODO: Move explain onto generated TFM metadata once the canonical
+        # OpenAPI spec defines an explain operation and response shape.
+        params: dict[str, Any] = {'generate_summary': not skip_summary}
         response = self._client._request(
-            TFMOperations.create_prediction.endpoint,
-            json=request,
-            headers={'Content-Type': 'application/json'},
-        )
+            RFMEndpoints.explain, data=request, params=params,
+            headers={'Content-Type': 'application/x-protobuf'})
         raise_on_error(response)
         return parse_response(RFMExplanationResponse, response)
 
-    def evaluate(self, request: Mapping[str, Any]) -> RFMEvaluateResponse:
+    def evaluate(self, request: bytes) -> RFMEvaluateResponse:
         """Evaluate the RFM model on the given context.
 
         Args:
-            request: The evaluate request as a universal TFM JSON envelope.
+            request: The evaluate request as serialized protobuf.
 
         Returns:
             RFMEvaluateResponse containing the computed metrics
         """
+        # Evaluation is intentionally not part of the TFM prediction spec.
         response = self._client._request(
-            TFMOperations.create_prediction.endpoint,
-            json=request,
-            headers={'Content-Type': 'application/json'},
-        )
+            RFMEndpoints.evaluate, data=request,
+            headers={'Content-Type': 'application/x-protobuf'})
         raise_on_error(response)
         return parse_response(RFMEvaluateResponse, response)
 
@@ -119,3 +120,46 @@ class RFMAPI:
                                          json=to_json_dict(request))
         raise_on_error(response)
         return parse_response(RFMParseQueryResponse, response)
+
+
+def _prediction_response_to_rfm(
+        response: PredictionResponse) -> RFMPredictResponse:
+    rows: list[dict[str, Any]] = [
+        _prediction_item_to_row(item) for item in response.predictions
+    ]
+    columns: list[str] = []
+    for row in rows:
+        for column_name in row:
+            if column_name not in columns:
+                columns.append(column_name)
+    return RFMPredictResponse(prediction={
+        'columns': columns,
+        'data': [[row.get(column_name) for column_name in columns]
+                 for row in rows],
+    })
+
+
+def _prediction_item_to_row(item: PredictionItem) -> dict[str, Any]:
+    row: dict[str, Any] = {'ENTITY': _coerce_prediction_id(item.id)}
+    if item.prediction is not None:
+        row['prediction'] = item.prediction
+    if item.probabilities is not None:
+        for name, value in item.probabilities.items():
+            row[f'{name}_PROB'] = value
+    if item.scores is not None:
+        row['scores'] = list(item.scores)
+    if item.rankings is not None:
+        row['rankings'] = [dict(ranking) for ranking in item.rankings]
+    if item.embeddings is not None:
+        row['embeddings'] = list(item.embeddings)
+    if item.quantiles is not None:
+        for name, value in item.quantiles.items():
+            row[f'q_{name}'] = value
+    return row
+
+
+def _coerce_prediction_id(value: str) -> str | int:
+    try:
+        return int(value)
+    except ValueError:
+        return value

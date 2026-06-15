@@ -31,9 +31,16 @@ def test_predict_posts_universal_json_payload(
         f'{MOCK_URL}/v1/predictions',
         additional_matcher=receptor,
         json={
-            'prediction': {
-                'columns': ['ENTITY', 'SCORE'],
-                'data': [[0, 0.5]],
+            'id': 'pred-test',
+            'model': 'kumo-rfm',
+            'predictions': [{
+                'id': '0',
+                'prediction': 0.5,
+                'embeddings': [0.1, 0.2],
+            }],
+            'metadata': {
+                'version': 'v1',
+                'task_kind': 'regression',
             },
         },
     )
@@ -49,7 +56,11 @@ def test_predict_posts_universal_json_payload(
         verbose=False,
     )
 
-    assert result.to_dict('records') == [{'ENTITY': 0, 'SCORE': 0.5}]
+    assert result.to_dict('records') == [{
+        'ENTITY': 0,
+        'prediction': 0.5,
+        'embeddings': [0.1, 0.2],
+    }]
     assert receptor.headers is not None
     assert receptor.headers['Content-Type'] == 'application/json'
 
@@ -66,7 +77,7 @@ def test_predict_posts_universal_json_payload(
     assert payload['inference']['inference_config']['kind'] == 'regression'
     assert payload['inference']['inference_config']['output_type'] == (
         'quantiles')
-    assert payload['metadata']['operation'] == 'predict'
+    assert 'operation' not in payload['metadata']
 
     payload_text = str(payload)
     assert 'application/x-protobuf' not in payload_text
