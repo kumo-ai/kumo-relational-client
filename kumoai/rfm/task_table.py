@@ -152,8 +152,8 @@ class TaskTable:
     # Target column ###########################################################
 
     @property
-    def evaluate(self) -> bool:
-        r"""Returns ``True`` if this task can be used for model evaluation."""
+    def has_prediction_targets(self) -> bool:
+        r"""Returns ``True`` if prediction rows include target values."""
         return self._target_column in self._pred_df
 
     @property
