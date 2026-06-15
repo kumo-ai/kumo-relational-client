@@ -41,6 +41,9 @@ test=[
     "pytest-mock",
     "requests-mock",
 ]
+codegen=[
+    "pyyaml",
+]
 sqlite=[
     "adbc_driver_sqlite",
 ]

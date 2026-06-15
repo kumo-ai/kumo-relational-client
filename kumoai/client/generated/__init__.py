@@ -1,0 +1,2 @@
+"""Generated client metadata."""
+
