@@ -6,10 +6,7 @@ import pandas as pd
 import pytest
 from kumoapi.pquery import ValidatedPredictiveQuery
 from kumoapi.pquery.AST import Column, Condition, Constant
-from kumoapi.rfm import (
-    RFMExplanationResponse,
-    RFMPredictResponse,
-)
+from kumoapi.rfm import RFMPredictResponse
 from kumoapi.rfm.context import REV_REL, EdgeLayout
 from kumoapi.task import TaskType
 from kumoapi.typing import Dtype, Stype
@@ -1024,20 +1021,24 @@ def test_explanation_warning_display():
 
 def test_explanation_warning_flows_from_api_response(
         user_store_graph: Graph, ltv: ValidatedPredictiveQuery) -> None:
-    """Warning from RFMExplanationResponse is surfaced in Explanation."""
-    mock_resp = MagicMock(spec=RFMExplanationResponse)
-    mock_resp.prediction = {'columns': ['ENTITY', 'SCORE'], 'data': [[1, 0.9]]}
-    mock_resp.summary = "Summary."
-    mock_resp.details = MagicMock()
-    mock_resp.warning = "Cross-region fallback used."
+    """Warning from predictions[].explanation is surfaced in Explanation."""
+    mock_resp = RFMPredictResponse(prediction={
+        'columns': ['ENTITY', 'SCORE', 'explanation'],
+        'data': [[1, 0.9, {
+            'format': 'natural_language_summary',
+            'summary': 'Summary.',
+            'warning': 'Cross-region fallback used.',
+        }]],
+    })
 
-    class MockExplainAPI:
-        def explain(self, request: bytes,
-                    skip_summary: bool = False) -> RFMExplanationResponse:
+    class MockPredictAPI:
+        def predict(self, request: dict[str, Any]) -> RFMPredictResponse:
             return mock_resp
 
     model = KumoRFM(user_store_graph, verbose=False)
-    model._client = MockExplainAPI()  # type: ignore
+    model._client = MockPredictAPI()  # type: ignore
     result = model.predict(ltv, indices=[0], explain=True, verbose=False)
     assert isinstance(result, Explanation)
+    assert result.summary == 'Summary.'
+    assert result.details['format'] == 'natural_language_summary'
     assert result.warning == "Cross-region fallback used."

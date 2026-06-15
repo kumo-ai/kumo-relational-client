@@ -96,7 +96,7 @@ class ExplainConfig(CastMixin):
 class Explanation:
     prediction: pd.DataFrame
     summary: str
-    details: ExplanationConfig
+    details: Any
     warning: str | None = None
 
     @overload
@@ -141,6 +141,34 @@ class Explanation:
 
     def _ipython_display_(self) -> None:
         self.print()
+
+
+def _extract_explanation(
+    prediction: pd.DataFrame,
+    explain_config: ExplainConfig,
+) -> tuple[pd.DataFrame, str, dict[str, Any], str | None]:
+    if 'explanation' not in prediction or prediction.empty:
+        raise RuntimeError(
+            "Prediction response did not include requested explanation.")
+    raw_explanation = prediction['explanation'].iloc[0]
+    if isinstance(raw_explanation, dict):
+        details = dict(raw_explanation)
+    else:
+        details = {
+            'format': 'unknown',
+            'value': raw_explanation,
+        }
+
+    summary = ''
+    if not explain_config.skip_summary:
+        maybe_summary = details.get('summary')
+        if isinstance(maybe_summary, str):
+            summary = maybe_summary
+
+    warning = details.get('warning')
+    if warning is not None:
+        warning = str(warning)
+    return prediction.drop(columns=['explanation']), summary, details, warning
 
 
 class KumoRFM:
@@ -710,7 +738,7 @@ class KumoRFM:
 
             predictions: list[pd.DataFrame] = []
             summary: str | None = None
-            details: ExplanationConfig | None = None
+            details: Any | None = None
             warning: str | None = None
             for start in range(0, task.num_prediction_examples, batch_size):
                 context = self._get_context(
@@ -730,23 +758,17 @@ class KumoRFM:
                     inference_config=inference_config,
                     return_embeddings=return_embeddings,
                 )
-                if explain_config is not None:
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings('ignore', message='gencode')
-                        request_msg = request.to_protobuf()
-                        request_data = request_msg.SerializeToString()
-                    request_size = len(request_data)
-                else:
-                    request_payload = predict_request_to_json(request)
-                    request_size = payload_size_bytes(request_payload)
+                request_payload = predict_request_to_json(
+                    request,
+                    explain=explain_config is not None,
+                )
+                request_size = payload_size_bytes(request_payload)
                 if start == 0:
                     logger.log(f"Generated context of size "
                                f"{request_size / (1024*1024):.2f}MB")
 
                 if request_size > _MAX_SIZE:
-                    stats = (Context.get_memory_stats(request_msg.context)
-                             if explain_config is not None else
-                             context_size_stats(context))
+                    stats = context_size_stats(context)
                     raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats))
 
                 if start == 0 and task.num_prediction_examples > batch_size:
@@ -755,17 +777,11 @@ class KumoRFM:
 
                 for attempt in range(self._num_retries + 1):
                     try:
-                        if explain_config is not None:
-                            resp = self._api_client.explain(
-                                request=request_data,
-                                skip_summary=explain_config.skip_summary,
-                            )
-                            summary = resp.summary
-                            details = resp.details
-                            warning = resp.warning
-                        else:
-                            resp = self._api_client.predict(request_payload)
+                        resp = self._api_client.predict(request_payload)
                         df = pd.DataFrame(**resp.prediction)
+                        if explain_config is not None:
+                            df, summary, details, warning = (
+                                _extract_explanation(df, explain_config))
 
                         # Cast 'ENTITY' to correct data type:
                         if 'ENTITY' in df:

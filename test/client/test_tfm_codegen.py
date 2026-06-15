@@ -12,6 +12,7 @@ from kumoai.client.generated.tfm_api import (
     TFM_ENDPOINTS_BY_OPERATION_ID,
     TFM_MODEL_KUMO_RFM,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
+    TFM_OUTPUT_FIELD_EXPLANATION,
     TFMOperations,
 )
 
@@ -25,6 +26,7 @@ def test_generated_tfm_api_runtime_metadata() -> None:
     assert TFM_API_VERSION == 'v1'
     assert TFM_MODEL_KUMO_RFM == 'kumo-rfm'
     assert TFM_OUTPUT_FIELD_EMBEDDINGS == 'embeddings'
+    assert TFM_OUTPUT_FIELD_EXPLANATION == 'explanation'
     assert operation.operation_id == 'createPrediction'
     assert operation.request_schema == 'PredictionRequest'
     assert operation.response_schema == 'PredictionResponse'
@@ -46,6 +48,10 @@ def test_generated_prediction_response_parser() -> None:
                 'true': 0.75,
             },
             'embeddings': [0.1, 0.2],
+            'explanation': {
+                'format': 'natural_language_summary',
+                'summary': 'Order frequency dropped.',
+            },
         }],
         'metadata': {
             'version': 'v1',
@@ -62,6 +68,10 @@ def test_generated_prediction_response_parser() -> None:
     assert item.prediction is True
     assert item.probabilities == {'false': 0.25, 'true': 0.75}
     assert item.embeddings == (0.1, 0.2)
+    assert item.explanation == {
+        'format': 'natural_language_summary',
+        'summary': 'Order frequency dropped.',
+    }
 
 
 def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
@@ -89,6 +99,7 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     assert "path='/predictions'" in generated
     assert "TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'" in generated
     assert "TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'" in generated
+    assert "TFM_OUTPUT_FIELD_EXPLANATION: Final[str] = 'explanation'" in generated
 
     subprocess.run(
         [
@@ -193,6 +204,7 @@ def _minimal_openapi_spec() -> dict:
                                     'prediction',
                                     'probabilities',
                                     'embeddings',
+                                    'explanation',
                                 ],
                             },
                         },

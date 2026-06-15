@@ -6,6 +6,7 @@ from kumoapi.pquery import ValidatedPredictiveQuery
 from kumoai.client import KumoClient
 from kumoai.client.rfm import RFMAPI
 from kumoai.rfm import Graph, KumoRFM
+from kumoai.rfm.rfm import Explanation
 
 from test.conftest import MOCK_URL
 
@@ -84,3 +85,57 @@ def test_predict_posts_universal_json_payload(
     assert "'batch'" not in payload_text
     assert "'row'" not in payload_text
     assert "'col'" not in payload_text
+
+
+def test_explain_requests_explanation_output_field(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    mock_api: Any,
+) -> None:
+    receptor = JsonPayloadReceptor()
+    mock_api.post(
+        f'{MOCK_URL}/v1/predictions',
+        additional_matcher=receptor,
+        json={
+            'id': 'pred-test',
+            'model': 'kumo-rfm',
+            'predictions': [{
+                'id': '0',
+                'prediction': 0.5,
+                'explanation': {
+                    'format': 'natural_language_summary',
+                    'summary': 'Order frequency dropped.',
+                    'warning': 'Cross-region fallback used.',
+                },
+            }],
+            'metadata': {
+                'version': 'v1',
+                'task_kind': 'regression',
+            },
+        },
+    )
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+
+    result = model.predict(ltv, indices=[0], explain=True, verbose=False)
+
+    assert isinstance(result, Explanation)
+    assert result.prediction.to_dict('records') == [{
+        'ENTITY': 0,
+        'prediction': 0.5,
+    }]
+    assert result.summary == 'Order frequency dropped.'
+    assert result.details == {
+        'format': 'natural_language_summary',
+        'summary': 'Order frequency dropped.',
+        'warning': 'Cross-region fallback used.',
+    }
+    assert result.warning == 'Cross-region fallback used.'
+
+    assert receptor.headers is not None
+    assert receptor.headers['Content-Type'] == 'application/json'
+    payload = receptor.payload
+    assert payload is not None
+    assert 'explanation' in payload['output']['fields']
+    assert 'operation' not in payload['metadata']

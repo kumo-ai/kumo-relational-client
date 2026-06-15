@@ -18,6 +18,7 @@ from kumoai.client.generated.tfm_api import (
     TFM_API_VERSION,
     TFM_MODEL_KUMO_RFM,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
+    TFM_OUTPUT_FIELD_EXPLANATION,
     TFM_OUTPUT_FIELD_PREDICTION,
     TFM_OUTPUT_FIELD_PROBABILITIES,
 )
@@ -41,10 +42,13 @@ class PayloadTables:
 
 def predict_request_to_json(
     request: RFMPredictRequest,
+    *,
+    explain: bool = False,
 ) -> dict[str, Any]:
     output_fields = _output_fields(
         request.context.task_type,
         return_embeddings=request.return_embeddings,
+        explain=explain,
     )
     payload = _base_payload(
         context=request.context,
@@ -498,12 +502,15 @@ def _output_fields(
     task_type: TaskType,
     *,
     return_embeddings: bool,
+    explain: bool,
 ) -> list[str]:
     fields = [TFM_OUTPUT_FIELD_PREDICTION]
     if TaskType(task_type).is_classification:
         fields.append(TFM_OUTPUT_FIELD_PROBABILITIES)
     if return_embeddings:
         fields.append(TFM_OUTPUT_FIELD_EMBEDDINGS)
+    if explain:
+        fields.append(TFM_OUTPUT_FIELD_EXPLANATION)
     return fields
 
 

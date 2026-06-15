@@ -28,6 +28,7 @@ TFM_MODEL_VALUES: Final[tuple[str, ...]] = (
     'kumo-rfm',
 )
 TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'
+TFM_OUTPUT_FIELD_EXPLANATION: Final[str] = 'explanation'
 TFM_OUTPUT_FIELD_PREDICTION: Final[str] = 'prediction'
 TFM_OUTPUT_FIELD_PROBABILITIES: Final[str] = 'probabilities'
 TFM_OUTPUT_FIELD_QUANTILES: Final[str] = 'quantiles'
@@ -40,6 +41,7 @@ TFM_OUTPUT_FIELD_VALUES: Final[tuple[str, ...]] = (
     'rankings',
     'embeddings',
     'quantiles',
+    'explanation',
 )
 TFM_TASK_KIND_BINARY_CLASSIFICATION: Final[str] = 'binary_classification'
 TFM_TASK_KIND_CLASSIFICATION: Final[str] = 'classification'
@@ -68,6 +70,7 @@ class PredictionItem:
     rankings: tuple[dict[str, Any], ...] | None = None
     embeddings: tuple[float, ...] | None = None
     quantiles: dict[str, float] | None = None
+    explanation: dict[str, Any] | None = None
     metadata: dict[str, Any] | None = None
 
     @classmethod
@@ -80,6 +83,7 @@ class PredictionItem:
             rankings=_mapping_tuple(data.get('rankings')),
             embeddings=_float_tuple(data.get('embeddings')),
             quantiles=_float_dict(data.get('quantiles')),
+            explanation=_dict_or_none(data.get('explanation')),
             metadata=_dict_or_none(data.get('metadata')),
         )
 
@@ -187,6 +191,7 @@ __all__ = [
     'TFM_MODEL_TABICL',
     'TFM_MODEL_VALUES',
     'TFM_OUTPUT_FIELD_EMBEDDINGS',
+    'TFM_OUTPUT_FIELD_EXPLANATION',
     'TFM_OUTPUT_FIELD_PREDICTION',
     'TFM_OUTPUT_FIELD_PROBABILITIES',
     'TFM_OUTPUT_FIELD_QUANTILES',

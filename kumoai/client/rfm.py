@@ -4,7 +4,6 @@ from typing import Any
 from kumoapi.json_serde import to_json_dict
 from kumoapi.rfm import (
     RFMEvaluateResponse,
-    RFMExplanationResponse,
     RFMParseQueryRequest,
     RFMParseQueryResponse,
     RFMPredictResponse,
@@ -44,30 +43,6 @@ class RFMAPI:
         raise_on_error(response)
         prediction_response = PredictionResponse.from_dict(response.json())
         return _prediction_response_to_rfm(prediction_response)
-
-    def explain(
-        self,
-        request: bytes,
-        skip_summary: bool = False,
-    ) -> RFMExplanationResponse:
-        """Explain the RFM model on the given context.
-
-        Args:
-            request: The predict request as serialized protobuf.
-            skip_summary: Whether to skip generating a human-readable summary
-                of the explanation.
-
-        Returns:
-            RFMPredictResponse containing the explanations
-        """
-        # TODO: Move explain onto generated TFM metadata once the canonical
-        # OpenAPI spec defines an explain operation and response shape.
-        params: dict[str, Any] = {'generate_summary': not skip_summary}
-        response = self._client._request(
-            RFMEndpoints.explain, data=request, params=params,
-            headers={'Content-Type': 'application/x-protobuf'})
-        raise_on_error(response)
-        return parse_response(RFMExplanationResponse, response)
 
     def evaluate(self, request: bytes) -> RFMEvaluateResponse:
         """Evaluate the RFM model on the given context.
@@ -155,6 +130,8 @@ def _prediction_item_to_row(item: PredictionItem) -> dict[str, Any]:
     if item.quantiles is not None:
         for name, value in item.quantiles.items():
             row[f'q_{name}'] = value
+    if item.explanation is not None:
+        row['explanation'] = item.explanation
     return row
 
 

@@ -25,6 +25,7 @@ except ImportError:  # pragma: no cover - exercised only in bare dev envs.
 
 DEFAULT_OUTPUT = Path('kumoai/client/generated/tfm_api.py')
 DEFAULT_STRIP_PREFIX = '/v1'
+PROPOSAL_OUTPUT_FIELDS = ('explanation',)
 
 HTTP_METHODS = {
     'delete',
@@ -259,6 +260,10 @@ def _extract_constants(spec: dict[str, Any]) -> dict[str, str | tuple[str, ...]]
         for value in model_values:
             constants[f'TFM_MODEL_{_constant_token(value)}'] = value
     if output_fields:
+        # The updated API proposal defines explanation as a capability-gated
+        # output field. Keep it generated here until the YAML enum catches up.
+        output_fields = tuple(dict.fromkeys(
+            [*output_fields, *PROPOSAL_OUTPUT_FIELDS]))
         constants['TFM_OUTPUT_FIELD_VALUES'] = tuple(output_fields)
         for value in output_fields:
             constants[f'TFM_OUTPUT_FIELD_{_constant_token(value)}'] = value
@@ -305,6 +310,7 @@ def _response_model_lines(schemas: dict[str, Any]) -> list[str]:
         '    rankings: tuple[dict[str, Any], ...] | None = None',
         '    embeddings: tuple[float, ...] | None = None',
         '    quantiles: dict[str, float] | None = None',
+        '    explanation: dict[str, Any] | None = None',
         '    metadata: dict[str, Any] | None = None',
         '',
         '    @classmethod',
@@ -317,6 +323,7 @@ def _response_model_lines(schemas: dict[str, Any]) -> list[str]:
         "            rankings=_mapping_tuple(data.get('rankings')),",
         "            embeddings=_float_tuple(data.get('embeddings')),",
         "            quantiles=_float_dict(data.get('quantiles')),",
+        "            explanation=_dict_or_none(data.get('explanation')),",
         "            metadata=_dict_or_none(data.get('metadata')),",
         '        )',
         '',
