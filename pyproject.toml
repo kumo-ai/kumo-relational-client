@@ -59,10 +59,6 @@ snowflake=[
 sagemaker = [
     "boto3>=1.30.0,<2.0",
 ]
-test-sagemaker=[
-    "sagemaker<3.0",
-    "protobuf<4.0.0",
-]
 
 [project.urls]
 homepage="https://kumo.ai"
@@ -102,15 +98,12 @@ filterwarnings=[
     "error::UserWarning",
     "error::DeprecationWarning",
     "ignore:.*pkg_resources.*:DeprecationWarning",
-    # sagemaker uses distutils which is deprecated in Python 3.12+
-    "ignore:The distutils package is deprecated.*:DeprecationWarning",
     # Pydantic v1 calls ForwardRef._evaluate, which is deprecated in Python
     # 3.14. Remove once we upgrade to Pydantic v2.
     "ignore:ForwardRef._evaluate is a private API.*:DeprecationWarning",
 ]
 markers = [
     "integration: integration tests",
-    "rfm_backend: RFM backend tests",
 ]
 
 [tool.yapf]
