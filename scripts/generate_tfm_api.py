@@ -9,6 +9,8 @@ an external OpenAPI client generator.
 from __future__ import annotations
 
 import argparse
+import ast
+import difflib
 import hashlib
 import keyword
 import os
@@ -58,14 +60,31 @@ def main() -> int:
         action='store_true',
         help='Exit non-zero if output is not up to date.',
     )
+    parser.add_argument(
+        '--validate',
+        action='store_true',
+        help='Validate generated response models and constants against spec.',
+    )
     args = parser.parse_args()
 
     output = Path(args.output)
-    code = generate_code_from_source(
-        args.spec,
+    spec_text = _read_source(args.spec)
+    spec = _load_spec(spec_text, args.spec)
+    code = generate_code(
+        spec,
+        spec_text=spec_text,
+        source=args.spec,
         strip_prefix=args.strip_prefix,
         output_path=output,
     )
+
+    if args.validate:
+        errors = validate_generated_code(spec, code)
+        if errors:
+            print('\n\n'.join(errors), file=sys.stderr)
+            return 1
+        if not args.check:
+            return 0
 
     if args.check:
         actual = output.read_text() if output.exists() else ''
@@ -171,6 +190,62 @@ def generate_code(
     code = '\n'.join(lines)
     _assert_importable_syntax(code, output_path)
     return code
+
+
+def validate_generated_code(spec: dict[str, Any], code: str) -> list[str]:
+    errors: list[str] = []
+    schemas = spec.get('components', {}).get('schemas', {})
+
+    for schema_name in ('PredictionItem', 'PredictionResponse'):
+        schema = schemas.get(schema_name)
+        if not isinstance(schema, dict):
+            errors.append(f'Missing schema: {schema_name}')
+            continue
+
+        expected_fields = tuple(schema.get('properties', {}))
+        actual_fields = _generated_dataclass_fields(code, schema_name)
+        if actual_fields != expected_fields:
+            errors.append(
+                _format_sequence_diff(
+                    f'{schema_name} fields differ from spec properties',
+                    expected_fields=expected_fields,
+                    actual_fields=actual_fields,
+                ))
+
+        missing_required = tuple(
+            field for field in schema.get('required', [])
+            if field not in actual_fields)
+        if missing_required:
+            errors.append(
+                f"{schema_name} is missing required spec fields: "
+                f"{', '.join(missing_required)}")
+
+    expected_output_fields = tuple(
+        _nested_enum_at(schemas.get('OutputSpec', {}),
+                        ('fields', 'items')))
+    actual_output_fields = _generated_constant_tuple(
+        code,
+        'TFM_OUTPUT_FIELD_VALUES',
+    )
+    if actual_output_fields != expected_output_fields:
+        errors.append(
+            _format_sequence_diff(
+                'TFM_OUTPUT_FIELD_VALUES differs from OutputSpec.fields enum',
+                expected_fields=expected_output_fields,
+                actual_fields=actual_output_fields,
+            ))
+
+    create_prediction = _operation_by_id(spec, 'createPrediction')
+    if create_prediction is None:
+        errors.append('Missing operationId: createPrediction')
+    else:
+        response_schema = _success_response_schema(create_prediction)
+        if response_schema != 'PredictionResponse':
+            errors.append(
+                'createPrediction success response schema must be '
+                f"'PredictionResponse', got {response_schema!r}")
+
+    return errors
 
 
 def _read_source(source: str) -> str:
@@ -430,6 +505,22 @@ def _schema_ref_name(schema: dict[str, Any] | None) -> str | None:
     return ref[len(prefix):]
 
 
+def _operation_by_id(
+    spec: dict[str, Any],
+    operation_id: str,
+) -> dict[str, Any] | None:
+    for path_item in spec.get('paths', {}).values():
+        if not isinstance(path_item, dict):
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS:
+                continue
+            if isinstance(operation, dict) and operation.get(
+                    'operationId') == operation_id:
+                return operation
+    return None
+
+
 def _enum_at(schema: dict[str, Any], property_name: str) -> list[str]:
     prop = schema.get('properties', {}).get(property_name, {})
     values = prop.get('enum', [])
@@ -494,6 +585,52 @@ def _normalize_spec_url(source: str) -> str:
     if '/-/blob/' in source:
         return source.replace('/-/blob/', '/-/raw/', 1)
     return source
+
+
+def _generated_dataclass_fields(code: str, class_name: str) -> tuple[str, ...]:
+    module = ast.parse(code)
+    for node in module.body:
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            fields: list[str] = []
+            for item in node.body:
+                if isinstance(item, ast.AnnAssign):
+                    target = item.target
+                    if isinstance(target, ast.Name):
+                        fields.append(target.id)
+            return tuple(fields)
+    return ()
+
+
+def _generated_constant_tuple(code: str, name: str) -> tuple[str, ...]:
+    module = ast.parse(code)
+    for node in module.body:
+        if not isinstance(node, ast.AnnAssign):
+            continue
+        target = node.target
+        if not isinstance(target, ast.Name) or target.id != name:
+            continue
+        value = ast.literal_eval(node.value)
+        if not isinstance(value, tuple):
+            raise ValueError(f'{name} must be generated as a tuple')
+        return tuple(str(item) for item in value)
+    return ()
+
+
+def _format_sequence_diff(
+    title: str,
+    *,
+    expected_fields: tuple[str, ...],
+    actual_fields: tuple[str, ...],
+) -> str:
+    diff = '\n'.join(
+        difflib.unified_diff(
+            [f'{field}\n' for field in actual_fields],
+            [f'{field}\n' for field in expected_fields],
+            fromfile='generated',
+            tofile='spec',
+            lineterm='',
+        ))
+    return f'{title}:\n{diff}'
 
 
 def _assert_importable_syntax(code: str, output_path: Path) -> None:
