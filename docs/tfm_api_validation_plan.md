@@ -104,7 +104,7 @@ longer needs it.
 
 ## Useful generator guard
 
-After the tests above exist, add a lightweight `--validate` mode to
+After the tests above exist, add a lightweight `--validate-contract` mode to
 `scripts/generate_tfm_api.py` that runs the same spec comparisons without
 rewriting files. It should fail with a readable diff for:
 

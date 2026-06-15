@@ -23,7 +23,7 @@ from kumoai.client.generated.tfm_api import (
 )
 
 
-CANONICAL_SPEC = Path('../docs/v0_tfm_nim_release/api_spec.yaml')
+CANONICAL_SPEC = Path('../structured-data-api/api_spec.yaml')
 
 
 def test_generated_tfm_api_runtime_metadata() -> None:
@@ -204,7 +204,7 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
             str(spec),
             '--output',
             str(output),
-            '--validate',
+            '--validate-contract',
         ],
         check=True,
     )
@@ -249,9 +249,33 @@ def test_generator_validation_reports_spec_drift(tmp_path: Path) -> None:
     assert any('PredictionItem fields differ' in error for error in errors)
 
 
+def test_generator_validation_reports_output_enum_drift(
+        tmp_path: Path) -> None:
+    from scripts.generate_tfm_api import (
+        generate_code,
+        validate_generated_code,
+    )
+
+    spec = _minimal_openapi_spec()
+    spec_text = json.dumps(spec)
+    code = generate_code(
+        spec,
+        spec_text=spec_text,
+        source='inline',
+        output_path=tmp_path / 'generated.py',
+    )
+    assert validate_generated_code(spec, code) == []
+
+    spec['components']['schemas']['OutputSpec']['properties']['fields'][
+        'items']['enum'].append('attributions')
+    errors = validate_generated_code(spec, code)
+    assert any('TFM_OUTPUT_FIELD_VALUES differs' in error for error in errors)
+
+
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical docs checkout is not available beside this repo',
+    reason='canonical structured-data-api checkout is not available beside '
+    'this repo',
 )
 def test_generated_tfm_api_matches_local_canonical_spec() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -272,7 +296,8 @@ def test_generated_tfm_api_matches_local_canonical_spec() -> None:
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical docs checkout is not available beside this repo',
+    reason='canonical structured-data-api checkout is not available beside '
+    'this repo',
 )
 def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -302,7 +327,8 @@ def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical docs checkout is not available beside this repo',
+    reason='canonical structured-data-api checkout is not available beside '
+    'this repo',
 )
 def test_documented_prediction_response_examples_parse() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -336,7 +362,8 @@ def test_documented_prediction_response_examples_parse() -> None:
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical docs checkout is not available beside this repo',
+    reason='canonical structured-data-api checkout is not available beside '
+    'this repo',
 )
 def test_documented_prediction_request_examples_match_envelope_shape() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -371,7 +398,9 @@ def _load_local_canonical_spec_at_generated_revision() -> dict:
     output = Path('kumoai/client/generated/tfm_api.py')
     generated_source_sha = _generated_source_sha(output)
     if generated_source_sha != _file_sha256(CANONICAL_SPEC):
-        pytest.skip('local docs checkout is not the generated spec revision')
+        pytest.skip(
+            'local structured-data-api checkout is not the generated spec '
+            'revision')
     return yaml.safe_load(CANONICAL_SPEC.read_text())
 
 

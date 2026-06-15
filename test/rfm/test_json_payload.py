@@ -14,7 +14,7 @@ from kumoai.rfm.rfm import Explanation
 
 from test.conftest import MOCK_URL
 
-CANONICAL_SPEC = Path('../docs/v0_tfm_nim_release/api_spec.yaml')
+CANONICAL_SPEC = Path('../structured-data-api/api_spec.yaml')
 
 
 class JsonPayloadReceptor:
@@ -156,7 +156,7 @@ def _assert_payload_matches_local_prediction_request_schema(
         return
 
     schema = spec['components']['schemas']['PredictionRequest']
-    assert set(payload) <= set(schema['properties'])
+    assert set(payload) == set(schema['properties'])
     assert set(schema['required']) <= set(payload)
     assert 'operation' not in payload.get('metadata', {})
     assert 'evaluate' not in payload

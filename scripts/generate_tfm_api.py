@@ -61,7 +61,7 @@ def main() -> int:
         help='Exit non-zero if output is not up to date.',
     )
     parser.add_argument(
-        '--validate',
+        '--validate-contract',
         action='store_true',
         help='Validate generated response models and constants against spec.',
     )
@@ -78,7 +78,7 @@ def main() -> int:
         output_path=output,
     )
 
-    if args.validate:
+    if args.validate_contract:
         errors = validate_generated_code(spec, code)
         if errors:
             print('\n\n'.join(errors), file=sys.stderr)
