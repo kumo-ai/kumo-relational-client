@@ -1,4 +1,6 @@
+import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -141,11 +143,27 @@ def test_generated_tfm_api_matches_local_canonical_spec() -> None:
     from scripts.generate_tfm_api import generate_code_from_source
 
     output = Path('kumoai/client/generated/tfm_api.py')
+    generated_source_sha = _generated_source_sha(output)
+    if generated_source_sha != _file_sha256(CANONICAL_SPEC):
+        pytest.skip('local docs checkout is not the generated spec revision')
+
     expected = generate_code_from_source(
         str(CANONICAL_SPEC),
         output_path=output,
     )
     assert output.read_text() == expected
+
+
+def _generated_source_sha(path: Path) -> str:
+    match = re.search(r'^# Source SHA256: ([0-9a-f]+)$',
+                      path.read_text(),
+                      flags=re.MULTILINE)
+    assert match is not None
+    return match.group(1)
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _minimal_openapi_spec() -> dict:

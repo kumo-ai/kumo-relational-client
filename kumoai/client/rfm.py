@@ -3,7 +3,6 @@ from typing import Any
 
 from kumoapi.json_serde import to_json_dict
 from kumoapi.rfm import (
-    RFMEvaluateResponse,
     RFMParseQueryRequest,
     RFMParseQueryResponse,
     RFMPredictResponse,
@@ -43,22 +42,6 @@ class RFMAPI:
         raise_on_error(response)
         prediction_response = PredictionResponse.from_dict(response.json())
         return _prediction_response_to_rfm(prediction_response)
-
-    def evaluate(self, request: bytes) -> RFMEvaluateResponse:
-        """Evaluate the RFM model on the given context.
-
-        Args:
-            request: The evaluate request as serialized protobuf.
-
-        Returns:
-            RFMEvaluateResponse containing the computed metrics
-        """
-        # Evaluation is intentionally not part of the TFM prediction spec.
-        response = self._client._request(
-            RFMEndpoints.evaluate, data=request,
-            headers={'Content-Type': 'application/x-protobuf'})
-        raise_on_error(response)
-        return parse_response(RFMEvaluateResponse, response)
 
     def validate_query(
         self,
