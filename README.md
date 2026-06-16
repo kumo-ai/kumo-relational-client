@@ -4,7 +4,7 @@ This repository contains the RFM-only subset of the Kumo Python SDK. It keeps
 the documented import path:
 
 ```python
-import kumoai.experimental.rfm as rfm
+import kumoai.rfm as rfm
 ```
 
 The package includes the RFM graph/table abstractions, local/sqlite/duckdb/
@@ -36,7 +36,7 @@ local RFM backends.
 ```python
 import os
 import pandas as pd
-import kumoai.experimental.rfm as rfm
+import kumoai.rfm as rfm
 
 os.environ["KUMO_API_KEY"] = "ENTER_YOUR_API_KEY_HERE"
 rfm.init()
@@ -59,8 +59,5 @@ https://kumo.ai/docs/quick-start/rfm/
 ## Tests
 
 ```bash
-pytest test/rfm
+pytest test
 ```
-
-Backend-specific tests require their optional dependencies, for example
-`.[sqlite]`, `.[duckdb]`, `.[snowflake]`, or `.[sagemaker]`.

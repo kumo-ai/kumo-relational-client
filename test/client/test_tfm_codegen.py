@@ -19,6 +19,7 @@ from kumoai.client.generated.tfm_api import (
     TFM_OUTPUT_FIELD_EMBEDDINGS,
     TFM_OUTPUT_FIELD_EXPLANATION,
     TFM_OUTPUT_FIELD_VALUES,
+    TFM_SCHEMA_NAMES,
     TFMOperations,
 )
 
@@ -28,6 +29,9 @@ CANONICAL_SPEC = Path('../structured-data-api/api_spec.yaml')
 
 def test_generated_tfm_api_runtime_metadata() -> None:
     operation = TFMOperations.create_prediction
+    health = TFMOperations.get_health
+    health_live = TFMOperations.get_health_live
+    health_ready = TFMOperations.get_health_ready
 
     assert TFM_API_VERSION == 'v1'
     assert TFM_MODEL_KUMO_RFM == 'kumo-rfm'
@@ -40,6 +44,29 @@ def test_generated_tfm_api_runtime_metadata() -> None:
     assert operation.endpoint.get_path() == '/predictions'
     assert TFM_ENDPOINTS_BY_OPERATION_ID['createPrediction'] == (
         operation.endpoint)
+    assert 'HealthResponse' in TFM_SCHEMA_NAMES
+    assert 'ProblemDetails' in TFM_SCHEMA_NAMES
+
+    assert health.operation_id == 'getHealth'
+    assert health.request_schema is None
+    assert health.response_schema == 'HealthResponse'
+    assert health.endpoint.method == HTTPMethod.GET
+    assert health.endpoint.get_path() == '/health'
+    assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealth'] == health.endpoint
+
+    assert health_live.operation_id == 'getHealthLive'
+    assert health_live.response_schema == 'HealthResponse'
+    assert health_live.endpoint.method == HTTPMethod.GET
+    assert health_live.endpoint.get_path() == '/health/live'
+    assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealthLive'] == (
+        health_live.endpoint)
+
+    assert health_ready.operation_id == 'getHealthReady'
+    assert health_ready.response_schema == 'HealthResponse'
+    assert health_ready.endpoint.method == HTTPMethod.GET
+    assert health_ready.endpoint.get_path() == '/health/ready'
+    assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealthReady'] == (
+        health_ready.endpoint)
 
 
 def test_generated_prediction_response_parser() -> None:
@@ -48,6 +75,7 @@ def test_generated_prediction_response_parser() -> None:
         'model': 'kumo-rfm',
         'predictions': [{
             'id': 7,
+            'row_index': '3',
             'prediction': True,
             'probabilities': {
                 'false': 0.25,
@@ -82,6 +110,7 @@ def test_generated_prediction_response_parser() -> None:
     assert len(response.predictions) == 1
     item = response.predictions[0]
     assert item.id == '7'
+    assert item.row_index == 3
     assert item.prediction is True
     assert item.probabilities == {'false': 0.25, 'true': 0.75}
     assert item.scores == (0.4, 0.6)
@@ -141,8 +170,16 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
         },
     }
 
+    row_by_index = _prediction_item_to_row(
+        PredictionItem(row_index=12, prediction='fallback'))
+    assert row_by_index == {
+        'ENTITY': 12,
+        'prediction': 'fallback',
+    }
+
     mapped_fields = {
         'id',
+        'row_index',
         'prediction',
         'probabilities',
         'scores',
@@ -311,7 +348,7 @@ def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
         schemas['PredictionItem']['properties'])
     assert tuple(field.name for field in fields(PredictionResponse)) == tuple(
         schemas['PredictionResponse']['properties'])
-    assert set(schemas['PredictionItem']['required']) <= {
+    assert set(schemas['PredictionItem'].get('required', [])) <= {
         field.name
         for field in fields(PredictionItem)
     }
@@ -345,7 +382,10 @@ def test_documented_prediction_response_examples_parse() -> None:
         assert response.metadata['version'] == 'v1'
         assert response.predictions, name
         for item in response.predictions:
-            assert isinstance(item.id, str)
+            assert item.id is None or isinstance(item.id, str)
+            assert item.id is not None or item.row_index is not None
+            if item.row_index is not None:
+                assert isinstance(item.row_index, int)
             if item.probabilities is not None:
                 assert all(
                     isinstance(value, float)
@@ -480,9 +520,9 @@ def _minimal_openapi_spec() -> dict:
                     },
                 },
                 'PredictionItem': {
-                    'required': ['id'],
                     'properties': {
                         'id': {},
+                        'row_index': {},
                         'prediction': {},
                         'probabilities': {},
                         'scores': {},
