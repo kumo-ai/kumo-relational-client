@@ -25,7 +25,6 @@ from kumoapi.rfm import Explanation as ExplanationConfig
 from kumoapi.rfm import (
     InferenceConfig,
     RegressionInferenceConfig,
-    RFMEvaluateRequest,
     RFMParseQueryRequest,
     RFMPredictRequest,
 )
@@ -849,246 +848,6 @@ class KumoRFM:
 
         return prediction
 
-    def evaluate(
-        self,
-        query: str,
-        *,
-        metrics: list[str] | None = None,
-        anchor_time: pd.Timestamp | Literal['entity'] | None = None,
-        context_anchor_time: pd.Timestamp | None = None,
-        run_mode: RunMode | str = RunMode.FAST,
-        num_neighbors: list[int] | None = None,
-        use_prediction_time: bool = False,
-        lag_timesteps: int = 0,
-        inference_config: InferenceConfig | dict[str, Any] | None = None,
-        num_hops: int = 2,
-        max_pq_iterations: int = 10,
-        random_seed: int | None = _RANDOM_SEED,
-        verbose: bool | ProgressLogger = True,
-    ) -> pd.DataFrame:
-        """Evaluates a predictive query.
-
-        Args:
-            query: The predictive query.
-            metrics: The metrics to use.
-            anchor_time: The anchor timestamp for the prediction. If set to
-                ``None``, will use the maximum timestamp in the data.
-                If set to ``"entity"``, will use the timestamp of the entity.
-            context_anchor_time: The maximum anchor timestamp for context
-                examples. If set to ``None``, ``anchor_time`` will
-                determine the anchor time for context examples.
-            run_mode: The :class:`RunMode` for the query.
-            num_neighbors: The number of neighbors to sample for each hop.
-                If specified, the ``num_hops`` option will be ignored.
-            use_prediction_time: Whether to use the anchor timestamp as an
-                additional feature during prediction.
-            lag_timesteps: The number of past timesteps included as lagged
-                features.
-            inference_config: Optional inference-time model configuration. See
-                :meth:`predict` for supported dictionary keys.
-            num_hops: The number of hops to sample when generating the context.
-                Deprecated in favor of ``num_neighbors``.
-            max_pq_iterations: The maximum number of iterations to perform to
-                collect valid labels. It is advised to increase the number of
-                iterations in case the predictive query has strict entity
-                filters, in which case, :class:`KumoRFM` needs to sample more
-                entities to find valid labels.
-            random_seed: A manual seed for generating pseudo-random numbers.
-            verbose: Whether to print verbose output.
-
-        Returns:
-            The metrics as a :class:`pandas.DataFrame`
-        """
-        parsed_query = self._parse_query(query)
-        query_def = replace(
-            parsed_query,
-            for_each='FOR EACH',
-            rfm_entity_ids=None,
-        )
-
-        if not isinstance(verbose, ProgressLogger):
-            query_repr = query_def.to_string(rich=True, exclude_predict=True)
-            msg = f'[bold]EVALUATE[/bold] {query_repr}'
-            verbose = ProgressLogger.default(msg=msg, verbose=verbose)
-
-        with verbose as logger:
-            tmp_query_def = query_def
-            # For forecasting, we want to eval on the provided entity ID.
-            if parsed_query.problem_type == ProblemType.FORECAST:
-                tmp_query_def = replace(
-                    query_def, rfm_entity_ids=parsed_query.rfm_entity_ids)
-            task_table = self._get_task_table(
-                query=tmp_query_def,
-                indices=None,
-                anchor_time=anchor_time,
-                context_anchor_time=context_anchor_time,
-                run_mode=RunMode(run_mode),
-                lag_timesteps=lag_timesteps,
-                max_pq_iterations=max_pq_iterations,
-                random_seed=random_seed,
-                logger=logger,
-            )
-
-            return self.evaluate_task(
-                task_table,
-                metrics=metrics,
-                run_mode=RunMode(run_mode),
-                num_neighbors=num_neighbors,
-                inference_config=inference_config,
-                num_hops=num_hops,
-                verbose=verbose,
-                exclude_cols_dict=query_def.get_exclude_cols_dict(),
-                use_prediction_time=use_prediction_time,
-            )
-
-    def evaluate_task(
-        self,
-        task: TaskTable,
-        *,
-        metrics: list[str] | None = None,
-        run_mode: RunMode | str = RunMode.FAST,
-        num_neighbors: list[int] | None = None,
-        inference_config: InferenceConfig | dict[str, Any] | None = None,
-        num_hops: int = 2,
-        verbose: bool | ProgressLogger = True,
-        exclude_cols_dict: dict[str, list[str]] | None = None,
-        use_prediction_time: bool = False,
-    ) -> pd.DataFrame:
-        """Evaluates a custom task specification.
-
-        Args:
-            task: The custom :class:`TaskTable`.
-            metrics: The metrics to use.
-            run_mode: The :class:`RunMode` for the query.
-            num_neighbors: The number of neighbors to sample for each hop.
-                If specified, the ``num_hops`` option will be ignored.
-            inference_config: Optional inference-time model configuration. See
-                :meth:`predict` for supported dictionary keys.
-            num_hops: The number of hops to sample when generating the context.
-            verbose: Whether to print verbose output.
-            exclude_cols_dict: Any column in any table to exclude from the
-                model input.
-            use_prediction_time: Whether to use the anchor timestamp as an
-                additional feature during prediction.
-
-        Returns:
-            The metrics as a :class:`pandas.DataFrame`
-        """
-        if num_hops != 2 and num_neighbors is not None:
-            warnings.warn(f"Received custom 'num_neighbors' option; ignoring "
-                          f"custom 'num_hops={num_hops}' option")
-        if num_neighbors is None:
-            key = (RunMode.FAST
-                   if task.task_type.is_link_pred else RunMode(run_mode))
-            num_neighbors = _DEFAULT_NUM_NEIGHBORS[key][:num_hops]
-
-        if metrics is not None and len(metrics) > 0:
-            self._validate_metrics(metrics, task.task_type)
-            metrics = list(dict.fromkeys(metrics))
-
-        if inference_config is None:
-            inference_config = InferenceConfig.from_task_type(task.task_type)
-        elif isinstance(inference_config, dict):
-            Cls = InferenceConfig
-            if task.task_type.is_classification:
-                Cls = ClassificationInferenceConfig
-            if task.task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
-                Cls = RegressionInferenceConfig
-            inference_config = Cls(**inference_config)  # type: ignore
-
-        if not isinstance(verbose, ProgressLogger):
-            if task.task_type == TaskType.BINARY_CLASSIFICATION:
-                task_type_repr = 'binary classification'
-            elif task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
-                task_type_repr = 'multi-class classification'
-            elif task.task_type == TaskType.REGRESSION:
-                task_type_repr = 'regression'
-            elif task.task_type == TaskType.FORECASTING:
-                task_type_repr = 'forecasting'
-            elif task.task_type == TaskType.TEMPORAL_LINK_PREDICTION:
-                task_type_repr = 'link prediction'
-            else:
-                task_type_repr = str(task.task_type)
-
-            msg = f"Evaluating {task_type_repr} task"
-            verbose = ProgressLogger.default(msg=msg, verbose=verbose)
-
-        with verbose as logger:
-            max_ctx = _MAX_CONTEXT_SIZE[RunMode(run_mode)]
-            if task.num_context_examples > max_ctx:
-                logger.log(f"Sub-sampled {max_ctx:,} "
-                           f"out of {task.num_context_examples:,} in-context "
-                           f"examples")
-                task = task.narrow_context(0, max_ctx)
-
-            if (task.task_type == TaskType.FORECASTING
-                    and task.num_forecasts > task.num_context_examples):
-                raise ValueError(
-                    f"The number of forecast steps "
-                    f"({task.num_forecasts:,}) exceeds the number of "
-                    f"available in-context examples "
-                    f"({task.num_context_examples:,}). Please provide "
-                    f"more historical data or reduce the number of "
-                    f"forecast steps.")
-
-            if task.num_prediction_examples > _MAX_TEST_SIZE[task.task_type]:
-                logger.log(f"Sub-sampled {_MAX_TEST_SIZE[task.task_type]:,} "
-                           f"out of {task.num_prediction_examples:,} test "
-                           f"examples")
-                task = task.narrow_prediction(
-                    start=0,
-                    length=_MAX_TEST_SIZE[task.task_type],
-                )
-
-            context = self._get_context(
-                task=task,
-                run_mode=run_mode,
-                num_neighbors=num_neighbors,
-                exclude_cols_dict=exclude_cols_dict,
-            )
-
-            request = RFMEvaluateRequest(
-                context=context,
-                run_mode=RunMode(run_mode),
-                metrics=metrics,
-                use_prediction_time=use_prediction_time,
-                inference_config=inference_config,
-            )
-            with warnings.catch_warnings():
-                warnings.filterwarnings('ignore', message='Protobuf gencode')
-                request_msg = request.to_protobuf()
-                request_bytes = request_msg.SerializeToString()
-            logger.log(f"Generated context of size "
-                       f"{len(request_bytes) / (1024*1024):.2f}MB")
-
-            if len(request_bytes) > _MAX_SIZE:
-                stats_msg = Context.get_memory_stats(request_msg.context)
-                raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats_msg))
-
-            for attempt in range(self._num_retries + 1):
-                try:
-                    resp = self._api_client.evaluate(request_bytes)
-                    break
-                except HTTPException as e:
-                    if attempt == self._num_retries:
-                        try:
-                            msg = json.loads(e.detail)['detail']
-                        except Exception:
-                            msg = e.detail
-                        raise RuntimeError(
-                            f"An unexpected exception occurred. Please create "
-                            f"an issue at "
-                            f"'https://github.com/kumo-ai/kumo-rfm'. {msg}"
-                        ) from None
-
-                    time.sleep(2**attempt)  # 1s, 2s, 4s, 8s, ...
-
-        return pd.DataFrame.from_dict(
-            resp.metrics,
-            orient='index',
-            columns=pd.Index(['value']),
-        ).reset_index(names='metric')
-
     def get_train_table(
         self,
         query: str | ValidatedPredictiveQuery,
@@ -1247,9 +1006,8 @@ class KumoRFM:
 
         if isinstance(query, str) and query.strip()[:9].lower() == 'evaluate ':
             raise ValueError("'EVALUATE PREDICT ...' queries are not "
-                             "supported in the SDK. Instead, use either "
-                             "`predict()` or `evaluate()` methods to perform "
-                             "predictions or evaluations.")
+                             "supported in the SDK. Use `predict()` for "
+                             "predictions.")
 
         request = RFMParseQueryRequest(
             query=query,
@@ -1690,7 +1448,7 @@ class KumoRFM:
             subgraph=subgraph,
             y_train=task._context_df[task.target_column.name],
             y_test=task._pred_df[task.target_column.name]
-            if task.evaluate else None,
+            if task.has_prediction_targets else None,
             task_table=Table(
                 df=pd.concat([
                     task._context_df[[c.name for c in task.feature_columns]],
@@ -1709,65 +1467,6 @@ class KumoRFM:
             step_size=task.step_size,
             num_forecasts=task.num_forecasts,
         )
-
-    @staticmethod
-    def _validate_metrics(
-        metrics: list[str],
-        task_type: TaskType,
-    ) -> None:
-
-        if task_type == TaskType.BINARY_CLASSIFICATION:
-            supported_metrics = [
-                'acc', 'precision', 'recall', 'f1', 'auroc', 'auprc', 'ap'
-            ]
-        elif task_type == TaskType.MULTICLASS_CLASSIFICATION:
-            supported_metrics = ['acc', 'precision', 'recall', 'f1', 'mrr']
-        elif task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
-            supported_metrics = ['mae', 'mape', 'mse', 'rmse', 'smape', 'r2']
-        elif task_type == TaskType.TEMPORAL_LINK_PREDICTION:
-            supported_metrics = [
-                'map@', 'ndcg@', 'mrr@', 'precision@', 'recall@', 'f1@',
-                'hit_ratio@'
-            ]
-        else:
-            raise NotImplementedError
-
-        for metric in metrics:
-            if '@' in metric:
-                metric_split = metric.split('@')
-                if len(metric_split) != 2:
-                    raise ValueError(f"Unsupported metric '{metric}'. "
-                                     f"Available metrics "
-                                     f"are {supported_metrics}.")
-
-                name, top_k = f'{metric_split[0]}@', metric_split[1]
-
-                if not top_k.isdigit():
-                    raise ValueError(f"Metric '{metric}' does not define a "
-                                     f"valid 'top_k' value (got '{top_k}').")
-
-                if int(top_k) <= 0:
-                    raise ValueError(f"Metric '{metric}' needs to define a "
-                                     f"positive 'top_k' value (got '{top_k}')")
-
-                if int(top_k) > 100:
-                    raise ValueError(f"Metric '{metric}' defines a 'top_k' "
-                                     f"value greater than 100 "
-                                     f"(got '{top_k}'). Please create a "
-                                     f"feature request at "
-                                     f"'https://github.com/kumo-ai/kumo-rfm' "
-                                     f"if you must go beyond this for your "
-                                     f"use-case.")
-
-                metric = name
-
-            if metric not in supported_metrics:
-                raise ValueError(f"Unsupported metric '{metric}'. Available "
-                                 f"metrics are {supported_metrics}. If you "
-                                 f"feel a metric is missing, please create a "
-                                 f"feature request at "
-                                 f"'https://github.com/kumo-ai/kumo-rfm'.")
-
 
 def _date_offset_to_ns(offset: pd.DateOffset) -> int | None:
     """Convert a pandas DateOffset to an integer number of nanoseconds."""

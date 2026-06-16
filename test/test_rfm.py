@@ -583,87 +583,6 @@ def test_validation(
         model._get_context(task_table, num_neighbors=[10] * 7)
 
 
-def test_validate_metrics() -> None:
-    with pytest.raises(ValueError, match="Unsupported metric"):
-        KumoRFM._validate_metrics(
-            metrics=['f1@f1@f1'],
-            task_type=TaskType.BINARY_CLASSIFICATION,
-        )
-
-    with pytest.raises(ValueError, match="does not define a valid 'top_k'"):
-        KumoRFM._validate_metrics(
-            metrics=['f1@f1'],
-            task_type=TaskType.BINARY_CLASSIFICATION,
-        )
-
-    with pytest.raises(ValueError, match="needs to define a positive 'top_k'"):
-        KumoRFM._validate_metrics(
-            metrics=['f1@0'],
-            task_type=TaskType.BINARY_CLASSIFICATION,
-        )
-
-    with pytest.raises(ValueError, match="greater than 100"):
-        KumoRFM._validate_metrics(
-            metrics=['f1@101'],
-            task_type=TaskType.BINARY_CLASSIFICATION,
-        )
-
-    with pytest.raises(ValueError, match="Unsupported metric"):
-        KumoRFM._validate_metrics(
-            metrics=['f1@10'],
-            task_type=TaskType.BINARY_CLASSIFICATION,
-        )
-
-    KumoRFM._validate_metrics(
-        metrics=['auprc'],
-        task_type=TaskType.BINARY_CLASSIFICATION,
-    )
-
-    with pytest.raises(ValueError, match="Unsupported metric"):
-        KumoRFM._validate_metrics(
-            metrics=['auprc'],
-            task_type=TaskType.MULTICLASS_CLASSIFICATION,
-        )
-
-    KumoRFM._validate_metrics(
-        metrics=['acc'],
-        task_type=TaskType.MULTICLASS_CLASSIFICATION,
-    )
-
-    with pytest.raises(ValueError, match="Unsupported metric"):
-        KumoRFM._validate_metrics(
-            metrics=['auprc'],
-            task_type=TaskType.REGRESSION,
-        )
-
-    KumoRFM._validate_metrics(
-        metrics=['mae', 'r2'],
-        task_type=TaskType.REGRESSION,
-    )
-
-    with pytest.raises(ValueError, match="Unsupported metric"):
-        KumoRFM._validate_metrics(
-            metrics=['auprc'],
-            task_type=TaskType.TEMPORAL_LINK_PREDICTION,
-        )
-
-    KumoRFM._validate_metrics(
-        metrics=['map@10'],
-        task_type=TaskType.TEMPORAL_LINK_PREDICTION,
-    )
-
-    with pytest.raises(ValueError, match="Unsupported metric"):
-        KumoRFM._validate_metrics(
-            metrics=['auprc'],
-            task_type=TaskType.FORECASTING,
-        )
-
-    KumoRFM._validate_metrics(
-        metrics=['mae', 'r2'],
-        task_type=TaskType.FORECASTING,
-    )
-
-
 def test_get_train_table(
     string_user_graph: Graph,
     churn: ValidatedPredictiveQuery,
@@ -886,39 +805,6 @@ def test_num_forecasts_exceeds_context_predict(
     task = _make_forecast_task(num_context=3, num_forecasts=5)
     with pytest.raises(ValueError, match="number of forecast steps"):
         model.predict_task(task, verbose=False, use_prediction_time=True)
-
-
-def test_num_forecasts_exceeds_context_evaluate(
-        user_store_graph: Graph) -> None:
-    context_df = pd.DataFrame({
-        'ENTITY': [0, 0, 0],
-        'TARGET':
-        pd.Series([10.0, 15.0, 20.0], dtype='float32'),
-        'ANCHOR_TIMESTAMP':
-        pd.date_range('2025-01-01', periods=3, freq='D'),
-    })
-    pred_df = pd.DataFrame({
-        'ENTITY': [0, 0, 0, 0, 0],
-        'TARGET':
-        pd.Series([5.0, 8.0, 12.0, 6.0, 9.0], dtype='float32'),
-        'ANCHOR_TIMESTAMP':
-        pd.date_range('2025-02-01', periods=5, freq='D'),
-    })
-    task = TaskTable(
-        task_type=TaskType.FORECASTING,
-        context_df=context_df,
-        pred_df=pred_df,
-        entity_table_name='USERS',
-        entity_column='ENTITY',
-        target_column='TARGET',
-        time_column='ANCHOR_TIMESTAMP',
-        num_forecasts=5,
-    )
-
-    model = KumoRFM(user_store_graph, verbose=False)
-    model._client = MockAPI()  # type: ignore
-    with pytest.raises(ValueError, match="number of forecast steps"):
-        model.evaluate_task(task, verbose=False, use_prediction_time=True)
 
 
 def test_custom_task_features(user_store_graph: Graph) -> None:
