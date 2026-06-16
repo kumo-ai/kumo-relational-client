@@ -1,5 +1,9 @@
+import hashlib
+import re
+from pathlib import Path
 from typing import Any
 
+import pytest
 import requests
 from kumoapi.pquery import ValidatedPredictiveQuery
 
@@ -9,6 +13,8 @@ from kumoai.rfm import Graph, KumoRFM
 from kumoai.rfm.rfm import Explanation
 
 from test.conftest import MOCK_URL
+
+CANONICAL_SPEC = Path('../structured-data-api/api_spec.yaml')
 
 
 class JsonPayloadReceptor:
@@ -79,12 +85,14 @@ def test_predict_posts_universal_json_payload(
     assert payload['inference']['inference_config']['output_type'] == (
         'quantiles')
     assert 'operation' not in payload['metadata']
+    _assert_payload_matches_local_prediction_request_schema(payload)
 
     payload_text = str(payload)
     assert 'application/x-protobuf' not in payload_text
     assert "'batch'" not in payload_text
     assert "'row'" not in payload_text
     assert "'col'" not in payload_text
+    assert "'evaluate'" not in payload_text
 
 
 def test_explain_requests_explanation_output_field(
@@ -139,3 +147,38 @@ def test_explain_requests_explanation_output_field(
     assert payload is not None
     assert 'explanation' in payload['output']['fields']
     assert 'operation' not in payload['metadata']
+
+
+def _assert_payload_matches_local_prediction_request_schema(
+        payload: dict[str, Any]) -> None:
+    spec = _load_local_canonical_spec_at_generated_revision()
+    if spec is None:
+        return
+
+    schema = spec['components']['schemas']['PredictionRequest']
+    assert set(payload) == set(schema['properties'])
+    assert set(schema['required']) <= set(payload)
+    assert 'operation' not in payload.get('metadata', {})
+    assert 'evaluate' not in payload
+
+
+def _load_local_canonical_spec_at_generated_revision() -> dict | None:
+    if not CANONICAL_SPEC.exists():
+        return None
+    output = Path('kumoai/client/generated/tfm_api.py')
+    if _generated_source_sha(output) != _file_sha256(CANONICAL_SPEC):
+        return None
+    yaml = pytest.importorskip('yaml')
+    return yaml.safe_load(CANONICAL_SPEC.read_text())
+
+
+def _generated_source_sha(path: Path) -> str:
+    match = re.search(r'^# Source SHA256: ([0-9a-f]+)$',
+                      path.read_text(),
+                      flags=re.MULTILINE)
+    assert match is not None
+    return match.group(1)
+
+
+def _file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()

@@ -83,7 +83,8 @@ class RFMAPI:
 def _prediction_response_to_rfm(
         response: PredictionResponse) -> RFMPredictResponse:
     rows: list[dict[str, Any]] = [
-        _prediction_item_to_row(item) for item in response.predictions
+        _prediction_item_to_row(item, position=index)
+        for index, item in enumerate(response.predictions)
     ]
     columns: list[str] = []
     for row in rows:
@@ -97,8 +98,18 @@ def _prediction_response_to_rfm(
     })
 
 
-def _prediction_item_to_row(item: PredictionItem) -> dict[str, Any]:
-    row: dict[str, Any] = {'ENTITY': _coerce_prediction_id(item.id)}
+def _prediction_item_to_row(
+    item: PredictionItem,
+    *,
+    position: int | None = None,
+) -> dict[str, Any]:
+    if item.id is not None:
+        entity = _coerce_prediction_id(item.id)
+    elif item.row_index is not None:
+        entity = item.row_index
+    else:
+        entity = position
+    row: dict[str, Any] = {'ENTITY': entity}
     if item.prediction is not None:
         row['prediction'] = item.prediction
     if item.probabilities is not None:
