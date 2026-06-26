@@ -17,9 +17,18 @@ from rfm_nim_payloads import (
     SDK_V1_RFM_PARSE_QUERY_PATH,
     SDK_V1_RFM_VALIDATE_QUERY_PATH,
     SDK_V1_SESSIONS_PATH,
+    nim_v0_empty_predict_rows_payload,
+    nim_v0_explicit_utc_offset_timestamp_payload,
+    nim_v0_fast_run_mode_payload,
+    nim_v0_multiclass_payload,
+    nim_v0_prediction_only_output_payload,
+    nim_v0_regression_payload,
+    nim_v0_reordered_predict_rows_payload,
     nim_v0_session_create_payload,
     nim_v0_session_predict_minimal_payload,
     nim_v0_smoke_payload,
+    nim_v0_two_predict_rows_payload,
+    nim_v0_without_inference_payload,
     sdk_v1_smoke_payload,
 )
 
@@ -90,31 +99,57 @@ def _assert_problem_details(
 
 def _assert_prediction_response_invariants(
     response: requests.Response,
+    *,
+    expected_count: int = 1,
+    expected_task_kind: str = 'classification',
+    expected_ids: list[str] | None = None,
+    expect_probabilities: bool = True,
+    expected_probability_labels: set[str] | None = None,
 ) -> dict[str, Any]:
     assert response.status_code == 200
     body = _assert_json_response(response)
+    assert isinstance(body.get('id'), str)
+    assert body['id']
     assert body['model'] == 'kumo-rfm'
 
     predictions = body['predictions']
     assert isinstance(predictions, list)
-    assert len(predictions) == 1
+    assert len(predictions) == expected_count
+    if expected_ids is not None:
+        assert [prediction.get('id') for prediction in predictions] == (
+            expected_ids)
 
-    prediction = predictions[0]
-    assert isinstance(prediction, dict)
-    assert prediction['prediction'] is True
+    for index, prediction in enumerate(predictions):
+        assert isinstance(prediction, dict)
+        if 'id' in prediction:
+            assert isinstance(prediction['id'], str)
+        else:
+            assert prediction['row_index'] == index
+        assert 'prediction' in prediction
+        assert isinstance(prediction.get('metadata'), dict)
+        assert prediction['metadata']['backend_status'] == 'driver'
 
-    probabilities = prediction['probabilities']
-    assert isinstance(probabilities, dict)
-    assert set(probabilities) == {'False', 'True'}
-    for value in probabilities.values():
-        assert isinstance(value, (int, float))
-        assert not isinstance(value, bool)
-        assert 0 <= value <= 1
-    assert sum(probabilities.values()) == pytest.approx(1.0)
+        if not expect_probabilities:
+            assert 'probabilities' not in prediction
+            continue
+
+        probabilities = prediction['probabilities']
+        assert isinstance(probabilities, dict)
+        assert probabilities
+        if expected_probability_labels is not None:
+            assert set(probabilities) == expected_probability_labels
+        for value in probabilities.values():
+            assert isinstance(value, (int, float))
+            assert not isinstance(value, bool)
+            assert 0 <= value <= 1
+        assert sum(probabilities.values()) == pytest.approx(1.0)
+
+    if expected_count == 0:
+        assert predictions == []
 
     metadata = body['metadata']
     assert isinstance(metadata, dict)
-    assert metadata['task_kind'] == 'classification'
+    assert metadata['task_kind'] == expected_task_kind
     assert metadata['adapter'] == 'kumo_rfm'
     assert metadata['backend_status'] == 'driver'
     return body
@@ -291,7 +326,246 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
         json=nim_v0_smoke_payload(),
     )
 
-    _assert_prediction_response_invariants(response)
+    body = _assert_prediction_response_invariants(
+        response,
+        expected_probability_labels={'False', 'True'},
+    )
+    assert body['predictions'][0]['prediction'] is True
+
+
+@pytest.mark.parametrize(
+    ('payload_factory', 'assertion_kwargs'),
+    [
+        pytest.param(
+            nim_v0_prediction_only_output_payload,
+            {'expect_probabilities': False},
+            id='prediction-only-output',
+        ),
+        pytest.param(
+            nim_v0_fast_run_mode_payload,
+            {'expected_probability_labels': {'False', 'True'}},
+            id='fast-run-mode',
+        ),
+        pytest.param(
+            nim_v0_without_inference_payload,
+            {'expected_probability_labels': {'False', 'True'}},
+            id='default-inference',
+        ),
+        pytest.param(
+            nim_v0_two_predict_rows_payload,
+            {
+                'expected_count': 2,
+                'expected_ids': ['601', '602'],
+                'expected_probability_labels': {'False', 'True'},
+            },
+            id='two-predict-rows',
+        ),
+        pytest.param(
+            nim_v0_reordered_predict_rows_payload,
+            {
+                'expected_count': 2,
+                'expected_ids': ['602', '601'],
+                'expected_probability_labels': {'False', 'True'},
+            },
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    'Prediction response should preserve predict row order, but '
+                    'the current NIM returns predictions sorted by entity id.'),
+            ),
+            id='reordered-predict-rows',
+        ),
+        pytest.param(
+            nim_v0_empty_predict_rows_payload,
+            {
+                'expected_count': 0,
+                'expect_probabilities': False,
+            },
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    'Empty predict batches should return a clean empty response '
+                    'or validation error, but the current NIM returns 500.'),
+            ),
+            id='empty-predict-rows',
+        ),
+        pytest.param(
+            nim_v0_explicit_utc_offset_timestamp_payload,
+            {'expected_probability_labels': {'False', 'True'}},
+            marks=pytest.mark.xfail(
+                strict=True,
+                reason=(
+                    'ISO timestamps with explicit UTC offsets should be accepted '
+                    'or rejected cleanly, but the current NIM returns 500.'),
+            ),
+            id='timestamp-offsets',
+        ),
+        pytest.param(
+            nim_v0_regression_payload,
+            {
+                'expected_task_kind': 'regression',
+                'expect_probabilities': False,
+            },
+            id='regression',
+        ),
+        pytest.param(
+            nim_v0_multiclass_payload,
+            {'expected_task_kind': 'multiclass_classification'},
+            id='multiclass-categorical-target',
+        ),
+    ],
+)
+def test_live_nim_v0_prediction_accepts_deterministic_variants(
+    nim_base_url: str,
+    payload_factory: Callable[[], dict[str, Any]],
+    assertion_kwargs: dict[str, Any],
+) -> None:
+    response = _request(
+        'POST',
+        nim_base_url,
+        NIM_V0_PREDICTION_PATH,
+        json=payload_factory(),
+    )
+
+    _assert_prediction_response_invariants(response, **assertion_kwargs)
+
+
+def _invalid_run_mode_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['inference']['run_mode'] = 'turbo'
+    return payload
+
+
+def _unsupported_output_field_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['output']['fields'].append('feature_importances')
+    return payload
+
+
+def _unsupported_task_kind_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['task']['kind'] = 'forecasting'
+    return payload
+
+
+def _missing_target_column_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['task']['target']['column_name'] = 'missing_status'
+    return payload
+
+
+def _unknown_predict_column_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['predict']['instance_table']['columns'].append('leakage')
+    payload['predict']['instance_table']['rows'][0].append('not-declared')
+    return payload
+
+
+def _invalid_timestamp_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['predict']['instance_table']['rows'][0][1] = '2025-02-01 00:00:00'
+    return payload
+
+
+def _related_row_unknown_instance_key_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['context']['related_tables']['accounts']['rows'].append(
+        [999, 'orphan'])
+    return payload
+
+
+def _relationship_source_key_mismatch_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['schema']['relationships'][0]['source_columns'] = [
+        'missing_account_id',
+    ]
+    return payload
+
+
+def _duplicate_predict_primary_key_payload() -> dict[str, Any]:
+    payload = nim_v0_two_predict_rows_payload()
+    payload['predict']['instance_table']['rows'][1][0] = 601
+    return payload
+
+
+@pytest.mark.parametrize(
+    ('payload_factory', 'expected_code', 'detail_fragment'),
+    [
+        pytest.param(
+            _invalid_run_mode_payload,
+            'INVALID_SCHEMA',
+            'run_mode',
+            id='invalid-run-mode',
+        ),
+        pytest.param(
+            _unsupported_output_field_payload,
+            'UNSUPPORTED_OUTPUT',
+            'feature_importances',
+            id='unsupported-output-field',
+        ),
+        pytest.param(
+            _unsupported_task_kind_payload,
+            'UNSUPPORTED_TASK',
+            'forecasting',
+            id='unsupported-task-kind',
+        ),
+        pytest.param(
+            _missing_target_column_payload,
+            'TASK_SCHEMA_MISMATCH',
+            'missing_status',
+            id='missing-target-column',
+        ),
+        pytest.param(
+            _unknown_predict_column_payload,
+            'VALIDATION_FAILED',
+            'leakage',
+            id='unknown-predict-column',
+        ),
+        pytest.param(
+            _invalid_timestamp_payload,
+            'VALIDATION_FAILED',
+            'timestamp',
+            id='invalid-timestamp',
+        ),
+        pytest.param(
+            _related_row_unknown_instance_key_payload,
+            'INVALID_SCHEMA',
+            'unknown instance key',
+            id='related-row-unknown-instance-key',
+        ),
+        pytest.param(
+            _relationship_source_key_mismatch_payload,
+            'INVALID_SCHEMA',
+            'missing_account_id',
+            id='relationship-source-key-mismatch',
+        ),
+        pytest.param(
+            _duplicate_predict_primary_key_payload,
+            'INVALID_SCHEMA',
+            'duplicate',
+            id='duplicate-predict-primary-key',
+        ),
+    ],
+)
+def test_live_nim_v0_prediction_rejects_deterministic_variants(
+    nim_base_url: str,
+    payload_factory: Callable[[], dict[str, Any]],
+    expected_code: str,
+    detail_fragment: str,
+) -> None:
+    response = _request(
+        'POST',
+        nim_base_url,
+        NIM_V0_PREDICTION_PATH,
+        json=payload_factory(),
+    )
+
+    body = _assert_problem_details(
+        response,
+        expected_status=422,
+        expected_code=expected_code,
+    )
+    assert detail_fragment in str(body)
 
 
 @pytest.mark.xfail(

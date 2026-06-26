@@ -110,6 +110,155 @@ def nim_v0_smoke_payload() -> dict[str, Any]:
     return deepcopy(_NIM_V0_SMOKE_PAYLOAD)
 
 
+def nim_v0_prediction_only_output_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['output']['fields'] = ['prediction']
+    return payload
+
+
+def nim_v0_fast_run_mode_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['inference']['run_mode'] = 'fast'
+    return payload
+
+
+def nim_v0_without_inference_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload.pop('inference')
+    return payload
+
+
+def nim_v0_two_predict_rows_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['predict']['instance_table']['rows'] = [
+        [601, '2025-02-01T00:00:00Z'],
+        [602, '2025-02-02T00:00:00Z'],
+    ]
+    payload['predict']['related_tables']['accounts']['rows'] = [
+        [601, 'enterprise'],
+        [602, 'startup'],
+    ]
+    return payload
+
+
+def nim_v0_reordered_predict_rows_payload() -> dict[str, Any]:
+    payload = nim_v0_two_predict_rows_payload()
+    payload['predict']['instance_table']['rows'] = [
+        [602, '2025-02-02T00:00:00Z'],
+        [601, '2025-02-01T00:00:00Z'],
+    ]
+    return payload
+
+
+def nim_v0_empty_predict_rows_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['predict']['instance_table']['rows'] = []
+    payload['predict']['related_tables']['accounts']['rows'] = []
+    return payload
+
+
+def nim_v0_explicit_utc_offset_timestamp_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['context']['instance_table']['rows'] = [
+        [501, True, '2025-01-01T00:00:00.123456+00:00'],
+        [502, False, '2025-01-02T03:04:05-05:00'],
+    ]
+    payload['predict']['instance_table']['rows'] = [
+        [601, '2025-02-01T12:30:45.000001+02:00'],
+    ]
+    return payload
+
+
+def nim_v0_regression_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['task'] = {
+        'kind': 'regression',
+        'target': {
+            'column_name': 'score',
+            'dtype': 'float64',
+        },
+        'entity_table_names': ['accounts'],
+    }
+    payload['schema']['instance_table']['columns'] = {
+        'account_id': {
+            'dtype': 'int64',
+            'stype': 'ID',
+        },
+        'score': {
+            'dtype': 'float64',
+            'stype': 'numerical',
+        },
+        'score_hint': {
+            'dtype': 'float64',
+            'stype': 'numerical',
+        },
+        'anchor_time': {
+            'dtype': 'timestamp[us]',
+            'stype': 'timestamp',
+        },
+    }
+    payload['context']['instance_table'] = {
+        'format': 'arrays',
+        'columns': ['account_id', 'score', 'score_hint', 'anchor_time'],
+        'rows': [
+            [501, 0.25, 1.0, '2025-01-01T00:00:00Z'],
+            [502, 0.75, 2.0, '2025-01-02T00:00:00Z'],
+        ],
+    }
+    payload['predict']['instance_table'] = {
+        'format': 'arrays',
+        'columns': ['account_id', 'score_hint', 'anchor_time'],
+        'rows': [[601, 1.5, '2025-02-01T00:00:00Z']],
+    }
+    payload['output']['fields'] = ['prediction']
+    return payload
+
+
+def nim_v0_multiclass_payload() -> dict[str, Any]:
+    payload = nim_v0_smoke_payload()
+    payload['task'] = {
+        'kind': 'multiclass_classification',
+        'target': {
+            'column_name': 'tier',
+            'dtype': 'string',
+            'classes': ['bronze', 'silver'],
+        },
+        'entity_table_names': ['accounts'],
+    }
+    payload['schema']['instance_table']['columns'] = {
+        'account_id': {
+            'dtype': 'int64',
+            'stype': 'ID',
+        },
+        'tier': {
+            'dtype': 'string',
+            'stype': 'categorical',
+        },
+        'score_hint': {
+            'dtype': 'float64',
+            'stype': 'numerical',
+        },
+        'anchor_time': {
+            'dtype': 'timestamp[us]',
+            'stype': 'timestamp',
+        },
+    }
+    payload['context']['instance_table'] = {
+        'format': 'arrays',
+        'columns': ['account_id', 'tier', 'score_hint', 'anchor_time'],
+        'rows': [
+            [501, 'bronze', 1.0, '2025-01-01T00:00:00Z'],
+            [502, 'silver', 2.0, '2025-01-02T00:00:00Z'],
+        ],
+    }
+    payload['predict']['instance_table'] = {
+        'format': 'arrays',
+        'columns': ['account_id', 'score_hint', 'anchor_time'],
+        'rows': [[601, 1.5, '2025-02-01T00:00:00Z']],
+    }
+    return payload
+
+
 def sdk_v1_smoke_payload() -> dict[str, Any]:
     payload = nim_v0_smoke_payload()
     payload['version'] = 'v1'
