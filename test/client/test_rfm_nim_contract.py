@@ -82,6 +82,44 @@ def test_sdk_prediction_endpoint_is_v1_but_current_nim_smoke_is_v0() -> None:
     assert SDK_V1_PREDICTION_PATH != NIM_V0_PREDICTION_PATH
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: RFMAPI.predict currently posts '
+        'to /v1/predictions, while this Kumo RFM NIM serves /v0/predictions.'),
+)
+def test_sdk_prediction_endpoint_should_match_current_nim_route() -> None:
+    client = KumoClient(MOCK_URL, api_key='DISABLED')
+    endpoint = TFMOperations.create_prediction.endpoint
+
+    assert client._format_endpoint_url(endpoint.get_path()) == (
+        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}')
+
+
+@pytest.mark.parametrize(
+    ('operation', 'current_nim_path'),
+    [
+        (TFMOperations.get_health_live, '/health/live'),
+        (TFMOperations.get_health_ready, '/health/ready'),
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: generated TFM health endpoints '
+        'are version-prefixed by KumoClient, while this NIM exposes unversioned '
+        'health routes.'),
+)
+def test_sdk_generated_health_endpoints_should_match_current_nim_routes(
+    operation: Any,
+    current_nim_path: str,
+) -> None:
+    client = KumoClient(MOCK_URL, api_key='DISABLED')
+
+    assert client._format_endpoint_url(operation.endpoint.get_path()) == (
+        f'{MOCK_URL}{current_nim_path}')
+
+
 def test_sdk_predict_surfaces_current_nim_v1_prediction_404(
     mock_api: Any,
 ) -> None:

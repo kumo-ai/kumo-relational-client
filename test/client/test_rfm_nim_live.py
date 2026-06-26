@@ -193,6 +193,66 @@ def test_live_nim_sdk_v1_prediction_endpoint_remains_absent(
     assert response.status_code == 404
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: SDK-style /v1/predictions '
+        'requests should work against the Kumo RFM NIM, but currently 404.'),
+)
+def test_live_nim_sdk_v1_prediction_endpoint_should_work(
+    nim_base_url: str,
+) -> None:
+    response = _request(
+        'POST',
+        nim_base_url,
+        SDK_V1_PREDICTION_PATH,
+        json=sdk_v1_smoke_payload(),
+    )
+
+    _assert_prediction_response_invariants(response)
+
+
+@pytest.mark.parametrize(
+    ('sdk_health_path', 'current_nim_path'),
+    [
+        ('/v1/health/live', '/health/live'),
+        ('/v1/health/ready', '/health/ready'),
+    ],
+)
+def test_live_nim_sdk_health_routes_are_currently_absent(
+    nim_base_url: str,
+    sdk_health_path: str,
+    current_nim_path: str,
+) -> None:
+    current_response = _request('GET', nim_base_url, current_nim_path)
+    sdk_response = _request('GET', nim_base_url, sdk_health_path)
+
+    assert current_response.status_code == 200
+    assert sdk_response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    'sdk_health_path',
+    [
+        '/v1/health/live',
+        '/v1/health/ready',
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: generated TFM health routes are '
+        'version-prefixed by the SDK but absent from this NIM container.'),
+)
+def test_live_nim_sdk_health_routes_should_work(
+    nim_base_url: str,
+    sdk_health_path: str,
+) -> None:
+    response = _request('GET', nim_base_url, sdk_health_path)
+
+    assert response.status_code == 200
+
+
 @pytest.mark.parametrize(
     ('path', 'allowed_method'),
     [
