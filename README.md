@@ -87,3 +87,30 @@ https://kumo.ai/docs/quick-start/rfm/
 ```bash
 pytest test
 ```
+
+### RFM NIM Contract Tests
+
+The SDK-side contract tests are unit-only by default:
+
+```bash
+python -m pytest test/client/test_rfm_nim_contract.py
+```
+
+Live Kumo RFM NIM probes are skipped unless `RFM_NIM_BASE_URL` is set. To test
+a container running on a Colossus host port such as `8002`, forward the remote
+port to the local machine first:
+
+```bash
+.tmp/ssh-colossus-gpu-temp -N -L 8002:127.0.0.1:8002
+```
+
+Then run the opt-in live suite from this repo:
+
+```bash
+export RFM_NIM_BASE_URL=http://127.0.0.1:8002
+python -m pytest test/client/test_rfm_nim_live.py
+```
+
+The live suite currently documents the known compatibility split: this SDK posts
+generated Universal TFM predictions to `/v1/predictions`, while the current Kumo
+RFM NIM container accepts prediction and session requests under `/v0/*`.
