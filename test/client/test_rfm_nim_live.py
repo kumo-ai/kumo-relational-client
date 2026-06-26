@@ -109,6 +109,31 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
     assert body['model'] == 'kumo-rfm'
     assert isinstance(body['predictions'], list)
     assert body['predictions']
+    prediction = body['predictions'][0]
+    assert prediction['prediction'] is True
+    assert set(prediction['probabilities']) == {'False', 'True'}
+    assert body['metadata']['task_kind'] == 'classification'
+    assert body['metadata']['adapter'] == 'kumo_rfm'
+    assert body['metadata']['backend_status'] == 'driver'
+
+
+def test_live_nim_v0_prediction_rejects_empty_body_with_problem_details(
+    nim_base_url: str,
+) -> None:
+    response = _request(
+        'POST',
+        nim_base_url,
+        NIM_V0_PREDICTION_PATH,
+        json={},
+    )
+
+    assert response.status_code == 422
+    assert response.headers['content-type'].startswith(
+        'application/problem+json')
+    body = response.json()
+    assert body['code'] == 'VALIDATION_FAILED'
+    assert body['status'] == 422
+    assert body['errors']
 
 
 def test_live_nim_v0_session_create_predict_delete(
@@ -124,6 +149,8 @@ def test_live_nim_v0_session_create_predict_delete(
     body = created.json()
     session_id = str(body['session_id'])
     assert session_id
+    assert body['ttl_seconds'] > 0
+    assert body['expires_at']
 
     try:
         predict = _request(
@@ -137,6 +164,7 @@ def test_live_nim_v0_session_create_predict_delete(
         assert prediction_body['model'] == 'kumo-rfm'
         assert isinstance(prediction_body['predictions'], list)
         assert prediction_body['predictions']
+        assert prediction_body['predictions'][0]['prediction'] is True
     finally:
         deleted = _request(
             'DELETE',

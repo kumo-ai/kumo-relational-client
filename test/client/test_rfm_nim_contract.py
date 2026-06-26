@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 import pytest
@@ -84,10 +85,16 @@ def test_sdk_prediction_endpoint_is_v1_but_current_nim_smoke_is_v0() -> None:
 def test_sdk_predict_surfaces_current_nim_v1_prediction_404(
     mock_api: Any,
 ) -> None:
+    error_body = {
+        'type': 'about:blank',
+        'title': 'Not Found',
+        'status': 404,
+        'detail': 'Not Found',
+    }
     mock_api.post(
         f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
         status_code=404,
-        json={'detail': 'Not Found'},
+        json=error_body,
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
@@ -95,8 +102,143 @@ def test_sdk_predict_surfaces_current_nim_v1_prediction_404(
         api.predict(sdk_v1_smoke_payload())
 
     assert exc_info.value.status_code == 404
+    assert 'Not Found' in exc_info.value.detail
+    assert 'Not Found' in str(exc_info.value)
     assert mock_api.request_history[0].url == (
         f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}')
+
+
+def test_rfm_api_predict_does_not_mutate_request_payload(
+    mock_api: Any,
+) -> None:
+    mock_api.post(
+        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        json={
+            'id': 'pred-contract-test',
+            'model': 'kumo-rfm',
+            'predictions': [],
+        },
+    )
+    payload = sdk_v1_smoke_payload()
+    original = deepcopy(payload)
+
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    api.predict(payload)
+
+    assert payload == original
+
+
+def test_rfm_api_predict_maps_varied_prediction_item_shapes(
+    mock_api: Any,
+) -> None:
+    mock_api.post(
+        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        json={
+            'id': 'pred-varied-test',
+            'model': 'kumo-rfm',
+            'predictions': [
+                {
+                    'id': 'abc-123',
+                    'prediction': 'gold',
+                    'scores': ['0.5', 1],
+                    'rankings': [{
+                        'entity_id': 'item-1',
+                        'score': 0.9,
+                    }],
+                    'embeddings': ['0.1', 0.2],
+                    'quantiles': {
+                        'p50': '12.5',
+                    },
+                    'explanation': {
+                        'reason': 'fixture',
+                    },
+                },
+                {
+                    'row_index': '7',
+                    'prediction': 3.14,
+                },
+                {
+                    'probabilities': {
+                        'A': '0.25',
+                        'B': 0.75,
+                    },
+                },
+            ],
+            'metadata': {
+                'adapter': 'mock',
+            },
+        },
+    )
+
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    result = api.predict(sdk_v1_smoke_payload())
+
+    assert result.prediction == {
+        'columns': [
+            'ENTITY',
+            'prediction',
+            'scores',
+            'rankings',
+            'embeddings',
+            'q_p50',
+            'explanation',
+            'A_PROB',
+            'B_PROB',
+        ],
+        'data': [
+            [
+                'abc-123',
+                'gold',
+                [0.5, 1.0],
+                [{
+                    'entity_id': 'item-1',
+                    'score': 0.9,
+                }],
+                [0.1, 0.2],
+                12.5,
+                {
+                    'reason': 'fixture',
+                },
+                None,
+                None,
+            ],
+            [7, 3.14, None, None, None, None, None, None, None],
+            [2, None, None, None, None, None, None, 0.25, 0.75],
+        ],
+    }
+
+
+def test_prediction_response_rejects_bad_probability_shape(
+    mock_api: Any,
+) -> None:
+    mock_api.post(
+        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        json={
+            'id': 'pred-bad-probabilities',
+            'model': 'kumo-rfm',
+            'predictions': [{
+                'id': '1',
+                'probabilities': ['not', 'a', 'mapping'],
+            }],
+        },
+    )
+
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    with pytest.raises(TypeError, match='Expected mapping value'):
+        api.predict(sdk_v1_smoke_payload())
+
+
+def test_payload_factories_return_isolated_deep_copies() -> None:
+    first = nim_v0_smoke_payload()
+    second = nim_v0_smoke_payload()
+
+    first['context']['instance_table']['rows'][0][1] = False
+    first['schema']['related_tables']['accounts']['columns']['segment'][
+        'dtype'] = 'mutated'
+
+    assert second['context']['instance_table']['rows'][0][1] is True
+    assert second['schema']['related_tables']['accounts']['columns'][
+        'segment']['dtype'] == 'string'
 
 
 def test_container_smoke_payload_tracks_current_v0_wire_shape() -> None:
