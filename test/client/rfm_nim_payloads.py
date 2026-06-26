@@ -5,7 +5,13 @@ from typing import Any
 
 NIM_V0_PREDICTION_PATH = '/v0/predictions'
 NIM_V0_SESSIONS_PATH = '/v0/sessions'
+NIM_HEALTH_READY_PATH = '/health/ready'
+SDK_CONFIG_PATH = '/config'
+SDK_V1_CONNECTORS_PATH = '/v1/connectors'
 SDK_V1_PREDICTION_PATH = '/v1/predictions'
+SDK_V1_SESSIONS_PATH = '/v1/sessions'
+SDK_V1_RFM_PARSE_QUERY_PATH = '/v1/rfm/parse_query'
+SDK_V1_RFM_VALIDATE_QUERY_PATH = '/v1/rfm/validate_query'
 
 _NIM_V0_SMOKE_PAYLOAD: dict[str, Any] = {
     'model': 'kumo-rfm',

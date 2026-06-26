@@ -9,9 +9,14 @@ import pytest
 import requests
 
 from rfm_nim_payloads import (
+    SDK_CONFIG_PATH,
     NIM_V0_PREDICTION_PATH,
     NIM_V0_SESSIONS_PATH,
+    SDK_V1_CONNECTORS_PATH,
     SDK_V1_PREDICTION_PATH,
+    SDK_V1_RFM_PARSE_QUERY_PATH,
+    SDK_V1_RFM_VALIDATE_QUERY_PATH,
+    SDK_V1_SESSIONS_PATH,
     nim_v0_session_create_payload,
     nim_v0_session_predict_minimal_payload,
     nim_v0_smoke_payload,
@@ -157,11 +162,16 @@ def test_live_nim_available_get_endpoints(
 @pytest.mark.parametrize(
     ('method', 'path', 'payload_factory'),
     [
-        ('POST', '/v1/sessions', nim_v0_session_create_payload),
+        ('POST', SDK_V1_SESSIONS_PATH, nim_v0_session_create_payload),
         ('GET', '/v1/capabilities', None),
         ('GET', '/v0/capabilities', None),
         ('GET', '/v1/models/kumo-rfm/capabilities', None),
         ('GET', '/v0/models/kumo-rfm/capabilities', None),
+        ('GET', SDK_V1_CONNECTORS_PATH, None),
+        ('GET', SDK_CONFIG_PATH, None),
+        ('GET', '/api/config', None),
+        ('POST', SDK_V1_RFM_PARSE_QUERY_PATH, None),
+        ('POST', SDK_V1_RFM_VALIDATE_QUERY_PATH, None),
     ],
 )
 def test_live_nim_currently_absent_endpoints_return_404(
@@ -279,6 +289,26 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
         nim_base_url,
         NIM_V0_PREDICTION_PATH,
         json=nim_v0_smoke_payload(),
+    )
+
+    _assert_prediction_response_invariants(response)
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: SDK-shaped prediction payloads '
+        'include v1-only top-level fields that the current /v0/predictions '
+        'contract rejects.'),
+)
+def test_live_nim_v0_prediction_should_accept_sdk_generated_payload_shape(
+    nim_base_url: str,
+) -> None:
+    response = _request(
+        'POST',
+        nim_base_url,
+        NIM_V0_PREDICTION_PATH,
+        json=sdk_v1_smoke_payload(),
     )
 
     _assert_prediction_response_invariants(response)

@@ -7,13 +7,19 @@ import pytest
 import requests
 
 from kumoai.client import KumoClient
+from kumoai.client.endpoints import HTTPMethod, RFMEndpoints
 from kumoai.client.generated.tfm_api import TFMOperations
+from kumoai.client.generated.tfm_api import TFM_ENDPOINTS_BY_OPERATION_ID
 from kumoai.client.rfm import RFMAPI
 from kumoai.exceptions import HTTPException
 
 from rfm_nim_payloads import (
+    NIM_HEALTH_READY_PATH,
     NIM_V0_PREDICTION_PATH,
     SDK_V1_PREDICTION_PATH,
+    SDK_V1_CONNECTORS_PATH,
+    SDK_V1_RFM_PARSE_QUERY_PATH,
+    SDK_V1_RFM_VALIDATE_QUERY_PATH,
     nim_v0_session_create_payload,
     nim_v0_session_predict_minimal_payload,
     nim_v0_smoke_payload,
@@ -96,6 +102,21 @@ def test_sdk_prediction_endpoint_should_match_current_nim_route() -> None:
         f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}')
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: SDK prediction payloads include '
+        'the v1 body-level version field, while the current v0 NIM contract '
+        'uses path versioning and rejects unknown top-level fields.'),
+)
+def test_sdk_prediction_payload_should_match_current_nim_v0_envelope() -> None:
+    sdk_payload = sdk_v1_smoke_payload()
+    nim_payload = nim_v0_smoke_payload()
+
+    assert 'version' not in sdk_payload
+    assert set(nim_payload) <= set(sdk_payload)
+
+
 @pytest.mark.parametrize(
     ('operation', 'current_nim_path'),
     [
@@ -118,6 +139,88 @@ def test_sdk_generated_health_endpoints_should_match_current_nim_routes(
 
     assert client._format_endpoint_url(operation.endpoint.get_path()) == (
         f'{MOCK_URL}{current_nim_path}')
+
+
+@pytest.mark.parametrize(
+    ('operation_id', 'method', 'current_nim_path'),
+    [
+        ('createSession', HTTPMethod.POST, '/v0/sessions'),
+        (
+            'runSessionPrediction',
+            HTTPMethod.POST,
+            '/v0/sessions/{session_id}/predictions',
+        ),
+        ('deleteSession', HTTPMethod.DELETE, '/v0/sessions/{session_id}'),
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: generated TFM metadata does '
+        'not include the current v0 session routes exposed by this NIM.'),
+)
+def test_sdk_generated_session_endpoints_should_match_current_nim_routes(
+    operation_id: str,
+    method: HTTPMethod,
+    current_nim_path: str,
+) -> None:
+    client = KumoClient(MOCK_URL, api_key='DISABLED')
+    endpoint = TFM_ENDPOINTS_BY_OPERATION_ID[operation_id]
+
+    assert endpoint.method == method
+    assert client._format_endpoint_url(endpoint.get_path()) == (
+        f'{MOCK_URL}{current_nim_path}')
+
+
+@pytest.mark.parametrize(
+    ('endpoint', 'legacy_path'),
+    [
+        (RFMEndpoints.parse_query, SDK_V1_RFM_PARSE_QUERY_PATH),
+        (RFMEndpoints.validate_query, SDK_V1_RFM_VALIDATE_QUERY_PATH),
+    ],
+)
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: public RFM query helpers still '
+        'post to legacy /v1/rfm/* routes, but the current NIM exposes only the '
+        'Universal TFM /v0 API.'),
+)
+def test_sdk_rfm_query_helpers_should_not_target_legacy_nim_absent_routes(
+    endpoint: Any,
+    legacy_path: str,
+) -> None:
+    client = KumoClient(MOCK_URL, api_key='DISABLED')
+
+    assert client._format_endpoint_url(endpoint.get_path()) != (
+        f'{MOCK_URL}{legacy_path}')
+
+
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        'Known SDK/container compatibility bug: KumoClient.authenticate probes '
+        '/v1/connectors, which is absent from the current NIM; NIM-compatible '
+        'init should use the available readiness/model metadata surface or '
+        'skip legacy auth.'),
+)
+def test_sdk_rest_authenticate_should_work_against_current_nim_surface(
+    mock_api: Any,
+) -> None:
+    mock_api.get(f'{MOCK_URL}{NIM_HEALTH_READY_PATH}', json={'status': 'ready'})
+    mock_api.get(
+        f'{MOCK_URL}{SDK_V1_CONNECTORS_PATH}',
+        status_code=404,
+        json={
+            'type': 'about:blank',
+            'title': 'Not Found',
+            'status': 404,
+            'detail': 'Not Found',
+        },
+    )
+
+    client = KumoClient(MOCK_URL, api_key='DISABLED')
+    client.authenticate()
 
 
 def test_sdk_predict_surfaces_current_nim_v1_prediction_404(
