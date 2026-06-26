@@ -15,6 +15,7 @@ from rfm_nim_payloads import (
     nim_v0_session_create_payload,
     nim_v0_session_predict_minimal_payload,
     nim_v0_smoke_payload,
+    sdk_v1_smoke_payload,
 )
 
 _ENV_VAR = 'RFM_NIM_BASE_URL'
@@ -31,7 +32,11 @@ pytestmark = [
 
 @pytest.fixture(scope='module')
 def nim_base_url() -> str:
-    return os.environ[_ENV_VAR].rstrip('/')
+    return _normalize_base_url(os.environ[_ENV_VAR])
+
+
+def _normalize_base_url(base_url: str) -> str:
+    return base_url.rstrip('/')
 
 
 def _url(base_url: str, path: str) -> str:
@@ -50,6 +55,84 @@ def _request(
         timeout=_TIMEOUT_SECONDS,
         **kwargs,
     )
+
+
+def _assert_json_response(response: requests.Response) -> dict[str, Any]:
+    assert response.headers.get('content-type', '').startswith(
+        'application/json')
+    body = response.json()
+    assert isinstance(body, dict)
+    return body
+
+
+def _assert_problem_details(
+    response: requests.Response,
+    expected_status: int,
+    expected_code: str | None = None,
+) -> dict[str, Any]:
+    assert response.status_code == expected_status
+    assert response.headers.get('content-type', '').startswith(
+        'application/problem+json')
+    body = response.json()
+    assert isinstance(body, dict)
+    assert body['status'] == expected_status
+    assert isinstance(body.get('title'), str)
+    assert isinstance(body.get('detail'), str)
+    if expected_code is not None:
+        assert body['code'] == expected_code
+    return body
+
+
+def _assert_prediction_response_invariants(
+    response: requests.Response,
+) -> dict[str, Any]:
+    assert response.status_code == 200
+    body = _assert_json_response(response)
+    assert body['model'] == 'kumo-rfm'
+
+    predictions = body['predictions']
+    assert isinstance(predictions, list)
+    assert len(predictions) == 1
+
+    prediction = predictions[0]
+    assert isinstance(prediction, dict)
+    assert prediction['prediction'] is True
+
+    probabilities = prediction['probabilities']
+    assert isinstance(probabilities, dict)
+    assert set(probabilities) == {'False', 'True'}
+    for value in probabilities.values():
+        assert isinstance(value, (int, float))
+        assert not isinstance(value, bool)
+        assert 0 <= value <= 1
+    assert sum(probabilities.values()) == pytest.approx(1.0)
+
+    metadata = body['metadata']
+    assert isinstance(metadata, dict)
+    assert metadata['task_kind'] == 'classification'
+    assert metadata['adapter'] == 'kumo_rfm'
+    assert metadata['backend_status'] == 'driver'
+    return body
+
+
+@pytest.mark.parametrize(
+    ('raw_base_url', 'expected_base_url'),
+    [
+        ('http://localhost:8000', 'http://localhost:8000'),
+        ('http://localhost:8000/', 'http://localhost:8000'),
+        ('http://localhost:8000///', 'http://localhost:8000'),
+        ('https://nim.example.test/rfm/', 'https://nim.example.test/rfm'),
+    ],
+)
+def test_live_nim_base_url_trailing_slash_normalization(
+    raw_base_url: str,
+    expected_base_url: str,
+) -> None:
+    normalized = _normalize_base_url(raw_base_url)
+
+    assert normalized == expected_base_url
+    assert _url(normalized, '/health/live') == (
+        f'{expected_base_url}/health/live')
 
 
 @pytest.mark.parametrize(
@@ -74,7 +157,6 @@ def test_live_nim_available_get_endpoints(
 @pytest.mark.parametrize(
     ('method', 'path', 'payload_factory'),
     [
-        ('POST', SDK_V1_PREDICTION_PATH, nim_v0_smoke_payload),
         ('POST', '/v1/sessions', nim_v0_session_create_payload),
         ('GET', '/v1/capabilities', None),
         ('GET', '/v0/capabilities', None),
@@ -94,6 +176,41 @@ def test_live_nim_currently_absent_endpoints_return_404(
     assert response.status_code == 404
 
 
+def test_live_nim_sdk_v1_prediction_endpoint_remains_absent(
+    nim_base_url: str,
+) -> None:
+    assert SDK_V1_PREDICTION_PATH == '/v1/predictions'
+    assert NIM_V0_PREDICTION_PATH == '/v0/predictions'
+    assert SDK_V1_PREDICTION_PATH != NIM_V0_PREDICTION_PATH
+
+    response = _request(
+        'POST',
+        nim_base_url,
+        SDK_V1_PREDICTION_PATH,
+        json=sdk_v1_smoke_payload(),
+    )
+
+    assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ('path', 'allowed_method'),
+    [
+        (NIM_V0_PREDICTION_PATH, 'POST'),
+        (NIM_V0_SESSIONS_PATH, 'POST'),
+    ],
+)
+def test_live_nim_v0_write_endpoints_reject_safe_method_mismatches(
+    nim_base_url: str,
+    path: str,
+    allowed_method: str,
+) -> None:
+    response = _request('GET', nim_base_url, path)
+
+    assert response.status_code == 405
+    assert allowed_method in response.headers.get('allow', '')
+
+
 def test_live_nim_v0_prediction_accepts_container_smoke_payload(
     nim_base_url: str,
 ) -> None:
@@ -104,17 +221,7 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
         json=nim_v0_smoke_payload(),
     )
 
-    assert response.status_code == 200
-    body = response.json()
-    assert body['model'] == 'kumo-rfm'
-    assert isinstance(body['predictions'], list)
-    assert body['predictions']
-    prediction = body['predictions'][0]
-    assert prediction['prediction'] is True
-    assert set(prediction['probabilities']) == {'False', 'True'}
-    assert body['metadata']['task_kind'] == 'classification'
-    assert body['metadata']['adapter'] == 'kumo_rfm'
-    assert body['metadata']['backend_status'] == 'driver'
+    _assert_prediction_response_invariants(response)
 
 
 def test_live_nim_v0_prediction_rejects_empty_body_with_problem_details(
@@ -127,13 +234,34 @@ def test_live_nim_v0_prediction_rejects_empty_body_with_problem_details(
         json={},
     )
 
-    assert response.status_code == 422
-    assert response.headers['content-type'].startswith(
-        'application/problem+json')
-    body = response.json()
-    assert body['code'] == 'VALIDATION_FAILED'
-    assert body['status'] == 422
+    body = _assert_problem_details(
+        response,
+        expected_status=422,
+        expected_code='VALIDATION_FAILED',
+    )
     assert body['errors']
+
+
+def test_live_nim_v0_prediction_rejects_missing_required_field(
+    nim_base_url: str,
+) -> None:
+    payload = nim_v0_smoke_payload()
+    payload.pop('schema')
+
+    response = _request(
+        'POST',
+        nim_base_url,
+        NIM_V0_PREDICTION_PATH,
+        json=payload,
+    )
+
+    body = _assert_problem_details(
+        response,
+        expected_status=422,
+        expected_code='VALIDATION_FAILED',
+    )
+    assert body['errors']
+    assert any('schema' in str(error) for error in body['errors'])
 
 
 def test_live_nim_v0_session_create_predict_delete(
@@ -152,23 +280,34 @@ def test_live_nim_v0_session_create_predict_delete(
     assert body['ttl_seconds'] > 0
     assert body['expires_at']
 
+    deleted_session = False
+    session_url = f'{NIM_V0_SESSIONS_PATH}/{quote(session_id, safe="")}'
+    session_predictions_url = f'{session_url}/predictions'
+
     try:
         predict = _request(
             'POST',
             nim_base_url,
-            f'{NIM_V0_SESSIONS_PATH}/{quote(session_id, safe="")}/predictions',
+            session_predictions_url,
             json=nim_v0_session_predict_minimal_payload(),
         )
-        assert predict.status_code == 200
-        prediction_body = predict.json()
-        assert prediction_body['model'] == 'kumo-rfm'
-        assert isinstance(prediction_body['predictions'], list)
-        assert prediction_body['predictions']
-        assert prediction_body['predictions'][0]['prediction'] is True
-    finally:
-        deleted = _request(
+        _assert_prediction_response_invariants(predict)
+
+        delete_response = _request(
             'DELETE',
             nim_base_url,
-            f'{NIM_V0_SESSIONS_PATH}/{quote(session_id, safe="")}',
+            session_url,
         )
-        assert deleted.status_code == 204
+        assert delete_response.status_code == 204
+        deleted_session = True
+
+        after_delete = _request(
+            'POST',
+            nim_base_url,
+            session_predictions_url,
+            json=nim_v0_session_predict_minimal_payload(),
+        )
+        _assert_problem_details(after_delete, expected_status=404)
+    finally:
+        if not deleted_session:
+            _request('DELETE', nim_base_url, session_url)
