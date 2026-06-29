@@ -17,7 +17,13 @@ from kumoai.rfm.rfm import Explanation
 
 
 class MockAPI:
-    def predict(self, request: dict[str, Any]) -> RFMPredictResponse:
+    def predict(
+        self,
+        request: dict[str, Any],
+        *,
+        entity_ids: list[Any] | None = None,
+        instance_ids: list[Any] | None = None,
+    ) -> RFMPredictResponse:
         return RFMPredictResponse(prediction={
             'columns': ['ENTITY', 'True_PROB'],
             'data': [[0, 0.15]],
@@ -646,7 +652,13 @@ def test_regression_quantile_output_config(
     captured_config = None
 
     class MockQuantileAPI:
-        def predict(self, request: dict[str, Any]) -> RFMPredictResponse:
+        def predict(
+            self,
+            request: dict[str, Any],
+            *,
+            entity_ids: list[Any] | None = None,
+            instance_ids: list[Any] | None = None,
+        ) -> RFMPredictResponse:
             nonlocal captured_config
             captured_config = request['inference']['inference_config']
             return RFMPredictResponse(
@@ -918,7 +930,13 @@ def test_explanation_warning_flows_from_api_response(
     })
 
     class MockPredictAPI:
-        def predict(self, request: dict[str, Any]) -> RFMPredictResponse:
+        def predict(
+            self,
+            request: dict[str, Any],
+            *,
+            entity_ids: list[Any] | None = None,
+            instance_ids: list[Any] | None = None,
+        ) -> RFMPredictResponse:
             return mock_resp
 
     model = KumoRFM(user_store_graph, verbose=False)

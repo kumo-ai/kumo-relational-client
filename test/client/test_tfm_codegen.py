@@ -10,7 +10,10 @@ import pytest
 
 from kumoai.client import KumoClient
 from kumoai.client.endpoints import HTTPMethod
-from kumoai.client.rfm import _prediction_item_to_row
+from kumoai.client.rfm import (
+    _prediction_item_to_row,
+    _prediction_response_to_rfm,
+)
 from kumoai.client.generated.tfm_api import (
     PredictionItem,
     PredictionResponse,
@@ -167,10 +170,10 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
         },
     )
 
-    row = _prediction_item_to_row(item)
+    row = _prediction_item_to_row(item, entity_id='customer-7')
 
     assert row == {
-        'ENTITY': 7,
+        'ENTITY': 'customer-7',
         'prediction': 'yes',
         'no_PROB': 0.2,
         'yes_PROB': 0.8,
@@ -187,13 +190,6 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
         },
     }
 
-    row_by_index = _prediction_item_to_row(
-        PredictionItem(row_index=12, prediction='fallback'))
-    assert row_by_index == {
-        'ENTITY': 12,
-        'prediction': 'fallback',
-    }
-
     mapped_fields = {
         'id',
         'row_index',
@@ -208,6 +204,86 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
     parsed_fields = {field.name for field in fields(PredictionItem)}
     intentionally_unmapped_fields = {'metadata'}
     assert parsed_fields == mapped_fields | intentionally_unmapped_fields
+
+
+def test_prediction_response_correlates_opaque_ids_to_repeated_entities(
+) -> None:
+    response = PredictionResponse(
+        id='pred-1',
+        model='kumo-rfm',
+        predictions=(
+            PredictionItem(id='21', row_index=1, prediction='second'),
+            PredictionItem(id='20', row_index=0, prediction='first'),
+        ),
+        metadata={'task_kind': 'regression'},
+    )
+
+    converted = _prediction_response_to_rfm(
+        response,
+        entity_ids=('user-7', 'user-7'),
+        instance_ids=(20, 21),
+    )
+
+    assert converted.prediction == {
+        'columns': ['ENTITY', 'prediction'],
+        'data': [
+            ['user-7', 'first'],
+            ['user-7', 'second'],
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ('predictions', 'entity_ids', 'instance_ids', 'error'),
+    [
+        (
+            (PredictionItem(id='20', prediction=1.0), ),
+            (3, ),
+            (20, ),
+            'missing row_index',
+        ),
+        (
+            (PredictionItem(id='20', row_index=1, prediction=1.0), ),
+            (3, ),
+            (20, ),
+            'row_index is out of range',
+        ),
+        (
+            (PredictionItem(id='wrong', row_index=0, prediction=1.0), ),
+            (3, ),
+            (20, ),
+            'id does not match request instance_id',
+        ),
+        (
+            (
+                PredictionItem(id='20', row_index=0, prediction=1.0),
+                PredictionItem(id='20', row_index=0, prediction=2.0),
+            ),
+            (3, 3),
+            (20, 21),
+            'duplicate row_index',
+        ),
+    ],
+)
+def test_prediction_response_rejects_invalid_correlation(
+    predictions: tuple[PredictionItem, ...],
+    entity_ids: tuple[object, ...],
+    instance_ids: tuple[object, ...],
+    error: str,
+) -> None:
+    response = PredictionResponse(
+        id='pred-1',
+        model='kumo-rfm',
+        predictions=predictions,
+        metadata={'task_kind': 'regression'},
+    )
+
+    with pytest.raises(ValueError, match=error):
+        _prediction_response_to_rfm(
+            response,
+            entity_ids=entity_ids,
+            instance_ids=instance_ids,
+        )
 
 
 def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
@@ -279,6 +355,33 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     )
     assert result.returncode == 1
     assert 'not up to date' in result.stderr
+
+
+def test_generator_source_label_is_repository_relative(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from scripts.generate_tfm_api import generate_code_from_source
+
+    source_repo = tmp_path / 'source-repo'
+    (source_repo / '.git').mkdir(parents=True)
+    spec = source_repo / 'specs' / 'api_spec.json'
+    spec.parent.mkdir()
+    spec.write_text(json.dumps(_minimal_openapi_spec()))
+    monkeypatch.chdir(tmp_path)
+
+    relative_code = generate_code_from_source(
+        'source-repo/specs/api_spec.json',
+        output_path=tmp_path / 'relative.py',
+    )
+    absolute_code = generate_code_from_source(
+        str(spec),
+        output_path=tmp_path / 'absolute.py',
+    )
+
+    assert relative_code == absolute_code
+    assert '# Source: specs/api_spec.json' in relative_code
+    assert str(tmp_path) not in relative_code
 
 
 def test_generator_validation_reports_spec_drift(tmp_path: Path) -> None:

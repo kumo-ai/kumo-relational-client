@@ -41,6 +41,7 @@ from kumoai.rfm import Graph, TaskTable
 from kumoai.rfm.base import DataBackend, Sampler
 from kumoai.rfm.base.utils import Timestamp
 from kumoai.rfm.payload import (
+    INSTANCE_ID,
     context_size_stats,
     payload_size_bytes,
     predict_request_to_json,
@@ -740,8 +741,12 @@ class KumoRFM:
             details: Any | None = None
             warning: str | None = None
             for start in range(0, task.num_prediction_examples, batch_size):
+                batch_task = task.narrow_prediction(
+                    start,
+                    length=batch_size,
+                )
                 context = self._get_context(
-                    task=task.narrow_prediction(start, length=batch_size),
+                    task=batch_task,
                     run_mode=run_mode,
                     num_neighbors=num_neighbors,
                     exclude_cols_dict=exclude_cols_dict,
@@ -776,7 +781,22 @@ class KumoRFM:
 
                 for attempt in range(self._num_retries + 1):
                     try:
-                        resp = self._api_client.predict(request_payload)
+                        entity_ids = batch_task._pred_df[
+                            batch_task.entity_column.name
+                        ].tolist()
+                        predict_table = request_payload['predict'][
+                            'instance_table']
+                        instance_id_index = predict_table['columns'].index(
+                            INSTANCE_ID)
+                        instance_ids = [
+                            row[instance_id_index]
+                            for row in predict_table['rows']
+                        ]
+                        resp = self._api_client.predict(
+                            request_payload,
+                            entity_ids=entity_ids,
+                            instance_ids=instance_ids,
+                        )
                         df = pd.DataFrame(**resp.prediction)
                         if explain_config is not None:
                             df, summary, details, warning = (

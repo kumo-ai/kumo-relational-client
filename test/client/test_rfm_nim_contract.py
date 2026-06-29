@@ -51,6 +51,7 @@ def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
             'model': 'kumo-rfm',
             'predictions': [{
                 'id': '601',
+                'row_index': 0,
                 'prediction': True,
                 'probabilities': {
                     'True': 0.65,
@@ -65,7 +66,11 @@ def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
     payload = nim_v0_smoke_payload()
-    result = api.predict(payload)
+    result = api.predict(
+        payload,
+        entity_ids=[601],
+        instance_ids=[601],
+    )
 
     assert capture.payload == payload
     assert capture.headers is not None
@@ -164,14 +169,21 @@ def test_rfm_api_predict_does_not_mutate_request_payload(
         json={
             'id': 'pred-contract-test',
             'model': 'kumo-rfm',
-            'predictions': [],
+            'predictions': [{
+                'id': '601',
+                'row_index': 0,
+            }],
         },
     )
     payload = nim_v0_smoke_payload()
     original = deepcopy(payload)
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    api.predict(payload)
+    api.predict(
+        payload,
+        entity_ids=[601],
+        instance_ids=[601],
+    )
 
     assert payload == original
 
@@ -186,7 +198,8 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
             'model': 'kumo-rfm',
             'predictions': [
                 {
-                    'id': 'abc-123',
+                    'id': '601',
+                    'row_index': 0,
                     'prediction': 'gold',
                     'scores': ['0.5', 1],
                     'rankings': [{
@@ -202,10 +215,13 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
                     },
                 },
                 {
-                    'row_index': '7',
+                    'id': '602',
+                    'row_index': 1,
                     'prediction': 3.14,
                 },
                 {
+                    'id': '603',
+                    'row_index': 2,
                     'probabilities': {
                         'A': '0.25',
                         'B': 0.75,
@@ -219,7 +235,17 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    result = api.predict(nim_v0_smoke_payload())
+    payload = nim_v0_smoke_payload()
+    payload['predict']['instance_table']['rows'] = [
+        [601, '2025-02-01T00:00:00Z'],
+        [602, '2025-02-02T00:00:00Z'],
+        [603, '2025-02-03T00:00:00Z'],
+    ]
+    result = api.predict(
+        payload,
+        entity_ids=['account-a', 'account-a', 'account-b'],
+        instance_ids=[601, 602, 603],
+    )
 
     assert result.prediction == {
         'columns': [
@@ -235,7 +261,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
         ],
         'data': [
             [
-                'abc-123',
+                'account-a',
                 'gold',
                 [0.5, 1.0],
                 [{
@@ -250,8 +276,14 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
                 None,
                 None,
             ],
-            [7, 3.14, None, None, None, None, None, None, None],
-            [2, None, None, None, None, None, None, 0.25, 0.75],
+            [
+                'account-a', 3.14, None, None, None, None, None, None,
+                None,
+            ],
+            [
+                'account-b', None, None, None, None, None, None, 0.25,
+                0.75,
+            ],
         ],
     }
 
@@ -273,7 +305,11 @@ def test_prediction_response_rejects_bad_probability_shape(
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(TypeError, match='Expected mapping value'):
-        api.predict(nim_v0_smoke_payload())
+        api.predict(
+            nim_v0_smoke_payload(),
+            entity_ids=[601],
+            instance_ids=[601],
+        )
 
 
 def test_payload_factories_return_isolated_deep_copies() -> None:

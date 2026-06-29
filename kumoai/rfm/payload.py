@@ -20,11 +20,13 @@ from kumoai.client.generated.tfm_api import (
     TFM_OUTPUT_FIELD_EXPLANATION,
     TFM_OUTPUT_FIELD_PREDICTION,
     TFM_OUTPUT_FIELD_PROBABILITIES,
+    TFM_OUTPUT_FIELD_QUANTILES,
 )
 
 INSTANCE_ID = 'instance_id'
-INSTANCE_FEATURE = '__kumo_instance_feature'
 SYNTHETIC_NODE_ID = '__node_id'
+ENTITY_REFERENCE_PREFIX = '__kumo_entity_ref'
+ANCHOR_TIME_PREFIX = '__kumo_anchor_time'
 
 
 @dataclass(frozen=True)
@@ -37,6 +39,8 @@ class PayloadTables:
     related_table_primary_keys: dict[str, str | list[str]]
     related_table_stype_overrides: dict[str, dict[str, Stype]]
     related_table_key_columns: dict[str, str]
+    entity_reference_columns: dict[str, str]
+    anchor_time_column: str | None
     relationships: list[dict[str, Any]]
 
 
@@ -49,6 +53,10 @@ def predict_request_to_json(
         request.context.task_type,
         return_embeddings=request.return_embeddings,
         explain=explain,
+        quantile_output=(
+            isinstance(request.inference_config, RegressionInferenceConfig)
+            and request.inference_config.output_type == 'quantiles'
+        ),
     )
     payload = _base_payload(
         context=request.context,
@@ -110,19 +118,14 @@ def _base_payload(
 
     return {
         'model': TFM_MODEL_KUMO_RFM,
-        'task': _task_spec(context),
-        'schema': _schema_spec(
-            context,
-            tables,
-            use_prediction_time=use_prediction_time,
-        ),
+        'task': _task_spec(context, tables),
+        'schema': _schema_spec(context, tables),
         'context': {
             'instance_table':
             _dataframe_table(
                 _instance_payload_dataframe(
                     tables.context_instance_table,
                     context,
-                    use_prediction_time=use_prediction_time,
                 )),
             'related_tables': {
                 table_name: _dataframe_table(df)
@@ -135,7 +138,6 @@ def _base_payload(
                 _instance_payload_dataframe(
                     tables.predict_instance_table,
                     context,
-                    use_prediction_time=use_prediction_time,
                 )),
             'related_tables': {
                 table_name: _dataframe_table(df)
@@ -153,24 +155,25 @@ def _base_payload(
 
 
 def _payload_tables(context: Context) -> PayloadTables:
-    instance_df = _instance_dataframe(context)
+    instance_df, entity_reference_columns, anchor_time_column = (
+        _instance_dataframe(context)
+    )
     related_table_frames: dict[str, pd.DataFrame] = {}
     related_table_primary_keys: dict[str, str | list[str]] = {}
     related_table_stype_overrides: dict[str, dict[str, Stype]] = {}
     related_table_key_columns: dict[str, str] = {}
 
     for table_name, table in context.subgraph.table_dict.items():
-        df = _occurrence_dataframe(table)
-        key_column = _table_key_column(table, df)
+        df, key_column = _occurrence_dataframe(table)
         stype_overrides = {INSTANCE_ID: Stype.ID, **table.stype_dict}
-        if key_column == SYNTHETIC_NODE_ID:
-            stype_overrides[SYNTHETIC_NODE_ID] = Stype.ID
+        if key_column != table.primary_key:
+            stype_overrides[key_column] = Stype.ID
 
         related_table_frames[table_name] = df
         related_table_key_columns[table_name] = key_column
         related_table_primary_keys[table_name] = (
-            key_column if table_name in context.entity_table_names else
-            [INSTANCE_ID, key_column])
+            [INSTANCE_ID, key_column]
+        )
         related_table_stype_overrides[table_name] = stype_overrides
 
     relationships = _populate_relationship_columns(
@@ -179,15 +182,12 @@ def _payload_tables(context: Context) -> PayloadTables:
         related_table_frames,
         related_table_key_columns,
         related_table_stype_overrides,
+        entity_reference_columns,
     )
 
     context_related_tables: dict[str, pd.DataFrame] = {}
     predict_related_tables: dict[str, pd.DataFrame] = {}
     for table_name, df in related_table_frames.items():
-        if INSTANCE_ID not in df:
-            context_related_tables[table_name] = df.copy(deep=False)
-            predict_related_tables[table_name] = df.iloc[0:0].copy()
-            continue
         instance_ids = df[INSTANCE_ID].to_numpy()
         context_mask = instance_ids < context.num_train
         predict_mask = instance_ids >= context.num_train
@@ -210,21 +210,47 @@ def _payload_tables(context: Context) -> PayloadTables:
         related_table_primary_keys=related_table_primary_keys,
         related_table_stype_overrides=related_table_stype_overrides,
         related_table_key_columns=related_table_key_columns,
+        entity_reference_columns=entity_reference_columns,
+        anchor_time_column=anchor_time_column,
         relationships=relationships,
     )
 
 
-def _instance_dataframe(context: Context) -> pd.DataFrame:
+def _instance_dataframe(
+    context: Context,
+) -> tuple[pd.DataFrame, dict[str, str], str | None]:
+    # Request-local transport keys are independent of user entity values.
     df = pd.DataFrame({INSTANCE_ID: range(context.subgraph.batch_size)})
+    occupied = {INSTANCE_ID, context.y_train.name or 'TARGET'}
+    if context.task_table is not None:
+        occupied.update(context.task_table.df.columns)
+
     entity_names = context.entity_table_names
+    entity_reference_columns: dict[str, str] = {}
     for i, table_name in enumerate(entity_names):
         values = _entity_values(context, table_name)
         if values is None:
-            continue
-        column_name = 'ENTITY' if len(entity_names) == 1 else f'ENTITY_{i}'
+            raise ValueError(
+                f"Entity table {table_name!r} does not expose a primary key "
+                "for Universal payload materialization.")
+        column_name = _unique_internal_column(
+            occupied,
+            f'{ENTITY_REFERENCE_PREFIX}_{i}',
+        )
+        occupied.add(column_name)
+        entity_reference_columns[table_name] = column_name
         df[column_name] = values
 
-    df['ANCHOR_TIMESTAMP'] = pd.to_datetime(context.subgraph.anchor_time)
+    anchor_values = np.asarray(context.subgraph.anchor_time, dtype=np.int64)
+    anchor_time_column: str | None = None
+    if len(anchor_values) and not np.all(
+            anchor_values == pd.Timestamp.min.value):
+        anchor_time_column = _unique_internal_column(
+            occupied,
+            ANCHOR_TIME_PREFIX,
+        )
+        occupied.add(anchor_time_column)
+        df[anchor_time_column] = pd.to_datetime(anchor_values)
 
     target_name = context.y_train.name or 'TARGET'
     df[target_name] = None
@@ -242,7 +268,7 @@ def _instance_dataframe(context: Context) -> pd.DataFrame:
         for column_name in context.task_table.df.columns:
             df[column_name] = context.task_table.df[column_name].tolist()
 
-    return df
+    return df, entity_reference_columns, anchor_time_column
 
 
 def _entity_values(context: Context, table_name: str) -> list[Any] | None:
@@ -271,7 +297,7 @@ def _entity_values(context: Context, table_name: str) -> list[Any] | None:
     return values
 
 
-def _occurrence_dataframe(table: Any) -> pd.DataFrame:
+def _occurrence_dataframe(table: Any) -> tuple[pd.DataFrame, str]:
     df = table.df.reset_index(drop=True)
     batch = np.asarray(table.batch)
     if table.row is not None:
@@ -298,14 +324,14 @@ def _occurrence_dataframe(table: Any) -> pd.DataFrame:
     df = df.copy(deep=False)
     df.insert(0, INSTANCE_ID, batch)
     if table.primary_key is None or table.primary_key not in df:
-        df.insert(1, SYNTHETIC_NODE_ID, np.arange(len(df), dtype=np.int64))
-    return df
-
-
-def _table_key_column(table: Any, df: pd.DataFrame) -> str:
-    if table.primary_key is not None and table.primary_key in df:
-        return table.primary_key
-    return SYNTHETIC_NODE_ID
+        key_column = _unique_internal_column(
+            set(df.columns),
+            SYNTHETIC_NODE_ID,
+        )
+        df.insert(1, key_column, np.arange(len(df), dtype=np.int64))
+    else:
+        key_column = table.primary_key
+    return df, key_column
 
 
 def _populate_relationship_columns(
@@ -314,24 +340,26 @@ def _populate_relationship_columns(
     related_table_frames: dict[str, pd.DataFrame],
     related_table_key_columns: dict[str, str],
     related_table_stype_overrides: dict[str, dict[str, Stype]],
+    entity_reference_columns: dict[str, str],
 ) -> list[dict[str, Any]]:
     relationships: list[dict[str, Any]] = []
 
-    for i, table_name in enumerate(context.entity_table_names):
-        if table_name in related_table_frames:
-            continue
-        source_column = 'ENTITY' if len(
-            context.entity_table_names) == 1 else f'ENTITY_{i}'
+    for table_name in context.entity_table_names:
+        source_column = entity_reference_columns[table_name]
         target_column = related_table_key_columns.get(table_name)
-        if source_column not in instance_df or target_column is None:
-            continue
-        if target_column == SYNTHETIC_NODE_ID:
-            continue
+        if target_column is None:
+            raise ValueError(
+                f"Entity table {table_name!r} is missing from the sampled "
+                "subgraph.")
+        table = context.subgraph.table_dict[table_name]
+        if table.primary_key is None or target_column != table.primary_key:
+            raise ValueError(
+                f"Entity table {table_name!r} requires a declared scalar "
+                "primary key.")
         relationships.append({
-            'source_table': table_name,
-            'source_columns': [INSTANCE_ID, target_column],
+            'source_columns': [source_column],
             'target_table': table_name,
-            'target_columns': [INSTANCE_ID, target_column],
+            'target_columns': [target_column],
         })
 
     processed_edges: set[tuple[str, str, str]] = set()
@@ -365,9 +393,9 @@ def _populate_relationship_columns(
         related_table_stype_overrides[src_table][fkey] = Stype.ID
         relationships.append({
             'source_table': src_table,
-            'source_columns': [INSTANCE_ID, fkey],
+            'source_columns': [fkey],
             'target_table': dst_table,
-            'target_columns': [INSTANCE_ID, dst_key],
+            'target_columns': [dst_key],
         })
         processed_edges.add(logical_edge_type)
 
@@ -434,7 +462,7 @@ def _edge_pairs(
     return [(int(src), int(dst)) for src, dst in zip(row, col)]
 
 
-def _task_spec(context: Context) -> dict[str, Any]:
+def _task_spec(context: Context, tables: PayloadTables) -> dict[str, Any]:
     target_name = context.y_train.name or 'TARGET'
     spec: dict[str, Any] = {
         'kind': TaskType(context.task_type).value,
@@ -444,6 +472,15 @@ def _task_spec(context: Context) -> dict[str, Any]:
         },
         'entity_table_names': list(context.entity_table_names),
     }
+    if tables.anchor_time_column is not None:
+        spec['anchor_time_column'] = tables.anchor_time_column
+    if TaskType(context.task_type) == TaskType.BINARY_CLASSIFICATION:
+        spec['target']['classes'] = ['false', 'true']
+        spec['target']['positive_class'] = 'true'
+    elif TaskType(context.task_type) == TaskType.MULTICLASS_CLASSIFICATION:
+        spec['target']['classes'] = [
+            str(value) for value in pd.unique(context.y_train)
+        ]
     if context.top_k is not None:
         spec['top_k'] = context.top_k
     if context.step_size is not None:
@@ -456,8 +493,6 @@ def _task_spec(context: Context) -> dict[str, Any]:
 def _schema_spec(
     context: Context,
     tables: PayloadTables,
-    *,
-    use_prediction_time: bool,
 ) -> dict[str, Any]:
     spec = {
         'instance_table':
@@ -466,21 +501,22 @@ def _schema_spec(
                 _instance_payload_dataframe(
                     tables.context_instance_table,
                     context,
-                    use_prediction_time=use_prediction_time,
                 ),
                 _instance_payload_dataframe(
                     tables.predict_instance_table,
                     context,
-                    use_prediction_time=use_prediction_time,
                 ),
             ],
                       ignore_index=True),
             stype_overrides={
                 INSTANCE_ID: Stype.ID,
-                'ENTITY': Stype.ID,
-                'ENTITY_0': Stype.ID,
-                'ENTITY_1': Stype.ID,
-                'ANCHOR_TIMESTAMP': Stype.timestamp,
+                **{
+                    column: Stype.ID
+                    for column in tables.entity_reference_columns.values()
+                },
+                **({
+                    tables.anchor_time_column: Stype.timestamp
+                } if tables.anchor_time_column is not None else {}),
                 context.y_train.name or 'TARGET': _target_stype(
                     context.task_type),
             },
@@ -512,6 +548,9 @@ def _schema_for_dataframe(
     stype_overrides: dict[str, Stype],
     primary_key: str | list[str],
 ) -> dict[str, Any]:
+    primary_keys = (
+        {primary_key} if isinstance(primary_key, str) else set(primary_key)
+    )
     return {
         'columns': {
             column_name: {
@@ -519,6 +558,9 @@ def _schema_for_dataframe(
                 **({
                     'stype': _stype_name(stype_overrides[column_name])
                 } if column_name in stype_overrides else {}),
+                **({
+                    'nullable': False
+                } if column_name in primary_keys else {}),
             }
             for column_name in df.columns
         },
@@ -531,17 +573,17 @@ def _instance_primary_key(context: Context) -> str:
 
 
 def _instance_payload_dataframe(df: pd.DataFrame,
-                                context: Context,
-                                *,
-                                use_prediction_time: bool) -> pd.DataFrame:
-    if len(context.entity_table_names) == 1:
-        columns: list[str] = []
-        if not use_prediction_time:
-            columns.append('ANCHOR_TIMESTAMP')
-        out = df.drop(columns=columns, errors='ignore').copy(deep=False)
-        out[INSTANCE_FEATURE] = 0.0
-        return out
-    return df
+                                context: Context) -> pd.DataFrame:
+    return df.copy(deep=False)
+
+
+def _unique_internal_column(occupied: set[str], prefix: str) -> str:
+    if prefix not in occupied:
+        return prefix
+    suffix = 1
+    while f'{prefix}_{suffix}' in occupied:
+        suffix += 1
+    return f'{prefix}_{suffix}'
 
 
 def _dataframe_table(df: pd.DataFrame) -> dict[str, Any]:
@@ -558,10 +600,13 @@ def _output_fields(
     *,
     return_embeddings: bool,
     explain: bool,
+    quantile_output: bool = False,
 ) -> list[str]:
     fields = [TFM_OUTPUT_FIELD_PREDICTION]
     if TaskType(task_type).is_classification:
         fields.append(TFM_OUTPUT_FIELD_PROBABILITIES)
+    if quantile_output:
+        fields.append(TFM_OUTPUT_FIELD_QUANTILES)
     if return_embeddings:
         fields.append(TFM_OUTPUT_FIELD_EMBEDDINGS)
     if explain:
