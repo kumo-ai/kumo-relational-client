@@ -29,7 +29,6 @@ from rfm_nim_payloads import (
     nim_v0_smoke_payload,
     nim_v0_two_predict_rows_payload,
     nim_v0_without_inference_payload,
-    sdk_v1_smoke_payload,
 )
 
 _ENV_VAR = 'RFM_NIM_BASE_URL'
@@ -221,7 +220,7 @@ def test_live_nim_currently_absent_endpoints_return_404(
     assert response.status_code == 404
 
 
-def test_live_nim_sdk_v1_prediction_endpoint_remains_absent(
+def test_live_nim_legacy_v1_prediction_endpoint_remains_absent(
     nim_base_url: str,
 ) -> None:
     assert SDK_V1_PREDICTION_PATH == '/v1/predictions'
@@ -232,29 +231,10 @@ def test_live_nim_sdk_v1_prediction_endpoint_remains_absent(
         'POST',
         nim_base_url,
         SDK_V1_PREDICTION_PATH,
-        json=sdk_v1_smoke_payload(),
+        json=nim_v0_smoke_payload(),
     )
 
     assert response.status_code == 404
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: SDK-style /v1/predictions '
-        'requests should work against the Kumo RFM NIM, but currently 404.'),
-)
-def test_live_nim_sdk_v1_prediction_endpoint_should_work(
-    nim_base_url: str,
-) -> None:
-    response = _request(
-        'POST',
-        nim_base_url,
-        SDK_V1_PREDICTION_PATH,
-        json=sdk_v1_smoke_payload(),
-    )
-
-    _assert_prediction_response_invariants(response)
 
 
 @pytest.mark.parametrize(
@@ -274,28 +254,6 @@ def test_live_nim_sdk_health_routes_are_currently_absent(
 
     assert current_response.status_code == 200
     assert sdk_response.status_code == 404
-
-
-@pytest.mark.parametrize(
-    'sdk_health_path',
-    [
-        '/v1/health/live',
-        '/v1/health/ready',
-    ],
-)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: generated TFM health routes are '
-        'version-prefixed by the SDK but absent from this NIM container.'),
-)
-def test_live_nim_sdk_health_routes_should_work(
-    nim_base_url: str,
-    sdk_health_path: str,
-) -> None:
-    response = _request('GET', nim_base_url, sdk_health_path)
-
-    assert response.status_code == 200
 
 
 @pytest.mark.parametrize(
@@ -568,21 +526,17 @@ def test_live_nim_v0_prediction_rejects_deterministic_variants(
     assert detail_fragment in str(body)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: SDK-shaped prediction payloads '
-        'include v1-only top-level fields that the current /v0/predictions '
-        'contract rejects.'),
-)
-def test_live_nim_v0_prediction_should_accept_sdk_generated_payload_shape(
+def test_live_nim_v0_prediction_accepts_metadata_field(
     nim_base_url: str,
 ) -> None:
+    payload = nim_v0_smoke_payload()
+    payload['metadata'] = {'source_query': 'rfm-sdk-nim-contract-smoke'}
+
     response = _request(
         'POST',
         nim_base_url,
         NIM_V0_PREDICTION_PATH,
-        json=sdk_v1_smoke_payload(),
+        json=payload,
     )
 
     _assert_prediction_response_invariants(response)

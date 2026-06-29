@@ -7,26 +7,25 @@ import pytest
 import requests
 
 from kumoai.client import KumoClient
-from kumoai.client.endpoints import HTTPMethod, RFMEndpoints
-from kumoai.client.generated.tfm_api import TFMOperations
-from kumoai.client.generated.tfm_api import TFM_ENDPOINTS_BY_OPERATION_ID
+from kumoai.client.endpoints import HTTPMethod
+from kumoai.client.generated.tfm_api import (
+    TFMOperations,
+    TFM_ENDPOINTS_BY_OPERATION_ID,
+)
 from kumoai.client.rfm import RFMAPI
-from kumoai.exceptions import HTTPException
 
 from rfm_nim_payloads import (
     NIM_HEALTH_READY_PATH,
     NIM_V0_PREDICTION_PATH,
-    SDK_V1_PREDICTION_PATH,
+    NIM_V0_SESSIONS_PATH,
     SDK_V1_CONNECTORS_PATH,
-    SDK_V1_RFM_PARSE_QUERY_PATH,
-    SDK_V1_RFM_VALIDATE_QUERY_PATH,
     nim_v0_session_create_payload,
     nim_v0_session_predict_minimal_payload,
     nim_v0_smoke_payload,
-    sdk_v1_smoke_payload,
 )
 
 MOCK_URL = 'http://kumo.ai'
+SDK_V1_MODELS_PATH = '/v1/models'
 
 
 class JsonRequestCapture:
@@ -40,12 +39,12 @@ class JsonRequestCapture:
         return True
 
 
-def test_rfm_api_predict_posts_sdk_v1_payload_and_parses_response(
+def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
     mock_api: Any,
 ) -> None:
     capture = JsonRequestCapture()
     mock_api.post(
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
         additional_matcher=capture,
         json={
             'id': 'pred-contract-test',
@@ -59,16 +58,15 @@ def test_rfm_api_predict_posts_sdk_v1_payload_and_parses_response(
                 },
             }],
             'metadata': {
-                'version': 'v1',
                 'adapter': 'mock',
             },
         },
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    result = api.predict(sdk_v1_smoke_payload())
+    result = api.predict(nim_v0_smoke_payload())
 
-    assert capture.payload == sdk_v1_smoke_payload()
+    assert capture.payload == nim_v0_smoke_payload()
     assert capture.headers is not None
     assert capture.headers['Content-Type'] == 'application/json'
     assert result.prediction == {
@@ -77,44 +75,13 @@ def test_rfm_api_predict_posts_sdk_v1_payload_and_parses_response(
     }
 
 
-def test_sdk_prediction_endpoint_is_v1_but_current_nim_smoke_is_v0() -> None:
+def test_sdk_prediction_endpoint_matches_current_nim_v0_route() -> None:
     client = KumoClient(MOCK_URL, api_key='DISABLED')
-    endpoint = TFMOperations.create_prediction.endpoint
+    endpoint = TFMOperations.run_prediction.endpoint
 
-    assert endpoint.get_path() == '/predictions'
-    assert client._format_endpoint_url(endpoint.get_path()) == (
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}')
-    assert NIM_V0_PREDICTION_PATH == '/v0/predictions'
-    assert SDK_V1_PREDICTION_PATH != NIM_V0_PREDICTION_PATH
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: RFMAPI.predict currently posts '
-        'to /v1/predictions, while this Kumo RFM NIM serves /v0/predictions.'),
-)
-def test_sdk_prediction_endpoint_should_match_current_nim_route() -> None:
-    client = KumoClient(MOCK_URL, api_key='DISABLED')
-    endpoint = TFMOperations.create_prediction.endpoint
-
+    assert endpoint.get_path() == NIM_V0_PREDICTION_PATH
     assert client._format_endpoint_url(endpoint.get_path()) == (
         f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}')
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: SDK prediction payloads include '
-        'the v1 body-level version field, while the current v0 NIM contract '
-        'uses path versioning and rejects unknown top-level fields.'),
-)
-def test_sdk_prediction_payload_should_match_current_nim_v0_envelope() -> None:
-    sdk_payload = sdk_v1_smoke_payload()
-    nim_payload = nim_v0_smoke_payload()
-
-    assert 'version' not in sdk_payload
-    assert set(nim_payload) <= set(sdk_payload)
 
 
 @pytest.mark.parametrize(
@@ -124,14 +91,7 @@ def test_sdk_prediction_payload_should_match_current_nim_v0_envelope() -> None:
         (TFMOperations.get_health_ready, '/health/ready'),
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: generated TFM health endpoints '
-        'are version-prefixed by KumoClient, while this NIM exposes unversioned '
-        'health routes.'),
-)
-def test_sdk_generated_health_endpoints_should_match_current_nim_routes(
+def test_sdk_generated_health_endpoints_match_current_nim_routes(
     operation: Any,
     current_nim_path: str,
 ) -> None:
@@ -153,13 +113,7 @@ def test_sdk_generated_health_endpoints_should_match_current_nim_routes(
         ('deleteSession', HTTPMethod.DELETE, '/v0/sessions/{session_id}'),
     ],
 )
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: generated TFM metadata does '
-        'not include the current v0 session routes exposed by this NIM.'),
-)
-def test_sdk_generated_session_endpoints_should_match_current_nim_routes(
+def test_sdk_generated_session_endpoints_match_current_nim_routes(
     operation_id: str,
     method: HTTPMethod,
     current_nim_path: str,
@@ -172,42 +126,9 @@ def test_sdk_generated_session_endpoints_should_match_current_nim_routes(
         f'{MOCK_URL}{current_nim_path}')
 
 
-@pytest.mark.parametrize(
-    ('endpoint', 'legacy_path'),
-    [
-        (RFMEndpoints.parse_query, SDK_V1_RFM_PARSE_QUERY_PATH),
-        (RFMEndpoints.validate_query, SDK_V1_RFM_VALIDATE_QUERY_PATH),
-    ],
-)
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: public RFM query helpers still '
-        'post to legacy /v1/rfm/* routes, but the current NIM exposes only the '
-        'Universal TFM /v0 API.'),
-)
-def test_sdk_rfm_query_helpers_should_not_target_legacy_nim_absent_routes(
-    endpoint: Any,
-    legacy_path: str,
-) -> None:
-    client = KumoClient(MOCK_URL, api_key='DISABLED')
-
-    assert client._format_endpoint_url(endpoint.get_path()) != (
-        f'{MOCK_URL}{legacy_path}')
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        'Known SDK/container compatibility bug: KumoClient.authenticate probes '
-        '/v1/connectors, which is absent from the current NIM; NIM-compatible '
-        'init should use the available readiness/model metadata surface or '
-        'skip legacy auth.'),
-)
-def test_sdk_rest_authenticate_should_work_against_current_nim_surface(
+def test_sdk_rest_authenticate_accepts_current_nim_surface(
     mock_api: Any,
 ) -> None:
-    mock_api.get(f'{MOCK_URL}{NIM_HEALTH_READY_PATH}', json={'status': 'ready'})
     mock_api.get(
         f'{MOCK_URL}{SDK_V1_CONNECTORS_PATH}',
         status_code=404,
@@ -218,49 +139,30 @@ def test_sdk_rest_authenticate_should_work_against_current_nim_surface(
             'detail': 'Not Found',
         },
     )
+    mock_api.get(f'{MOCK_URL}{NIM_HEALTH_READY_PATH}', json={'status': 'ready'})
+    mock_api.get(
+        f'{MOCK_URL}{SDK_V1_MODELS_PATH}',
+        json={'data': [{
+            'id': 'kumo-rfm',
+        }]},
+    )
 
     client = KumoClient(MOCK_URL, api_key='DISABLED')
     client.authenticate()
-
-
-def test_sdk_predict_surfaces_current_nim_v1_prediction_404(
-    mock_api: Any,
-) -> None:
-    error_body = {
-        'type': 'about:blank',
-        'title': 'Not Found',
-        'status': 404,
-        'detail': 'Not Found',
-    }
-    mock_api.post(
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
-        status_code=404,
-        json=error_body,
-    )
-
-    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    with pytest.raises(HTTPException) as exc_info:
-        api.predict(sdk_v1_smoke_payload())
-
-    assert exc_info.value.status_code == 404
-    assert 'Not Found' in exc_info.value.detail
-    assert 'Not Found' in str(exc_info.value)
-    assert mock_api.request_history[0].url == (
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}')
 
 
 def test_rfm_api_predict_does_not_mutate_request_payload(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
         json={
             'id': 'pred-contract-test',
             'model': 'kumo-rfm',
             'predictions': [],
         },
     )
-    payload = sdk_v1_smoke_payload()
+    payload = nim_v0_smoke_payload()
     original = deepcopy(payload)
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
@@ -273,7 +175,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
         json={
             'id': 'pred-varied-test',
             'model': 'kumo-rfm',
@@ -312,7 +214,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    result = api.predict(sdk_v1_smoke_payload())
+    result = api.predict(nim_v0_smoke_payload())
 
     assert result.prediction == {
         'columns': [
@@ -353,7 +255,7 @@ def test_prediction_response_rejects_bad_probability_shape(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}{SDK_V1_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
         json={
             'id': 'pred-bad-probabilities',
             'model': 'kumo-rfm',
@@ -366,7 +268,7 @@ def test_prediction_response_rejects_bad_probability_shape(
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(TypeError, match='Expected mapping value'):
-        api.predict(sdk_v1_smoke_payload())
+        api.predict(nim_v0_smoke_payload())
 
 
 def test_payload_factories_return_isolated_deep_copies() -> None:
