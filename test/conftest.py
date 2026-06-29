@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Generator
 
 import pandas as pd
@@ -20,7 +22,6 @@ from kumoapi.typing import (
     Stype,
 )
 
-import kumoai.rfm as rfm
 from kumoai import global_state, init
 from kumoai.client.endpoints import Endpoint, HTTPMethod
 
@@ -81,6 +82,8 @@ def setup_integration_client():
 
 @pytest.fixture()
 def user_store_graph() -> rfm.Graph:
+    import kumoai.rfm as rfm
+
     df_dict = {}
     df_dict['USERS'] = pd.DataFrame({
         'USER_ID': [0, 1, 2, 3],
@@ -125,6 +128,8 @@ def user_store_graph() -> rfm.Graph:
 
 @pytest.fixture()
 def string_user_graph() -> rfm.Graph:
+    import kumoai.rfm as rfm
+
     df_dict = {}
     df_dict['USERS'] = pd.DataFrame({
         'USER_ID': ['user_a', 'user_b', 'user_c', 'user_d'],

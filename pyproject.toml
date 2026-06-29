@@ -107,6 +107,7 @@ filterwarnings=[
 ]
 markers = [
     "integration: integration tests",
+    "live_nim: opt-in live Kumo RFM NIM tests using RFM_NIM_BASE_URL",
 ]
 
 [tool.yapf]
