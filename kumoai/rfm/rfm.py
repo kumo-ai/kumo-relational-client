@@ -45,6 +45,7 @@ from kumoai.rfm.payload import (
     payload_size_bytes,
     predict_request_to_json,
 )
+from kumoai.rfm.query_parser import parse_query_locally
 from kumoai.utils import ProgressLogger, display
 
 _RANDOM_SEED = 42
@@ -1003,9 +1004,7 @@ class KumoRFM:
         if isinstance(query, ValidatedPredictiveQuery):
             return query
 
-        raise ValueError(
-            "String predictive queries require the retired RFM parse-query "
-            "API. Pass a ValidatedPredictiveQuery instead.")
+        return parse_query_locally(query, self._graph_def)
 
     @staticmethod
     def _get_task_type(
