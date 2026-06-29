@@ -29,6 +29,7 @@ setup(
         "urllib3",
         "typing_extensions>=4.5.0",
         kumo_api,
+        "antlr4-python3-runtime==4.9.3",
         "rich>=9.0.0",
         "jinja2",
     ],

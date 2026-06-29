@@ -89,7 +89,51 @@ class KumoClient:
                                          verify=self._verify_ssl)
             response.raise_for_status()
         except requests.RequestException as e:
+            if self._authenticate_universal_tfm_nim():
+                return
             _raise_init_error(self._url, e)
+
+    def _authenticate_universal_tfm_nim(self) -> bool:
+        """Return True when the endpoint is a Universal TFM NIM.
+
+        Universal TFM NIM containers do not expose the legacy Kumo
+        ``/v1/connectors`` authentication route. They do expose NIM health and
+        model metadata routes, so accept the endpoint when it reports ready and
+        advertises the Kumo RFM model.
+        """
+        try:
+            ready = self._session.get(
+                self._url + '/health/ready',
+                verify=self._verify_ssl,
+                timeout=10,
+            )
+            ready.raise_for_status()
+            ready_data = ready.json()
+            if not isinstance(ready_data, dict):
+                return False
+            ready_status = str(ready_data.get('status', '')).lower()
+            ready_check = str(ready_data.get('check', '')).lower()
+            if not (
+                (ready_status == 'healthy' and ready_check == 'ready')
+                or ready_status == 'ready'
+            ):
+                return False
+            models = self._session.get(
+                self._url + '/v1/models',
+                verify=self._verify_ssl,
+                timeout=10,
+            )
+            models.raise_for_status()
+            data = models.json()
+        except (requests.RequestException, ValueError):
+            return False
+
+        if not isinstance(data, dict):
+            return False
+        for model in data.get('data', []):
+            if isinstance(model, dict) and model.get('id') == 'kumo-rfm':
+                return True
+        return False
 
     def set_spcs_token(self, spcs_token: str) -> None:
         r"""Sets the SPCS token for subsequent requests."""

@@ -23,6 +23,7 @@ from kumoai.client.generated.tfm_api import (
 )
 
 INSTANCE_ID = 'instance_id'
+INSTANCE_FEATURE = '__kumo_instance_feature'
 SYNTHETIC_NODE_ID = '__node_id'
 
 
@@ -110,10 +111,19 @@ def _base_payload(
     return {
         'model': TFM_MODEL_KUMO_RFM,
         'task': _task_spec(context),
-        'schema': _schema_spec(context, tables),
+        'schema': _schema_spec(
+            context,
+            tables,
+            use_prediction_time=use_prediction_time,
+        ),
         'context': {
             'instance_table':
-            _dataframe_table(tables.context_instance_table),
+            _dataframe_table(
+                _instance_payload_dataframe(
+                    tables.context_instance_table,
+                    context,
+                    use_prediction_time=use_prediction_time,
+                )),
             'related_tables': {
                 table_name: _dataframe_table(df)
                 for table_name, df in tables.context_related_tables.items()
@@ -121,7 +131,12 @@ def _base_payload(
         },
         'predict': {
             'instance_table':
-            _dataframe_table(tables.predict_instance_table),
+            _dataframe_table(
+                _instance_payload_dataframe(
+                    tables.predict_instance_table,
+                    context,
+                    use_prediction_time=use_prediction_time,
+                )),
             'related_tables': {
                 table_name: _dataframe_table(df)
                 for table_name, df in tables.predict_related_tables.items()
@@ -153,7 +168,9 @@ def _payload_tables(context: Context) -> PayloadTables:
 
         related_table_frames[table_name] = df
         related_table_key_columns[table_name] = key_column
-        related_table_primary_keys[table_name] = [INSTANCE_ID, key_column]
+        related_table_primary_keys[table_name] = (
+            key_column if table_name in context.entity_table_names else
+            [INSTANCE_ID, key_column])
         related_table_stype_overrides[table_name] = stype_overrides
 
     relationships = _populate_relationship_columns(
@@ -183,7 +200,10 @@ def _payload_tables(context: Context) -> PayloadTables:
         context_instance_table=instance_df.iloc[:context.num_train].
         reset_index(drop=True),
         predict_instance_table=instance_df.iloc[context.num_train:].
-        reset_index(drop=True),
+        reset_index(drop=True).drop(
+            columns=[context.y_train.name or 'TARGET'],
+            errors='ignore',
+        ),
         related_table_frames=related_table_frames,
         context_related_tables=context_related_tables,
         predict_related_tables=predict_related_tables,
@@ -298,6 +318,8 @@ def _populate_relationship_columns(
     relationships: list[dict[str, Any]] = []
 
     for i, table_name in enumerate(context.entity_table_names):
+        if table_name in related_table_frames:
+            continue
         source_column = 'ENTITY' if len(
             context.entity_table_names) == 1 else f'ENTITY_{i}'
         target_column = related_table_key_columns.get(table_name)
@@ -306,7 +328,8 @@ def _populate_relationship_columns(
         if target_column == SYNTHETIC_NODE_ID:
             continue
         relationships.append({
-            'source_columns': [INSTANCE_ID, source_column],
+            'source_table': table_name,
+            'source_columns': [INSTANCE_ID, target_column],
             'target_table': table_name,
             'target_columns': [INSTANCE_ID, target_column],
         })
@@ -417,7 +440,7 @@ def _task_spec(context: Context) -> dict[str, Any]:
         'kind': TaskType(context.task_type).value,
         'target': {
             'column_name': target_name,
-            'dtype': _dtype_name(context.y_train),
+            'dtype': _target_dtype(context.task_type, context.y_train),
         },
         'entity_table_names': list(context.entity_table_names),
     }
@@ -433,13 +456,23 @@ def _task_spec(context: Context) -> dict[str, Any]:
 def _schema_spec(
     context: Context,
     tables: PayloadTables,
+    *,
+    use_prediction_time: bool,
 ) -> dict[str, Any]:
-    return {
+    spec = {
         'instance_table':
         _schema_for_dataframe(
             pd.concat([
-                tables.context_instance_table,
-                tables.predict_instance_table,
+                _instance_payload_dataframe(
+                    tables.context_instance_table,
+                    context,
+                    use_prediction_time=use_prediction_time,
+                ),
+                _instance_payload_dataframe(
+                    tables.predict_instance_table,
+                    context,
+                    use_prediction_time=use_prediction_time,
+                ),
             ],
                       ignore_index=True),
             stype_overrides={
@@ -451,7 +484,7 @@ def _schema_spec(
                 context.y_train.name or 'TARGET': _target_stype(
                     context.task_type),
             },
-            primary_key=INSTANCE_ID,
+            primary_key=_instance_primary_key(context),
         ),
         'related_tables': {
             table_name:
@@ -465,6 +498,12 @@ def _schema_spec(
         },
         'relationships': tables.relationships,
     }
+    target_name = context.y_train.name or 'TARGET'
+    spec['instance_table']['columns'][target_name]['dtype'] = _target_dtype(
+        context.task_type,
+        context.y_train,
+    )
+    return spec
 
 
 def _schema_for_dataframe(
@@ -485,6 +524,24 @@ def _schema_for_dataframe(
         },
         'primary_key': primary_key,
     }
+
+
+def _instance_primary_key(context: Context) -> str:
+    return INSTANCE_ID
+
+
+def _instance_payload_dataframe(df: pd.DataFrame,
+                                context: Context,
+                                *,
+                                use_prediction_time: bool) -> pd.DataFrame:
+    if len(context.entity_table_names) == 1:
+        columns: list[str] = []
+        if not use_prediction_time:
+            columns.append('ANCHOR_TIMESTAMP')
+        out = df.drop(columns=columns, errors='ignore').copy(deep=False)
+        out[INSTANCE_FEATURE] = 0.0
+        return out
+    return df
 
 
 def _dataframe_table(df: pd.DataFrame) -> dict[str, Any]:
@@ -542,6 +599,12 @@ def _target_stype(task_type: TaskType) -> Stype:
     return Stype.numerical
 
 
+def _target_dtype(task_type: TaskType, target: pd.Series) -> str:
+    if TaskType(task_type) == TaskType.BINARY_CLASSIFICATION:
+        return 'bool'
+    return _dtype_name(target)
+
+
 def _dtype_name(data: pd.Series) -> str:
     dtype = data.dtype
     if pd.api.types.is_bool_dtype(dtype):
@@ -551,7 +614,7 @@ def _dtype_name(data: pd.Series) -> str:
     if pd.api.types.is_float_dtype(dtype):
         return 'float32' if dtype.itemsize <= 4 else 'float64'
     if pd.api.types.is_datetime64_any_dtype(dtype):
-        return 'timestamp[ns]'
+        return 'timestamp[us]'
     return 'string'
 
 
@@ -567,10 +630,9 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, np.generic):
         value = value.item()
     if isinstance(value, pd.Timestamp):
-        return None if pd.isna(value) else value.isoformat()
+        return _timestamp_json_value(value)
     if isinstance(value, np.datetime64):
-        ts = pd.Timestamp(value)
-        return None if pd.isna(ts) else ts.isoformat()
+        return _timestamp_json_value(pd.Timestamp(value))
     if isinstance(value, np.ndarray):
         return [_json_value(v) for v in value.tolist()]
     if isinstance(value, (list, tuple)):
@@ -583,3 +645,11 @@ def _json_value(value: Any) -> Any:
     except (TypeError, ValueError):
         pass
     return value
+
+
+def _timestamp_json_value(value: pd.Timestamp) -> str | None:
+    if pd.isna(value):
+        return None
+    if value.tzinfo is not None:
+        value = value.tz_convert('UTC').tz_localize(None)
+    return value.to_pydatetime().isoformat(timespec='microseconds') + 'Z'

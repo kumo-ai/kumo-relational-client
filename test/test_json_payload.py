@@ -10,9 +10,10 @@ from kumoapi.pquery import ValidatedPredictiveQuery
 from kumoai.client import KumoClient
 from kumoai.client.rfm import RFMAPI
 from kumoai.rfm import Graph, KumoRFM
+from kumoai.rfm.payload import INSTANCE_FEATURE, INSTANCE_ID
 from kumoai.rfm.rfm import Explanation
 
-from test.conftest import MOCK_URL
+from conftest import MOCK_URL
 
 CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
 
@@ -78,6 +79,28 @@ def test_predict_posts_universal_json_payload(
     assert payload['schema']['relationships']
     assert payload['context']['instance_table']['format'] == 'arrays'
     assert payload['predict']['instance_table']['format'] == 'arrays'
+    assert payload['task']['target']['column_name'] in payload['context'][
+        'instance_table']['columns']
+    assert payload['task']['target']['column_name'] not in payload['predict'][
+        'instance_table']['columns']
+    assert payload['schema']['instance_table']['primary_key'] == INSTANCE_ID
+    context_instance_table = payload['context']['instance_table']
+    instance_id_index = context_instance_table['columns'].index(INSTANCE_ID)
+    instance_ids = [row[instance_id_index]
+                    for row in context_instance_table['rows']]
+    assert len(instance_ids) == len(set(instance_ids))
+    assert INSTANCE_FEATURE in payload['context']['instance_table']['columns']
+    assert INSTANCE_FEATURE in payload['predict']['instance_table']['columns']
+    assert 'ANCHOR_TIMESTAMP' not in payload['schema']['instance_table'][
+        'columns']
+    assert payload['schema']['related_tables']['USERS']['primary_key'] == (
+        'USER_ID')
+    assert payload['schema']['related_tables']['ORDERS']['columns']['TIME'][
+        'dtype'] == 'timestamp[us]'
+    assert payload['context']['related_tables']['ORDERS']['rows'][0][
+        payload['context']['related_tables']['ORDERS']['columns'].index(
+            'TIME')].endswith('Z')
+    assert payload['task']['target']['dtype'] == 'float32'
     assert 'embeddings' in payload['output']['fields']
     assert payload['inference']['run_mode'] == 'fast'
     assert payload['inference']['inference_config']['kind'] == 'regression'

@@ -77,6 +77,9 @@ build-backend = "scikit_build_core.setuptools.build_meta"
 where=["."]
 include=["kumoai*"]
 
+[tool.setuptools.package-data]
+"kumoai._vendor.kumopql"=["VENDORED.md"]
+
 [tool.setuptools.dynamic]
 version = {attr = "kumoai._version.__version__"}
 
