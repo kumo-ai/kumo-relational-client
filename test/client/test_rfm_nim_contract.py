@@ -64,9 +64,10 @@ def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    result = api.predict(nim_v0_smoke_payload())
+    payload = nim_v0_smoke_payload()
+    result = api.predict(payload)
 
-    assert capture.payload == nim_v0_smoke_payload()
+    assert capture.payload == payload
     assert capture.headers is not None
     assert capture.headers['Content-Type'] == 'application/json'
     assert result.prediction == {
@@ -104,13 +105,17 @@ def test_sdk_generated_health_endpoints_match_current_nim_routes(
 @pytest.mark.parametrize(
     ('operation_id', 'method', 'current_nim_path'),
     [
-        ('createSession', HTTPMethod.POST, '/v0/sessions'),
+        ('createSession', HTTPMethod.POST, NIM_V0_SESSIONS_PATH),
         (
             'runSessionPrediction',
             HTTPMethod.POST,
-            '/v0/sessions/{session_id}/predictions',
+            f'{NIM_V0_SESSIONS_PATH}/{{session_id}}/predictions',
         ),
-        ('deleteSession', HTTPMethod.DELETE, '/v0/sessions/{session_id}'),
+        (
+            'deleteSession',
+            HTTPMethod.DELETE,
+            f'{NIM_V0_SESSIONS_PATH}/{{session_id}}',
+        ),
     ],
 )
 def test_sdk_generated_session_endpoints_match_current_nim_routes(

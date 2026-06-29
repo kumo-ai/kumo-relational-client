@@ -101,7 +101,7 @@ a container running on a Colossus host port such as `8002`, forward the remote
 port to the local machine first:
 
 ```bash
-.tmp/ssh-colossus-gpu-temp -N -L 8002:127.0.0.1:8002
+ssh <user>@<colossus-host> -N -L 8002:127.0.0.1:8002
 ```
 
 Then run the opt-in live suite from this repo:
