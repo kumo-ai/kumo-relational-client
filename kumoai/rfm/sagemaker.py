@@ -98,7 +98,6 @@ class KumoClient_SageMakerAdapter(KumoClient):
 class KumoClient_SageMakerProxy_Local(KumoClient):
     def __init__(self, url: str):
         self._client = KumoClient(url, api_key=None)
-        self._client._api_url = self._client._url
         self._endpoint = Endpoint('/invocations', HTTPMethod.POST)
 
     def authenticate(self) -> None:

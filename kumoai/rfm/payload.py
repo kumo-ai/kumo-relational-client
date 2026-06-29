@@ -15,7 +15,6 @@ from kumoapi.rfm.inference import (
 from kumoapi.task import TaskType
 from kumoapi.typing import Stype
 from kumoai.client.generated.tfm_api import (
-    TFM_API_VERSION,
     TFM_MODEL_KUMO_RFM,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
     TFM_OUTPUT_FIELD_EXPLANATION,
@@ -109,7 +108,6 @@ def _base_payload(
     metadata['num_prediction_examples'] = context.num_test
 
     return {
-        'version': TFM_API_VERSION,
         'model': TFM_MODEL_KUMO_RFM,
         'task': _task_spec(context),
         'schema': _schema_spec(context, tables),

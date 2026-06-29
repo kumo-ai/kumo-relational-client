@@ -25,7 +25,6 @@ from kumoapi.rfm import Explanation as ExplanationConfig
 from kumoapi.rfm import (
     InferenceConfig,
     RegressionInferenceConfig,
-    RFMParseQueryRequest,
     RFMPredictRequest,
 )
 from kumoapi.rfm.context import Context, Table
@@ -1004,39 +1003,9 @@ class KumoRFM:
         if isinstance(query, ValidatedPredictiveQuery):
             return query
 
-        if isinstance(query, str) and query.strip()[:9].lower() == 'evaluate ':
-            raise ValueError("'EVALUATE PREDICT ...' queries are not "
-                             "supported in the SDK. Use `predict()` for "
-                             "predictions.")
-
-        request = RFMParseQueryRequest(
-            query=query,
-            graph_definition=self._graph_def,
-        )
-
-        for attempt in range(self._num_retries + 1):
-            try:
-                resp = self._api_client.parse_query(request)
-                break
-            except HTTPException as e:
-                if attempt == self._num_retries:
-                    try:
-                        msg = json.loads(e.detail)['detail']
-                    except Exception:
-                        msg = e.detail
-                    raise ValueError(f"Failed to parse query '{query}'. {msg}")
-
-                time.sleep(2**attempt)  # 1s, 2s, 4s, 8s, ...
-
-        if len(resp.validation_response.warnings) > 0:
-            msg = '\n'.join([
-                f'{i+1}. {warning.title}: {warning.message}'
-                for i, warning in enumerate(resp.validation_response.warnings)
-            ])
-            warnings.warn(f"Encountered the following warnings during "
-                          f"parsing:\n{msg}")
-
-        return resp.query
+        raise ValueError(
+            "String predictive queries require the retired RFM parse-query "
+            "API. Pass a ValidatedPredictiveQuery instead.")
 
     @staticmethod
     def _get_task_type(

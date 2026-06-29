@@ -3,7 +3,7 @@
 This plan lists the minimum validations needed to keep
 `scripts/generate_tfm_api.py`, the generated `kumoai/client/generated/tfm_api.py`
 models, and the handwritten SDK adapters aligned with the canonical OpenAPI spec
-from the `structured-data-api` repo at `../structured-data-api/api_spec.yaml`.
+from the `structured-data-api` repo at `../structured-data-api/nim-sd.openapi.yaml`.
 
 ## Why this exists
 
@@ -37,14 +37,14 @@ response field and the SDK has not been updated.
 ### 1. Response schema parity
 
 Add a spec-driven test in `test/client/test_tfm_codegen.py` that loads
-`api_spec.yaml` and asserts:
+`nim-sd.openapi.yaml` and asserts:
 
 - `dataclasses.fields(PredictionItem)` equals
   `components.schemas.PredictionItem.properties`
 - `dataclasses.fields(PredictionResponse)` equals
   `components.schemas.PredictionResponse.properties`
 - each schema's `required` fields are represented by the dataclass
-- `createPrediction` still returns `PredictionResponse`
+- the prediction operation still returns `PredictionResponse`
 
 Keep the local checkout skip behavior for developer machines, but make sure CI
 runs this with the canonical spec available.
@@ -53,7 +53,7 @@ runs this with the canonical spec available.
 
 Replace or extend the handwritten parser fixture with examples from:
 
-`paths./v1/predictions.post.responses.200.content.application/json.examples`
+`paths./v0/predictions.post.responses.200.content.application/json.examples`
 
 For each example:
 
@@ -110,7 +110,7 @@ rewriting files. It should fail with a readable diff for:
 
 - response dataclass fields vs spec properties
 - output enum constants vs spec enum
-- `createPrediction` response schema not being `PredictionResponse`
+- the prediction operation response schema not being `PredictionResponse`
 
 This is useful for local codegen and CI, but it should reuse the same comparison
 logic as the tests.
