@@ -2,7 +2,7 @@ import os
 
 from setuptools import setup
 
-kumo_api_ver = 'v0.91.0'
+kumo_api_ver = 'v0.92.0'
 if int(os.getenv('KUMO_SDK_RELEASE', '0')):
     api_ver = kumo_api_ver[1:]
     major, minor, patch = api_ver.split('.')
