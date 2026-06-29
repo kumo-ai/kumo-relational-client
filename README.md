@@ -20,16 +20,42 @@ session management.
 pip install -e .
 ```
 
-For local development without GitHub SSH access to `kumo-api`, point the
-installer at a local checkout:
+For local development without GitHub SSH access to `kumo-api`, use the
+published `kumo-api` wheel instead of the source tag:
 
 ```bash
-KUMO_API_PATH=/path/to/kumo-api pip install -e .
+KUMO_SDK_RELEASE=1 python -m pip install -e .
 ```
+
+Use `KUMO_API_PATH=/path/to/kumo-api python -m pip install -e .` only when
+intentionally testing a local `kumo-api` source checkout.
 
 The native sampler is built through CMake/scikit-build. Set
 `WITH_KUMOLIB=0` only for metadata-only workflows that do not import or run
 local RFM backends.
+
+### Native sampler build notes
+
+The `kumoai.kumolib` module is built from this repository, not from
+`kumo-api`. `CMakeLists.txt` compiles `kumoai/csrc/neighbor_sampler.cpp` into
+the `kumolib` pybind11 extension, and `setup.py` enables that native build by
+default unless `WITH_KUMOLIB=0` is set. Local backend imports such as
+`kumoai.rfm.backend.local` require the compiled extension to be present.
+
+`kumo-api` v0.92.0 supports Python 3.10 through 3.14 as an installed wheel.
+If the SDK dependencies are already present, build only this package and its
+native extension with:
+
+```bash
+python -m pip install -e . --no-deps
+```
+
+This avoids source-building `kumo-api` while still producing the SDK extension
+artifact for the active interpreter, for example
+`kumoai/kumolib.cpython-314-x86_64-linux-gnu.so`. The generated shared object
+is ignored by git. Building `kumo-api` itself from source is still done on
+Python 3.10 because of its protobuf generation toolchain, and source builds on
+Python 3.14 are unsupported.
 
 ## Quick Start
 
