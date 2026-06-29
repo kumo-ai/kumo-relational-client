@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 
+from kumoai.client import KumoClient
 from kumoai.client.endpoints import HTTPMethod
 from kumoai.client.rfm import _prediction_item_to_row
 from kumoai.client.generated.tfm_api import (
     PredictionItem,
     PredictionResponse,
-    TFM_API_VERSION,
     TFM_ENDPOINTS_BY_OPERATION_ID,
     TFM_MODEL_KUMO_RFM,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
@@ -24,25 +24,24 @@ from kumoai.client.generated.tfm_api import (
 )
 
 
-CANONICAL_SPEC = Path('../structured-data-api/api_spec.yaml')
+CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
 
 
 def test_generated_tfm_api_runtime_metadata() -> None:
-    operation = TFMOperations.create_prediction
+    operation = TFMOperations.run_prediction
     health = TFMOperations.get_health
     health_live = TFMOperations.get_health_live
     health_ready = TFMOperations.get_health_ready
 
-    assert TFM_API_VERSION == 'v1'
     assert TFM_MODEL_KUMO_RFM == 'kumo-rfm'
     assert TFM_OUTPUT_FIELD_EMBEDDINGS == 'embeddings'
     assert TFM_OUTPUT_FIELD_EXPLANATION == 'explanation'
-    assert operation.operation_id == 'createPrediction'
+    assert operation.operation_id == 'runPrediction'
     assert operation.request_schema == 'PredictionRequest'
     assert operation.response_schema == 'PredictionResponse'
     assert operation.endpoint.method == HTTPMethod.POST
-    assert operation.endpoint.get_path() == '/predictions'
-    assert TFM_ENDPOINTS_BY_OPERATION_ID['createPrediction'] == (
+    assert operation.endpoint.get_path() == '/v0/predictions'
+    assert TFM_ENDPOINTS_BY_OPERATION_ID['runPrediction'] == (
         operation.endpoint)
     assert 'HealthResponse' in TFM_SCHEMA_NAMES
     assert 'ProblemDetails' in TFM_SCHEMA_NAMES
@@ -67,6 +66,24 @@ def test_generated_tfm_api_runtime_metadata() -> None:
     assert health_ready.endpoint.get_path() == '/health/ready'
     assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealthReady'] == (
         health_ready.endpoint)
+
+
+def test_generated_tfm_api_paths_are_service_root_relative() -> None:
+    client = KumoClient('https://example.test', api_key=None)
+
+    for operation, expected_url in (
+        (TFMOperations.get_health, 'https://example.test/health'),
+        (TFMOperations.get_health_live, 'https://example.test/health/live'),
+        (TFMOperations.get_health_ready,
+         'https://example.test/health/ready'),
+        (TFMOperations.run_prediction,
+         'https://example.test/v0/predictions'),
+    ):
+        assert client._format_endpoint_url(
+            operation.endpoint.get_path()) == expected_url
+
+    with pytest.raises(ValueError, match='must start'):
+        client._format_endpoint_url('rfm/validate_query')
 
 
 def test_generated_prediction_response_parser() -> None:
@@ -106,7 +123,7 @@ def test_generated_prediction_response_parser() -> None:
 
     assert response.id == 'pred-1'
     assert response.model == 'kumo-rfm'
-    assert response.metadata['version'] == 'v1'
+    assert response.metadata['task_kind'] == 'classification'
     assert len(response.predictions) == 1
     item = response.predictions[0]
     assert item.id == '7'
@@ -214,7 +231,7 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     assert "Source: " in generated
     assert "class TFMOperations" in generated
     assert "class PredictionResponse" in generated
-    assert "create_prediction: Final[TFMOperation]" in generated
+    assert "run_prediction: Final[TFMOperation]" in generated
     assert "path='/predictions'" in generated
     assert "TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'" in generated
     assert "TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'" in generated
@@ -327,8 +344,8 @@ def test_generated_tfm_api_matches_local_canonical_spec() -> None:
 
     # Keep the loaded spec live so the skip guard above cannot be accidentally
     # removed without also updating this test.
-    assert spec['paths']['/v1/predictions']['post']['operationId'] == (
-        'createPrediction')
+    assert spec['paths']['/v0/predictions']['post']['operationId'] == (
+        'runPrediction')
 
 
 @pytest.mark.skipif(
@@ -358,7 +375,7 @@ def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
     }
     assert TFM_OUTPUT_FIELD_VALUES == tuple(
         schemas['OutputSpec']['properties']['fields']['items']['enum'])
-    assert TFMOperations.create_prediction.response_schema == (
+    assert TFMOperations.run_prediction.response_schema == (
         'PredictionResponse')
 
 
@@ -369,7 +386,7 @@ def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
 )
 def test_documented_prediction_response_examples_parse() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
-    examples = spec['paths']['/v1/predictions']['post']['responses']['200'][
+    examples = spec['paths']['/v0/predictions']['post']['responses']['200'][
         'content']['application/json']['examples']
     required = set(
         spec['components']['schemas']['PredictionResponse']['required'])
@@ -379,7 +396,7 @@ def test_documented_prediction_response_examples_parse() -> None:
         assert required <= set(example['value'])
         assert response.id
         assert response.model
-        assert response.metadata['version'] == 'v1'
+        assert response.metadata['task_kind']
         assert response.predictions, name
         for item in response.predictions:
             assert item.id is None or isinstance(item.id, str)
@@ -408,7 +425,7 @@ def test_documented_prediction_response_examples_parse() -> None:
 def test_documented_prediction_request_examples_match_envelope_shape() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
     request_schema = spec['components']['schemas']['PredictionRequest']
-    examples = spec['paths']['/v1/predictions']['post']['requestBody'][
+    examples = spec['paths']['/v0/predictions']['post']['requestBody'][
         'content']['application/json']['examples']
     property_names = set(request_schema['properties'])
     required = set(request_schema['required'])
@@ -445,7 +462,6 @@ def _load_local_canonical_spec_at_generated_revision() -> dict:
 
 
 def _assert_request_envelope_shape(value: dict) -> None:
-    assert value['version'] == 'v1'
     assert value['model'] in {'tabicl', 'kumo-rfm'}
     assert 'kind' in value['task']
     assert 'instance_table' in value['schema']
@@ -463,7 +479,7 @@ def _minimal_openapi_spec() -> dict:
         'paths': {
             '/v1/predictions': {
                 'post': {
-                    'operationId': 'createPrediction',
+                    'operationId': 'runPrediction',
                     'summary': 'Run a one-shot TFM prediction',
                     'requestBody': {
                         'content': {

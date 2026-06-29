@@ -1,23 +1,15 @@
 from collections.abc import Mapping
 from typing import Any
 
-from kumoapi.json_serde import to_json_dict
-from kumoapi.rfm import (
-    RFMParseQueryRequest,
-    RFMParseQueryResponse,
-    RFMPredictResponse,
-    RFMValidateQueryRequest,
-    RFMValidateQueryResponse,
-)
+from kumoapi.rfm import RFMPredictResponse
 
 from kumoai.client import KumoClient
-from kumoai.client.endpoints import RFMEndpoints
 from kumoai.client.generated.tfm_api import (
     PredictionItem,
     PredictionResponse,
     TFMOperations,
 )
-from kumoai.client.utils import parse_response, raise_on_error
+from kumoai.client.utils import raise_on_error
 
 
 class RFMAPI:
@@ -35,49 +27,13 @@ class RFMAPI:
             RFMPredictResponse containing the predictions
         """
         response = self._client._request(
-            TFMOperations.create_prediction.endpoint,
+            TFMOperations.run_prediction.endpoint,
             json=request,
             headers={'Content-Type': 'application/json'},
         )
         raise_on_error(response)
         prediction_response = PredictionResponse.from_dict(response.json())
         return _prediction_response_to_rfm(prediction_response)
-
-    def validate_query(
-        self,
-        request: RFMValidateQueryRequest,
-    ) -> RFMValidateQueryResponse:
-        """Validate a predictive query against a graph.
-
-        Args:
-            request: The request object containing
-                the query and graph definition
-
-        Returns:
-            RFMValidateQueryResponse containing the QueryDefinition
-        """
-        response = self._client._request(RFMEndpoints.validate_query,
-                                         json=to_json_dict(request))
-        raise_on_error(response)
-        return parse_response(RFMValidateQueryResponse, response)
-
-    def parse_query(
-        self,
-        request: RFMParseQueryRequest,
-    ) -> RFMParseQueryResponse:
-        """Validate a predictive query against a graph.
-
-        Args:
-            request: The request object containing
-                the query and graph definition
-
-        Returns:
-            RFMParseQueryResponse containing the QueryDefinition
-        """
-        response = self._client._request(RFMEndpoints.parse_query,
-                                         json=to_json_dict(request))
-        raise_on_error(response)
-        return parse_response(RFMParseQueryResponse, response)
 
 
 def _prediction_response_to_rfm(

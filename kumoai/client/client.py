@@ -7,8 +7,6 @@ from urllib3.util import Retry
 
 from kumoai.client.endpoints import Endpoint, HTTPMethod
 
-API_VERSION = 'v1'
-
 logger = logging.getLogger('kumoai')
 
 _AUTH_STATUS_CODES = frozenset({401, 403})
@@ -50,7 +48,6 @@ class KumoClient:
     ) -> None:
         r"""Creates an authenticated client for KumoRFM API requests."""
         self._url = url
-        self._api_url = f"{url}/{API_VERSION}"
         self._api_key = api_key
         self._spcs_token = spcs_token
         self._verify_ssl = verify_ssl
@@ -175,6 +172,6 @@ class KumoClient:
                                             verify=self._verify_ssl, **kwargs)
 
     def _format_endpoint_url(self, endpoint: str) -> str:
-        if endpoint[0] == "/":
-            endpoint = endpoint[1:]
-        return f"{self._api_url}/{endpoint}"
+        if not endpoint.startswith("/"):
+            raise ValueError("Endpoint path must start with '/'")
+        return f"{self._url}{endpoint}"

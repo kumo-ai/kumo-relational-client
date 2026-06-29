@@ -14,7 +14,7 @@ from kumoai.rfm.rfm import Explanation
 
 from test.conftest import MOCK_URL
 
-CANONICAL_SPEC = Path('../structured-data-api/api_spec.yaml')
+CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
 
 
 class JsonPayloadReceptor:
@@ -35,7 +35,7 @@ def test_predict_posts_universal_json_payload(
 ) -> None:
     receptor = JsonPayloadReceptor()
     mock_api.post(
-        f'{MOCK_URL}/v1/predictions',
+        f'{MOCK_URL}/v0/predictions',
         additional_matcher=receptor,
         json={
             'id': 'pred-test',
@@ -46,7 +46,6 @@ def test_predict_posts_universal_json_payload(
                 'embeddings': [0.1, 0.2],
             }],
             'metadata': {
-                'version': 'v1',
                 'task_kind': 'regression',
             },
         },
@@ -73,7 +72,7 @@ def test_predict_posts_universal_json_payload(
 
     payload = receptor.payload
     assert payload is not None
-    assert payload['version'] == 'v1'
+    assert 'version' not in payload
     assert payload['model'] == 'kumo-rfm'
     assert payload['task']['kind'] == 'regression'
     assert payload['schema']['relationships']
@@ -102,7 +101,7 @@ def test_explain_requests_explanation_output_field(
 ) -> None:
     receptor = JsonPayloadReceptor()
     mock_api.post(
-        f'{MOCK_URL}/v1/predictions',
+        f'{MOCK_URL}/v0/predictions',
         additional_matcher=receptor,
         json={
             'id': 'pred-test',
@@ -117,7 +116,6 @@ def test_explain_requests_explanation_output_field(
                 },
             }],
             'metadata': {
-                'version': 'v1',
                 'task_kind': 'regression',
             },
         },

@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Final, Optional
+from typing import Optional
 
 
 class HTTPMethod(Enum):
@@ -26,10 +26,3 @@ class Endpoint:
         if self.path is None:
             raise ValueError("Endpoint requires a path")
         return self.path
-
-
-class RFMEndpoints:
-    BASE: Final[str] = "/rfm"
-
-    validate_query = Endpoint(f"{BASE}/validate_query", HTTPMethod.POST)
-    parse_query = Endpoint(f"{BASE}/parse_query", HTTPMethod.POST)

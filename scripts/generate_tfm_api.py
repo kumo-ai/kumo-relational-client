@@ -235,14 +235,16 @@ def validate_generated_code(spec: dict[str, Any], code: str) -> list[str]:
                 actual_fields=actual_output_fields,
             ))
 
-    create_prediction = _operation_by_id(spec, 'createPrediction')
-    if create_prediction is None:
-        errors.append('Missing operationId: createPrediction')
-    else:
-        response_schema = _success_response_schema(create_prediction)
+    prediction_operations = _operations_by_request_schema(
+        spec, 'PredictionRequest')
+    if not prediction_operations:
+        errors.append(
+            'Missing operation with request schema: PredictionRequest')
+    for operation_id, operation in prediction_operations:
+        response_schema = _success_response_schema(operation)
         if response_schema != 'PredictionResponse':
             errors.append(
-                'createPrediction success response schema must be '
+                f"{operation_id} success response schema must be "
                 f"'PredictionResponse', got {response_schema!r}")
 
     return errors
@@ -513,20 +515,25 @@ def _schema_ref_name(schema: dict[str, Any] | None) -> str | None:
     return ref[len(prefix):]
 
 
-def _operation_by_id(
+def _operations_by_request_schema(
     spec: dict[str, Any],
-    operation_id: str,
-) -> dict[str, Any] | None:
+    schema_name: str,
+) -> list[tuple[str, dict[str, Any]]]:
+    operations: list[tuple[str, dict[str, Any]]] = []
     for path_item in spec.get('paths', {}).values():
         if not isinstance(path_item, dict):
             continue
         for method, operation in path_item.items():
             if method.lower() not in HTTP_METHODS:
                 continue
-            if isinstance(operation, dict) and operation.get(
-                    'operationId') == operation_id:
-                return operation
-    return None
+            if not isinstance(operation, dict):
+                continue
+            if _request_schema(operation) != schema_name:
+                continue
+            operation_id = operation.get('operationId')
+            if isinstance(operation_id, str):
+                operations.append((operation_id, operation))
+    return operations
 
 
 def _enum_at(schema: dict[str, Any], property_name: str) -> list[str]:
