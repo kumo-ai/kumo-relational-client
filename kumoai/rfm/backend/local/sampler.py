@@ -6,6 +6,7 @@ from kumoapi.pquery import ValidatedPredictiveQuery
 
 from kumoai.rfm.backend.local import LocalGraphStore
 from kumoai.rfm.base import DataBackend, Sampler, SamplerOutput
+from kumoai.rfm.diagnostics import GraphSanitizationReport
 from kumoai.rfm.pquery import PQueryPandasExecutor
 from kumoai.utils import ProgressLogger
 
@@ -42,6 +43,20 @@ class LocalSampler(Sampler):
     def backend(self) -> DataBackend:
         return cast(DataBackend, DataBackend.LOCAL)
 
+    @property
+    def sanitization_report(self) -> GraphSanitizationReport:
+        return self._graph_store.sanitization_report
+
+    def validate_entity_references(
+        self,
+        table_name: str,
+        entity_pkey: pd.Series,
+    ) -> None:
+        self._graph_store.validate_entity_references(
+            table_name,
+            entity_pkey,
+        )
+
     def _get_min_max_time_dict(
         self,
         table_names: list[str],
@@ -59,6 +74,7 @@ class LocalSampler(Sampler):
         anchor_time: pd.Series | Literal['entity'],
         columns_dict: dict[str, set[str]],
         num_neighbors: list[int],
+        random_seed: int | None = None,
     ) -> SamplerOutput:
 
         index = self._graph_store.get_node_id(entity_table_name, entity_pkey)
@@ -68,6 +84,9 @@ class LocalSampler(Sampler):
         else:
             assert anchor_time == 'entity'
             time = self._graph_store.time_dict[entity_table_name][index]
+
+        if random_seed is not None:
+            self._graph_sampler.seed(random_seed)
 
         (
             row_dict,

@@ -5,7 +5,7 @@ from kumoapi.rfm.context import REV_REL
 from kumoapi.typing import Stype
 
 from kumoai.graph import Edge
-from kumoai.rfm import Graph
+from kumoai.rfm import Graph, TaskReferenceError
 from kumoai.rfm.backend.local import LocalGraphStore
 
 
@@ -62,6 +62,29 @@ def test_local_graph_store() -> None:
     ]
 
     store = LocalGraphStore(graph)
+    report = store.sanitization_report
+    assert report.status.value == 'available'
+    assert set(report.tables) == set(df_dict)
+    users_report = report.tables['USERS']
+    assert users_report.input_rows == 7
+    assert users_report.output_rows == 4
+    assert users_report.null_primary_key_rows == 1
+    assert users_report.duplicate_primary_key_rows == 1
+    assert users_report.null_time_rows == 1
+    assert users_report.total_dropped_rows == 3
+    orders_report = report.tables['ORDERS']
+    assert orders_report.input_rows == 9
+    assert orders_report.output_rows == 8
+    assert orders_report.null_primary_key_rows == 0
+    assert orders_report.duplicate_primary_key_rows == 0
+    assert orders_report.null_time_rows == 1
+    for table_report in report.tables.values():
+        assert table_report.total_dropped_rows == (
+            table_report.null_primary_key_rows
+            + table_report.duplicate_primary_key_rows
+            + table_report.null_time_rows
+        )
+
 
     for table_name, df in store.df_dict.items():
         # No edges are dropped:
@@ -175,3 +198,27 @@ def test_local_graph_store() -> None:
 
     with pytest.raises(ValueError, match="'VIEWS' does not have a primary"):
         store.get_node_id('VIEWS', pd.Series(['x', 'y']))
+
+def test_sanitization_reason_precedence_and_reference_count() -> None:
+    graph = Graph.from_data({
+        'USERS': pd.DataFrame({
+            'USER_ID': pd.Series([pd.NA, 1, 1, 2], dtype='Int64'),
+            'TIME': [None, None, None, '2025-01-01'],
+        }),
+    }, verbose=False)
+    store = LocalGraphStore(graph, verbose=False)
+    report = store.sanitization_report.tables['USERS']
+
+    assert report.input_rows == 4
+    assert report.output_rows == 1
+    assert report.null_primary_key_rows == 1
+    assert report.duplicate_primary_key_rows == 1
+    assert report.null_time_rows == 1
+
+    with pytest.raises(TaskReferenceError) as exc_info:
+        store.validate_entity_references(
+            'USERS',
+            pd.Series([2, 'not-an-integer'], dtype=object),
+        )
+
+    assert exc_info.value.unresolved_rows == 1

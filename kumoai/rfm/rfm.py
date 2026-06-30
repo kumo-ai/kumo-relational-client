@@ -3,7 +3,7 @@ import math
 import time
 import warnings
 from collections import defaultdict
-from collections.abc import Generator, Iterator, Sequence
+from collections.abc import Generator, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from typing import Any, Literal, overload
@@ -40,11 +40,13 @@ from kumoai.mixin import CastMixin
 from kumoai.rfm import Graph, TaskTable
 from kumoai.rfm.base import DataBackend, Sampler
 from kumoai.rfm.base.utils import Timestamp
+from kumoai.rfm.diagnostics import GraphSanitizationReport
 from kumoai.rfm.payload import (
     INSTANCE_ID,
     context_size_stats,
     payload_size_bytes,
     predict_request_to_json,
+    validate_payload_table_rows,
 )
 from kumoai.rfm.query_parser import parse_query_locally
 from kumoai.utils import ProgressLogger, display
@@ -79,6 +81,28 @@ _SIZE_LIMIT_MSG = ("Context size exceeds the 30MB limit. {stats}\nPlease "
                    "this is possible, please create a feature request at "
                    "'https://github.com/kumo-ai/kumo-rfm' if you must go "
                    "beyond this for your use-case.")
+
+
+@dataclass(frozen=True)
+class MaterializedPredictionRequest:
+    r"""A frozen request record with source-row provenance.
+
+    The payload is the exact mapping passed to the live API and should be
+    treated as read-only; nested payload containers are not copied or frozen.
+    """
+    payload: Mapping[str, Any]
+    batch_index: int
+    prediction_start: int
+    prediction_stop: int
+    request_size_bytes: int
+
+
+@dataclass(frozen=True)
+class _GeneratedPredictionRequest:
+    materialized: MaterializedPredictionRequest
+    entity_ids: tuple[Any, ...]
+    instance_ids: tuple[Any, ...]
+    entity_dtype: Any
 
 
 @dataclass(repr=False)
@@ -249,6 +273,11 @@ class KumoRFM:
         from kumoai.rfm import global_state
         self._client = RFMAPI(global_state.client)
         return self._client
+
+    @property
+    def sanitization_report(self) -> GraphSanitizationReport:
+        r"""Structured graph-sanitization diagnostics for this backend."""
+        return self._sampler.sanitization_report
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}()'
@@ -539,6 +568,248 @@ class KumoRFM:
                 exclude_cols_dict=query_def.get_exclude_cols_dict(),
                 use_prediction_time=use_prediction_time,
                 top_k=query_def.top_k,
+                random_seed=random_seed,
+            )
+
+    def materialize_task(
+        self,
+        task: TaskTable,
+        *,
+        explain: bool | ExplainConfig | dict[str, Any] = False,
+        return_embeddings: bool = False,
+        run_mode: RunMode | str = RunMode.FAST,
+        num_neighbors: list[int] | None = None,
+        inference_config: InferenceConfig | dict[str, Any] | None = None,
+        num_hops: int = 2,
+        verbose: bool | ProgressLogger = True,
+        exclude_cols_dict: dict[str, list[str]] | None = None,
+        use_prediction_time: bool = False,
+        top_k: int | None = None,
+        random_seed: int | None = _RANDOM_SEED,
+    ) -> tuple[MaterializedPredictionRequest, ...]:
+        r"""Materialize final prediction requests without contacting a NIM.
+
+        The returned payloads are the exact mappings used by
+        :meth:`predict_task`, paired with half-open positional ranges into
+        the original prediction rows.
+        """
+        run_mode, num_neighbors, inference_config = (
+            self._resolve_task_request_options(
+                task,
+                run_mode=run_mode,
+                num_neighbors=num_neighbors,
+                inference_config=inference_config,
+                num_hops=num_hops,
+            )
+        )
+        explain_config = self._resolve_explain_config(explain)
+        if (explain_config is not None
+                and run_mode in {RunMode.NORMAL, RunMode.BEST}):
+            warnings.warn(
+                "Explainability is currently only supported for run mode "
+                f"'FAST' (got '{run_mode}'). Provided run mode has been reset. "
+                "Please lower the run mode to suppress this warning.",
+                stacklevel=2,
+            )
+            run_mode = RunMode.FAST
+        if (explain_config is not None
+                and task.num_prediction_examples > 1):
+            raise ValueError(
+                "Cannot explain predictions for more than a single entity "
+                f"(got {task.num_prediction_examples:,})")
+
+        if not isinstance(verbose, ProgressLogger):
+            verbose = ProgressLogger.default(
+                msg=f"Materializing {task.task_type} task",
+                verbose=verbose,
+            )
+        with verbose as logger:
+            requests = self._iter_task_requests(
+                task,
+                explain=explain_config is not None,
+                return_embeddings=return_embeddings,
+                run_mode=run_mode,
+                num_neighbors=num_neighbors,
+                inference_config=inference_config,
+                logger=logger,
+                exclude_cols_dict=exclude_cols_dict,
+                use_prediction_time=use_prediction_time,
+                top_k=top_k,
+                random_seed=random_seed,
+            )
+            return tuple(request.materialized for request in requests)
+
+    def _resolve_task_request_options(
+        self,
+        task: TaskTable,
+        *,
+        run_mode: RunMode | str,
+        num_neighbors: list[int] | None,
+        inference_config: InferenceConfig | dict[str, Any] | None,
+        num_hops: int,
+    ) -> tuple[RunMode, list[int], InferenceConfig]:
+        run_mode = RunMode(run_mode)
+        if num_hops != 2 and num_neighbors is not None:
+            warnings.warn(
+                f"Received custom 'num_neighbors' option; ignoring custom "
+                f"'num_hops={num_hops}' option",
+                stacklevel=3,
+            )
+        if num_neighbors is None:
+            key = RunMode.FAST if task.task_type.is_link_pred else run_mode
+            num_neighbors = _DEFAULT_NUM_NEIGHBORS[key][:num_hops]
+
+        if inference_config is None:
+            inference_config = InferenceConfig.from_task_type(task.task_type)
+        elif isinstance(inference_config, dict):
+            Config = InferenceConfig
+            if task.task_type.is_classification:
+                Config = ClassificationInferenceConfig
+            if task.task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
+                Config = RegressionInferenceConfig
+            inference_config = Config(**inference_config)  # type: ignore
+        return run_mode, num_neighbors, inference_config
+
+    @staticmethod
+    def _resolve_explain_config(
+        explain: bool | ExplainConfig | dict[str, Any],
+    ) -> ExplainConfig | None:
+        if explain is True:
+            return ExplainConfig()
+        if explain is not False:
+            return ExplainConfig._cast(explain)
+        return None
+
+    def _validate_task_references(self, task: TaskTable) -> None:
+        entity_pkey = pd.concat([
+            task._context_df[task._entity_column],
+            task._pred_df[task._entity_column],
+        ], axis=0, ignore_index=True)
+        self._sampler.validate_entity_references(
+            task.entity_table_name,
+            entity_pkey,
+        )
+
+    def _iter_task_requests(
+        self,
+        task: TaskTable,
+        *,
+        explain: bool,
+        return_embeddings: bool,
+        run_mode: RunMode,
+        num_neighbors: list[int],
+        inference_config: InferenceConfig,
+        logger: ProgressLogger,
+        exclude_cols_dict: dict[str, list[str]] | None,
+        use_prediction_time: bool,
+        top_k: int | None,
+        random_seed: int | None,
+        progress_message: str | None = None,
+    ) -> Iterator[_GeneratedPredictionRequest]:
+        # Validate the complete task before generating or sending any batch.
+        self._validate_task_references(task)
+
+        max_ctx = _MAX_CONTEXT_SIZE[run_mode]
+        if task.num_context_examples > max_ctx:
+            logger.log(
+                f"Sub-sampled {max_ctx:,} out of "
+                f"{task.num_context_examples:,} in-context examples")
+            task = task.narrow_context(0, max_ctx)
+
+        if (task.task_type == TaskType.FORECASTING
+                and task.num_forecasts > task.num_context_examples):
+            raise ValueError(
+                f"The number of forecast steps ({task.num_forecasts:,}) "
+                f"exceeds the number of available in-context examples "
+                f"({task.num_context_examples:,}). Please provide more "
+                f"historical data or reduce the number of forecast steps.")
+
+        if self._batch_size is None:
+            batch_size = task.num_prediction_examples
+        elif self._batch_size == 'max':
+            batch_size = _MAX_PRED_SIZE[task.task_type]
+        else:
+            batch_size = self._batch_size
+
+        if batch_size > _MAX_PRED_SIZE[task.task_type]:
+            raise ValueError(
+                f"Cannot predict for more than "
+                f"{_MAX_PRED_SIZE[task.task_type]:,} entities at once "
+                f"(got {batch_size:,}). Use `KumoRFM.batch_mode` to process "
+                "entities in batches with a sufficient batch size.")
+
+        num_batches = math.ceil(task.num_prediction_examples / batch_size)
+        if num_batches > 1:
+            logger.log(
+                f"Splitting {task.num_prediction_examples:,} entities into "
+                f"{num_batches:,} batches of size {batch_size:,}")
+            if progress_message is not None:
+                logger.init_progress(msg=progress_message, total=num_batches)
+
+        for batch_index, start in enumerate(
+                range(0, task.num_prediction_examples, batch_size)):
+            stop = min(start + batch_size, task.num_prediction_examples)
+            batch_task = task.narrow_prediction(start, length=batch_size)
+            context = self._get_context(
+                task=batch_task,
+                run_mode=run_mode,
+                num_neighbors=num_neighbors,
+                exclude_cols_dict=exclude_cols_dict,
+                top_k=top_k,
+                random_seed=random_seed,
+                _validate_references=False,
+            )
+            context.y_test = None
+            request = RFMPredictRequest(
+                context=context,
+                run_mode=run_mode,
+                query=task._query,
+                use_prediction_time=use_prediction_time,
+                inference_config=inference_config,
+                return_embeddings=return_embeddings,
+            )
+            payload = predict_request_to_json(request, explain=explain)
+            prediction_row_count = len(
+                payload['predict']['instance_table']['rows'])
+            expected_prediction_rows = stop - start
+            if prediction_row_count != expected_prediction_rows:
+                raise RuntimeError(
+                    f"Request batch {batch_index} serialized "
+                    f"{prediction_row_count:,} prediction rows; expected "
+                    f"{expected_prediction_rows:,} from its source range.")
+            request_size = payload_size_bytes(payload)
+            if batch_index == 0:
+                logger.log(
+                    f"Generated context of size "
+                    f"{request_size / (1024 * 1024):.2f}MB")
+            if request_size > _MAX_SIZE:
+                stats = context_size_stats(context)
+                raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats))
+            validate_payload_table_rows(payload, batch_index=batch_index)
+            materialized = MaterializedPredictionRequest(
+                payload=payload,
+                batch_index=batch_index,
+                prediction_start=start,
+                prediction_stop=stop,
+                request_size_bytes=request_size,
+            )
+            entity_table = context.subgraph.table_dict[
+                context.entity_table_names[0]
+            ]
+            predict_table = payload['predict']['instance_table']
+            instance_id_index = predict_table['columns'].index(INSTANCE_ID)
+            yield _GeneratedPredictionRequest(
+                materialized=materialized,
+                entity_ids=tuple(
+                    batch_task._pred_df[
+                        batch_task.entity_column.name
+                    ].tolist()
+                ),
+                instance_ids=tuple(
+                    row[instance_id_index]
+                    for row in predict_table['rows']
+                ),
+                entity_dtype=entity_table.df[entity_table.primary_key].dtype,
             )
 
     @overload
@@ -556,6 +827,7 @@ class KumoRFM:
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
+        random_seed: int | None = _RANDOM_SEED,
     ) -> pd.DataFrame:
         pass
 
@@ -574,6 +846,7 @@ class KumoRFM:
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
+        random_seed: int | None = _RANDOM_SEED,
     ) -> Explanation:
         pass
 
@@ -592,6 +865,7 @@ class KumoRFM:
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
+        random_seed: int | None = _RANDOM_SEED,
     ) -> pd.DataFrame | Explanation:
         pass
 
@@ -609,6 +883,7 @@ class KumoRFM:
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
+        random_seed: int | None = _RANDOM_SEED,
     ) -> pd.DataFrame | Explanation:
         """Returns predictions for a custom task specification.
 
@@ -634,43 +909,36 @@ class KumoRFM:
             use_prediction_time: Whether to use the anchor timestamp as an
                 additional feature during prediction.
             top_k: The number of predictions to return per entity.
+            random_seed: A manual seed for neighborhood sampling. Reusing a
+                seed produces the same sampled local neighborhoods for the
+                same graph, ordered task rows, batching, and options.
 
         Returns:
             The predictions as a :class:`pandas.DataFrame`.
             If ``explain`` is provided, returns an :class:`Explanation` object
             containing the prediction, summary, and details.
         """
-        if num_hops != 2 and num_neighbors is not None:
-            warnings.warn(f"Received custom 'num_neighbors' option; ignoring "
-                          f"custom 'num_hops={num_hops}' option")
-        if num_neighbors is None:
-            key = (RunMode.FAST
-                   if task.task_type.is_link_pred else RunMode(run_mode))
-            num_neighbors = _DEFAULT_NUM_NEIGHBORS[key][:num_hops]
+        run_mode, num_neighbors, inference_config = (
+            self._resolve_task_request_options(
+                task,
+                run_mode=run_mode,
+                num_neighbors=num_neighbors,
+                inference_config=inference_config,
+                num_hops=num_hops,
+            )
+        )
 
-        if inference_config is None:
-            inference_config = InferenceConfig.from_task_type(task.task_type)
-        elif isinstance(inference_config, dict):
-            Cls = InferenceConfig
-            if task.task_type.is_classification:
-                Cls = ClassificationInferenceConfig
-            if task.task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
-                Cls = RegressionInferenceConfig
-            inference_config = Cls(**inference_config)  # type: ignore
-
-        explain_config: ExplainConfig | None = None
-        if explain is True:
-            explain_config = ExplainConfig()
-        elif explain is not False:
-            explain_config = ExplainConfig._cast(explain)
+        explain_config = self._resolve_explain_config(explain)
 
         if explain_config is not None and run_mode in {
                 RunMode.NORMAL, RunMode.BEST
         }:
-            warnings.warn(f"Explainability is currently only supported for "
-                          f"run mode 'FAST' (got '{run_mode}'). Provided run "
-                          f"mode has been reset. Please lower the run mode to "
-                          f"suppress this warning.")
+            warnings.warn(
+                f"Explainability is currently only supported for run mode "
+                f"'FAST' (got '{run_mode}'). Provided run mode has been reset. "
+                f"Please lower the run mode to suppress this warning.",
+                stacklevel=2,
+            )
             run_mode = RunMode.FAST
 
         if explain_config is not None and task.num_prediction_examples > 1:
@@ -699,103 +967,34 @@ class KumoRFM:
             verbose = ProgressLogger.default(msg=msg, verbose=verbose)
 
         with verbose as logger:
-            max_ctx = _MAX_CONTEXT_SIZE[RunMode(run_mode)]
-            if task.num_context_examples > max_ctx:
-                logger.log(f"Sub-sampled {max_ctx:,} "
-                           f"out of {task.num_context_examples:,} in-context "
-                           f"examples")
-                task = task.narrow_context(0, max_ctx)
-
-            if (task.task_type == TaskType.FORECASTING
-                    and task.num_forecasts > task.num_context_examples):
-                raise ValueError(
-                    f"The number of forecast steps "
-                    f"({task.num_forecasts:,}) exceeds the number of "
-                    f"available in-context examples "
-                    f"({task.num_context_examples:,}). Please provide "
-                    f"more historical data or reduce the number of "
-                    f"forecast steps.")
-
-            if self._batch_size is None:
-                batch_size = task.num_prediction_examples
-            elif self._batch_size == 'max':
-                batch_size = _MAX_PRED_SIZE[task.task_type]
-            else:
-                batch_size = self._batch_size
-
-            if batch_size > _MAX_PRED_SIZE[task.task_type]:
-                raise ValueError(f"Cannot predict for more than "
-                                 f"{_MAX_PRED_SIZE[task.task_type]:,} "
-                                 f"entities at once (got {batch_size:,}). Use "
-                                 f"`KumoRFM.batch_mode` to process entities "
-                                 f"in batches with a sufficient batch size.")
-
-            if task.num_prediction_examples > batch_size:
-                num = math.ceil(task.num_prediction_examples / batch_size)
-                logger.log(f"Splitting {task.num_prediction_examples:,} "
-                           f"entities into {num:,} batches of size "
-                           f"{batch_size:,}")
-
             predictions: list[pd.DataFrame] = []
             summary: str | None = None
             details: Any | None = None
             warning: str | None = None
-            for start in range(0, task.num_prediction_examples, batch_size):
-                batch_task = task.narrow_prediction(
-                    start,
-                    length=batch_size,
-                )
-                context = self._get_context(
-                    task=batch_task,
-                    run_mode=run_mode,
-                    num_neighbors=num_neighbors,
-                    exclude_cols_dict=exclude_cols_dict,
-                    top_k=top_k,
-                )
-                context.y_test = None
-
-                request = RFMPredictRequest(
-                    context=context,
-                    run_mode=RunMode(run_mode),
-                    query=task._query,
-                    use_prediction_time=use_prediction_time,
-                    inference_config=inference_config,
-                    return_embeddings=return_embeddings,
-                )
-                request_payload = predict_request_to_json(
-                    request,
-                    explain=explain_config is not None,
-                )
-                request_size = payload_size_bytes(request_payload)
-                if start == 0:
-                    logger.log(f"Generated context of size "
-                               f"{request_size / (1024*1024):.2f}MB")
-
-                if request_size > _MAX_SIZE:
-                    stats = context_size_stats(context)
-                    raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats))
-
-                if start == 0 and task.num_prediction_examples > batch_size:
-                    num = math.ceil(task.num_prediction_examples / batch_size)
-                    verbose.init_progress(msg='Predicting', total=num)
+            requests = self._iter_task_requests(
+                task,
+                explain=explain_config is not None,
+                return_embeddings=return_embeddings,
+                run_mode=run_mode,
+                num_neighbors=num_neighbors,
+                inference_config=inference_config,
+                logger=logger,
+                exclude_cols_dict=exclude_cols_dict,
+                use_prediction_time=use_prediction_time,
+                top_k=top_k,
+                random_seed=random_seed,
+                progress_message='Predicting',
+            )
+            for generated in requests:
+                materialized = generated.materialized
+                request_payload = materialized.payload
 
                 for attempt in range(self._num_retries + 1):
                     try:
-                        entity_ids = batch_task._pred_df[
-                            batch_task.entity_column.name
-                        ].tolist()
-                        predict_table = request_payload['predict'][
-                            'instance_table']
-                        instance_id_index = predict_table['columns'].index(
-                            INSTANCE_ID)
-                        instance_ids = [
-                            row[instance_id_index]
-                            for row in predict_table['rows']
-                        ]
                         resp = self._api_client.predict(
                             request_payload,
-                            entity_ids=entity_ids,
-                            instance_ids=instance_ids,
+                            entity_ids=generated.entity_ids,
+                            instance_ids=generated.instance_ids,
                         )
                         df = pd.DataFrame(**resp.prediction)
                         if explain_config is not None:
@@ -804,10 +1003,9 @@ class KumoRFM:
 
                         # Cast 'ENTITY' to correct data type:
                         if 'ENTITY' in df:
-                            table_dict = context.subgraph.table_dict
-                            table = table_dict[context.entity_table_names[0]]
-                            ser = table.df[table.primary_key]
-                            df['ENTITY'] = df['ENTITY'].astype(ser.dtype)
+                            df['ENTITY'] = df['ENTITY'].astype(
+                                generated.entity_dtype
+                            )
 
                         # Cast 'ANCHOR_TIMESTAMP' to correct data type:
                         if 'ANCHOR_TIMESTAMP' in df:
@@ -832,7 +1030,9 @@ class KumoRFM:
 
                         predictions.append(df.reset_index(drop=True))
 
-                        if task.num_prediction_examples > batch_size:
+                        if (materialized.prediction_stop
+                                < task.num_prediction_examples
+                                or materialized.batch_index > 0):
                             verbose.step()
 
                         break
@@ -1374,6 +1574,8 @@ class KumoRFM:
         num_neighbors: list[int] | None = None,
         exclude_cols_dict: dict[str, list[str]] | None = None,
         top_k: int | None = None,
+        random_seed: int | None = _RANDOM_SEED,
+        _validate_references: bool = True,
     ) -> Context:
 
         if num_neighbors is None:
@@ -1388,6 +1590,9 @@ class KumoRFM:
                              f"feature request at "
                              f"'https://github.com/kumo-ai/kumo-rfm' if you "
                              f"must go beyond this for your use-case.")
+
+        if _validate_references:
+            self._validate_task_references(task)
 
         entity_pkey = pd.concat([
             task._context_df[task._entity_column],
@@ -1415,6 +1620,7 @@ class KumoRFM:
             anchor_time=anchor_time,
             num_neighbors=num_neighbors,
             exclude_cols_dict=exclude_cols_dict,
+            random_seed=random_seed,
         )
 
         if len(subgraph.table_dict) >= 15:

@@ -130,6 +130,10 @@ class NeighborSampler {
     // code and should be correct.
   }
 
+  void seed(const int seed) {
+    rng_.seed(seed);
+  }
+
   void validate_arr_dict(const py::dict& val_dict, std::string dict_name, std::vector<std::string> keys, int dim=1, bool validate_int=true){
     for (const auto& kv : val_dict) {
       std::string node_t = std::string(py::str(kv.first));
@@ -544,6 +548,8 @@ py::class_<kumolib::NeighborSampler>(m, "NeighborSampler")
   py::arg("row"),
   py::arg("node_time"),
   py::arg("seed") = py::int_(123))
+.def("seed", &kumolib::NeighborSampler::seed,
+    py::arg("seed"))
 .def("sample", &kumolib::NeighborSampler::sample,
     py::arg("num_neighbors"),
     py::arg("sampling_time_offsets"),

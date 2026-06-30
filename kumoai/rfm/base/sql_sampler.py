@@ -103,7 +103,12 @@ class SQLSampler(Sampler):
         anchor_time: pd.Series | Literal['entity'],
         columns_dict: dict[str, set[str]],
         num_neighbors: list[int],
+        random_seed: int | None = None,
     ) -> SamplerOutput:
+
+        # SQL backends do not use the local pseudo-random neighborhood
+        # sampler, so this option does not affect their traversal.
+        del random_seed
 
         # Make sure to always include primary key, foreign key and time columns
         # during data fetching since these are needed for graph traversal:

@@ -147,6 +147,7 @@ def test_generated_prediction_response_parser() -> None:
 def test_prediction_item_adapter_maps_known_fields() -> None:
     item = PredictionItem(
         id='7',
+        row_index=3,
         prediction='yes',
         probabilities={
             'no': 0.2,
@@ -262,6 +263,33 @@ def test_prediction_response_correlates_opaque_ids_to_repeated_entities(
             (3, 3),
             (20, 21),
             'duplicate row_index',
+        ),
+        (
+            (PredictionItem(id='20', row_index=-1, prediction=1.0), ),
+            (3, ),
+            (20, ),
+            'row_index is out of range',
+        ),
+        (
+            (PredictionItem(row_index=0, prediction=1.0), ),
+            (3, ),
+            (20, ),
+            'id does not match request instance_id',
+        ),
+        (
+            (
+                PredictionItem(id='20', row_index=0, prediction=1.0),
+                PredictionItem(id='20', row_index=1, prediction=2.0),
+            ),
+            (3, 4),
+            (20, 21),
+            'id does not match request instance_id',
+        ),
+        (
+            (PredictionItem(id='20', row_index=0, prediction=1.0), ),
+            (3, 4),
+            (20, 21),
+            'response count does not match the request',
         ),
     ],
 )

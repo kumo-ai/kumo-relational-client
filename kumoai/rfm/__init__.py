@@ -19,9 +19,20 @@ from .sagemaker import (
 )
 from .base import Table
 from .backend.local import LocalTable
+from .diagnostics import (
+    GraphSanitizationReport,
+    SanitizationStatus,
+    TableSanitizationReport,
+    TaskReferenceError,
+)
 from .graph import Graph
 from .task_table import TaskTable
-from .rfm import ExplainConfig, Explanation, KumoRFM
+from .rfm import (
+    ExplainConfig,
+    Explanation,
+    KumoRFM,
+    MaterializedPredictionRequest,
+)
 
 logger = logging.getLogger('kumoai_rfm')
 
@@ -204,8 +215,13 @@ __all__ = [
     'Table',
     'LocalTable',
     'Graph',
+    'GraphSanitizationReport',
+    'SanitizationStatus',
+    'TableSanitizationReport',
+    'TaskReferenceError',
     'TaskTable',
     'KumoRFM',
     'ExplainConfig',
     'Explanation',
+    'MaterializedPredictionRequest',
 ]

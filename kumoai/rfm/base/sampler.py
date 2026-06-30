@@ -15,6 +15,7 @@ from kumoapi.typing import ProblemType, Stype
 
 from kumoai.rfm.base import DataBackend
 from kumoai.rfm.base.utils import Timestamp
+from kumoai.rfm.diagnostics import GraphSanitizationReport
 from kumoai.rfm.pquery import PQueryPandasExecutor
 from kumoai.utils import ProgressLogger
 
@@ -144,6 +145,19 @@ class Sampler(ABC):
         """
         return self._table_stype_dict
 
+    @property
+    def sanitization_report(self) -> GraphSanitizationReport:
+        r"""Graph sanitization diagnostics, when supported by the backend."""
+        return GraphSanitizationReport.not_available()
+
+    def validate_entity_references(
+        self,
+        table_name: str,
+        entity_pkey: pd.Series,
+    ) -> None:
+        r"""Validate task references when supported by the backend."""
+        return None
+
     def get_min_time(
         self,
         table_names: list[str] | None = None,
@@ -193,6 +207,7 @@ class Sampler(ABC):
         anchor_time: pd.Series | Literal['entity'],
         num_neighbors: list[int],
         exclude_cols_dict: dict[str, list[str]] | None = None,
+        random_seed: int | None = None,
     ) -> Subgraph:
         r"""Samples distinct subgraphs for each entity primary key.
 
@@ -202,6 +217,7 @@ class Sampler(ABC):
             anchor_time: The anchor time of the subgraphs.
             num_neighbors: The number of neighbors to sample for each hop.
             exclude_cols_dict: The columns to exclude from the subgraph.
+            random_seed: A manual seed for neighborhood sampling.
         """
         # Exclude all columns that leak target information:
         table_stype_dict: dict[str, dict[str, Stype]] = self.table_stype_dict
@@ -230,6 +246,7 @@ class Sampler(ABC):
             anchor_time=anchor_time,
             columns_dict=columns_dict,
             num_neighbors=num_neighbors,
+            random_seed=random_seed,
         )
 
         # Parse `SubgraphOutput` into `Subgraph` structure:
@@ -773,6 +790,7 @@ class Sampler(ABC):
         anchor_time: pd.Series | Literal['entity'],
         columns_dict: dict[str, set[str]],
         num_neighbors: list[int],
+        random_seed: int | None = None,
     ) -> SamplerOutput:
         r"""Samples distinct subgraphs for each entity primary key.
 
@@ -782,6 +800,7 @@ class Sampler(ABC):
             anchor_time: The anchor time of the subgraphs.
             columns_dict: The columns to return for each table.
             num_neighbors: The number of neighbors to sample for each hop.
+            random_seed: A manual seed for neighborhood sampling.
         """
 
     @abstractmethod

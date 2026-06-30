@@ -71,6 +71,9 @@ def predict_request_to_json(
     return payload
 
 
+MAX_TABLE_ROWS = 10_000
+
+
 def payload_size_bytes(payload: dict[str, Any]) -> int:
     return len(
         json.dumps(
@@ -78,6 +81,31 @@ def payload_size_bytes(payload: dict[str, Any]) -> int:
             allow_nan=False,
             separators=(',', ':'),
         ).encode('utf-8'))
+
+
+def validate_payload_table_rows(
+    payload: dict[str, Any],
+    *,
+    batch_index: int,
+    limit: int = MAX_TABLE_ROWS,
+) -> None:
+    r"""Validate every serialized request table independently."""
+    for section_name in ('context', 'predict'):
+        section = payload[section_name]
+        tables = {
+            'instance_table': section['instance_table'],
+            **{
+                f'related_tables.{name}': table
+                for name, table in section['related_tables'].items()
+            },
+        }
+        for table_name, table in tables.items():
+            num_rows = len(table['rows'])
+            if num_rows > limit:
+                path = f'{section_name}.{table_name}'
+                raise ValueError(
+                    f"Request batch {batch_index} table '{path}' contains "
+                    f"{num_rows:,} rows, exceeding the {limit:,}-row limit")
 
 
 def context_size_stats(context: Context) -> str:
@@ -539,6 +567,11 @@ def _schema_spec(
         context.task_type,
         context.y_train,
     )
+    if tables.anchor_time_column is not None:
+        anchor_schema = spec['instance_table']['columns'][
+            tables.anchor_time_column
+        ]
+        anchor_schema['nullable'] = False
     return spec
 
 
@@ -697,4 +730,4 @@ def _timestamp_json_value(value: pd.Timestamp) -> str | None:
         return None
     if value.tzinfo is not None:
         value = value.tz_convert('UTC').tz_localize(None)
-    return value.to_pydatetime().isoformat(timespec='microseconds') + 'Z'
+    return value.isoformat(timespec='microseconds') + 'Z'

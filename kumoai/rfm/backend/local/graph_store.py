@@ -8,6 +8,12 @@ from kumoapi.rfm.context import Subgraph
 
 from kumoai.rfm.backend.local import LocalTable
 from kumoai.rfm.base import Table
+from kumoai.rfm.diagnostics import (
+    GraphSanitizationReport,
+    SanitizationStatus,
+    TableSanitizationReport,
+    TaskReferenceError,
+)
 from kumoai.utils import ProgressLogger
 
 if TYPE_CHECKING:
@@ -86,6 +92,33 @@ class LocalGraphStore:
             raise KeyError(f"The primary keys {pkey[missing].tolist()} do "
                            f"not exist in the '{table_name}' table") from e
 
+    def validate_entity_references(
+        self,
+        table_name: str,
+        pkey: pd.Series,
+    ) -> None:
+        r"""Validate task entity references without exposing key values."""
+        if table_name not in self.pkey_map_dict:
+            return
+        index = self.pkey_map_dict[table_name].index
+        key_type = type(index[0])
+        try:
+            converted = pkey.astype(key_type)
+            missing = ~converted.isin(index).to_numpy()
+        except (TypeError, ValueError, OverflowError):
+            converted_values: list[object] = []
+            invalid = np.zeros(len(pkey), dtype=bool)
+            for position, value in enumerate(pkey):
+                try:
+                    converted_values.append(key_type(value))
+                except (TypeError, ValueError, OverflowError):
+                    converted_values.append(None)
+                    invalid[position] = True
+            converted = pd.Series(converted_values)
+            missing = invalid | ~converted.isin(index).to_numpy()
+        if missing.any():
+            raise TaskReferenceError(table_name, int(missing.sum()))
+
     def sanitize(
         self,
         graph: 'Graph',
@@ -114,20 +147,43 @@ class LocalGraphStore:
             )
 
         mask_dict: dict[str, np.ndarray] = {}
+        reports: dict[str, TableSanitizationReport] = {}
         for table in graph.tables.values():
-            mask: np.ndarray | None = None
-            if table._time_column is not None:
-                ser = df_dict[table.name][table._time_column]
-                mask = ser.notna().to_numpy()
+            df = df_dict[table.name]
+            null_pkey = np.zeros(len(df), dtype=bool)
+            duplicate_pkey = np.zeros(len(df), dtype=bool)
+            null_time = np.zeros(len(df), dtype=bool)
 
             if table._primary_key is not None:
-                ser = df_dict[table.name][table._primary_key]
-                _mask = (~ser.duplicated().to_numpy()) & ser.notna().to_numpy()
-                mask = _mask if mask is None else (_mask & mask)
+                ser = df[table._primary_key]
+                null_pkey = ser.isna().to_numpy()
+                duplicate_pkey = (
+                    ser.duplicated().to_numpy() & ~null_pkey
+                )
 
-            if mask is not None and not mask.all():
+            if table._time_column is not None:
+                ser = df[table._time_column]
+                null_time = (
+                    ser.isna().to_numpy() & ~null_pkey & ~duplicate_pkey
+                )
+
+            mask = ~(null_pkey | duplicate_pkey | null_time)
+            if not mask.all():
                 mask_dict[table.name] = mask
 
+            reports[table.name] = TableSanitizationReport(
+                table_name=table.name,
+                input_rows=len(df),
+                output_rows=int(mask.sum()),
+                null_primary_key_rows=int(null_pkey.sum()),
+                duplicate_primary_key_rows=int(duplicate_pkey.sum()),
+                null_time_rows=int(null_time.sum()),
+            )
+
+        self.sanitization_report = GraphSanitizationReport(
+            status=SanitizationStatus.AVAILABLE,
+            tables=reports,
+        )
         return df_dict, mask_dict
 
     def get_pkey_map_dict(
