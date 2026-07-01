@@ -16,12 +16,12 @@ from kumoai.client.rfm import RFMAPI
 
 from rfm_nim_payloads import (
     NIM_HEALTH_READY_PATH,
-    NIM_V0_PREDICTION_PATH,
-    NIM_V0_SESSIONS_PATH,
+    NIM_V1_PREDICTION_PATH,
+    NIM_V1_SESSIONS_PATH,
     SDK_V1_CONNECTORS_PATH,
-    nim_v0_session_create_payload,
-    nim_v0_session_predict_minimal_payload,
-    nim_v0_smoke_payload,
+    nim_v1_session_create_payload,
+    nim_v1_session_predict_minimal_payload,
+    nim_v1_smoke_payload,
 )
 
 MOCK_URL = 'http://kumo.ai'
@@ -39,12 +39,12 @@ class JsonRequestCapture:
         return True
 
 
-def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
+def test_rfm_api_predict_posts_current_v1_payload_and_parses_response(
     mock_api: Any,
 ) -> None:
     capture = JsonRequestCapture()
     mock_api.post(
-        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         additional_matcher=capture,
         json={
             'id': 'pred-contract-test',
@@ -65,7 +65,7 @@ def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     result = api.predict(
         payload,
         entity_ids=[601],
@@ -81,45 +81,36 @@ def test_rfm_api_predict_posts_current_v0_payload_and_parses_response(
     }
 
 
-def test_sdk_prediction_endpoint_matches_current_nim_v0_route() -> None:
+def test_sdk_prediction_endpoint_matches_current_nim_v1_route() -> None:
     client = KumoClient(MOCK_URL, api_key='DISABLED')
     endpoint = TFMOperations.run_prediction.endpoint
 
-    assert endpoint.get_path() == NIM_V0_PREDICTION_PATH
+    assert endpoint.get_path() == NIM_V1_PREDICTION_PATH
     assert client._format_endpoint_url(endpoint.get_path()) == (
-        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}')
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}')
 
 
-@pytest.mark.parametrize(
-    ('operation', 'current_nim_path'),
-    [
-        (TFMOperations.get_health_live, '/health/live'),
-        (TFMOperations.get_health_ready, '/health/ready'),
-    ],
-)
-def test_sdk_generated_health_endpoints_match_current_nim_routes(
-    operation: Any,
-    current_nim_path: str,
-) -> None:
+def test_sdk_health_endpoint_matches_current_nim_route() -> None:
     client = KumoClient(MOCK_URL, api_key='DISABLED')
 
-    assert client._format_endpoint_url(operation.endpoint.get_path()) == (
-        f'{MOCK_URL}{current_nim_path}')
+    assert NIM_HEALTH_READY_PATH == '/v1/health/ready'
+    assert client._format_endpoint_url(NIM_HEALTH_READY_PATH) == (
+        f'{MOCK_URL}{NIM_HEALTH_READY_PATH}')
 
 
 @pytest.mark.parametrize(
     ('operation_id', 'method', 'current_nim_path'),
     [
-        ('createSession', HTTPMethod.POST, NIM_V0_SESSIONS_PATH),
+        ('createSession', HTTPMethod.POST, NIM_V1_SESSIONS_PATH),
         (
             'runSessionPrediction',
             HTTPMethod.POST,
-            f'{NIM_V0_SESSIONS_PATH}/{{session_id}}/predictions',
+            f'{NIM_V1_SESSIONS_PATH}/{{session_id}}/predictions',
         ),
         (
             'deleteSession',
             HTTPMethod.DELETE,
-            f'{NIM_V0_SESSIONS_PATH}/{{session_id}}',
+            f'{NIM_V1_SESSIONS_PATH}/{{session_id}}',
         ),
     ],
 )
@@ -165,7 +156,7 @@ def test_rfm_api_predict_does_not_mutate_request_payload(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-contract-test',
             'model': 'kumo-rfm',
@@ -175,7 +166,7 @@ def test_rfm_api_predict_does_not_mutate_request_payload(
             }],
         },
     )
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     original = deepcopy(payload)
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
@@ -192,7 +183,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-varied-test',
             'model': 'kumo-rfm',
@@ -235,7 +226,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
     )
 
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['predict']['instance_table']['rows'] = [
         [601, '2025-02-01T00:00:00Z'],
         [602, '2025-02-02T00:00:00Z'],
@@ -292,7 +283,7 @@ def test_prediction_response_rejects_bad_probability_shape(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}{NIM_V0_PREDICTION_PATH}',
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-bad-probabilities',
             'model': 'kumo-rfm',
@@ -306,15 +297,15 @@ def test_prediction_response_rejects_bad_probability_shape(
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(TypeError, match='Expected mapping value'):
         api.predict(
-            nim_v0_smoke_payload(),
+            nim_v1_smoke_payload(),
             entity_ids=[601],
             instance_ids=[601],
         )
 
 
 def test_payload_factories_return_isolated_deep_copies() -> None:
-    first = nim_v0_smoke_payload()
-    second = nim_v0_smoke_payload()
+    first = nim_v1_smoke_payload()
+    second = nim_v1_smoke_payload()
 
     first['context']['instance_table']['rows'][0][1] = False
     first['schema']['related_tables']['accounts']['columns']['segment'][
@@ -325,8 +316,8 @@ def test_payload_factories_return_isolated_deep_copies() -> None:
         'segment']['dtype'] == 'string'
 
 
-def test_container_smoke_payload_tracks_current_v0_wire_shape() -> None:
-    payload = nim_v0_smoke_payload()
+def test_container_smoke_payload_tracks_current_v1_wire_shape() -> None:
+    payload = nim_v1_smoke_payload()
 
     assert set(payload) == {
         'model',
@@ -345,9 +336,9 @@ def test_container_smoke_payload_tracks_current_v0_wire_shape() -> None:
     assert payload['inference'] == {'run_mode': 'best'}
 
 
-def test_session_payload_helpers_match_current_v0_session_contract() -> None:
-    create = nim_v0_session_create_payload()
-    predict = nim_v0_session_predict_minimal_payload()
+def test_session_payload_helpers_match_current_v1_session_contract() -> None:
+    create = nim_v1_session_create_payload()
+    predict = nim_v1_session_predict_minimal_payload()
 
     assert set(create) == {'model', 'task', 'schema', 'context'}
     assert 'predict' not in create

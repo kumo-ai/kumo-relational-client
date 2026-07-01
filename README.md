@@ -111,6 +111,5 @@ export RFM_NIM_BASE_URL=http://127.0.0.1:8002
 python -m pytest test/client/test_rfm_nim_live.py
 ```
 
-The live suite currently documents the known compatibility split: this SDK posts
-generated Universal TFM predictions to `/v1/predictions`, while the current Kumo
-RFM NIM container accepts prediction and session requests under `/v0/*`.
+The live suite validates that this SDK and the Kumo RFM NIM use the current
+Universal TFM prediction and session routes under `/v1/*`.

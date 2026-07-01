@@ -53,7 +53,7 @@ runs this with the canonical spec available.
 
 Replace or extend the handwritten parser fixture with examples from:
 
-`paths./v0/predictions.post.responses.200.content.application/json.examples`
+`paths./v1/predictions.post.responses.200.content.application/json.examples`
 
 For each example:
 

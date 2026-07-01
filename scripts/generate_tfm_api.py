@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover - exercised only in bare dev envs.
     yaml = None
 
 DEFAULT_OUTPUT = Path('kumoai/client/generated/tfm_api.py')
-DEFAULT_STRIP_PREFIX = '/v1'
+DEFAULT_STRIP_PREFIX = ''
 
 HTTP_METHODS = {
     'delete',
@@ -53,7 +53,7 @@ def main() -> int:
     parser.add_argument(
         '--strip-prefix',
         default=DEFAULT_STRIP_PREFIX,
-        help='Path prefix to strip because KumoClient already adds it.',
+        help='Optional path prefix to strip from generated endpoint paths.',
     )
     parser.add_argument(
         '--check',

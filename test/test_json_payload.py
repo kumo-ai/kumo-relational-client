@@ -106,7 +106,7 @@ def test_predict_posts_universal_json_payload(
 ) -> None:
     receptor = JsonPayloadReceptor()
     mock_api.post(
-        f'{MOCK_URL}/v0/predictions',
+        f'{MOCK_URL}/v1/predictions',
         additional_matcher=receptor,
         json=_correlated_response({
             'prediction': 0.5,
@@ -202,7 +202,7 @@ def test_entity_identity_survives_batch_local_row_indexes(
     mock_api: Any,
 ) -> None:
     mock_api.post(
-        f'{MOCK_URL}/v0/predictions',
+        f'{MOCK_URL}/v1/predictions',
         json=_correlated_response({'prediction': 0.5}),
     )
     model = KumoRFM(user_store_graph, verbose=False)
@@ -222,7 +222,7 @@ def test_explain_requests_explanation_output_field(
 ) -> None:
     receptor = JsonPayloadReceptor()
     mock_api.post(
-        f'{MOCK_URL}/v0/predictions',
+        f'{MOCK_URL}/v1/predictions',
         additional_matcher=receptor,
         json=_correlated_response({
             'prediction': 0.5,

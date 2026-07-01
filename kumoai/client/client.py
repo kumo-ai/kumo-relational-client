@@ -103,7 +103,7 @@ class KumoClient:
         """
         try:
             ready = self._session.get(
-                self._url + '/health/ready',
+                self._url + '/v1/health/ready',
                 verify=self._verify_ssl,
                 timeout=10,
             )

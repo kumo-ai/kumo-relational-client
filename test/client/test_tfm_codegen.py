@@ -32,9 +32,6 @@ CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
 
 def test_generated_tfm_api_runtime_metadata() -> None:
     operation = TFMOperations.run_prediction
-    health = TFMOperations.get_health
-    health_live = TFMOperations.get_health_live
-    health_ready = TFMOperations.get_health_ready
 
     assert TFM_MODEL_KUMO_RFM == 'kumo-rfm'
     assert TFM_OUTPUT_FIELD_EMBEDDINGS == 'embeddings'
@@ -43,47 +40,19 @@ def test_generated_tfm_api_runtime_metadata() -> None:
     assert operation.request_schema == 'PredictionRequest'
     assert operation.response_schema == 'PredictionResponse'
     assert operation.endpoint.method == HTTPMethod.POST
-    assert operation.endpoint.get_path() == '/v0/predictions'
+    assert operation.endpoint.get_path() == '/v1/predictions'
     assert TFM_ENDPOINTS_BY_OPERATION_ID['runPrediction'] == (
         operation.endpoint)
-    assert 'HealthResponse' in TFM_SCHEMA_NAMES
+    assert 'HealthResponse' not in TFM_SCHEMA_NAMES
     assert 'ProblemDetails' in TFM_SCHEMA_NAMES
-
-    assert health.operation_id == 'getHealth'
-    assert health.request_schema is None
-    assert health.response_schema == 'HealthResponse'
-    assert health.endpoint.method == HTTPMethod.GET
-    assert health.endpoint.get_path() == '/health'
-    assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealth'] == health.endpoint
-
-    assert health_live.operation_id == 'getHealthLive'
-    assert health_live.response_schema == 'HealthResponse'
-    assert health_live.endpoint.method == HTTPMethod.GET
-    assert health_live.endpoint.get_path() == '/health/live'
-    assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealthLive'] == (
-        health_live.endpoint)
-
-    assert health_ready.operation_id == 'getHealthReady'
-    assert health_ready.response_schema == 'HealthResponse'
-    assert health_ready.endpoint.method == HTTPMethod.GET
-    assert health_ready.endpoint.get_path() == '/health/ready'
-    assert TFM_ENDPOINTS_BY_OPERATION_ID['getHealthReady'] == (
-        health_ready.endpoint)
 
 
 def test_generated_tfm_api_paths_are_service_root_relative() -> None:
     client = KumoClient('https://example.test', api_key=None)
 
-    for operation, expected_url in (
-        (TFMOperations.get_health, 'https://example.test/health'),
-        (TFMOperations.get_health_live, 'https://example.test/health/live'),
-        (TFMOperations.get_health_ready,
-         'https://example.test/health/ready'),
-        (TFMOperations.run_prediction,
-         'https://example.test/v0/predictions'),
-    ):
-        assert client._format_endpoint_url(
-            operation.endpoint.get_path()) == expected_url
+    assert client._format_endpoint_url(
+        TFMOperations.run_prediction.endpoint.get_path()) == (
+            'https://example.test/v1/predictions')
 
     with pytest.raises(ValueError, match='must start'):
         client._format_endpoint_url('rfm/validate_query')
@@ -336,7 +305,7 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     assert "class TFMOperations" in generated
     assert "class PredictionResponse" in generated
     assert "run_prediction: Final[TFMOperation]" in generated
-    assert "path='/predictions'" in generated
+    assert "path='/v1/predictions'" in generated
     assert "TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'" in generated
     assert "TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'" in generated
     assert "TFM_OUTPUT_FIELD_EXPLANATION: Final[str] = 'explanation'" in generated
@@ -475,7 +444,7 @@ def test_generated_tfm_api_matches_local_canonical_spec() -> None:
 
     # Keep the loaded spec live so the skip guard above cannot be accidentally
     # removed without also updating this test.
-    assert spec['paths']['/v0/predictions']['post']['operationId'] == (
+    assert spec['paths']['/v1/predictions']['post']['operationId'] == (
         'runPrediction')
 
 
@@ -517,7 +486,7 @@ def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
 )
 def test_documented_prediction_response_examples_parse() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
-    examples = spec['paths']['/v0/predictions']['post']['responses']['200'][
+    examples = spec['paths']['/v1/predictions']['post']['responses']['200'][
         'content']['application/json']['examples']
     required = set(
         spec['components']['schemas']['PredictionResponse']['required'])
@@ -556,7 +525,7 @@ def test_documented_prediction_response_examples_parse() -> None:
 def test_documented_prediction_request_examples_match_envelope_shape() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
     request_schema = spec['components']['schemas']['PredictionRequest']
-    examples = spec['paths']['/v0/predictions']['post']['requestBody'][
+    examples = spec['paths']['/v1/predictions']['post']['requestBody'][
         'content']['application/json']['examples']
     property_names = set(request_schema['properties'])
     required = set(request_schema['required'])

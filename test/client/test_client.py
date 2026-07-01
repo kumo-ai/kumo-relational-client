@@ -7,7 +7,7 @@ def test_authenticate_accepts_universal_tfm_nim(requests_mock):
     base_url = 'http://nim.test'
     requests_mock.get(f'{base_url}/v1/connectors', status_code=404)
     requests_mock.get(
-        f'{base_url}/health/ready',
+        f'{base_url}/v1/health/ready',
         json={
             'status': 'healthy',
             'check': 'ready',
@@ -48,7 +48,7 @@ def test_authenticate_rejects_unready_universal_tfm_nim(
     base_url = 'http://nim.test'
     requests_mock.get(f'{base_url}/v1/connectors', status_code=404)
     requests_mock.get(
-        f'{base_url}/health/ready',
+        f'{base_url}/v1/health/ready',
         json=ready_payload,
     )
 

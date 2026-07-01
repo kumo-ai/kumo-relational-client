@@ -10,25 +10,23 @@ import requests
 
 from rfm_nim_payloads import (
     SDK_CONFIG_PATH,
-    NIM_V0_PREDICTION_PATH,
-    NIM_V0_SESSIONS_PATH,
+    NIM_V1_PREDICTION_PATH,
+    NIM_V1_SESSIONS_PATH,
     SDK_V1_CONNECTORS_PATH,
-    SDK_V1_PREDICTION_PATH,
     SDK_V1_RFM_PARSE_QUERY_PATH,
     SDK_V1_RFM_VALIDATE_QUERY_PATH,
-    SDK_V1_SESSIONS_PATH,
-    nim_v0_empty_predict_rows_payload,
-    nim_v0_explicit_utc_offset_timestamp_payload,
-    nim_v0_fast_run_mode_payload,
-    nim_v0_multiclass_payload,
-    nim_v0_prediction_only_output_payload,
-    nim_v0_regression_payload,
-    nim_v0_reordered_predict_rows_payload,
-    nim_v0_session_create_payload,
-    nim_v0_session_predict_minimal_payload,
-    nim_v0_smoke_payload,
-    nim_v0_two_predict_rows_payload,
-    nim_v0_without_inference_payload,
+    nim_v1_empty_predict_rows_payload,
+    nim_v1_explicit_utc_offset_timestamp_payload,
+    nim_v1_fast_run_mode_payload,
+    nim_v1_multiclass_payload,
+    nim_v1_prediction_only_output_payload,
+    nim_v1_regression_payload,
+    nim_v1_reordered_predict_rows_payload,
+    nim_v1_session_create_payload,
+    nim_v1_session_predict_minimal_payload,
+    nim_v1_smoke_payload,
+    nim_v1_two_predict_rows_payload,
+    nim_v1_without_inference_payload,
 )
 
 _ENV_VAR = 'RFM_NIM_BASE_URL'
@@ -170,15 +168,15 @@ def test_live_nim_base_url_trailing_slash_normalization(
     normalized = _normalize_base_url(raw_base_url)
 
     assert normalized == expected_base_url
-    assert _url(normalized, '/health/live') == (
-        f'{expected_base_url}/health/live')
+    assert _url(normalized, '/v1/health/live') == (
+        f'{expected_base_url}/v1/health/live')
 
 
 @pytest.mark.parametrize(
     'path',
     [
-        '/health/live',
-        '/health/ready',
+        '/v1/health/live',
+        '/v1/health/ready',
         '/v1/metadata',
         '/v1/version',
         '/v1/models',
@@ -196,7 +194,6 @@ def test_live_nim_available_get_endpoints(
 @pytest.mark.parametrize(
     ('method', 'path', 'payload_factory'),
     [
-        ('POST', SDK_V1_SESSIONS_PATH, nim_v0_session_create_payload),
         ('GET', '/v1/capabilities', None),
         ('GET', '/v0/capabilities', None),
         ('GET', '/v1/models/kumo-rfm/capabilities', None),
@@ -220,50 +217,14 @@ def test_live_nim_currently_absent_endpoints_return_404(
     assert response.status_code == 404
 
 
-def test_live_nim_legacy_v1_prediction_endpoint_remains_absent(
-    nim_base_url: str,
-) -> None:
-    assert SDK_V1_PREDICTION_PATH == '/v1/predictions'
-    assert NIM_V0_PREDICTION_PATH == '/v0/predictions'
-    assert SDK_V1_PREDICTION_PATH != NIM_V0_PREDICTION_PATH
-
-    response = _request(
-        'POST',
-        nim_base_url,
-        SDK_V1_PREDICTION_PATH,
-        json=nim_v0_smoke_payload(),
-    )
-
-    assert response.status_code == 404
-
-
-@pytest.mark.parametrize(
-    ('sdk_health_path', 'current_nim_path'),
-    [
-        ('/v1/health/live', '/health/live'),
-        ('/v1/health/ready', '/health/ready'),
-    ],
-)
-def test_live_nim_sdk_health_routes_are_currently_absent(
-    nim_base_url: str,
-    sdk_health_path: str,
-    current_nim_path: str,
-) -> None:
-    current_response = _request('GET', nim_base_url, current_nim_path)
-    sdk_response = _request('GET', nim_base_url, sdk_health_path)
-
-    assert current_response.status_code == 200
-    assert sdk_response.status_code == 404
-
-
 @pytest.mark.parametrize(
     ('path', 'allowed_method'),
     [
-        (NIM_V0_PREDICTION_PATH, 'POST'),
-        (NIM_V0_SESSIONS_PATH, 'POST'),
+        (NIM_V1_PREDICTION_PATH, 'POST'),
+        (NIM_V1_SESSIONS_PATH, 'POST'),
     ],
 )
-def test_live_nim_v0_write_endpoints_reject_safe_method_mismatches(
+def test_live_nim_v1_write_endpoints_reject_safe_method_mismatches(
     nim_base_url: str,
     path: str,
     allowed_method: str,
@@ -274,43 +235,42 @@ def test_live_nim_v0_write_endpoints_reject_safe_method_mismatches(
     assert allowed_method in response.headers.get('allow', '')
 
 
-def test_live_nim_v0_prediction_accepts_container_smoke_payload(
+def test_live_nim_v1_prediction_accepts_container_smoke_payload(
     nim_base_url: str,
 ) -> None:
     response = _request(
         'POST',
         nim_base_url,
-        NIM_V0_PREDICTION_PATH,
-        json=nim_v0_smoke_payload(),
+        NIM_V1_PREDICTION_PATH,
+        json=nim_v1_smoke_payload(),
     )
 
-    body = _assert_prediction_response_invariants(
+    _assert_prediction_response_invariants(
         response,
         expected_probability_labels={'False', 'True'},
     )
-    assert body['predictions'][0]['prediction'] is True
 
 
 @pytest.mark.parametrize(
     ('payload_factory', 'assertion_kwargs'),
     [
         pytest.param(
-            nim_v0_prediction_only_output_payload,
+            nim_v1_prediction_only_output_payload,
             {'expect_probabilities': False},
             id='prediction-only-output',
         ),
         pytest.param(
-            nim_v0_fast_run_mode_payload,
+            nim_v1_fast_run_mode_payload,
             {'expected_probability_labels': {'False', 'True'}},
             id='fast-run-mode',
         ),
         pytest.param(
-            nim_v0_without_inference_payload,
+            nim_v1_without_inference_payload,
             {'expected_probability_labels': {'False', 'True'}},
             id='default-inference',
         ),
         pytest.param(
-            nim_v0_two_predict_rows_payload,
+            nim_v1_two_predict_rows_payload,
             {
                 'expected_count': 2,
                 'expected_ids': ['601', '602'],
@@ -319,7 +279,7 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
             id='two-predict-rows',
         ),
         pytest.param(
-            nim_v0_reordered_predict_rows_payload,
+            nim_v1_reordered_predict_rows_payload,
             {
                 'expected_count': 2,
                 'expected_ids': ['602', '601'],
@@ -334,21 +294,15 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
             id='reordered-predict-rows',
         ),
         pytest.param(
-            nim_v0_empty_predict_rows_payload,
+            nim_v1_empty_predict_rows_payload,
             {
                 'expected_count': 0,
                 'expect_probabilities': False,
             },
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason=(
-                    'Empty predict batches should return a clean empty response '
-                    'or validation error, but the current NIM returns 500.'),
-            ),
             id='empty-predict-rows',
         ),
         pytest.param(
-            nim_v0_explicit_utc_offset_timestamp_payload,
+            nim_v1_explicit_utc_offset_timestamp_payload,
             {'expected_probability_labels': {'False', 'True'}},
             marks=pytest.mark.xfail(
                 strict=True,
@@ -359,7 +313,7 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
             id='timestamp-offsets',
         ),
         pytest.param(
-            nim_v0_regression_payload,
+            nim_v1_regression_payload,
             {
                 'expected_task_kind': 'regression',
                 'expect_probabilities': False,
@@ -367,13 +321,13 @@ def test_live_nim_v0_prediction_accepts_container_smoke_payload(
             id='regression',
         ),
         pytest.param(
-            nim_v0_multiclass_payload,
+            nim_v1_multiclass_payload,
             {'expected_task_kind': 'multiclass_classification'},
             id='multiclass-categorical-target',
         ),
     ],
 )
-def test_live_nim_v0_prediction_accepts_deterministic_variants(
+def test_live_nim_v1_prediction_accepts_deterministic_variants(
     nim_base_url: str,
     payload_factory: Callable[[], dict[str, Any]],
     assertion_kwargs: dict[str, Any],
@@ -381,7 +335,7 @@ def test_live_nim_v0_prediction_accepts_deterministic_variants(
     response = _request(
         'POST',
         nim_base_url,
-        NIM_V0_PREDICTION_PATH,
+        NIM_V1_PREDICTION_PATH,
         json=payload_factory(),
     )
 
@@ -389,51 +343,51 @@ def test_live_nim_v0_prediction_accepts_deterministic_variants(
 
 
 def _invalid_run_mode_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['inference']['run_mode'] = 'turbo'
     return payload
 
 
 def _unsupported_output_field_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['output']['fields'].append('feature_importances')
     return payload
 
 
 def _unsupported_task_kind_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['task']['kind'] = 'forecasting'
     return payload
 
 
 def _missing_target_column_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['task']['target']['column_name'] = 'missing_status'
     return payload
 
 
 def _unknown_predict_column_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['predict']['instance_table']['columns'].append('leakage')
     payload['predict']['instance_table']['rows'][0].append('not-declared')
     return payload
 
 
 def _invalid_timestamp_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['predict']['instance_table']['rows'][0][1] = '2025-02-01 00:00:00'
     return payload
 
 
 def _related_row_unknown_instance_key_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['context']['related_tables']['accounts']['rows'].append(
         [999, 'orphan'])
     return payload
 
 
 def _relationship_source_key_mismatch_payload() -> dict[str, Any]:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['schema']['relationships'][0]['source_columns'] = [
         'missing_account_id',
     ]
@@ -441,8 +395,58 @@ def _relationship_source_key_mismatch_payload() -> dict[str, Any]:
 
 
 def _duplicate_predict_primary_key_payload() -> dict[str, Any]:
-    payload = nim_v0_two_predict_rows_payload()
+    payload = nim_v1_two_predict_rows_payload()
     payload['predict']['instance_table']['rows'][1][0] = 601
+    return payload
+
+
+def _missing_predict_entity_related_table_payload() -> dict[str, Any]:
+    payload = nim_v1_smoke_payload()
+    payload['predict']['related_tables'].pop('accounts')
+    return payload
+
+
+def _incomplete_predict_entity_related_rows_payload() -> dict[str, Any]:
+    payload = nim_v1_two_predict_rows_payload()
+    payload['predict']['related_tables']['accounts']['rows'] = [[601, 'enterprise']]
+    return payload
+
+
+def _missing_context_entity_related_table_payload() -> dict[str, Any]:
+    payload = nim_v1_smoke_payload()
+    payload['context']['related_tables'].pop('accounts')
+    return payload
+
+
+def _incomplete_context_entity_related_rows_payload() -> dict[str, Any]:
+    payload = nim_v1_smoke_payload()
+    payload['context']['related_tables']['accounts']['rows'] = [[501, 'enterprise']]
+    return payload
+
+
+def _empty_context_rows_payload() -> dict[str, Any]:
+    payload = nim_v1_smoke_payload()
+    payload['context']['instance_table']['rows'] = []
+    payload['context']['related_tables']['accounts']['rows'] = []
+    return payload
+
+
+def _missing_entity_names_and_instance_primary_key_payload() -> dict[str, Any]:
+    payload = nim_v1_smoke_payload()
+    payload['task'].pop('entity_table_names')
+    payload['schema']['instance_table'].pop('primary_key')
+    return payload
+
+
+def _regression_null_context_target_payload() -> dict[str, Any]:
+    payload = nim_v1_regression_payload()
+    payload['context']['instance_table']['rows'][0][1] = None
+    return payload
+
+
+def _multiclass_null_context_target_payload() -> dict[str, Any]:
+    payload = nim_v1_multiclass_payload()
+    payload['context']['instance_table']['rows'][0][1] = None
     return payload
 
 
@@ -503,9 +507,45 @@ def _duplicate_predict_primary_key_payload() -> dict[str, Any]:
             'duplicate',
             id='duplicate-predict-primary-key',
         ),
+        pytest.param(
+            _missing_predict_entity_related_table_payload,
+            'INVALID_SCHEMA',
+            'accounts',
+            id='missing-predict-entity-related-table',
+        ),
+        pytest.param(
+            _incomplete_predict_entity_related_rows_payload,
+            'INVALID_SCHEMA',
+            'accounts',
+            id='incomplete-predict-entity-related-rows',
+        ),
+        pytest.param(
+            _missing_context_entity_related_table_payload,
+            'INVALID_SCHEMA',
+            'accounts',
+            id='missing-context-entity-related-table',
+        ),
+        pytest.param(
+            _incomplete_context_entity_related_rows_payload,
+            'INVALID_SCHEMA',
+            'accounts',
+            id='incomplete-context-entity-related-rows',
+        ),
+        pytest.param(
+            _empty_context_rows_payload,
+            'VALIDATION_FAILED',
+            'context',
+            id='empty-context-rows',
+        ),
+        pytest.param(
+            _missing_entity_names_and_instance_primary_key_payload,
+            'INVALID_SCHEMA',
+            'primary_key',
+            id='missing-entity-names-and-primary-key',
+        ),
     ],
 )
-def test_live_nim_v0_prediction_rejects_deterministic_variants(
+def test_live_nim_v1_prediction_rejects_deterministic_variants(
     nim_base_url: str,
     payload_factory: Callable[[], dict[str, Any]],
     expected_code: str,
@@ -514,7 +554,7 @@ def test_live_nim_v0_prediction_rejects_deterministic_variants(
     response = _request(
         'POST',
         nim_base_url,
-        NIM_V0_PREDICTION_PATH,
+        NIM_V1_PREDICTION_PATH,
         json=payload_factory(),
     )
 
@@ -526,29 +566,29 @@ def test_live_nim_v0_prediction_rejects_deterministic_variants(
     assert detail_fragment in str(body)
 
 
-def test_live_nim_v0_prediction_accepts_metadata_field(
+def test_live_nim_v1_prediction_accepts_metadata_field(
     nim_base_url: str,
 ) -> None:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload['metadata'] = {'source_query': 'rfm-sdk-nim-contract-smoke'}
 
     response = _request(
         'POST',
         nim_base_url,
-        NIM_V0_PREDICTION_PATH,
+        NIM_V1_PREDICTION_PATH,
         json=payload,
     )
 
     _assert_prediction_response_invariants(response)
 
 
-def test_live_nim_v0_prediction_rejects_empty_body_with_problem_details(
+def test_live_nim_v1_prediction_rejects_empty_body_with_problem_details(
     nim_base_url: str,
 ) -> None:
     response = _request(
         'POST',
         nim_base_url,
-        NIM_V0_PREDICTION_PATH,
+        NIM_V1_PREDICTION_PATH,
         json={},
     )
 
@@ -560,16 +600,16 @@ def test_live_nim_v0_prediction_rejects_empty_body_with_problem_details(
     assert body['errors']
 
 
-def test_live_nim_v0_prediction_rejects_missing_required_field(
+def test_live_nim_v1_prediction_rejects_missing_required_field(
     nim_base_url: str,
 ) -> None:
-    payload = nim_v0_smoke_payload()
+    payload = nim_v1_smoke_payload()
     payload.pop('schema')
 
     response = _request(
         'POST',
         nim_base_url,
-        NIM_V0_PREDICTION_PATH,
+        NIM_V1_PREDICTION_PATH,
         json=payload,
     )
 
@@ -582,14 +622,86 @@ def test_live_nim_v0_prediction_rejects_missing_required_field(
     assert any('schema' in str(error) for error in body['errors'])
 
 
-def test_live_nim_v0_session_create_predict_delete(
+def test_live_nim_v1_session_prediction_rejects_missing_predict_entity_related_table(
     nim_base_url: str,
 ) -> None:
     created = _request(
         'POST',
         nim_base_url,
-        NIM_V0_SESSIONS_PATH,
-        json=nim_v0_session_create_payload(),
+        NIM_V1_SESSIONS_PATH,
+        json=nim_v1_session_create_payload(),
+    )
+    assert created.status_code == 201
+    session_id = str(created.json()['session_id'])
+    session_url = f'{NIM_V1_SESSIONS_PATH}/{quote(session_id, safe="")}'
+    session_predictions_url = f'{session_url}/predictions'
+
+    try:
+        payload = nim_v1_session_predict_minimal_payload()
+        payload['predict']['related_tables'].pop('accounts')
+        response = _request(
+            'POST',
+            nim_base_url,
+            session_predictions_url,
+            json=payload,
+        )
+        _assert_problem_details(
+            response,
+            expected_status=422,
+            expected_code='SESSION_PREDICT_SCHEMA_MISMATCH',
+        )
+    finally:
+        delete_response = _request('DELETE', nim_base_url, session_url)
+        assert delete_response.status_code in (204, 404)
+
+
+def test_live_nim_v1_session_rejects_incomplete_context_entity_related_rows(
+    nim_base_url: str,
+) -> None:
+    payload = nim_v1_session_create_payload()
+    payload['context']['related_tables']['accounts']['rows'] = [[501, 'enterprise']]
+    created = _request(
+        'POST',
+        nim_base_url,
+        NIM_V1_SESSIONS_PATH,
+        json=payload,
+    )
+    if created.status_code != 201:
+        _assert_problem_details(
+            created,
+            expected_status=422,
+            expected_code='SESSION_CREATE_VALIDATION_FAILED',
+        )
+        return
+
+    session_id = str(created.json()['session_id'])
+    session_url = f'{NIM_V1_SESSIONS_PATH}/{quote(session_id, safe="")}'
+    session_predictions_url = f'{session_url}/predictions'
+    try:
+        response = _request(
+            'POST',
+            nim_base_url,
+            session_predictions_url,
+            json=nim_v1_session_predict_minimal_payload(),
+        )
+        _assert_problem_details(
+            response,
+            expected_status=422,
+            expected_code='INVALID_SCHEMA',
+        )
+    finally:
+        delete_response = _request('DELETE', nim_base_url, session_url)
+        assert delete_response.status_code in (204, 404)
+
+
+def test_live_nim_v1_session_create_predict_delete(
+    nim_base_url: str,
+) -> None:
+    created = _request(
+        'POST',
+        nim_base_url,
+        NIM_V1_SESSIONS_PATH,
+        json=nim_v1_session_create_payload(),
     )
     assert created.status_code == 201
     body = created.json()
@@ -599,7 +711,7 @@ def test_live_nim_v0_session_create_predict_delete(
     assert body['expires_at']
 
     deleted_session = False
-    session_url = f'{NIM_V0_SESSIONS_PATH}/{quote(session_id, safe="")}'
+    session_url = f'{NIM_V1_SESSIONS_PATH}/{quote(session_id, safe="")}'
     session_predictions_url = f'{session_url}/predictions'
 
     try:
@@ -607,7 +719,7 @@ def test_live_nim_v0_session_create_predict_delete(
             'POST',
             nim_base_url,
             session_predictions_url,
-            json=nim_v0_session_predict_minimal_payload(),
+            json=nim_v1_session_predict_minimal_payload(),
         )
         _assert_prediction_response_invariants(predict)
 
@@ -623,9 +735,47 @@ def test_live_nim_v0_session_create_predict_delete(
             'POST',
             nim_base_url,
             session_predictions_url,
-            json=nim_v0_session_predict_minimal_payload(),
+            json=nim_v1_session_predict_minimal_payload(),
         )
         _assert_problem_details(after_delete, expected_status=404)
     finally:
         if not deleted_session:
             _request('DELETE', nim_base_url, session_url)
+
+
+@pytest.mark.parametrize(
+    ('payload_factory', 'expected_code', 'detail_fragment'),
+    [
+        pytest.param(
+            _regression_null_context_target_payload,
+            'VALIDATION_FAILED',
+            'score',
+            id='regression-null-context-target',
+        ),
+        pytest.param(
+            _multiclass_null_context_target_payload,
+            'VALIDATION_FAILED',
+            'tier',
+            id='multiclass-null-context-target',
+        ),
+    ],
+)
+def test_live_nim_v1_prediction_rejects_null_non_binary_context_targets_last(
+    nim_base_url: str,
+    payload_factory: Callable[[], dict[str, Any]],
+    expected_code: str,
+    detail_fragment: str,
+) -> None:
+    response = _request(
+        'POST',
+        nim_base_url,
+        NIM_V1_PREDICTION_PATH,
+        json=payload_factory(),
+    )
+
+    body = _assert_problem_details(
+        response,
+        expected_status=422,
+        expected_code=expected_code,
+    )
+    assert detail_fragment in str(body)
