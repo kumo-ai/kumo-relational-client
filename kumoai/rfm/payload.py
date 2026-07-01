@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass
+from numbers import Real
 from typing import Any
 
 import numpy as np
@@ -283,11 +284,13 @@ def _instance_dataframe(
     target_name = context.y_train.name or 'TARGET'
     df[target_name] = None
     df.loc[:context.num_train - 1, target_name] = [
-        _json_value(value) for value in context.y_train.tolist()
+        _target_json_value(context.task_type, value)
+        for value in context.y_train.tolist()
     ]
     if context.y_test is not None:
         df.loc[context.num_train:, target_name] = [
-            _json_value(value) for value in context.y_test.tolist()
+            _target_json_value(context.task_type, value)
+            for value in context.y_test.tolist()
         ]
     elif context.num_test > 0:
         df.loc[context.num_train:, target_name] = None
@@ -681,6 +684,20 @@ def _target_dtype(task_type: TaskType, target: pd.Series) -> str:
     if TaskType(task_type) == TaskType.BINARY_CLASSIFICATION:
         return 'bool'
     return _dtype_name(target)
+
+
+def _target_json_value(task_type: TaskType, value: Any) -> Any:
+    value = _json_value(value)
+    if (TaskType(task_type) != TaskType.BINARY_CLASSIFICATION
+            or value is None):
+        return value
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, Real) and value in (0, 1):
+        return bool(value)
+    raise ValueError(
+        "Binary classification target values must be booleans or numeric "
+        f"0/1 values, but got {value!r}.")
 
 
 def _dtype_name(data: pd.Series) -> str:
