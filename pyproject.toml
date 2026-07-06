@@ -92,6 +92,7 @@ editable.verbose=false
 build-frontend = "build[uv]"
 
 [tool.pytest.ini_options]
+xfail_strict = true
 addopts = [
     "--capture=no",
     "--color=yes",
@@ -108,6 +109,8 @@ filterwarnings=[
 markers = [
     "integration: integration tests",
     "live_nim: opt-in live Kumo RFM NIM tests using RFM_NIM_BASE_URL",
+    "live_nim_smoke: fast public SDK and NIM boundary validation",
+    "live_nim_full: extended task, validation, recovery, and session coverage",
 ]
 
 [tool.yapf]

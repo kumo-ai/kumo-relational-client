@@ -88,7 +88,7 @@ https://kumo.ai/docs/quick-start/rfm/
 pytest test
 ```
 
-### RFM NIM Contract Tests
+### RFM NIM Contract And Live Tests
 
 The SDK-side contract tests are unit-only by default:
 
@@ -96,20 +96,39 @@ The SDK-side contract tests are unit-only by default:
 python -m pytest test/client/test_rfm_nim_contract.py
 ```
 
-Live Kumo RFM NIM probes are skipped unless `RFM_NIM_BASE_URL` is set. To test
-a container running on a Colossus host port such as `8002`, forward the remote
-port to the local machine first:
+Live Kumo RFM NIM probes remain opt-in and accept an existing container URL.
+The repeatable runner creates or repairs an ignored, repo-local virtualenv and
+runs a fast SDK/NIM boundary smoke suite by default:
+
+```bash
+scripts/run_rfm_nim_live_tests.sh --url http://127.0.0.1:8002
+```
+
+Run the broader task, invalid-request recovery, and session suite explicitly:
+
+```bash
+scripts/run_rfm_nim_live_tests.sh --url http://127.0.0.1:8002 --full
+```
+
+To test a container running on a Colossus host port such as `8002`, forward the
+remote port to the local machine first:
 
 ```bash
 ssh <user>@<colossus-host> -N -L 8002:127.0.0.1:8002
 ```
 
-Then run the opt-in live suite from this repo:
+Direct pytest usage is still supported. The URL is required for live tests;
+without it, they are skipped as part of ordinary unit-test collection:
 
 ```bash
 export RFM_NIM_BASE_URL=http://127.0.0.1:8002
-python -m pytest test/client/test_rfm_nim_live.py
+python -m pytest test/client/test_rfm_nim_live.py \
+  -m 'live_nim_smoke or live_nim_full'
 ```
 
-The live suite validates that this SDK and the Kumo RFM NIM use the current
-Universal TFM prediction and session routes under `/v1/*`.
+Set `RFM_NIM_API_KEY` when the deployment requires `X-API-Key` authentication.
+`RFM_NIM_TIMEOUT_SECONDS` changes the per-request timeout, and
+`RFM_NIM_VERIFY_SSL=0` disables TLS verification for development endpoints.
+The live suite validates the current `/v1/*` Universal TFM boundary using
+semantic response and problem-details invariants; it intentionally does not
+pin model scores, backend metadata, or implementation-specific error text.
