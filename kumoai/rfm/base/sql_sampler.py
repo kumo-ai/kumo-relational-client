@@ -23,6 +23,10 @@ EdgeType = tuple[str, str, str]
 
 
 class SQLSampler(Sampler):
+    # The character used to quote SQL identifiers. Backends whose dialect does
+    # not use double quotes (*e.g.*, Databricks uses backticks) override this:
+    _QUOTE_CHAR: str = '"'
+
     def __init__(
         self,
         graph: 'Graph',
@@ -60,10 +64,12 @@ class SQLSampler(Sampler):
                     assert isinstance(column.expr, LocalExpression)
                     column_ref_dict[column.name] = column.expr.value
                     column_proj_dict[column.name] = (
-                        f'{column.expr} AS {quote_ident(column.name)}')
+                        f'{column.expr} AS '
+                        f'{quote_ident(column.name, self._QUOTE_CHAR)}')
                 else:
-                    column_ref_dict[column.name] = quote_ident(column.name)
-                    column_proj_dict[column.name] = quote_ident(column.name)
+                    ident = quote_ident(column.name, self._QUOTE_CHAR)
+                    column_ref_dict[column.name] = ident
+                    column_proj_dict[column.name] = ident
             self._table_column_ref_dict[table.name] = column_ref_dict
             self._table_column_proj_dict[table.name] = column_proj_dict
 

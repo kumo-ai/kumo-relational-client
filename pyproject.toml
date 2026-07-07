@@ -56,6 +56,9 @@ snowflake=[
     "pyyaml",
     "mermaid-py",  # For graph visualization in vnext notebooks.
 ]
+databricks=[
+    "databricks-sql-connector>=3.0.0",  # for native parameterized queries.
+]
 sagemaker = [
     "boto3>=1.30.0,<2.0",
 ]
@@ -164,6 +167,7 @@ allowed-unresolved-imports = [
     "streamlit.**",
     "snowflake.**",
     "adbc_driver_sqlite.**",
+    "databricks.**",
 ]
 
 [[tool.ty.overrides]]

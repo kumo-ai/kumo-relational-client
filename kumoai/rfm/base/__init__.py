@@ -6,6 +6,7 @@ class DataBackend(StrEnum):
     SQLITE = 'sqlite'
     DUCKDB = 'duckdb'
     SNOWFLAKE = 'snowflake'
+    DATABRICKS = 'databricks'
 
 
 from .source import SourceColumn, SourceForeignKey  # noqa: E402

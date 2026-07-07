@@ -25,13 +25,14 @@ from kumoai.mixin import CastMixin
 from kumoai.rfm.base import ColumnSpec, DataBackend, Table
 from kumoai.rfm.base.utils import Timedelta
 from kumoai.rfm.infer import infer_time_column
-from kumoai.utils import display
+from kumoai.utils import display, quote_ident
 
 if TYPE_CHECKING:
     import graphviz
     from adbc_driver_duckdb.dbapi import Connection as AdbcDuckDBConnection
     from adbc_driver_sqlite.dbapi import AdbcSqliteConnection
     from snowflake.connector import SnowflakeConnection
+    from databricks.sql.client import Connection as DatabricksConnection
 
 
 @dataclass
@@ -109,7 +110,8 @@ class Graph:
         self._tables: dict[str, Table] = {}
         self._edges: list[Edge] = []
         self._connection: (AdbcSqliteConnection | AdbcDuckDBConnection
-                           | SnowflakeConnection | None) = None
+                           | SnowflakeConnection | DatabricksConnection
+                           | None) = None
 
         for table in tables:
             self.add_table(table)
@@ -505,6 +507,129 @@ class Graph:
         graph = cls(
             tables=[
                 SnowTable(connection=connection, **kwargs)
+                for kwargs in table_kwargs
+            ],
+            edges=edges or [],
+        )
+
+        if infer_metadata:
+            graph.infer_metadata(verbose=False)
+
+            if edges is None:
+                graph.infer_links(verbose=False)
+
+        if verbose:
+            graph.print_metadata()
+            graph.print_links()
+
+        return graph
+
+    @classmethod
+    def from_databricks(
+        cls,
+        connection: Union['DatabricksConnection', dict[str, Any], None] = None,
+        tables: Sequence[str | dict[str, Any]] | None = None,
+        catalog: str | None = None,
+        schema: str | None = None,
+        edges: Sequence[EdgeLike] | None = None,
+        infer_metadata: bool = True,
+        verbose: bool = True,
+    ) -> Self:
+        r"""Creates a :class:`Graph` from a :class:`databricks` SQL warehouse.
+
+        Automatically infers table metadata and links by default.
+
+        .. code-block:: python
+
+            >>> # doctest: +SKIP
+            >>> import kumoai.rfm as rfm
+
+            >>> # Create a graph using explicit Databricks credentials:
+            >>> graph = rfm.Graph.from_databricks(
+            ...     connection={
+            ...         'server_hostname': '<workspace>.cloud.databricks.com',
+            ...         'http_path': '/sql/1.0/warehouses/<warehouse_id>',
+            ...         'access_token': '<access_token>',
+            ...     },
+            ...     catalog='MY_CATALOG',
+            ...     schema='MY_SCHEMA',
+            ...     tables=[
+            ...         'USERS',
+            ...         'ORDERS',
+            ...         {'name': 'ITEMS', 'source_name': 'ITEMS_SNAPSHOT'},
+            ...     ],
+            ... )
+
+            >>> # Fine-grained control over table specification:
+            >>> graph = rfm.Graph.from_databricks(tables=[
+            ...     'USERS',
+            ...     dict(name='ORDERS', source_name='ORDERS_SNAPSHOT'),
+            ...     dict(name='ITEMS', schema='OTHER_SCHEMA'),
+            ... ], catalog='DEFAULT_CATALOG', schema='DEFAULT_SCHEMA')
+
+        Args:
+            connection: An open connection from
+                :meth:`~kumoai.rfm.backend.databricks.connect` or the
+                :class:`databricks.sql` connector keyword arguments to open a
+                new connection. If ``None``, will open a connection from
+                credentials stored in environment variables.
+            tables: Set of table names or :class:`DatabricksTable` keyword
+                arguments to include. If ``None``, will add all tables present
+                in the current catalog and schema.
+            catalog: The Unity Catalog catalog.
+            schema: The schema.
+            edges: An optional list of :class:`~kumoai.graph.Edge` objects to
+                add to the graph. If not provided, edges will be automatically
+                inferred from the data in case ``infer_metadata=True``.
+            infer_metadata: Whether to infer metadata for all tables in the
+                graph.
+            verbose: Whether to print verbose output.
+        """
+        from kumoai.rfm.backend.databricks import (
+            Connection,
+            DatabricksTable,
+            connect,
+        )
+
+        if not isinstance(connection, Connection):
+            connection = connect(**(connection or {}))
+        assert isinstance(connection, Connection)
+
+        if catalog is None or schema is None:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT current_catalog(), current_schema()")
+                result = cursor.fetchone()
+                assert result is not None
+                catalog = catalog or result[0]
+                assert catalog is not None
+                schema = schema or result[1]
+
+        if tables is None:
+            if schema is None:
+                raise ValueError("No current 'schema' set. Please specify the "
+                                 "Databricks schema manually")
+
+            with connection.cursor() as cursor:
+                cursor.execute(f"""
+                SELECT table_name
+                FROM {quote_ident(catalog, char='`')}.information_schema.tables
+                WHERE table_schema = {quote_ident(schema, char="'")}
+                """)
+                tables = [row[0] for row in cursor.fetchall()]
+
+        table_kwargs: list[dict[str, Any]] = []
+        for table in tables:
+            if isinstance(table, str):
+                kwargs = dict(name=table, catalog=catalog, schema=schema)
+            else:
+                kwargs = copy.copy(table)
+                kwargs.setdefault('catalog', catalog)
+                kwargs.setdefault('schema', schema)
+            table_kwargs.append(kwargs)
+
+        graph = cls(
+            tables=[
+                DatabricksTable(connection=connection, **kwargs)
                 for kwargs in table_kwargs
             ],
             edges=edges or [],
@@ -1693,7 +1818,7 @@ class Graph:
     def update_connection(
         self,
         connection: (AdbcSqliteConnection | AdbcDuckDBConnection
-                     | SnowflakeConnection),
+                     | SnowflakeConnection | DatabricksConnection),
     ) -> None:
         r"""Updates the connection to a database."""
         if self._connection is not None:
@@ -1722,6 +1847,15 @@ class Graph:
                 from kumoai.rfm.backend.snow import SnowTable
                 assert isinstance(table, SnowTable)
                 assert isinstance(connection, SnowflakeConnection)
+                table._connection = connection
+
+            if table.backend == DataBackend.DATABRICKS:
+                from kumoai.rfm.backend.databricks import (
+                    Connection,
+                    DatabricksTable,
+                )
+                assert isinstance(table, DatabricksTable)
+                assert isinstance(connection, Connection)
                 table._connection = connection
 
     # Class properties ########################################################

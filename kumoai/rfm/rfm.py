@@ -257,6 +257,9 @@ class KumoRFM:
         elif graph.backend == DataBackend.SNOWFLAKE:
             from kumoai.rfm.backend.snow import SnowSampler
             self._sampler = SnowSampler(graph, verbose)
+        elif graph.backend == DataBackend.DATABRICKS:
+            from kumoai.rfm.backend.databricks import DatabricksSampler
+            self._sampler = DatabricksSampler(graph, verbose)
         else:
             raise NotImplementedError
 
@@ -1213,6 +1216,14 @@ class KumoRFM:
             from kumoai.rfm.backend.snow import SnowSampler
             assert isinstance(self._sampler, SnowSampler)
             assert isinstance(connection, SnowflakeConnection)
+            self._sampler._connection = connection
+        if self._sampler.backend == DataBackend.DATABRICKS:
+            from kumoai.rfm.backend.databricks import (
+                Connection,
+                DatabricksSampler,
+            )
+            assert isinstance(self._sampler, DatabricksSampler)
+            assert isinstance(connection, Connection)
             self._sampler._connection = connection
 
     # Helpers #################################################################
