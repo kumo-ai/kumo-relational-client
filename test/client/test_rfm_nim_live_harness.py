@@ -94,6 +94,22 @@ def test_live_runner_rejects_sensitive_urls_without_logging_them(
     assert 'runner-url-secret' not in output
 
 
+def test_live_runner_documents_destructive_mode() -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+
+    result = subprocess.run(
+        [repo_root / 'scripts/run_rfm_nim_live_tests.sh', '--help'],
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert '--destructive' in result.stdout
+    assert 'container may need to be restarted' in result.stdout
+
+
 def test_live_client_applies_transport_configuration(mock_api) -> None:
     mock_api.get('https://example.test/rfm/v1/health/ready', json={})
     client = LiveNimClient(

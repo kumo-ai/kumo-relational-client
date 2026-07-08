@@ -17,6 +17,13 @@ from rfm_nim_live_harness import (
     assert_problem_details,
     assert_ready_and_model_available,
 )
+from rfm_nim_hardening_cases import (
+    DESTRUCTIVE_KNOWN_ISSUE_CASES,
+    EXPECTED_REJECTION_CASES,
+    KNOWN_ISSUE_CASES,
+    ExpectedRejectionCase,
+    KnownIssueCase,
+)
 from rfm_nim_payloads import (
     NIM_V1_PREDICTION_PATH,
     NIM_V1_SESSIONS_PATH,
@@ -44,6 +51,10 @@ pytestmark = [
         reason=f'set {_ENV_VAR} to run live Kumo RFM NIM tests',
     ),
 ]
+
+
+class KnownNimDefectAssertion(AssertionError):
+    """Failure matching a tracked NIM defect rather than the test harness."""
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -97,6 +108,53 @@ def _assert_service_recovers(live_nim: LiveNimClient) -> None:
     assert_ready_and_model_available(live_nim)
     payload = nim_v1_smoke_payload()
     assert_prediction_response(_post_prediction(live_nim, payload), payload)
+
+
+def _known_issue_params(
+    cases: tuple[KnownIssueCase, ...],
+) -> list[Any]:
+    return [
+        pytest.param(
+            case,
+            id=case.case_id,
+            marks=pytest.mark.xfail(
+                reason=f'known NIM defect: {case.issue_url}',
+                raises=KnownNimDefectAssertion,
+            ),
+        ) for case in cases
+    ]
+
+
+def _cleanup_created_session(
+    live_nim: LiveNimClient,
+    response: requests.Response,
+) -> None:
+    if response.status_code != 201:
+        return
+    session_id = str(response.json()['session_id'])
+    session_url = f'{NIM_V1_SESSIONS_PATH}/{quote(session_id, safe="")}'
+    cleanup = live_nim.request('DELETE', session_url)
+    assert cleanup.status_code == 204
+
+
+def _assert_known_issue_rejected_and_recovers(
+    live_nim: LiveNimClient,
+    case: KnownIssueCase,
+) -> None:
+    response = live_nim.request('POST', case.path, **case.request_kwargs())
+    contract_error: Exception | None = None
+    try:
+        assert_problem_details(
+            response,
+            expected_statuses=case.expected_statuses,
+        )
+    except Exception as exc:  # Preserve the contract failure after recovery.
+        contract_error = exc
+
+    _cleanup_created_session(live_nim, response)
+    _assert_service_recovers(live_nim)
+    if contract_error is not None:
+        raise KnownNimDefectAssertion(str(contract_error)) from contract_error
 
 
 @pytest.mark.live_nim_smoke
@@ -258,12 +316,6 @@ def _relationship_mismatch_payload() -> dict[str, Any]:
     return payload
 
 
-def _null_regression_target_payload() -> dict[str, Any]:
-    payload = nim_v1_regression_payload()
-    payload['context']['instance_table']['rows'][0][1] = None
-    return payload
-
-
 @pytest.mark.live_nim_full
 @pytest.mark.parametrize(
     'payload_factory',
@@ -281,10 +333,6 @@ def _null_regression_target_payload() -> dict[str, Any]:
             _relationship_mismatch_payload,
             id='relationship-mismatch',
         ),
-        pytest.param(
-            _null_regression_target_payload,
-            id='null-regression-target',
-        ),
     ],
 )
 def test_live_nim_full_rejects_invalid_requests_and_recovers(
@@ -294,6 +342,40 @@ def test_live_nim_full_rejects_invalid_requests_and_recovers(
     response = _post_prediction(live_nim, payload_factory())
     assert_problem_details(response)
     _assert_service_recovers(live_nim)
+
+
+@pytest.mark.live_nim_full
+@pytest.mark.parametrize(
+    'case',
+    EXPECTED_REJECTION_CASES,
+    ids=lambda case: case.case_id,
+)
+def test_live_nim_full_expected_http_rejections(
+    live_nim: LiveNimClient,
+    case: ExpectedRejectionCase,
+) -> None:
+    response = live_nim.request(
+        case.method,
+        case.path,
+        **case.request_kwargs(),
+    )
+    if case.problem_details:
+        assert_problem_details(
+            response,
+            expected_statuses=(case.expected_status,),
+        )
+    else:
+        assert response.status_code == case.expected_status
+    _assert_service_recovers(live_nim)
+
+
+@pytest.mark.live_nim_full
+@pytest.mark.parametrize('case', _known_issue_params(KNOWN_ISSUE_CASES))
+def test_live_nim_full_known_issue_rejections(
+    live_nim: LiveNimClient,
+    case: KnownIssueCase,
+) -> None:
+    _assert_known_issue_rejected_and_recovers(live_nim, case)
 
 
 @pytest.mark.live_nim_full
@@ -330,3 +412,24 @@ def test_live_nim_full_session_validation_and_cleanup(
     finally:
         cleanup = live_nim.request('DELETE', session_url)
         assert cleanup.status_code == 204
+
+
+# Keep destructive probes last: the currently reproduced defect can leave CUDA
+# unusable until the NIM container is restarted.
+@pytest.mark.live_nim_destructive
+@pytest.mark.parametrize(
+    'case',
+    _known_issue_params(DESTRUCTIVE_KNOWN_ISSUE_CASES),
+)
+def test_live_nim_destructive_known_issue_rejections(
+    live_nim: LiveNimClient,
+    case: KnownIssueCase,
+) -> None:
+    response = live_nim.request('POST', case.path, **case.request_kwargs())
+    try:
+        assert_problem_details(
+            response,
+            expected_statuses=case.expected_statuses,
+        )
+    except Exception as exc:
+        raise KnownNimDefectAssertion(str(exc)) from exc
