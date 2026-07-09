@@ -110,20 +110,11 @@ Run the broader task, invalid-request recovery, and session suite explicitly:
 scripts/run_rfm_nim_live_tests.sh --url http://127.0.0.1:8002 --full
 ```
 
-The full suite includes strict, issue-linked xfails for known NIM defects.
-They keep the suite green while a defect remains reproducible, but a fixed
-behavior becomes a strict XPASS failure so its issue and xfail can be closed
-together. Each non-destructive issue probe is followed by a known-good
-prediction to detect service degradation.
-
-One null-multiclass-target regression is isolated because the current defect
-can poison the CUDA context. Run it only against a disposable or restartable
-container; it runs last and may require a container restart afterward:
-
-```bash
-scripts/run_rfm_nim_live_tests.sh \
-  --url http://127.0.0.1:8002 --destructive
-```
+The full suite includes durable rejection regressions for previously fixed NIM
+defects. Open defects remain strict, issue-linked xfails so a fixed behavior
+becomes a strict XPASS until the case is promoted to the regular regression
+catalog. Every rejection probe is followed by a known-good prediction to
+detect service degradation.
 
 To test a container running on a Colossus host port such as `8002`, forward the
 remote port to the local machine first:
@@ -140,8 +131,6 @@ export RFM_NIM_BASE_URL=http://127.0.0.1:8002
 python -m pytest test/client/test_rfm_nim_live.py \
   -m 'live_nim_smoke or live_nim_full'
 ```
-
-Pass `-m live_nim_destructive` only when the target can be restarted.
 
 Set `RFM_NIM_API_KEY` when the deployment requires `X-API-Key` authentication.
 `RFM_NIM_TIMEOUT_SECONDS` changes the per-request timeout, and

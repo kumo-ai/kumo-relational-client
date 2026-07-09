@@ -114,7 +114,6 @@ markers = [
     "live_nim: opt-in live Kumo RFM NIM tests using RFM_NIM_BASE_URL",
     "live_nim_smoke: fast public SDK and NIM boundary validation",
     "live_nim_full: extended task, validation, recovery, and session coverage",
-    "live_nim_destructive: explicit probes that can require a NIM container restart",
 ]
 
 [tool.yapf]

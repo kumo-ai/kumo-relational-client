@@ -13,13 +13,11 @@ usage() {
 Run URL-driven Kumo RFM NIM live validation.
 
 Usage:
-  scripts/run_rfm_nim_live_tests.sh --url <base-url> [--full|--destructive] [pytest args...]
+  scripts/run_rfm_nim_live_tests.sh --url <base-url> [--full] [pytest args...]
 
 Options:
   --url URL       Kumo RFM NIM service root. RFM_NIM_BASE_URL is also accepted.
   --full          Run smoke and extended live validation. Default: smoke only.
-  --destructive   Run the full suite, then a known CUDA-poisoning regression.
-                  The target container may need to be restarted afterward.
   --rebuild-env   Recreate the script-owned virtualenv before running.
   -h, --help      Show this help.
 
@@ -42,10 +40,6 @@ while (($#)); do
       ;;
     --full)
       MODE=full
-      shift
-      ;;
-    --destructive)
-      MODE=destructive
       shift
       ;;
     --rebuild-env)
@@ -121,10 +115,7 @@ fi
 
 report_dir="$REPO_ROOT/.tmp/rfm-nim-live-results"
 mkdir -p "$report_dir"
-if [[ "$MODE" == destructive ]]; then
-  marker='live_nim_smoke or live_nim_full or live_nim_destructive'
-  echo 'WARNING: destructive validation can require a NIM container restart' >&2
-elif [[ "$MODE" == full ]]; then
+if [[ "$MODE" == full ]]; then
   marker='live_nim_smoke or live_nim_full'
 else
   marker='live_nim_smoke'

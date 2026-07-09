@@ -94,7 +94,7 @@ def test_live_runner_rejects_sensitive_urls_without_logging_them(
     assert 'runner-url-secret' not in output
 
 
-def test_live_runner_documents_destructive_mode() -> None:
+def test_live_runner_documents_full_mode() -> None:
     repo_root = Path(__file__).resolve().parents[2]
 
     result = subprocess.run(
@@ -106,8 +106,8 @@ def test_live_runner_documents_destructive_mode() -> None:
     )
 
     assert result.returncode == 0
-    assert '--destructive' in result.stdout
-    assert 'container may need to be restarted' in result.stdout
+    assert '--full' in result.stdout
+    assert '--destructive' not in result.stdout
 
 
 def test_live_client_applies_transport_configuration(mock_api) -> None:

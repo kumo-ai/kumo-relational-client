@@ -5,28 +5,28 @@ import json
 import pytest
 
 from rfm_nim_hardening_cases import (
-    DESTRUCTIVE_KNOWN_ISSUE_CASES,
     EXPECTED_REJECTION_CASES,
     KNOWN_ISSUE_CASES,
+    REGRESSION_REJECTION_CASES,
     ExpectedRejectionCase,
-    KnownIssueCase,
+    RejectionCase,
 )
 from rfm_nim_payloads import NIM_V1_PREDICTION_PATH, NIM_V1_SESSIONS_PATH
 
-ALL_CASES = KNOWN_ISSUE_CASES + DESTRUCTIVE_KNOWN_ISSUE_CASES
+ALL_CASES = REGRESSION_REJECTION_CASES + KNOWN_ISSUE_CASES
 
 
-def test_known_issue_catalog_is_unique_and_traceable() -> None:
+def test_rejection_catalog_is_unique_and_tracks_only_open_issues() -> None:
     case_ids = [case.case_id for case in ALL_CASES]
 
     assert len(case_ids) == len(set(case_ids))
+    assert all(case.issue_url is None for case in REGRESSION_REJECTION_CASES)
     assert all(
-        case.issue_url.startswith('https://the source repository/')
-        for case in ALL_CASES)
+        case.issue_url is not None
+        and case.issue_url.startswith('https://the source repository/')
+        for case in KNOWN_ISSUE_CASES)
     assert all(case.path in {NIM_V1_PREDICTION_PATH, NIM_V1_SESSIONS_PATH}
                for case in ALL_CASES)
-    assert not any(case.destructive for case in KNOWN_ISSUE_CASES)
-    assert all(case.destructive for case in DESTRUCTIVE_KNOWN_ISSUE_CASES)
 
 
 def test_expected_rejection_catalog_covers_audited_statuses() -> None:
@@ -60,8 +60,8 @@ def test_expected_rejection_factories_return_fresh_request_data(
 
 
 @pytest.mark.parametrize('case', ALL_CASES, ids=lambda case: case.case_id)
-def test_known_issue_factories_return_fresh_request_data(
-    case: KnownIssueCase,
+def test_rejection_factories_return_fresh_request_data(
+    case: RejectionCase,
 ) -> None:
     first = case.request_kwargs()
     second = case.request_kwargs()
@@ -75,7 +75,7 @@ def test_known_issue_factories_return_fresh_request_data(
         assert first['headers']['Content-Type'] == 'application/json'
 
 
-def test_raw_issue_cases_preserve_wire_level_reproductions() -> None:
+def test_raw_rejection_cases_preserve_wire_level_reproductions() -> None:
     by_id = {
         case.case_id: case.request_kwargs()['data']
         for case in ALL_CASES
@@ -96,7 +96,7 @@ def test_raw_issue_cases_preserve_wire_level_reproductions() -> None:
         )
 
 
-def test_structured_issue_cases_preserve_semantic_reproductions() -> None:
+def test_structured_rejection_cases_preserve_semantic_reproductions() -> None:
     by_id = {
         case.case_id: case.request_kwargs()['json']
         for case in ALL_CASES
@@ -106,6 +106,8 @@ def test_structured_issue_cases_preserve_semantic_reproductions() -> None:
     assert by_id['null-classification-target']['context'][
         'instance_table']['rows'][0][1] is None
     assert by_id['null-regression-target']['context'][
+        'instance_table']['rows'][0][1] is None
+    assert by_id['null-multiclass-target']['context'][
         'instance_table']['rows'][0][1] is None
     assert by_id['empty-context']['context']['instance_table']['rows'] == []
     assert by_id['multiclass-target-outside-classes']['context'][

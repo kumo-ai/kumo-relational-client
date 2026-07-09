@@ -14,34 +14,19 @@ from rfm_nim_payloads import (
     nim_v1_smoke_payload,
 )
 
-TFM_SERVING_ISSUE_1 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/1')
-TFM_SERVING_ISSUE_2 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/2')
-TFM_SERVING_ISSUE_3 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/3')
-TFM_SERVING_ISSUE_4 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/4')
-TFM_SERVING_ISSUE_5 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/5')
-TFM_SERVING_ISSUE_6 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/6')
-TFM_SERVING_ISSUE_7 = (
-    'https://the source repository/kumo-tfm-nims/tfm-serving/-/issues/7')
 STRUCTURED_DATA_API_ISSUE_3 = (
     'https://the source repository/kumo-tfm-nims/'
     'structured-data-api/-/issues/3')
 
 
 @dataclass(frozen=True)
-class KnownIssueCase:
+class RejectionCase:
     case_id: str
-    issue_url: str
     expected_statuses: tuple[int, ...]
     payload_factory: Callable[[], dict[str, Any]] | None = None
     raw_body_factory: Callable[[], bytes] | None = None
     path: str = NIM_V1_PREDICTION_PATH
-    destructive: bool = False
+    issue_url: str | None = None
 
     def __post_init__(self) -> None:
         factory_count = sum(
@@ -49,7 +34,7 @@ class KnownIssueCase:
             for factory in (self.payload_factory, self.raw_body_factory))
         if factory_count != 1:
             raise ValueError(
-                'known-issue cases require exactly one request-body factory')
+                'rejection cases require exactly one request-body factory')
 
     def request_kwargs(self) -> dict[str, Any]:
         if self.payload_factory is not None:
@@ -308,115 +293,100 @@ EXPECTED_REJECTION_CASES = (
 )
 
 
-KNOWN_ISSUE_CASES = (
-    KnownIssueCase(
+REGRESSION_REJECTION_CASES = (
+    RejectionCase(
         'null-classification-target',
-        TFM_SERVING_ISSUE_1,
         (422,),
         payload_factory=_null_classification_target,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'null-regression-target',
-        TFM_SERVING_ISSUE_1,
         (422,),
         payload_factory=_null_regression_target,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'null-regression-target-session',
-        TFM_SERVING_ISSUE_1,
         (422,),
         payload_factory=_null_regression_session,
         path=NIM_V1_SESSIONS_PATH,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'negative-infinity-regression-target',
-        TFM_SERVING_ISSUE_2,
         (400,),
         raw_body_factory=lambda: _nonfinite_regression_target('-Infinity'),
     ),
-    KnownIssueCase(
+    RejectionCase(
         'nan-metadata',
-        TFM_SERVING_ISSUE_2,
         (400,),
         raw_body_factory=_nonfinite_metadata,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'nan-regression-target-session',
-        TFM_SERVING_ISSUE_2,
         (400,),
         raw_body_factory=_nonfinite_regression_session,
         path=NIM_V1_SESSIONS_PATH,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'invalid-utf8-feature',
-        TFM_SERVING_ISSUE_3,
         (400,),
         raw_body_factory=_invalid_utf8_feature,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'lone-surrogate-feature',
-        TFM_SERVING_ISSUE_4,
         (400, 422),
         raw_body_factory=_lone_surrogate_feature,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'empty-context',
-        TFM_SERVING_ISSUE_5,
         (422,),
         payload_factory=_empty_context,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'empty-context-session',
-        TFM_SERVING_ISSUE_5,
         (422,),
         payload_factory=_empty_context_session,
         path=NIM_V1_SESSIONS_PATH,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'multiclass-target-outside-classes',
-        TFM_SERVING_ISSUE_6,
         (422,),
         payload_factory=_multiclass_target_outside_classes,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'multiclass-duplicate-classes',
-        TFM_SERVING_ISSUE_6,
         (422,),
         payload_factory=_multiclass_duplicate_classes,
     ),
-    KnownIssueCase(
+    RejectionCase(
         'whitespace-integer-ids',
-        TFM_SERVING_ISSUE_7,
         (422,),
         payload_factory=_whitespace_integer_ids,
     ),
-    KnownIssueCase(
-        'duplicate-context-column',
-        STRUCTURED_DATA_API_ISSUE_3,
+    RejectionCase(
+        'null-multiclass-target',
         (422,),
-        payload_factory=_duplicate_context_column,
-    ),
-    KnownIssueCase(
-        'duplicate-predict-column',
-        STRUCTURED_DATA_API_ISSUE_3,
-        (422,),
-        payload_factory=_duplicate_predict_column,
-    ),
-    KnownIssueCase(
-        'duplicate-context-column-session',
-        STRUCTURED_DATA_API_ISSUE_3,
-        (422,),
-        payload_factory=_duplicate_context_column_session,
-        path=NIM_V1_SESSIONS_PATH,
+        payload_factory=_null_multiclass_target,
     ),
 )
 
-DESTRUCTIVE_KNOWN_ISSUE_CASES = (
-    KnownIssueCase(
-        'null-multiclass-target-cuda-poisoning',
-        TFM_SERVING_ISSUE_1,
+KNOWN_ISSUE_CASES = (
+    RejectionCase(
+        'duplicate-context-column',
         (422,),
-        payload_factory=_null_multiclass_target,
-        destructive=True,
+        payload_factory=_duplicate_context_column,
+        issue_url=STRUCTURED_DATA_API_ISSUE_3,
+    ),
+    RejectionCase(
+        'duplicate-predict-column',
+        (422,),
+        payload_factory=_duplicate_predict_column,
+        issue_url=STRUCTURED_DATA_API_ISSUE_3,
+    ),
+    RejectionCase(
+        'duplicate-context-column-session',
+        (422,),
+        payload_factory=_duplicate_context_column_session,
+        path=NIM_V1_SESSIONS_PATH,
+        issue_url=STRUCTURED_DATA_API_ISSUE_3,
     ),
 )
