@@ -6,25 +6,19 @@ import pytest
 
 from rfm_nim_hardening_cases import (
     EXPECTED_REJECTION_CASES,
-    KNOWN_ISSUE_CASES,
     REGRESSION_REJECTION_CASES,
     ExpectedRejectionCase,
     RejectionCase,
 )
 from rfm_nim_payloads import NIM_V1_PREDICTION_PATH, NIM_V1_SESSIONS_PATH
 
-ALL_CASES = REGRESSION_REJECTION_CASES + KNOWN_ISSUE_CASES
+ALL_CASES = REGRESSION_REJECTION_CASES
 
 
-def test_rejection_catalog_is_unique_and_tracks_only_open_issues() -> None:
+def test_rejection_catalog_is_unique_and_ticket_free() -> None:
     case_ids = [case.case_id for case in ALL_CASES]
 
     assert len(case_ids) == len(set(case_ids))
-    assert all(case.issue_url is None for case in REGRESSION_REJECTION_CASES)
-    assert all(
-        case.issue_url is not None
-        and case.issue_url.startswith('https://the source repository/')
-        for case in KNOWN_ISSUE_CASES)
     assert all(case.path in {NIM_V1_PREDICTION_PATH, NIM_V1_SESSIONS_PATH}
                for case in ALL_CASES)
 

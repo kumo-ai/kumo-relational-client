@@ -19,7 +19,6 @@ from rfm_nim_live_harness import (
 )
 from rfm_nim_hardening_cases import (
     EXPECTED_REJECTION_CASES,
-    KNOWN_ISSUE_CASES,
     REGRESSION_REJECTION_CASES,
     ExpectedRejectionCase,
     RejectionCase,
@@ -51,10 +50,6 @@ pytestmark = [
         reason=f'set {_ENV_VAR} to run live Kumo RFM NIM tests',
     ),
 ]
-
-
-class KnownNimDefectAssertion(AssertionError):
-    """Failure matching a tracked NIM defect rather than the test harness."""
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -110,22 +105,6 @@ def _assert_service_recovers(live_nim: LiveNimClient) -> None:
     assert_prediction_response(_post_prediction(live_nim, payload), payload)
 
 
-def _known_issue_params(
-    cases: tuple[RejectionCase, ...],
-) -> list[Any]:
-    assert all(case.issue_url is not None for case in cases)
-    return [
-        pytest.param(
-            case,
-            id=case.case_id,
-            marks=pytest.mark.xfail(
-                reason=f'known NIM defect: {case.issue_url}',
-                raises=KnownNimDefectAssertion,
-            ),
-        ) for case in cases
-    ]
-
-
 def _cleanup_created_session(
     live_nim: LiveNimClient,
     response: requests.Response,
@@ -155,8 +134,6 @@ def _assert_rejection_and_recovers(
     _cleanup_created_session(live_nim, response)
     _assert_service_recovers(live_nim)
     if contract_error is not None:
-        if case.issue_url is not None:
-            raise KnownNimDefectAssertion(str(contract_error)) from contract_error
         raise contract_error
 
 
@@ -379,15 +356,6 @@ def test_live_nim_full_expected_http_rejections(
     ids=lambda case: case.case_id,
 )
 def test_live_nim_full_regression_rejections(
-    live_nim: LiveNimClient,
-    case: RejectionCase,
-) -> None:
-    _assert_rejection_and_recovers(live_nim, case)
-
-
-@pytest.mark.live_nim_full
-@pytest.mark.parametrize('case', _known_issue_params(KNOWN_ISSUE_CASES))
-def test_live_nim_full_known_issue_rejections(
     live_nim: LiveNimClient,
     case: RejectionCase,
 ) -> None:

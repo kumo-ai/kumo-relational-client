@@ -14,11 +14,6 @@ from rfm_nim_payloads import (
     nim_v1_smoke_payload,
 )
 
-STRUCTURED_DATA_API_ISSUE_3 = (
-    'https://the source repository/kumo-tfm-nims/'
-    'structured-data-api/-/issues/3')
-
-
 @dataclass(frozen=True)
 class RejectionCase:
     case_id: str
@@ -26,7 +21,6 @@ class RejectionCase:
     payload_factory: Callable[[], dict[str, Any]] | None = None
     raw_body_factory: Callable[[], bytes] | None = None
     path: str = NIM_V1_PREDICTION_PATH
-    issue_url: str | None = None
 
     def __post_init__(self) -> None:
         factory_count = sum(
@@ -367,26 +361,20 @@ REGRESSION_REJECTION_CASES = (
         (422,),
         payload_factory=_null_multiclass_target,
     ),
-)
-
-KNOWN_ISSUE_CASES = (
     RejectionCase(
         'duplicate-context-column',
         (422,),
         payload_factory=_duplicate_context_column,
-        issue_url=STRUCTURED_DATA_API_ISSUE_3,
     ),
     RejectionCase(
         'duplicate-predict-column',
         (422,),
         payload_factory=_duplicate_predict_column,
-        issue_url=STRUCTURED_DATA_API_ISSUE_3,
     ),
     RejectionCase(
         'duplicate-context-column-session',
         (422,),
         payload_factory=_duplicate_context_column_session,
         path=NIM_V1_SESSIONS_PATH,
-        issue_url=STRUCTURED_DATA_API_ISSUE_3,
     ),
 )
