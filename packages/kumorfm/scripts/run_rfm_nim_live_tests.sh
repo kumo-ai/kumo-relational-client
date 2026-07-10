@@ -122,9 +122,14 @@ else
 fi
 
 echo "Running RFM NIM $MODE validation"
-RFM_NIM_BASE_URL="$BASE_URL" exec "$PYTHON" -m pytest \
-  "$REPO_ROOT/tests/client/test_rfm_nim_live.py" \
-  --strict-markers \
-  -m "$marker" \
-  --junitxml="$report_dir/$MODE.xml" \
-  "${pytest_args[@]}"
+pytest_command=(
+  "$PYTHON" -m pytest
+  "$REPO_ROOT/tests/client/test_rfm_nim_live.py"
+  --strict-markers
+  -m "$marker"
+  --junitxml="$report_dir/$MODE.xml"
+)
+if ((${#pytest_args[@]})); then
+  pytest_command+=("${pytest_args[@]}")
+fi
+RFM_NIM_BASE_URL="$BASE_URL" exec "${pytest_command[@]}"

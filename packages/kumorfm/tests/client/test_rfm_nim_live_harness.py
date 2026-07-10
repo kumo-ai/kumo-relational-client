@@ -110,6 +110,39 @@ def test_live_runner_documents_full_mode() -> None:
     assert '--destructive' not in result.stdout
 
 
+def test_live_runner_accepts_no_pytest_args(tmp_path: Path) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    invocation_log = tmp_path / 'python-invocations.log'
+    fake_python = tmp_path / 'python'
+    fake_python.write_text(
+        '#!/bin/sh\n'
+        'printf "%s\\n" "$*" >> "$RFM_NIM_FAKE_PYTHON_LOG"\n',
+    )
+    fake_python.chmod(0o755)
+    env = os.environ.copy()
+    env['RFM_NIM_PYTHON'] = str(fake_python)
+    env['RFM_NIM_FAKE_PYTHON_LOG'] = str(invocation_log)
+
+    result = subprocess.run(
+        [
+            repo_root / 'scripts/run_rfm_nim_live_tests.sh',
+            '--url',
+            'http://localhost:8000',
+            '--full',
+        ],
+        cwd=repo_root,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    final_invocation = invocation_log.read_text().splitlines()[-1]
+    assert '-m pytest' in final_invocation
+    assert 'live_nim_smoke or live_nim_full' in final_invocation
+
+
 def test_live_client_applies_transport_configuration(mock_api) -> None:
     mock_api.get('https://example.test/rfm/v1/health/ready', json={})
     client = LiveNimClient(
