@@ -1,138 +1,129 @@
-# KumoRFM SDK
+# nvidia-sdfm
 
-This repository contains the RFM-only subset of the Kumo Python SDK. It keeps
-the documented import path:
-
-```python
-import kumoai.rfm as rfm
-```
-
-The package includes the RFM graph/table abstractions, local/sqlite/duckdb/
-Snowflake backends, SageMaker adapters, the RFM HTTP client, and the native
-local neighbor sampler. It intentionally excludes the Kumo Enterprise
-fine-tuning SDK surfaces such as connectors, training jobs, the separate
-`kumoai.pquery` management API, codegen, online serving, artifact export, and
-session management.
+One client SDK for NVIDIA structured-data foundation model NIMs, served behind the
+Universal TFM API. A thin, model-agnostic client dispatches to per-model adapters;
+heavy model drivers are optional, installed only when you ask for them.
 
 ## Install
 
-```bash
-pip install -e .
-```
+| Command | You get |
+| --- | --- |
+| `pip install nvidia-sdfm` | The client + every lightweight model (TabICL today). Works out of the box. |
+| `pip install nvidia-sdfm[kumorfm]` | Adds KumoRFM (pulls the native `kumorfm` driver). |
+| `pip install nvidia-sdfm[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]`). |
+| `pip install nvidia-sdfm[all]` | Everything. |
 
-For local development without GitHub SSH access to `kumo-api`, use the
-published `kumo-api` wheel instead of the source tag:
+The rule is dependency weight, not favoritism: a model that does no client-side work
+(like TabICL, which just shapes a request the NIM runs) ships in the base wheel; a model
+that does heavy client-side work (like KumoRFM: graph building, native neighbor-sampling,
+PQL) is an opt-in extra. Data-source drivers are opt-in the same way, via the shared
+`sdfm-connectors` package.
 
-```bash
-KUMO_SDK_RELEASE=1 python -m pip install -e .
-```
+## Quickstart
 
-Use `KUMO_API_PATH=/path/to/kumo-api python -m pip install -e .` only when
-intentionally testing a local `kumo-api` source checkout.
+A `SDFMClient` owns one connection to a NIM. Requests are typed per model, so your editor
+autocompletes the fields and the client validates them before sending.
 
-The native sampler is built through CMake/scikit-build. Set
-`WITH_KUMOLIB=0` only for metadata-only workflows that do not import or run
-local RFM backends.
-
-### Native sampler build notes
-
-The `kumoai.kumolib` module is built from this repository, not from
-`kumo-api`. `CMakeLists.txt` compiles `kumoai/csrc/neighbor_sampler.cpp` into
-the `kumolib` pybind11 extension, and `setup.py` enables that native build by
-default unless `WITH_KUMOLIB=0` is set. Local backend imports such as
-`kumoai.rfm.backend.local` require the compiled extension to be present.
-
-`kumo-api` v0.92.0 supports Python 3.10 through 3.14 as an installed wheel.
-If the SDK dependencies are already present, build only this package and its
-native extension with:
-
-```bash
-python -m pip install -e . --no-deps
-```
-
-This avoids source-building `kumo-api` while still producing the SDK extension
-artifact for the active interpreter, for example
-`kumoai/kumolib.cpython-314-x86_64-linux-gnu.so`. The generated shared object
-is ignored by git. Building `kumo-api` itself from source is still done on
-Python 3.10 because of its protobuf generation toolchain, and source builds on
-Python 3.14 are unsupported.
-
-## Quick Start
+TabICL (single table):
 
 ```python
-import os
-import pandas as pd
-import kumoai.rfm as rfm
+from nvidia_sdfm import SDFMClient, TabICLRequest
 
-os.environ["KUMO_API_KEY"] = "ENTER_YOUR_API_KEY_HERE"
-rfm.init()
-
-graph = rfm.LocalGraph.from_data({
-    "users": pd.DataFrame(...),
-    "items": pd.DataFrame(...),
-    "orders": pd.DataFrame(...),
-})
-
-model = rfm.KumoRFM(graph)
-result = model.predict(
-    "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1"
-)
+with SDFMClient(url="http://localhost:8000") as client:
+    df = client.predict(TabICLRequest(
+        context=context_df,
+        predict=predict_df,
+        task="classification",
+        target="label",
+        outputs=["prediction", "probabilities"],
+    ))
 ```
 
-Public quick-start documentation:
-https://kumo.ai/docs/quick-start/rfm/
+KumoRFM (relational) — needs `nvidia-sdfm[kumorfm]`:
 
-## Tests
+```python
+from nvidia_sdfm import SDFMClient, KumoRFMRequest, kumorfm
 
-```bash
-pytest test
+graph = kumorfm.LocalGraph.from_data({"users": df1, "items": df2, "orders": df3})
+
+with SDFMClient(url="http://localhost:8000") as client:
+    df = client.predict(KumoRFMRequest(
+        graph=graph,
+        query="PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
+        indices=[...],
+        run_mode="fast",
+    ))
 ```
 
-### RFM NIM Contract And Live Tests
+Each `SDFMClient` holds its own transport and registry, so multiple clients can target
+different endpoints or tenants at once. Discover what a NIM serves with
+`client.models()` and `client.capabilities("tabicl")`. The transport pools connections
+and retries transient failures (429/5xx) with backoff; tune it per client with
+`SDFMClient(url, timeout=30, max_retries=3)`.
 
-The SDK-side contract tests are unit-only by default:
+`from nvidia_sdfm import kumorfm` is a neutral, explicitly-exported surface for the
+driver's `Graph`, `Table`, `KumoRFM`, etc.; you never import the driver package directly.
 
-```bash
-python -m pytest test/client/test_rfm_nim_contract.py
+## Repository layout
+
+A monorepo workspace; every independently released distribution lives under `packages/`
+with the same `src/` + `tests/` convention:
+
+```text
+rfm-sdk/
+├── pyproject.toml              # workspace root: shared tooling only, builds nothing
+├── e2e/                        # cross-distribution live harnesses
+└── packages/
+    ├── nvidia-sdfm/            # the client SDK (pure-python, universal wheel)
+    │   └── src/nvidia_sdfm/
+    │       ├── core/           #   HTTP transport, response parsing, connectors, dtypes
+    │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
+    │       ├── adapters/       #   one peer module per model
+    │       │   ├── tabicl.py     #   single-table (no driver)
+    │       │   └── kumorfm.py    #   relational (lazy-wraps the KumoRFM driver)
+    │       └── kumorfm.py      #   explicit, lazily-resolved surface onto the driver
+    ├── sdfm-connectors/        # shared data-source connectors (pure-python)
+    │   └── src/sdfm_connectors/  #   connect(), read(), quote_ident, resolve_sql; DB drivers via extras
+    └── kumorfm/                # the KumoRFM driver (native build)
+        └── src/kumorfm/          #   graph, samplers, native kumolib, PQL, HTTP client
 ```
 
-Live Kumo RFM NIM probes remain opt-in and accept an existing container URL.
-The repeatable runner creates or repairs an ignored, repo-local virtualenv and
-runs a fast SDK/NIM boundary smoke suite by default:
+Two orthogonal axes: the **adapter layer** is symmetric (every model is a peer module
+implementing `ModelAdapter`, registered in the `SDFMClient`'s `AdapterRegistry`); a **driver**
+package holds a model's heavy runtime, and a model wraps zero or one of them. Each model has
+a typed request (`TabICLRequest`, `KumoRFMRequest`) that declares which model it targets;
+`client.predict(request)` dispatches on that, validates it against the model's
+`capabilities()`, and calls the adapter.
 
-```bash
-scripts/run_rfm_nim_live_tests.sh --url http://127.0.0.1:8002
-```
+Both the client (flat table reads) and the KumoRFM driver (warehouse connections for its
+graph samplers) sit on the shared **`sdfm-connectors`** package, so each warehouse is
+reached through one place. The `sqlite`, `snowflake`, and `databricks` connection factories
+are shared directly; `duckdb` is provided for flat reads (the driver's duckdb graph sampler
+needs the ADBC driver's `adbc_ingest`, which is a separate concern).
 
-Run the broader task, invalid-request recovery, and session suite explicitly:
+## Adding a model
 
-```bash
-scripts/run_rfm_nim_live_tests.sh --url http://127.0.0.1:8002 --full
-```
+1. Add `packages/nvidia-sdfm/src/nvidia_sdfm/adapters/<model>.py` implementing
+   `ModelAdapter`, and register it in `packages/nvidia-sdfm/src/nvidia_sdfm/__init__.py`.
+   The core never changes.
+2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its own
+   distribution and add a `[<model>]` extra; the adapter lazy-imports the driver so base
+   installs stay light.
+3. A dependency-free model (like TabICL) needs no driver and no extra.
 
-The full suite includes durable, ticket-free rejection regressions for fixed
-NIM defects. Every rejection probe is followed by a known-good prediction to
-detect service degradation.
+## Why the KumoRFM adapter isn't symmetric with TabICL
 
-To test a container running on a Colossus host port such as `8002`, forward the
-remote port to the local machine first:
+`TabICLRequest` (`context` / `predict` / `task` / `target`) maps cleanly onto the Universal
+wire envelope, but `KumoRFMRequest` (`graph` / `query` / `indices`) does not: `KumoRFM.predict()`
+takes a PQL query plus an entity-graph and builds/samples/sends the request as one fused
+operation — there is no standalone "build a payload from two flat DataFrames" step to call
+into. Reimplementing that outside the driver would duplicate PQL parsing, subgraph sampling,
+and point-in-time correctness logic that already lives (and is tested) there. So
+`adapters/kumorfm.py` takes the shape KumoRFM actually needs and normalizes the result into
+the same DataFrame shape `core.response` produces for TabICL, so callers get one consistent
+return type regardless of adapter.
 
-```bash
-ssh <user>@<colossus-host> -N -L 8002:127.0.0.1:8002
-```
+## Sessions
 
-Direct pytest usage is still supported. The URL is required for live tests;
-without it, they are skipped as part of ordinary unit-test collection:
-
-```bash
-export RFM_NIM_BASE_URL=http://127.0.0.1:8002
-python -m pytest test/client/test_rfm_nim_live.py \
-  -m 'live_nim_smoke or live_nim_full'
-```
-
-Set `RFM_NIM_API_KEY` when the deployment requires `X-API-Key` authentication.
-`RFM_NIM_TIMEOUT_SECONDS` changes the per-request timeout, and
-`RFM_NIM_VERIFY_SSL=0` disables TLS verification for development endpoints.
-The live suite validates the current `/v1/*` Universal TFM boundary using
-semantic response and problem-details invariants; it intentionally does not
-pin model scores, backend metadata, or implementation-specific error text.
+Not wired yet. `core/transport.py` implements `predict()` only; `create_session` /
+`session_predict` / `delete_session` are deferred until the NIM session path is exercised.

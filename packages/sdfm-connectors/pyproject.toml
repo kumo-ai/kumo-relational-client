@@ -1,0 +1,61 @@
+[project]
+name = "sdfm-connectors"
+dynamic = ["version"]
+authors = [
+    {name = "NVIDIA"},
+]
+description = "Shared data-source connectors (connect, read, SQL quoting) for the nvidia-sdfm SDK and its engines"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = [
+    "structured-data",
+    "connectors",
+    "sql",
+]
+dependencies = [
+    "pandas>=2.0",
+    "pyarrow",
+]
+
+[project.optional-dependencies]
+sqlite = [
+    "adbc-driver-sqlite",
+]
+duckdb = [
+    "duckdb>=1.5.0",
+]
+snowflake = [
+    "snowflake-connector-python",
+]
+databricks = [
+    "databricks-sql-connector>=3.0.0",
+]
+all = [
+    "sdfm-connectors[sqlite,duckdb,snowflake,databricks]",
+]
+test = [
+    "pytest",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["sdfm_connectors*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "sdfm_connectors.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-q"]
+
+[tool.ruff]
+line-length = 80
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

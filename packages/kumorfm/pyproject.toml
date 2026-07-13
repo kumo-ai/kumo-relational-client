@@ -1,0 +1,177 @@
+[project]
+name="kumorfm"
+dynamic=["dependencies", "version"]
+authors=[
+    {name="NVIDIA"},
+]
+license="MIT"
+license-files=["LICENSE"]
+description="RFM engine (graph, samplers, PQL, native neighbor-sampler) for the nvidia-sdfm SDK"
+readme="README.md"
+requires-python=">=3.10"
+keywords=[
+    "deep-learning",
+    "graph-neural-networks",
+    "relational-foundation-model",
+    "predictive-query",
+]
+classifiers=[
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3 :: Only",
+]
+
+[project.optional-dependencies]
+doc=[
+    "sphinx",
+    "sphinx-book-theme",
+    "sphinx-copybutton",
+    "sphinx-autodoc-typehints",
+    "graphviz",
+    "mermaid-py",
+]
+test=[
+    "packaging",
+    "pytest",
+    "pytest-mock",
+    "requests-mock",
+]
+codegen=[
+    "pyyaml",
+]
+sqlite=[
+    "sdfm-connectors[sqlite]",
+]
+duckdb=[
+    "adbc-driver-duckdb",
+]
+snowflake=[
+    "numpy<2.0",
+    "sdfm-connectors[snowflake]",
+    "pyyaml",
+    "mermaid-py",
+]
+databricks=[
+    "sdfm-connectors[databricks]",
+    "pyyaml",
+]
+
+[build-system]
+requires = [
+    "pybind11>=2.13.6",
+    "scikit-build-core<0.12.0",
+    "setuptools",
+    "setuptools_scm",
+]
+build-backend = "scikit_build_core.setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where=["src"]
+include=["kumorfm*"]
+
+[tool.setuptools.package-data]
+"kumorfm._vendor.kumopql"=["VENDORED.md"]
+
+[tool.setuptools.dynamic]
+version = {attr = "kumorfm._version.__version__"}
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+editable.verbose=false
+
+# https://cibuildwheel.pypa.io/en/stableoptions/
+[tool.cibuildwheel]
+build-frontend = "build[uv]"
+
+[tool.pytest.ini_options]
+xfail_strict = true
+addopts = [
+    "--capture=no",
+    "--color=yes",
+    "-vv",
+]
+filterwarnings=[
+    "error::UserWarning",
+    "error::DeprecationWarning",
+    "ignore:.*pkg_resources.*:DeprecationWarning",
+    # Pydantic v1 calls ForwardRef._evaluate, which is deprecated in Python
+    # 3.14. Remove once we upgrade to Pydantic v2.
+    "ignore:ForwardRef._evaluate is a private API.*:DeprecationWarning",
+]
+markers = [
+    "integration: integration tests",
+    "live_nim: opt-in live Kumo RFM NIM tests using RFM_NIM_BASE_URL",
+    "live_nim_smoke: fast public SDK and NIM boundary validation",
+    "live_nim_full: extended task, validation, recovery, and session coverage",
+]
+
+[tool.yapf]
+based_on_style="pep8"
+split_before_named_assigns=false
+blank_line_before_nested_class_or_def=false
+
+[tool.isort]
+known_first_party=["kumorfm"]
+multi_line_output=3
+include_trailing_comma=true
+skip=[".gitignore", "__init__.py"]
+
+[tool.ruff]  # https://docs.astral.sh/ruff/rules
+src=["src/kumorfm", "setup.py"]
+line-length=80
+indent-width=4
+target-version="py310"
+
+[tool.ruff.lint]
+select=[
+    "D",  # pydocstyle
+]
+ignore = [
+    "D100",  # TODO Don't ignore "Missing docstring in public module"
+    "D101",  # TODO Don't ignore "Missing docstring in public class"
+    "D102",  # TODO Don't ignore "Missing docstring in public method"
+    "D103",  # TODO Don't ignore "Missing docstring in public function"
+    "D104",  # TODO Don't ignore "Missing docstring in public package"
+    "D105",  # Ignore "Missing docstring in magic method"
+    "D107",  # Ignore "Missing docstring in __init__"
+    "D205",  # Ignore "blank line required between summary line and description"
+    "D415",  # First line should end with a period
+]
+
+[tool.ruff.format]
+quote-style="single"
+
+[tool.ruff.lint.pydocstyle]
+convention="google"
+
+[tool.ty.environment]
+python-version = "3.10"
+
+[tool.ty.analysis]
+allowed-unresolved-imports = [
+    "setuptools.**",
+    "kumorfm.kumolib",
+    "IPython.**",
+    "google.colab.**",
+    "streamlit.**",
+    "snowflake.**",
+    "adbc_driver_sqlite.**",
+    "databricks.**",
+]
+
+[[tool.ty.overrides]]
+include = ["tests/**"]
+rules = { unresolved-import = "ignore" }
+
+[[tool.ty.overrides]]
+include = ["examples/**"]
+rules = { unresolved-import = "ignore", unresolved-attribute = "ignore", unresolved-reference = "ignore", no-matching-overload = "ignore", unsupported-operator = "ignore", invalid-argument-type = "ignore" }
+
+[[tool.ty.overrides]]
+include = ["**/*.ipynb"]
+rules = { unresolved-import = "ignore", unresolved-reference = "ignore" }

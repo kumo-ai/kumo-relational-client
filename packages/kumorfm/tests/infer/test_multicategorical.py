@@ -1,0 +1,33 @@
+import pandas as pd
+from kumoapi.typing import Dtype
+
+from kumorfm.rfm.infer import contains_multicategorical
+
+
+def test_contains_multicategorical() -> None:
+    assert not contains_multicategorical(pd.Series([1]), 'test', Dtype.bool)
+    assert contains_multicategorical(
+        ser=pd.Series([['A', 'B'], ['A']]),
+        column_name='test',
+        dtype=Dtype.stringlist,
+    )
+    assert not contains_multicategorical(
+        ser=pd.Series(['A', 'B', 'C']),
+        column_name='test',
+        dtype=Dtype.string,
+    )
+    assert contains_multicategorical(
+        ser=pd.Series(['A|B', 'A', 'B', 'B|A']),
+        column_name='test',
+        dtype=Dtype.string,
+    )
+    assert contains_multicategorical(
+        ser=pd.Series([[0, 1], [0]]),
+        column_name='test',
+        dtype=Dtype.intlist,
+    )
+    assert not contains_multicategorical(
+        ser=pd.Series([None, None, True, False]),
+        column_name='test',
+        dtype=Dtype.string,
+    )

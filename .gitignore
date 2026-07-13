@@ -2,8 +2,15 @@ __pycache__/
 *.py[cod]
 *.so
 .pytest_cache/
+.ruff_cache/
 .tmp/
 build/
 dist/
 *.egg-info/
 _skbuild/
+.pip-cache/
+.venv*/
+
+# e2e local datasets
+e2e/data/
+e2e/adult.data
