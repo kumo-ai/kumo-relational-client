@@ -3,14 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from sdfm_connectors.sql import MissingBackendError
+from sdfm_connectors.sql import require_driver
 
-try:
-    import adbc_driver_sqlite.dbapi as adbc
-except ModuleNotFoundError as error:
-    if error.name != 'adbc_driver_sqlite':
-        raise
-    raise MissingBackendError('sqlite', 'adbc-driver-sqlite') from error
+adbc = require_driver(
+    'sqlite', 'adbc-driver-sqlite', 'adbc_driver_sqlite.dbapi',
+)
 
 Connection: TypeAlias = adbc.AdbcSqliteConnection
 

@@ -3,18 +3,24 @@ from __future__ import annotations
 import os
 from typing import Any, TypeAlias
 
-from sdfm_connectors.sql import MissingBackendError
+from sdfm_connectors.sql import require_driver
 
-try:
-    from databricks import sql as databricks_sql
-    from databricks.sql.client import Connection as _Connection
-except ModuleNotFoundError as error:
-    if error.name not in ('databricks', 'databricks.sql', 'databricks.sql.client'):
-        raise
-    raise MissingBackendError('databricks',
-                              'databricks-sql-connector') from error
+_ABSENT = ('databricks', 'databricks.sql', 'databricks.sql.client')
 
-Connection: TypeAlias = _Connection
+databricks_sql = require_driver(
+    'databricks', 'databricks-sql-connector', 'databricks.sql',
+    absent=_ABSENT,
+)
+_client = require_driver(
+    'databricks', 'databricks-sql-connector', 'databricks.sql.client',
+    absent=_ABSENT,
+)
+
+if not hasattr(_client, 'Connection'):
+    raise ImportError(
+        "cannot import name 'Connection' from 'databricks.sql.client'")
+
+Connection: TypeAlias = _client.Connection
 
 _ENV_BY_ARG = {
     'server_hostname': 'DATABRICKS_SERVER_HOSTNAME',

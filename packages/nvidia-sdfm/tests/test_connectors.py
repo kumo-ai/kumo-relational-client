@@ -64,6 +64,32 @@ def test_read_local_without_data_or_path_raises():
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
 
 
+def test_query_failure_maps_to_sdfm_error_with_code(tmp_path):
+    database = str(tmp_path / 'db.sqlite')
+    with sqlite3.connect(database) as connection:
+        pd.DataFrame({'a': [1]}).to_sql('items', connection, index=False)
+    with pytest.raises(SdfmError) as excinfo:
+        read('sqlite', database=database, query='SELECT * FROM missing')
+    assert excinfo.value.code == 'QUERY_FAILED'
+    assert excinfo.value.details['sql'] == 'SELECT * FROM missing'
+
+
+def test_connect_failure_maps_to_sdfm_error_with_code(tmp_path):
+    with pytest.raises(SdfmError) as excinfo:
+        read(
+            'duckdb',
+            database=str(tmp_path / 'missing-dir' / 'db.duckdb'),
+            table='items',
+        )
+    assert excinfo.value.code == 'CONNECT_FAILED'
+
+
+def test_local_missing_file_maps_to_not_found(tmp_path):
+    with pytest.raises(SdfmError) as excinfo:
+        read('local', path=str(tmp_path / 'absent.csv'))
+    assert excinfo.value.code == 'NOT_FOUND'
+
+
 def test_read_sqlite_by_table_and_query(tmp_path):
     database = str(tmp_path / 'db.sqlite')
     with sqlite3.connect(database) as connection:

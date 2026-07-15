@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import importlib
+from contextlib import suppress
 from typing import Any
 
 import pandas as pd
@@ -8,7 +8,8 @@ import pandas as pd
 from sdfm_connectors.backends import connect, owns_connection
 from sdfm_connectors.sql import (
     ConnectorError,
-    MissingBackendError,
+    driver_guard,
+    require_driver,
     resolve_sql,
 )
 
@@ -41,7 +42,8 @@ def read(source: str, **kwargs: Any) -> pd.DataFrame:
         return read_table(connection, table=table, query=query)
     finally:
         if owns_connection(connection):
-            connection.close()
+            with suppress(Exception):
+                connection.close()
 
 
 def read_table(
@@ -51,22 +53,24 @@ def read_table(
     query: str | None = None,
 ) -> pd.DataFrame:
     sql = resolve_sql(table=table, query=query)
-    cursor = connection.cursor()
-    try:
-        cursor.execute(sql)
-        if hasattr(cursor, 'fetch_pandas_all'):
-            return cursor.fetch_pandas_all()
-        if hasattr(cursor, 'fetchdf'):
-            return cursor.fetchdf()
-        if hasattr(cursor, 'fetch_arrow_table'):
-            return cursor.fetch_arrow_table().to_pandas()
-        if hasattr(cursor, 'fetchall_arrow'):
-            return cursor.fetchall_arrow().to_pandas()
-        rows = cursor.fetchall()
-        columns = [description[0] for description in cursor.description]
-        return pd.DataFrame(rows, columns=columns)
-    finally:
-        cursor.close()
+    with driver_guard('QUERY_FAILED', 'query execution failed', sql=sql):
+        cursor = connection.cursor()
+        try:
+            cursor.execute(sql)
+            if hasattr(cursor, 'fetch_pandas_all'):
+                return cursor.fetch_pandas_all()
+            if hasattr(cursor, 'fetchdf'):
+                return cursor.fetchdf()
+            if hasattr(cursor, 'fetch_arrow_table'):
+                return cursor.fetch_arrow_table().to_pandas()
+            if hasattr(cursor, 'fetchall_arrow'):
+                return cursor.fetchall_arrow().to_pandas()
+            rows = cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            return pd.DataFrame(rows, columns=columns)
+        finally:
+            with suppress(Exception):
+                cursor.close()
 
 
 def _read_local(
@@ -81,7 +85,16 @@ def _read_local(
             code='INVALID_CONNECTOR_ARGS',
         )
     if data is not None:
-        return data if isinstance(data, pd.DataFrame) else pd.DataFrame(data)
+        if isinstance(data, pd.DataFrame):
+            return data
+        try:
+            return pd.DataFrame(data)
+        except (ValueError, TypeError) as error:
+            raise ConnectorError(
+                f'local connector could not build a DataFrame from '
+                f"'data': {error}",
+                code='INVALID_CONNECTOR_ARGS',
+            ) from error
     if path is None:
         raise ConnectorError(
             "local connector requires either 'data' or 'path'",
@@ -114,12 +127,7 @@ def _read_s3(
             code='INVALID_CONNECTOR_ARGS',
             details={'path': path},
         )
-    try:
-        importlib.import_module('s3fs')
-    except ModuleNotFoundError as error:
-        if error.name != 's3fs':
-            raise
-        raise MissingBackendError('s3', 's3fs') from error
+    require_driver('s3', 's3fs', 's3fs')
     return _read_file(path, storage_options=storage_options)
 
 
@@ -127,6 +135,8 @@ def _read_file(
     path: str,
     storage_options: dict[str, Any] | None = None,
 ) -> pd.DataFrame:
-    if path.lower().endswith('.parquet') or path.endswith('/'):
-        return pd.read_parquet(path, storage_options=storage_options)
-    return pd.read_csv(path, storage_options=storage_options)
+    with driver_guard('READ_FAILED', f'failed to read {path!r}',
+                      missing_as_not_found=True, path=path):
+        if path.lower().endswith('.parquet') or path.endswith('/'):
+            return pd.read_parquet(path, storage_options=storage_options)
+        return pd.read_csv(path, storage_options=storage_options)

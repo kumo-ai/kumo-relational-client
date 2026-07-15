@@ -4,6 +4,8 @@ import importlib
 import weakref
 from typing import Any
 
+from sdfm_connectors.sql import ConnectorError, driver_guard
+
 _SQL_BACKENDS = ('sqlite', 'duckdb', 'snowflake', 'databricks')
 
 OWNED_ATTR = '_sdfm_connectors_owned'
@@ -13,11 +15,13 @@ _ownership: weakref.WeakKeyDictionary[Any, bool] = weakref.WeakKeyDictionary()
 
 def connect(backend: str, *args: Any, **kwargs: Any) -> Any:
     if backend not in _SQL_BACKENDS:
-        raise ValueError(
+        raise ConnectorError(
             f'unknown backend {backend!r}; supported: {list(_SQL_BACKENDS)}',
+            code='UNKNOWN_CONNECTOR',
         )
     module = importlib.import_module(f'{__name__}.{backend}')
-    return module.connect(*args, **kwargs)
+    with driver_guard('CONNECT_FAILED', f'failed to connect to {backend!r}'):
+        return module.connect(*args, **kwargs)
 
 
 def mark_owned(connection: Any, owned: bool) -> None:

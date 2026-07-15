@@ -17,35 +17,44 @@ BUCKET = 'sdfm-connectors-test'
 
 @pytest.fixture(scope='module')
 def storage_options():
-    server = moto_server.ThreadedMotoServer(ip_address='127.0.0.1', port=0)
-    server.start()
-    try:
-        host, port = server.get_host_and_port()
-        options = {
-            'key': 'testing',
-            'secret': 'testing',
-            'client_kwargs': {'endpoint_url': f'http://{host}:{port}'},
-        }
-        frame = pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
-        s3fs.S3FileSystem(**options).mkdir(BUCKET)
-        frame.to_csv(
-            f's3://{BUCKET}/table.csv', index=False, storage_options=options,
-        )
-        frame.to_parquet(
-            f's3://{BUCKET}/nested/table.parquet', storage_options=options,
-        )
-        frame.to_parquet(
-            f's3://{BUCKET}/upper/TABLE.PARQUET', storage_options=options,
-        )
-        frame.iloc[:2].to_parquet(
-            f's3://{BUCKET}/dataset/part-0.parquet', storage_options=options,
-        )
-        frame.iloc[2:].to_parquet(
-            f's3://{BUCKET}/dataset/part-1.parquet', storage_options=options,
-        )
-        yield options
-    finally:
-        server.stop()
+    with pytest.MonkeyPatch.context() as patcher:
+        patcher.setenv('AWS_CONFIG_FILE', '/dev/null')
+        patcher.setenv('AWS_SHARED_CREDENTIALS_FILE', '/dev/null')
+        patcher.setenv('AWS_DEFAULT_REGION', 'us-east-1')
+        patcher.setenv('AWS_REGION', 'us-east-1')
+        server = moto_server.ThreadedMotoServer(
+            ip_address='127.0.0.1', port=0)
+        server.start()
+        try:
+            host, port = server.get_host_and_port()
+            options = {
+                'key': 'testing',
+                'secret': 'testing',
+                'client_kwargs': {'endpoint_url': f'http://{host}:{port}'},
+            }
+            frame = pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+            s3fs.S3FileSystem(**options).mkdir(BUCKET)
+            frame.to_csv(
+                f's3://{BUCKET}/table.csv', index=False,
+                storage_options=options,
+            )
+            frame.to_parquet(
+                f's3://{BUCKET}/nested/table.parquet', storage_options=options,
+            )
+            frame.to_parquet(
+                f's3://{BUCKET}/upper/TABLE.PARQUET', storage_options=options,
+            )
+            frame.iloc[:2].to_parquet(
+                f's3://{BUCKET}/dataset/part-0.parquet',
+                storage_options=options,
+            )
+            frame.iloc[2:].to_parquet(
+                f's3://{BUCKET}/dataset/part-1.parquet',
+                storage_options=options,
+            )
+            yield options
+        finally:
+            server.stop()
 
 
 def test_read_s3_csv(storage_options):
@@ -86,13 +95,34 @@ def test_read_s3_parquet_dataset_prefix(storage_options):
     assert frame.shape == (3, 2)
 
 
-def test_read_s3_missing_object_raises(storage_options):
-    with pytest.raises(FileNotFoundError):
+def test_read_s3_missing_object_maps_to_not_found(storage_options):
+    with pytest.raises(ConnectorError) as excinfo:
         read(
             's3',
             path=f's3://{BUCKET}/absent.csv',
             storage_options=storage_options,
         )
+    assert excinfo.value.code == 'NOT_FOUND'
+    assert isinstance(excinfo.value.__cause__, FileNotFoundError)
+
+
+def test_read_s3_unreachable_endpoint_maps_to_read_failed():
+    with pytest.raises(ConnectorError) as excinfo:
+        read(
+            's3',
+            path='s3://bucket/table.csv',
+            storage_options={
+                'key': 'x',
+                'secret': 'x',
+                'client_kwargs': {'endpoint_url': 'http://127.0.0.1:1'},
+                'config_kwargs': {
+                    'connect_timeout': 1,
+                    'retries': {'max_attempts': 0},
+                },
+            },
+        )
+    assert excinfo.value.code == 'READ_FAILED'
+    assert excinfo.value.details['path'] == 's3://bucket/table.csv'
 
 
 def test_read_s3_without_path_raises():

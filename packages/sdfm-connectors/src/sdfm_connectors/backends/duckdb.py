@@ -3,14 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from sdfm_connectors.sql import MissingBackendError
+from sdfm_connectors.sql import require_driver
 
-try:
-    import duckdb
-except ModuleNotFoundError as error:
-    if error.name != 'duckdb':
-        raise
-    raise MissingBackendError('duckdb', 'duckdb') from error
+duckdb = require_driver('duckdb', 'duckdb', 'duckdb')
 
 Connection: TypeAlias = duckdb.DuckDBPyConnection
 
