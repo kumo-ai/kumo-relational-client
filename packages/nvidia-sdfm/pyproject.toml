@@ -36,8 +36,11 @@ snowflake = [
 databricks = [
     "sdfm-connectors[databricks]",
 ]
+s3 = [
+    "sdfm-connectors[s3]",
+]
 all = [
-    "nvidia-sdfm[kumorfm,sqlite,duckdb,snowflake,databricks]",
+    "nvidia-sdfm[kumorfm,sqlite,duckdb,snowflake,databricks,s3]",
 ]
 test = [
     "pytest",

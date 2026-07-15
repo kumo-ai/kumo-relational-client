@@ -16,16 +16,23 @@ def test_read_unknown_connector_raises():
     assert excinfo.value.code == 'UNKNOWN_CONNECTOR'
 
 
-def test_missing_backend_maps_to_missing_extra_error(monkeypatch):
+@pytest.mark.parametrize('extra, driver', [
+    ('snowflake', 'snowflake-connector-python'),
+    ('s3', 's3fs'),
+])
+def test_missing_backend_maps_to_missing_extra_error(
+    monkeypatch, extra, driver,
+):
     from sdfm_connectors.sql import MissingBackendError
 
     def raise_missing(source, **kwargs):
-        raise MissingBackendError('snowflake', 'snowflake-connector-python')
+        raise MissingBackendError(extra, driver)
 
     monkeypatch.setattr(connectors_module, '_read', raise_missing)
     with pytest.raises(MissingExtraError) as excinfo:
-        read('snowflake', table='t')
-    assert excinfo.value.details['extra'] == 'snowflake'
+        read(extra, table='t')
+    assert excinfo.value.details['extra'] == extra
+    assert f'nvidia-sdfm[{extra}]' in str(excinfo.value)
 
 
 def test_broken_driver_is_not_reported_as_missing_extra(monkeypatch):

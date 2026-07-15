@@ -1,0 +1,150 @@
+from __future__ import annotations
+
+import importlib
+import os
+
+import pandas as pd
+import pytest
+
+from sdfm_connectors import read
+from sdfm_connectors.sql import ConnectorError, MissingBackendError
+
+s3fs = pytest.importorskip('s3fs')
+moto_server = pytest.importorskip('moto.server')
+
+BUCKET = 'sdfm-connectors-test'
+
+
+@pytest.fixture(scope='module')
+def storage_options():
+    server = moto_server.ThreadedMotoServer(ip_address='127.0.0.1', port=0)
+    server.start()
+    try:
+        host, port = server.get_host_and_port()
+        options = {
+            'key': 'testing',
+            'secret': 'testing',
+            'client_kwargs': {'endpoint_url': f'http://{host}:{port}'},
+        }
+        frame = pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
+        s3fs.S3FileSystem(**options).mkdir(BUCKET)
+        frame.to_csv(
+            f's3://{BUCKET}/table.csv', index=False, storage_options=options,
+        )
+        frame.to_parquet(
+            f's3://{BUCKET}/nested/table.parquet', storage_options=options,
+        )
+        frame.to_parquet(
+            f's3://{BUCKET}/upper/TABLE.PARQUET', storage_options=options,
+        )
+        frame.iloc[:2].to_parquet(
+            f's3://{BUCKET}/dataset/part-0.parquet', storage_options=options,
+        )
+        frame.iloc[2:].to_parquet(
+            f's3://{BUCKET}/dataset/part-1.parquet', storage_options=options,
+        )
+        yield options
+    finally:
+        server.stop()
+
+
+def test_read_s3_csv(storage_options):
+    frame = read(
+        's3',
+        path=f's3://{BUCKET}/table.csv',
+        storage_options=storage_options,
+    )
+    assert frame.shape == (3, 2)
+    assert list(frame['b']) == ['x', 'y', 'z']
+
+
+def test_read_s3_parquet(storage_options):
+    frame = read(
+        's3',
+        path=f's3://{BUCKET}/nested/table.parquet',
+        storage_options=storage_options,
+    )
+    assert frame.shape == (3, 2)
+    assert list(frame['a']) == [1, 2, 3]
+
+
+def test_read_s3_uppercase_parquet_suffix(storage_options):
+    frame = read(
+        's3',
+        path=f's3://{BUCKET}/upper/TABLE.PARQUET',
+        storage_options=storage_options,
+    )
+    assert frame.shape == (3, 2)
+
+
+def test_read_s3_parquet_dataset_prefix(storage_options):
+    frame = read(
+        's3',
+        path=f's3://{BUCKET}/dataset/',
+        storage_options=storage_options,
+    )
+    assert frame.shape == (3, 2)
+
+
+def test_read_s3_missing_object_raises(storage_options):
+    with pytest.raises(FileNotFoundError):
+        read(
+            's3',
+            path=f's3://{BUCKET}/absent.csv',
+            storage_options=storage_options,
+        )
+
+
+def test_read_s3_without_path_raises():
+    with pytest.raises(ConnectorError) as excinfo:
+        read('s3')
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+def test_read_s3_rejects_unexpected_arguments():
+    with pytest.raises(ConnectorError) as excinfo:
+        read('s3', path='s3://bucket/table.csv', table='items')
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert excinfo.value.details['arguments'] == ['table']
+
+
+def test_read_s3_rejects_non_s3_uri(tmp_path):
+    path = tmp_path / 'table.csv'
+    pd.DataFrame({'a': [1]}).to_csv(path, index=False)
+    with pytest.raises(ConnectorError) as excinfo:
+        read('s3', path=str(path))
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert excinfo.value.details['path'] == str(path)
+
+
+def test_unknown_connector_message_lists_s3():
+    with pytest.raises(ConnectorError) as excinfo:
+        read('gcs')
+    assert "'s3'" in excinfo.value.message
+
+
+def test_read_s3_missing_driver_raises(monkeypatch):
+    def raise_missing(name, *args, **kwargs):
+        raise ModuleNotFoundError(f"No module named '{name}'", name=name)
+
+    monkeypatch.setattr(importlib, 'import_module', raise_missing)
+    with pytest.raises(MissingBackendError) as excinfo:
+        read('s3', path='s3://bucket/table.csv')
+    assert excinfo.value.backend == 's3'
+    assert excinfo.value.driver == 's3fs'
+    assert 'sdfm-connectors[s3]' in str(excinfo.value)
+
+
+@pytest.mark.skipif(
+    'SDFM_S3_LIVE_URI' not in os.environ,
+    reason='SDFM_S3_LIVE_URI not set',
+)
+def test_read_s3_live():
+    anon = os.environ.get('SDFM_S3_LIVE_ANON', '').lower()
+    options = {'anon': True} if anon in ('1', 'true', 'yes') else None
+    frame = read(
+        's3',
+        path=os.environ['SDFM_S3_LIVE_URI'],
+        storage_options=options,
+    )
+    assert len(frame) > 0

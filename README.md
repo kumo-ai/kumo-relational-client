@@ -10,7 +10,7 @@ heavy model drivers are optional, installed only when you ask for them.
 | --- | --- |
 | `pip install nvidia-sdfm` | The client + every lightweight model (TabICL today). Works out of the box. |
 | `pip install nvidia-sdfm[kumorfm]` | Adds KumoRFM (pulls the native `kumorfm` driver). |
-| `pip install nvidia-sdfm[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]`). |
+| `pip install nvidia-sdfm[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
 | `pip install nvidia-sdfm[all]` | Everything. |
 
 The rule is dependency weight, not favoritism: a model that does no client-side work
