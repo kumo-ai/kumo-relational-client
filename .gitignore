@@ -6,6 +6,7 @@ __pycache__/
 .tmp/
 build/
 dist/
+wheelhouse/
 *.egg-info/
 _skbuild/
 .pip-cache/
