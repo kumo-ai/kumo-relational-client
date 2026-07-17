@@ -1,4 +1,5 @@
 from collections.abc import Mapping, Sequence
+import math
 from typing import Any
 
 from kumoapi.rfm import RFMPredictResponse
@@ -100,6 +101,47 @@ def _prediction_item_to_row(
     return row
 
 
+def _prediction_item_to_ranking_rows(
+    item: PredictionItem,
+    *,
+    entity_id: Any,
+) -> list[dict[str, Any]]:
+    if item.rankings is None:
+        raise ValueError('Kumo RFM ranking response is missing rankings.')
+    if item.prediction is not None:
+        raise ValueError(
+            'Kumo RFM ranking response must not include prediction.')
+
+    rows: list[dict[str, Any]] = []
+    for ranking in item.rankings:
+        if 'id' not in ranking:
+            raise ValueError('Kumo RFM ranking item is missing id.')
+        if 'score' not in ranking:
+            raise ValueError('Kumo RFM ranking item is missing score.')
+        extra_fields = set(ranking) - {'id', 'score'}
+        if extra_fields:
+            unexpected = ', '.join(sorted(extra_fields))
+            raise ValueError(
+                'Kumo RFM ranking item includes unexpected fields: '
+                f'{unexpected}.')
+        ranking_id = ranking['id']
+        if not isinstance(ranking_id, str):
+            raise ValueError('Kumo RFM ranking item id must be a string.')
+        score = float(ranking['score'])
+        if not math.isfinite(score):
+            raise ValueError('Kumo RFM ranking item score must be finite.')
+
+        row: dict[str, Any] = {
+            'ENTITY': entity_id,
+            'CLASS': ranking_id,
+            'SCORE': score,
+        }
+        if item.explanation is not None:
+            row['explanation'] = item.explanation
+        rows.append(row)
+    return rows
+
+
 def _correlated_prediction_rows(
     response: PredictionResponse,
     *,
@@ -113,12 +155,14 @@ def _correlated_prediction_rows(
         raise ValueError(
             'Kumo RFM request identity mappings have different lengths: '
             f'{expected_count} entities and {len(instances)} instances.')
-    if len(response.predictions) != expected_count:
+    is_forecast = _is_forecast_response(response)
+    forecast_steps_by_index: dict[int, set[int]] = {}
+    if not is_forecast and len(response.predictions) != expected_count:
         raise ValueError(
             'Kumo RFM prediction response count does not match the request: '
             f'expected {expected_count}, got {len(response.predictions)}.')
 
-    rows_by_index: dict[int, dict[str, Any]] = {}
+    rows_by_index: dict[int, list[dict[str, Any]]] = {}
     for item in response.predictions:
         row_index = item.row_index
         if row_index is None:
@@ -128,7 +172,20 @@ def _correlated_prediction_rows(
             raise ValueError(
                 'Kumo RFM prediction response row_index is out of range: '
                 f'{row_index}.')
-        if row_index in rows_by_index:
+        if is_forecast:
+            if item.forecast_step is None:
+                raise ValueError(
+                    'Kumo RFM forecasting response is missing forecast_step.')
+            if item.forecast_step <= 0:
+                raise ValueError(
+                    'Kumo RFM forecasting response forecast_step must be positive.')
+            forecast_steps = forecast_steps_by_index.setdefault(row_index, set())
+            if item.forecast_step in forecast_steps:
+                raise ValueError(
+                    'Kumo RFM forecasting response contains duplicate '
+                    f'forecast_step {item.forecast_step} for row_index {row_index}.')
+            forecast_steps.add(item.forecast_step)
+        elif row_index in rows_by_index:
             raise ValueError(
                 'Kumo RFM prediction response contains duplicate row_index: '
                 f'{row_index}.')
@@ -139,9 +196,48 @@ def _correlated_prediction_rows(
                 'Kumo RFM prediction response id does not match request '
                 f'instance_id at row_index {row_index}: expected '
                 f'{expected_id!r}, got {item.id!r}.')
-        rows_by_index[row_index] = _prediction_item_to_row(
+        rows = _prediction_item_rows_for_response(
+            response,
             item,
             entity_id=entities[row_index],
         )
+        rows_by_index.setdefault(row_index, []).extend(rows)
 
-    return [rows_by_index[index] for index in range(expected_count)]
+    missing = [index for index in range(expected_count)
+               if index not in rows_by_index]
+    if missing:
+        raise ValueError(
+            'Kumo RFM prediction response is missing row_index values: '
+            f'{missing}.')
+
+    return [row for index in range(expected_count)
+            for row in rows_by_index[index]]
+
+
+def _prediction_item_rows_for_response(
+    response: PredictionResponse,
+    item: PredictionItem,
+    *,
+    entity_id: Any,
+) -> list[dict[str, Any]]:
+    if _is_ranking_response(response):
+        return _prediction_item_to_ranking_rows(item, entity_id=entity_id)
+    row = _prediction_item_to_row(item, entity_id=entity_id)
+    if _is_forecast_response(response):
+        row['forecast_step'] = item.forecast_step
+    return [row]
+
+
+def _is_ranking_response(response: PredictionResponse) -> bool:
+    task_kind = str(response.metadata.get('task_kind', '')).lower()
+    output_type = str(response.metadata.get('output_type', '')).lower()
+    return (
+        task_kind in {'ranking', 'temporal_link_prediction'}
+        or output_type == 'rankings'
+    )
+
+
+def _is_forecast_response(response: PredictionResponse) -> bool:
+    task_kind = str(response.metadata.get('task_kind', '')).lower()
+    output_type = str(response.metadata.get('output_type', '')).lower()
+    return task_kind in {'forecast', 'forecasting'} or output_type == 'forecast'

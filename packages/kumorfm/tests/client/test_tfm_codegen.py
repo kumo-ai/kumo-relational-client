@@ -65,6 +65,7 @@ def test_generated_prediction_response_parser() -> None:
         'predictions': [{
             'id': 7,
             'row_index': '3',
+            'forecast_step': '2',
             'prediction': True,
             'probabilities': {
                 'false': 0.25,
@@ -100,6 +101,7 @@ def test_generated_prediction_response_parser() -> None:
     item = response.predictions[0]
     assert item.id == '7'
     assert item.row_index == 3
+    assert item.forecast_step == 2
     assert item.prediction is True
     assert item.probabilities == {'false': 0.25, 'true': 0.75}
     assert item.scores == (0.4, 0.6)
@@ -172,7 +174,7 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
         'explanation',
     }
     parsed_fields = {field.name for field in fields(PredictionItem)}
-    intentionally_unmapped_fields = {'metadata'}
+    intentionally_unmapped_fields = {'forecast_step', 'metadata'}
     assert parsed_fields == mapped_fields | intentionally_unmapped_fields
 
 
@@ -201,6 +203,183 @@ def test_prediction_response_correlates_opaque_ids_to_repeated_entities(
             ['user-7', 'second'],
         ],
     }
+
+
+def test_ranking_response_expands_rankings_to_compatibility_rows() -> None:
+    response = PredictionResponse(
+        id='pred-rank-1',
+        model='kumo-rfm',
+        predictions=(
+            PredictionItem(
+                id='20',
+                row_index=0,
+                rankings=(
+                    {'id': 'item-a', 'score': 0.9},
+                    {'id': 'item-b', 'score': 0.7},
+                ),
+            ),
+        ),
+        metadata={
+            'task_kind': 'temporal_link_prediction',
+            'output_type': 'rankings',
+        },
+    )
+
+    converted = _prediction_response_to_rfm(
+        response,
+        entity_ids=('user-7', ),
+        instance_ids=(20, ),
+    )
+
+    assert converted.prediction == {
+        'columns': ['ENTITY', 'CLASS', 'SCORE'],
+        'data': [
+            ['user-7', 'item-a', 0.9],
+            ['user-7', 'item-b', 0.7],
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ('item', 'error'),
+    [
+        (
+            PredictionItem(
+                id='20',
+                row_index=0,
+                prediction='item-a',
+                rankings=({'id': 'item-a', 'score': 0.9}, ),
+            ),
+            'must not include prediction',
+        ),
+        (PredictionItem(id='20', row_index=0), 'missing rankings'),
+        (
+            PredictionItem(id='20', row_index=0, rankings=({'score': 0.9}, )),
+            'missing id',
+        ),
+        (
+            PredictionItem(id='20', row_index=0, rankings=({'id': 'item-a'}, )),
+            'missing score',
+        ),
+        (
+            PredictionItem(
+                id='20',
+                row_index=0,
+                rankings=({'id': 7, 'score': 0.9}, ),
+            ),
+            'id must be a string',
+        ),
+        (
+            PredictionItem(
+                id='20',
+                row_index=0,
+                rankings=({'id': 'item-a', 'score': 0.9, 'label': 'x'}, ),
+            ),
+            'unexpected fields',
+        ),
+    ],
+)
+def test_ranking_response_rejects_malformed_rankings(
+    item: PredictionItem,
+    error: str,
+) -> None:
+    response = PredictionResponse(
+        id='pred-rank-1',
+        model='kumo-rfm',
+        predictions=(item, ),
+        metadata={
+            'task_kind': 'temporal_link_prediction',
+            'output_type': 'rankings',
+        },
+    )
+
+    with pytest.raises(ValueError, match=error):
+        _prediction_response_to_rfm(
+            response,
+            entity_ids=('user-7', ),
+            instance_ids=(20, ),
+        )
+
+
+def test_forecast_response_allows_multiple_records_per_request_row() -> None:
+    response = PredictionResponse(
+        id='pred-forecast-1',
+        model='kumo-rfm',
+        predictions=(
+            PredictionItem(
+                id='20',
+                row_index=0,
+                prediction=10.0,
+                quantiles={'0.5': 10.0},
+                forecast_step=1,
+            ),
+            PredictionItem(
+                id='20',
+                row_index=0,
+                prediction=12.0,
+                quantiles={'0.5': 12.0},
+                forecast_step=2,
+            ),
+        ),
+        metadata={
+            'task_kind': 'forecasting',
+            'output_type': 'forecast',
+        },
+    )
+
+    converted = _prediction_response_to_rfm(
+        response,
+        entity_ids=('item-42', ),
+        instance_ids=(20, ),
+    )
+
+    assert converted.prediction == {
+        'columns': ['ENTITY', 'prediction', 'q_0.5', 'forecast_step'],
+        'data': [
+            ['item-42', 10.0, 10.0, 1],
+            ['item-42', 12.0, 12.0, 2],
+        ],
+    }
+
+
+@pytest.mark.parametrize(
+    ('predictions', 'error'),
+    [
+        (
+            (PredictionItem(id='20', row_index=0, prediction=10.0), ),
+            'missing forecast_step',
+        ),
+        (
+            (
+                PredictionItem(
+                    id='20', row_index=0, prediction=10.0, forecast_step=1),
+                PredictionItem(
+                    id='20', row_index=0, prediction=11.0, forecast_step=1),
+            ),
+            'duplicate forecast_step',
+        ),
+    ],
+)
+def test_forecast_response_rejects_malformed_steps(
+    predictions: tuple[PredictionItem, ...],
+    error: str,
+) -> None:
+    response = PredictionResponse(
+        id='pred-forecast-1',
+        model='kumo-rfm',
+        predictions=predictions,
+        metadata={
+            'task_kind': 'forecasting',
+            'output_type': 'forecast',
+        },
+    )
+
+    with pytest.raises(ValueError, match=error):
+        _prediction_response_to_rfm(
+            response,
+            entity_ids=('item-42', ),
+            instance_ids=(20, ),
+        )
 
 
 @pytest.mark.parametrize(
@@ -639,6 +818,7 @@ def _minimal_openapi_spec() -> dict:
                     'properties': {
                         'id': {},
                         'row_index': {},
+                        'forecast_step': {},
                         'prediction': {},
                         'probabilities': {},
                         'scores': {},

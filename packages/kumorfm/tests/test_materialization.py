@@ -325,7 +325,7 @@ def test_materialization_covers_task_types_and_request_options(
     fields = set(payload['output']['fields'])
     assert payload['task']['kind'] == task_type.value
     assert payload['task']['top_k'] == 2
-    assert 'prediction' in fields
+    assert ('prediction' in fields) is (task_type != TaskType.REGRESSION)
     assert 'embeddings' in fields
     assert ('probabilities' in fields) is task_type.is_classification
     assert ('quantiles' in fields) is (task_type == TaskType.REGRESSION)

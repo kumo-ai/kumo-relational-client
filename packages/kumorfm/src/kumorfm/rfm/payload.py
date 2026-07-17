@@ -22,6 +22,7 @@ from kumorfm.client.generated.tfm_api import (
     TFM_OUTPUT_FIELD_PREDICTION,
     TFM_OUTPUT_FIELD_PROBABILITIES,
     TFM_OUTPUT_FIELD_QUANTILES,
+    TFM_OUTPUT_FIELD_RANKINGS,
 )
 
 INSTANCE_ID = 'instance_id'
@@ -205,6 +206,12 @@ def _payload_tables(context: Context) -> PayloadTables:
         )
         related_table_stype_overrides[table_name] = stype_overrides
 
+    _include_link_prediction_rhs_context_targets(
+        context,
+        related_table_frames,
+        related_table_key_columns,
+    )
+
     relationships = _populate_relationship_columns(
         context,
         instance_df,
@@ -283,15 +290,23 @@ def _instance_dataframe(
 
     target_name = context.y_train.name or 'TARGET'
     df[target_name] = None
-    df.loc[:context.num_train - 1, target_name] = [
+    train_targets = [
         _target_json_value(context.task_type, value)
         for value in context.y_train.tolist()
     ]
+    if train_targets:
+        df.iloc[:context.num_train,
+                df.columns.get_loc(target_name)] = _object_array(train_targets)
     if context.y_test is not None:
-        df.loc[context.num_train:, target_name] = [
+        test_targets = [
             _target_json_value(context.task_type, value)
             for value in context.y_test.tolist()
         ]
+        if test_targets:
+            df.iloc[
+                context.num_train:context.num_train + len(test_targets),
+                df.columns.get_loc(target_name),
+            ] = _object_array(test_targets)
     elif context.num_test > 0:
         df.loc[context.num_train:, target_name] = None
 
@@ -300,6 +315,12 @@ def _instance_dataframe(
             df[column_name] = context.task_table.df[column_name].tolist()
 
     return df, entity_reference_columns, anchor_time_column
+
+
+def _object_array(values: list[Any]) -> np.ndarray:
+    array = np.empty(len(values), dtype=object)
+    array[:] = values
+    return array
 
 
 def _entity_values(context: Context, table_name: str) -> list[Any] | None:
@@ -363,6 +384,69 @@ def _occurrence_dataframe(table: Any) -> tuple[pd.DataFrame, str]:
     else:
         key_column = table.primary_key
     return df, key_column
+
+
+def _include_link_prediction_rhs_context_targets(
+    context: Context,
+    related_table_frames: dict[str, pd.DataFrame],
+    related_table_key_columns: dict[str, str],
+) -> None:
+    if TaskType(context.task_type) != TaskType.TEMPORAL_LINK_PREDICTION:
+        return
+    if len(context.entity_table_names) < 2:
+        return
+    rhs_name = context.entity_table_names[1]
+    rhs_frame = related_table_frames.get(rhs_name)
+    key_column = related_table_key_columns.get(rhs_name)
+    rhs_table = context.subgraph.table_dict.get(rhs_name)
+    if rhs_frame is None or key_column is None or rhs_table is None:
+        return
+    if rhs_table.primary_key is None or rhs_table.primary_key not in rhs_table.df:
+        return
+
+    source_df = rhs_table.df.reset_index(drop=True)
+    key_lookup: dict[str, pd.Series] = {}
+    for _, row in source_df.iterrows():
+        key_lookup.setdefault(str(_json_value(row[rhs_table.primary_key])), row)
+
+    existing = {
+        (int(row[INSTANCE_ID]), str(_json_value(row[key_column])))
+        for _, row in rhs_frame.iterrows()
+        if pd.notna(row.get(INSTANCE_ID)) and pd.notna(row.get(key_column))
+    }
+    additions: list[dict[str, Any]] = []
+    for instance_id, targets in enumerate(context.y_train.tolist()):
+        if targets is None:
+            continue
+        if isinstance(targets, np.ndarray):
+            targets = targets.tolist()
+        if not isinstance(targets, (list, tuple)):
+            continue
+        for target in targets:
+            target_key = str(_json_value(target))
+            existing_key = (instance_id, target_key)
+            if existing_key in existing:
+                continue
+            source_row = key_lookup.get(target_key)
+            item: dict[str, Any] = {}
+            for column in rhs_frame.columns:
+                if column == INSTANCE_ID:
+                    item[column] = instance_id
+                elif source_row is not None and column in source_row:
+                    item[column] = source_row[column]
+                elif column == key_column:
+                    item[column] = target
+                else:
+                    item[column] = None
+            additions.append(item)
+            existing.add(existing_key)
+
+    if additions:
+        related_table_frames[rhs_name] = pd.concat(
+            [rhs_frame, pd.DataFrame(additions, columns=rhs_frame.columns)],
+            ignore_index=True,
+            sort=False,
+        )
 
 
 def _populate_relationship_columns(
@@ -638,11 +722,14 @@ def _output_fields(
     explain: bool,
     quantile_output: bool = False,
 ) -> list[str]:
-    fields = [TFM_OUTPUT_FIELD_PREDICTION]
+    if TaskType(task_type).is_link_pred:
+        fields = [TFM_OUTPUT_FIELD_RANKINGS]
+    elif quantile_output:
+        fields = [TFM_OUTPUT_FIELD_QUANTILES]
+    else:
+        fields = [TFM_OUTPUT_FIELD_PREDICTION]
     if TaskType(task_type).is_classification:
         fields.append(TFM_OUTPUT_FIELD_PROBABILITIES)
-    if quantile_output:
-        fields.append(TFM_OUTPUT_FIELD_QUANTILES)
     if return_embeddings:
         fields.append(TFM_OUTPUT_FIELD_EMBEDDINGS)
     if explain:
@@ -675,21 +762,48 @@ def _inference_config_to_json(
 
 
 def _target_stype(task_type: TaskType) -> Stype:
+    if TaskType(task_type).is_link_pred:
+        return Stype.multicategorical
     if TaskType(task_type).is_classification:
         return Stype.categorical
     return Stype.numerical
 
 
 def _target_dtype(task_type: TaskType, target: pd.Series) -> str:
+    if TaskType(task_type).is_link_pred:
+        return 'stringlist'
     if TaskType(task_type) == TaskType.BINARY_CLASSIFICATION:
         return 'bool'
     return _dtype_name(target)
 
 
 def _target_json_value(task_type: TaskType, value: Any) -> Any:
+    task_type = TaskType(task_type)
+    if task_type.is_link_pred:
+        if value is None:
+            return None
+        if isinstance(value, np.ndarray):
+            value = value.tolist()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError(
+                "Link prediction target values must be stringlist arrays, "
+                f"but got {value!r}.")
+        result: list[str] = []
+        for item in value:
+            if _is_null_like(item):
+                raise ValueError(
+                    "Link prediction target stringlist values must not contain "
+                    f"null items, but got {value!r}.")
+            item_value = _json_value(item)
+            if item_value is None:
+                raise ValueError(
+                    "Link prediction target stringlist values must not contain "
+                    f"null items, but got {value!r}.")
+            result.append(str(item_value))
+        return result
+
     value = _json_value(value)
-    if (TaskType(task_type) != TaskType.BINARY_CLASSIFICATION
-            or value is None):
+    if task_type != TaskType.BINARY_CLASSIFICATION or value is None:
         return value
     if isinstance(value, bool):
         return value
@@ -701,6 +815,10 @@ def _target_json_value(task_type: TaskType, value: Any) -> Any:
 
 
 def _dtype_name(data: pd.Series) -> str:
+    list_dtype = _list_dtype_name(data)
+    if list_dtype is not None:
+        return list_dtype
+
     dtype = data.dtype
     if pd.api.types.is_bool_dtype(dtype):
         return 'bool'
@@ -711,6 +829,52 @@ def _dtype_name(data: pd.Series) -> str:
     if pd.api.types.is_datetime64_any_dtype(dtype):
         return 'timestamp[us]'
     return 'string'
+
+
+def _list_dtype_name(data: pd.Series) -> str | None:
+    if not pd.api.types.is_object_dtype(data.dtype):
+        return None
+
+    found_list = False
+    found_scalar = False
+    for value in data:
+        if _is_null_like(value):
+            continue
+        if isinstance(value, np.ndarray):
+            value = value.tolist()
+        if not isinstance(value, (list, tuple)):
+            found_scalar = True
+            continue
+        found_list = True
+        for item in value:
+            if _is_null_like(item):
+                raise ValueError(
+                    "stringlist columns must not contain null items, "
+                    f"but got {value!r}.")
+            item_value = _json_value(item)
+            if item_value is None:
+                raise ValueError(
+                    "stringlist columns must not contain null items, "
+                    f"but got {value!r}.")
+
+    if found_list and found_scalar:
+        raise ValueError(
+            "Columns with stringlist values must contain only arrays or nulls.")
+    if not found_list:
+        return None
+    return 'stringlist'
+
+
+def _is_null_like(value: Any) -> bool:
+    if value is None:
+        return True
+    try:
+        result = pd.isna(value)
+    except (TypeError, ValueError):
+        return False
+    if isinstance(result, (bool, np.bool_)):
+        return bool(result)
+    return False
 
 
 def _stype_name(stype: Stype) -> str:

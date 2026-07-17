@@ -9,17 +9,20 @@ import pytest
 import requests
 from kumoapi.pquery import ValidatedPredictiveQuery
 from kumoapi.rfm.context import Table
+from kumoapi.task import TaskType
 from kumoapi.typing import Stype
 
 from kumorfm.client import KumoClient
 from kumorfm.client.rfm import RFMAPI
-from kumorfm.rfm import Graph, KumoRFM
+from kumorfm.rfm import Graph, KumoRFM, TaskTable
 from kumorfm.rfm.payload import (
     ANCHOR_TIME_PREFIX,
     ENTITY_REFERENCE_PREFIX,
     INSTANCE_ID,
     SYNTHETIC_NODE_ID,
+    _dtype_name,
     _occurrence_dataframe,
+    _target_json_value,
 )
 from kumorfm.rfm.rfm import Explanation
 
@@ -181,6 +184,7 @@ def test_predict_posts_universal_json_payload(
     assert payload['task']['target']['dtype'] == 'float32'
     assert 'embeddings' in payload['output']['fields']
     assert 'quantiles' in payload['output']['fields']
+    assert 'prediction' not in payload['output']['fields']
     assert payload['inference']['run_mode'] == 'fast'
     assert payload['inference']['inference_config']['kind'] == 'regression'
     assert payload['inference']['inference_config']['output_type'] == (
@@ -194,6 +198,124 @@ def test_predict_posts_universal_json_payload(
     assert "'row'" not in payload_text
     assert "'col'" not in payload_text
     assert "'evaluate'" not in payload_text
+
+
+def test_forecast_payload_contains_universal_controls(
+    user_store_graph: Graph,
+    forecast: ValidatedPredictiveQuery,
+) -> None:
+    model = KumoRFM(user_store_graph, verbose=False)
+    task_table = model._get_task_table(
+        forecast,
+        indices=forecast.get_rfm_entity_id_list(),
+        anchor_time=pd.Timestamp('2025-01-05'),
+    )
+
+    payload = model.materialize_task(
+        task_table,
+        inference_config={'output_type': 'quantiles'},
+        verbose=False,
+    )[0].payload
+
+    assert payload['task']['kind'] == 'forecasting'
+    assert payload['task']['step_size'] == 86_400_000_000_000
+    assert payload['task']['num_forecasts'] == 4
+    assert payload['task']['target']['dtype'] == 'float32'
+    assert set(payload['output']['fields']) == {'quantiles'}
+    assert payload['inference']['inference_config']['kind'] == 'regression'
+    assert payload['inference']['inference_config']['output_type'] == (
+        'quantiles')
+
+
+def test_link_prediction_payload_requests_rankings_and_multicategorical_target(
+    user_store_graph: Graph,
+) -> None:
+    task = TaskTable(
+        task_type=TaskType.TEMPORAL_LINK_PREDICTION,
+        context_df=pd.DataFrame({
+            'ENTITY': [0, 1],
+            'TARGET': [['0', '1'], ['2']],
+            'ANCHOR_TIMESTAMP': pd.to_datetime([
+                '2025-01-05',
+                '2025-01-05',
+            ]),
+        }),
+        pred_df=pd.DataFrame({
+            'ENTITY': [3],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
+        }),
+        entity_table_name=('USERS', 'STORES'),
+        entity_column='ENTITY',
+        target_column='TARGET',
+        time_column='ANCHOR_TIMESTAMP',
+    )
+
+    payload = KumoRFM(user_store_graph, verbose=False).materialize_task(
+        task,
+        top_k=2,
+        num_neighbors=[4, 4],
+        verbose=False,
+    )[0].payload
+
+    assert payload['task']['kind'] == 'temporal_link_prediction'
+    assert payload['task']['entity_table_names'] == ['USERS', 'STORES']
+    assert payload['task']['top_k'] == 2
+    assert payload['task']['target'] == {
+        'column_name': 'TARGET',
+        'dtype': 'stringlist',
+    }
+    assert set(payload['output']['fields']) == {'rankings'}
+    target_schema = payload['schema']['instance_table']['columns']['TARGET']
+    assert target_schema['dtype'] == 'stringlist'
+    assert target_schema['stype'] == 'multicategorical'
+    assert payload['schema']['related_tables']['USERS']['primary_key'] == (
+        [INSTANCE_ID, 'USER_ID'])
+    assert payload['schema']['related_tables']['STORES']['primary_key'] == (
+        [INSTANCE_ID, 'STORE_ID'])
+    assert 'TARGET' in payload['context']['instance_table']['columns']
+    assert 'TARGET' not in payload['predict']['instance_table']['columns']
+    target_index = payload['context']['instance_table']['columns'].index(
+        'TARGET')
+    assert [row[target_index]
+            for row in payload['context']['instance_table']['rows']] == (
+                [['0', '1'], ['2']])
+    stores = payload['context']['related_tables']['STORES']
+    instance_index = stores['columns'].index(INSTANCE_ID)
+    store_index = stores['columns'].index('STORE_ID')
+    cat_index = stores['columns'].index('CAT')
+    store_rows = {
+        (row[instance_index], str(row[store_index])): row[cat_index]
+        for row in stores['rows']
+    }
+    assert store_rows[(0, '0')] == 'burger'
+    assert store_rows[(0, '1')] == 'pizza'
+    assert store_rows[(1, '2')] == 'fries'
+
+
+def test_link_prediction_target_values_must_be_stringlist_arrays() -> None:
+    task_type = TaskType.TEMPORAL_LINK_PREDICTION
+
+    assert _target_json_value(task_type, np.array([1, '2'])) == ['1', '2']
+
+    with pytest.raises(ValueError, match='stringlist arrays'):
+        _target_json_value(task_type, 'item-1')
+
+    with pytest.raises(ValueError, match='must not contain null'):
+        _target_json_value(task_type, ['item-1', None])
+
+
+def test_stringlist_dtype_detection_rejects_mixed_or_null_items() -> None:
+    assert _dtype_name(pd.Series([['a'], None, np.array(['b'])], dtype=object)) == (
+        'stringlist')
+
+    with pytest.raises(ValueError, match='only arrays or nulls'):
+        _dtype_name(pd.Series([['a'], 'b'], dtype=object))
+
+    with pytest.raises(ValueError, match='only arrays or nulls'):
+        _dtype_name(pd.Series(['b', ['a']], dtype=object))
+
+    with pytest.raises(ValueError, match='must not contain null items'):
+        _dtype_name(pd.Series([['a', None]], dtype=object))
 
 
 def test_entity_identity_survives_batch_local_row_indexes(
