@@ -8,6 +8,7 @@ description = "Client SDK for NVIDIA structured-data foundation model NIMs (TabI
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
 keywords = [
     "structured-data",
     "foundation-model",
@@ -50,7 +51,7 @@ test = [
 ]
 
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
