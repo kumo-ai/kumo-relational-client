@@ -32,8 +32,6 @@ doc=[
     "sphinx-book-theme",
     "sphinx-copybutton",
     "sphinx-autodoc-typehints",
-    "graphviz",
-    "mermaid-py",
 ]
 test=[
     "packaging",
@@ -54,7 +52,6 @@ snowflake=[
     "numpy<2.0",
     "sdfm-connectors[snowflake]",
     "pyyaml",
-    "mermaid-py",
 ]
 databricks=[
     "sdfm-connectors[databricks]",
@@ -76,6 +73,7 @@ include=["kumorfm*"]
 
 [tool.setuptools.package-data]
 "kumorfm._vendor.kumopql"=["VENDORED.md"]
+"kumorfm.rfm"=["assets/*"]
 
 [tool.setuptools.dynamic]
 version = {attr = "kumorfm._version.__version__"}

@@ -1,17 +1,14 @@
 from __future__ import annotations
 
-import contextlib
 import copy
 import io
 import warnings
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from importlib import import_module
-from importlib.util import find_spec
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Union
+from typing import TYPE_CHECKING, Any, Union
 
 import pandas as pd
 from kumoapi.graph import ColumnKey, ColumnKeyGroup, GraphDefinition
@@ -28,7 +25,6 @@ from kumorfm.rfm.infer import infer_time_column
 from kumorfm.utils import display, quote_ident
 
 if TYPE_CHECKING:
-    import graphviz
     from adbc_driver_duckdb.dbapi import Connection as AdbcDuckDBConnection
     from adbc_driver_sqlite.dbapi import AdbcSqliteConnection
     from snowflake.connector import SnowflakeConnection
@@ -1758,97 +1754,6 @@ class Graph:
 
     # Visualization ###########################################################
 
-    def _to_graphviz(
-        self,
-        format: str | None = None,
-        show_columns: bool = True,
-    ) -> 'graphviz.Graph':
-        r"""Returns a ``graphviz.Graph`` representation of the graph.
-
-        Args:
-            format: The rendering output format.
-            show_columns: Whether to show all columns of every table in the
-                graph. If ``False``, will only show the primary key, foreign
-                key(s), and time column of each table.
-
-        Returns:
-            The ``graphviz.Graph`` object.
-        """
-        graphviz = import_module('graphviz')
-        graph = graphviz.Graph(format=format)
-
-        def left_align(keys: list[str]) -> str:
-            if len(keys) == 0:
-                return ""
-            return '\\l'.join(keys) + '\\l'
-
-        fkeys_dict: dict[str, list[str]] = defaultdict(list)
-        for src_table_name, fkey_name, _ in self.edges:
-            fkeys_dict[src_table_name].append(fkey_name)
-
-        for table_name, table in self.tables.items():
-            keys = []
-            if primary_key := table.primary_key:
-                keys += [f'{primary_key.name}: PK ({primary_key.dtype})']
-            keys += [
-                f'{fkey_name}: FK ({self[table_name][fkey_name].dtype})'
-                for fkey_name in fkeys_dict[table_name]
-            ]
-            if time_column := table.time_column:
-                keys += [f'{time_column.name}: Time ({time_column.dtype})']
-            if end_time_column := table.end_time_column:
-                keys += [
-                    f'{end_time_column.name}: '
-                    f'End Time ({end_time_column.dtype})'
-                ]
-            key_repr = left_align(keys)
-
-            columns = []
-            if show_columns:
-                columns += [
-                    f'{column.name}: {column.stype} ({column.dtype})'
-                    for column in table.columns
-                    if column.name not in fkeys_dict[table_name] and
-                    column.name != table._primary_key and column.name != table.
-                    _time_column and column.name != table._end_time_column
-                ]
-            column_repr = left_align(columns)
-
-            if len(keys) > 0 and len(columns) > 0:
-                label = f'{{{table_name}|{key_repr}|{column_repr}}}'
-            elif len(keys) > 0:
-                label = f'{{{table_name}|{key_repr}}}'
-            elif len(columns) > 0:
-                label = f'{{{table_name}|{column_repr}}}'
-            else:
-                label = f'{{{table_name}}}'
-
-            graph.node(table_name, shape='record', label=label)
-
-        for src_table_name, fkey_name, dst_table_name in self.edges:
-            if self[dst_table_name]._primary_key is None:
-                continue  # Invalid edge.
-
-            pkey_name = self[dst_table_name]._primary_key
-
-            if fkey_name != pkey_name:
-                label = f' {fkey_name}\n< >\n{pkey_name} '
-            else:
-                label = f' {fkey_name} '
-
-            graph.edge(
-                src_table_name,
-                dst_table_name,
-                label=label,
-                headlabel='1',
-                taillabel='*',
-                minlen='2',
-                fontsize='11pt',
-                labeldistance='1.5',
-            )
-
-        return graph
-
     def _to_mermaid(self, show_columns: bool = True) -> str:
         r"""Returns a Mermaid ER diagram string representation of the graph.
 
@@ -1904,128 +1809,76 @@ class Graph:
         self,
         path: Path | str | io.BytesIO | None = None,
         show_columns: bool = True,
-        backend: Literal['auto', 'graphviz', 'mermaid'] = 'auto',
+        height: int = 540,
     ) -> None:
-        r"""Visualizes the tables and edges in this graph.
+        r"""Visualizes the tables and edges in this graph as a Mermaid
+        entity-relationship diagram.
+
+        Display is fully self-contained: the bundled mermaid.js is inlined
+        into the produced HTML, so no system executables (graphviz), CDN
+        scripts, or web services are needed inside notebook environments.
+        Only PNG/SVG export renders via the mermaid.ink web service and
+        therefore requires network access.
 
         Args:
-            path: A path to write the produced image to. If ``None``, the image
-                will not be written to disk.
+            path: Where to write the visualization. ``None`` displays the
+                graph inline (Jupyter, Databricks, Colab, and Snowflake
+                notebooks) or prints the Mermaid source in terminals.
+                A path ending in ``.html`` writes a standalone offline HTML
+                file, ``.mmd`` writes the Mermaid source, and ``.png`` or
+                ``.svg`` writes an image (network required). A
+                :class:`io.BytesIO` receives PNG bytes (network required).
             show_columns: Whether to show all columns of every table in the
                 graph. If ``False``, will only show the primary key, foreign
                 key(s), and time column of each table.
-            backend: The visualization backend to use. ``auto`` chooses the
-                backend based on environment and availability.
+            height: The pixel height of the inline notebook rendering.
         """
-        def has_graphviz_executables() -> bool:
-            if find_spec('graphviz') is None:
-                return False
+        from kumorfm.rfm import viz
 
-            graphviz = import_module('graphviz')
-
-            if in_streamlit_notebook() and path is None:
-                return True
-
-            try:
-                graphviz.Digraph().pipe()
-            except graphviz.backend.ExecutableNotFound:
-                return False
-
-            return True
+        source = self._to_mermaid(show_columns)
 
         path = Path(path) if isinstance(path, str) else path
 
-        suffix: str | None = None
         if isinstance(path, Path):
-            suffix = path.suffix.removeprefix('.')
+            suffix = path.suffix.removeprefix('.').lower()
             if suffix == '':
                 raise ValueError(f"Missing file extension in path '{path}'")
+            if suffix == 'html':
+                path.write_text(viz.to_html(source), encoding='utf-8')
+            elif suffix == 'mmd':
+                path.write_text(source + '\n', encoding='utf-8')
+            elif suffix in ('png', 'svg'):
+                path.write_bytes(viz.render_image(source, suffix))
+            else:
+                raise ValueError(f"File extension '{suffix}' not supported "
+                                 f"for visualization. Expected one of "
+                                 f"'html', 'mmd', 'png' or 'svg'.")
+
         elif isinstance(path, io.BytesIO):
-            suffix = 'pdf'
+            path.write(viz.render_image(source, 'png'))
 
-        if backend == 'auto':
-            if has_graphviz_executables():
-                backend = 'graphviz'
-            elif find_spec('mermaid') is not None:
-                backend = 'mermaid'
-            else:
-                raise ValueError("Could not resolve visualization backend. "
-                                 "Make sure that either 'graphviz' or "
-                                 "'mermaid-py' are installed.")
+        elif in_streamlit_notebook():
+            import streamlit as st
+            try:
+                st.components.v1.html(
+                    viz.to_html(source),
+                    height=height,
+                    scrolling=True,
+                )
+            except Exception:  # Custom components are unavailable.
+                st.code(source)
 
-        if backend == 'graphviz':
-            if find_spec('graphviz') is None:
-                raise ImportError("The 'graphviz' package is required for "
-                                  "visualization")
-
-            if not has_graphviz_executables():
-                raise RuntimeError("Could not visualize graph as 'graphviz' "
-                                   "executables are not installed. These "
-                                   "dependencies are required in addition to "
-                                   "the 'graphviz' Python package. Please "
-                                   "install them as described at "
-                                   "'https://graphviz.org/download'.")
-
-            obj = self._to_graphviz(format=suffix, show_columns=show_columns)
-
-            if isinstance(path, Path):
-                obj.render(path.with_suffix(''), cleanup=True)
-            elif isinstance(path, io.BytesIO):
-                path.write(obj.pipe())
-            elif in_streamlit_notebook():
-                import streamlit as st
-                st.graphviz_chart(obj)
-            elif in_jupyter_notebook():
-                from IPython.display import display
-                display(obj)
-            else:
-                try:
-                    stderr_buffer = io.StringIO()
-                    with contextlib.redirect_stderr(stderr_buffer):
-                        obj.view(cleanup=True)
-                    if stderr_buffer.getvalue():
-                        warnings.warn("Could not visualize graph for backend "
-                                      f"'{backend}' since your system does "
-                                      f"not know how to open or display PDF "
-                                      f"files from the command line. Please "
-                                      f"specify `visualize(path=...)` and "
-                                      f"open the generated file yourself.")
-                except Exception as e:
-                    warnings.warn(
-                        f"Could not visualize graph due to an "
-                        f"unexpected error in 'graphviz'. Error: {e}")
-
-        elif backend == 'mermaid':
-            if find_spec('mermaid') is None:
-                raise ImportError("The 'mermaid-py' package is required for "
-                                  "visualization")
-
-            md = import_module('mermaid')
-            obj = md.Mermaid(md.Graph('graph', self._to_mermaid(show_columns)))
-
-            if isinstance(path, Path):
-                if suffix == 'png':
-                    obj.to_png(path)
-                elif suffix == 'svg':
-                    obj.to_svg(path)
-                else:
-                    raise ValueError(f"File extension '{suffix}' not "
-                                     f"supported for 'mermaid' visualization. "
-                                     f"Expected either 'png' or 'svg'.")
-            elif isinstance(path, io.BytesIO):
-                path.write(obj.img_response.content)
-            elif in_jupyter_notebook():
-                from IPython.display import display
-                display(obj)
-            else:
-                warnings.warn(f"Could not visualize graph for backend "
-                              f"'{backend}'. Please specify "
-                              f"`visualize(path=...)` and open the generated "
-                              f"file yourself.")
+        elif in_jupyter_notebook():
+            from IPython.display import HTML
+            from IPython.display import display as ipython_display
+            ipython_display(HTML(viz.to_iframe(source, height=height)))
 
         else:
-            raise ValueError(f"Could not resolve visualization backend "
-                             f"'{backend}'")
+            warnings.warn("Cannot display the rendered graph outside of a "
+                          "notebook environment - printing the Mermaid "
+                          "source instead. Use `visualize(path='graph.html')`"
+                          " to write a standalone offline rendering.")
+            print(source)
 
     # Helpers #################################################################
 
