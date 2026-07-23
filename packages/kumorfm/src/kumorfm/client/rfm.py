@@ -24,6 +24,7 @@ class RFMAPI:
         *,
         entity_ids: Sequence[Any],
         instance_ids: Sequence[Any],
+        anchor_times: Sequence[Any] | None = None,
     ) -> RFMPredictResponse:
         """Make predictions using the RFM model.
 
@@ -34,6 +35,10 @@ class RFMAPI:
                 back to these values.
             instance_ids: Generated transport keys ordered like the predict
                 instance table, used only to validate response correlation.
+            anchor_times: Anchor timestamps ordered like the predict instance
+                table. The NIM response does not echo them back, so they are
+                re-attached here to keep the ``ANCHOR_TIMESTAMP`` column of
+                the prediction table.
 
         Returns:
             RFMPredictResponse containing the predictions
@@ -49,6 +54,7 @@ class RFMAPI:
             prediction_response,
             entity_ids=entity_ids,
             instance_ids=instance_ids,
+            anchor_times=anchor_times,
         )
 
 
@@ -57,11 +63,13 @@ def _prediction_response_to_rfm(
     *,
     entity_ids: Sequence[Any],
     instance_ids: Sequence[Any],
+    anchor_times: Sequence[Any] | None = None,
 ) -> RFMPredictResponse:
     rows = _correlated_prediction_rows(
         response,
         entity_ids=entity_ids,
         instance_ids=instance_ids,
+        anchor_times=anchor_times,
     )
 
     columns: list[str] = []
@@ -80,10 +88,13 @@ def _prediction_item_to_row(
     item: PredictionItem,
     *,
     entity_id: Any,
+    anchor_time: Any = None,
 ) -> dict[str, Any]:
     row: dict[str, Any] = {'ENTITY': entity_id}
+    if anchor_time is not None:
+        row['ANCHOR_TIMESTAMP'] = anchor_time
     if item.prediction is not None:
-        row['prediction'] = item.prediction
+        row['PREDICTION'] = item.prediction
     if item.probabilities is not None:
         for name, value in item.probabilities.items():
             row[f'{name}_PROB'] = value
@@ -105,6 +116,7 @@ def _prediction_item_to_ranking_rows(
     item: PredictionItem,
     *,
     entity_id: Any,
+    anchor_time: Any = None,
 ) -> list[dict[str, Any]]:
     if item.rankings is None:
         raise ValueError('Kumo RFM ranking response is missing rankings.')
@@ -131,11 +143,11 @@ def _prediction_item_to_ranking_rows(
         if not math.isfinite(score):
             raise ValueError('Kumo RFM ranking item score must be finite.')
 
-        row: dict[str, Any] = {
-            'ENTITY': entity_id,
-            'CLASS': ranking_id,
-            'SCORE': score,
-        }
+        row: dict[str, Any] = {'ENTITY': entity_id}
+        if anchor_time is not None:
+            row['ANCHOR_TIMESTAMP'] = anchor_time
+        row['CLASS'] = ranking_id
+        row['SCORE'] = score
         if item.explanation is not None:
             row['explanation'] = item.explanation
         rows.append(row)
@@ -147,14 +159,20 @@ def _correlated_prediction_rows(
     *,
     entity_ids: Sequence[Any],
     instance_ids: Sequence[Any],
+    anchor_times: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
     entities = list(entity_ids)
     instances = list(instance_ids)
+    anchors = list(anchor_times) if anchor_times is not None else None
     expected_count = len(entities)
     if len(instances) != expected_count:
         raise ValueError(
             'Kumo RFM request identity mappings have different lengths: '
             f'{expected_count} entities and {len(instances)} instances.')
+    if anchors is not None and len(anchors) != expected_count:
+        raise ValueError(
+            'Kumo RFM request identity mappings have different lengths: '
+            f'{expected_count} entities and {len(anchors)} anchor times.')
     is_forecast = _is_forecast_response(response)
     forecast_steps_by_index: dict[int, set[int]] = {}
     if not is_forecast and len(response.predictions) != expected_count:
@@ -200,6 +218,7 @@ def _correlated_prediction_rows(
             response,
             item,
             entity_id=entities[row_index],
+            anchor_time=anchors[row_index] if anchors is not None else None,
         )
         rows_by_index.setdefault(row_index, []).extend(rows)
 
@@ -219,10 +238,13 @@ def _prediction_item_rows_for_response(
     item: PredictionItem,
     *,
     entity_id: Any,
+    anchor_time: Any = None,
 ) -> list[dict[str, Any]]:
     if _is_ranking_response(response):
-        return _prediction_item_to_ranking_rows(item, entity_id=entity_id)
-    row = _prediction_item_to_row(item, entity_id=entity_id)
+        return _prediction_item_to_ranking_rows(
+            item, entity_id=entity_id, anchor_time=anchor_time)
+    row = _prediction_item_to_row(
+        item, entity_id=entity_id, anchor_time=anchor_time)
     if _is_forecast_response(response):
         row['forecast_step'] = item.forecast_step
     return [row]

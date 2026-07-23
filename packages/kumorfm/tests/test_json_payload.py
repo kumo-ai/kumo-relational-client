@@ -130,7 +130,8 @@ def test_predict_posts_universal_json_payload(
 
     assert result.to_dict('records') == [{
         'ENTITY': 3,
-        'prediction': 0.5,
+        'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
+        'PREDICTION': 0.5,
         'embeddings': [0.1, 0.2],
     }]
     assert receptor.headers is not None
@@ -364,7 +365,8 @@ def test_explain_requests_explanation_output_field(
     assert isinstance(result, Explanation)
     assert result.prediction.to_dict('records') == [{
         'ENTITY': 0,
-        'prediction': 0.5,
+        'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
+        'PREDICTION': 0.5,
     }]
     assert result.summary == 'Order frequency dropped.'
     assert result.details == {

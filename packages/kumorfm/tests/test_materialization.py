@@ -40,6 +40,7 @@ class RecordingAPI:
         *,
         entity_ids: Sequence[Any],
         instance_ids: Sequence[Any],
+        anchor_times: Sequence[Any] | None = None,
     ) -> RFMPredictResponse:
         self.requests.append(request)
         self.entity_ids.append(tuple(entity_ids))
@@ -62,6 +63,7 @@ class ExplanationRecordingAPI:
         *,
         entity_ids: Sequence[Any],
         instance_ids: Sequence[Any],
+        anchor_times: Sequence[Any] | None = None,
     ) -> RFMPredictResponse:
         self.requests.append(request)
         return RFMPredictResponse(

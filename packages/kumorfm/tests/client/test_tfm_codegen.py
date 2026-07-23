@@ -146,7 +146,7 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
 
     assert row == {
         'ENTITY': 'customer-7',
-        'prediction': 'yes',
+        'PREDICTION': 'yes',
         'no_PROB': 0.2,
         'yes_PROB': 0.8,
         'scores': [0.3, 0.7],
@@ -197,7 +197,7 @@ def test_prediction_response_correlates_opaque_ids_to_repeated_entities(
     )
 
     assert converted.prediction == {
-        'columns': ['ENTITY', 'prediction'],
+        'columns': ['ENTITY', 'PREDICTION'],
         'data': [
             ['user-7', 'first'],
             ['user-7', 'second'],
@@ -334,7 +334,7 @@ def test_forecast_response_allows_multiple_records_per_request_row() -> None:
     )
 
     assert converted.prediction == {
-        'columns': ['ENTITY', 'prediction', 'q_0.5', 'forecast_step'],
+        'columns': ['ENTITY', 'PREDICTION', 'q_0.5', 'forecast_step'],
         'data': [
             ['item-42', 10.0, 10.0, 1],
             ['item-42', 12.0, 12.0, 2],

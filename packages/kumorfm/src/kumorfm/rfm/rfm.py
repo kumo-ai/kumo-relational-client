@@ -103,6 +103,7 @@ class _GeneratedPredictionRequest:
     entity_ids: tuple[Any, ...]
     instance_ids: tuple[Any, ...]
     entity_dtype: Any
+    anchor_times: tuple[Any, ...] | None
 
 
 @dataclass(repr=False)
@@ -801,6 +802,11 @@ class KumoRFM:
             ]
             predict_table = payload['predict']['instance_table']
             instance_id_index = predict_table['columns'].index(INSTANCE_ID)
+            anchor_column = payload['task'].get('anchor_time_column')
+            anchor_index = (
+                predict_table['columns'].index(anchor_column)
+                if anchor_column in predict_table['columns'] else None
+            )
             yield _GeneratedPredictionRequest(
                 materialized=materialized,
                 entity_ids=tuple(
@@ -813,6 +819,9 @@ class KumoRFM:
                     for row in predict_table['rows']
                 ),
                 entity_dtype=entity_table.df[entity_table.primary_key].dtype,
+                anchor_times=tuple(
+                    row[anchor_index] for row in predict_table['rows']
+                ) if anchor_index is not None else None,
             )
 
     @overload
@@ -998,6 +1007,7 @@ class KumoRFM:
                             request_payload,
                             entity_ids=generated.entity_ids,
                             instance_ids=generated.instance_ids,
+                            anchor_times=generated.anchor_times,
                         )
                         df = pd.DataFrame(**resp.prediction)
                         if explain_config is not None:

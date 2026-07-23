@@ -23,6 +23,7 @@ class MockAPI:
         *,
         entity_ids: list[Any] | None = None,
         instance_ids: list[Any] | None = None,
+        anchor_times: list[Any] | None = None,
     ) -> RFMPredictResponse:
         return RFMPredictResponse(prediction={
             'columns': ['ENTITY', 'True_PROB'],
@@ -658,6 +659,7 @@ def test_regression_quantile_output_config(
             *,
             entity_ids: list[Any] | None = None,
             instance_ids: list[Any] | None = None,
+            anchor_times: list[Any] | None = None,
         ) -> RFMPredictResponse:
             nonlocal captured_config
             captured_config = request['inference']['inference_config']
@@ -936,6 +938,7 @@ def test_explanation_warning_flows_from_api_response(
             *,
             entity_ids: list[Any] | None = None,
             instance_ids: list[Any] | None = None,
+            anchor_times: list[Any] | None = None,
         ) -> RFMPredictResponse:
             return mock_resp
 

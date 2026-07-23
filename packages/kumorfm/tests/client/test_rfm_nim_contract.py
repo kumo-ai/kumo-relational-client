@@ -75,9 +75,79 @@ def test_rfm_api_predict_posts_current_v1_payload_and_parses_response(
     assert capture.headers is not None
     assert capture.headers['Content-Type'] == 'application/json'
     assert result.prediction == {
-        'columns': ['ENTITY', 'prediction', 'True_PROB', 'False_PROB'],
+        'columns': ['ENTITY', 'PREDICTION', 'True_PROB', 'False_PROB'],
         'data': [[601, True, 0.65, 0.35]],
     }
+
+
+def test_rfm_api_predict_reattaches_anchor_times(mock_api: Any) -> None:
+    mock_api.post(
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
+        json={
+            'id': 'pred-anchor-test',
+            'model': 'kumo-rfm',
+            'predictions': [{
+                'id': '601',
+                'row_index': 0,
+                'prediction': True,
+                'probabilities': {
+                    'True': 0.65,
+                    'False': 0.35,
+                },
+            }],
+            'metadata': {
+                'adapter': 'mock',
+            },
+        },
+    )
+
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    result = api.predict(
+        nim_v1_smoke_payload(),
+        entity_ids=[601],
+        instance_ids=[601],
+        anchor_times=['2025-02-01T00:00:00Z'],
+    )
+
+    assert result.prediction == {
+        'columns': [
+            'ENTITY',
+            'ANCHOR_TIMESTAMP',
+            'PREDICTION',
+            'True_PROB',
+            'False_PROB',
+        ],
+        'data': [[601, '2025-02-01T00:00:00Z', True, 0.65, 0.35]],
+    }
+
+
+def test_rfm_api_predict_rejects_misaligned_anchor_times(
+    mock_api: Any,
+) -> None:
+    mock_api.post(
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
+        json={
+            'id': 'pred-anchor-mismatch-test',
+            'model': 'kumo-rfm',
+            'predictions': [{
+                'id': '601',
+                'row_index': 0,
+                'prediction': True,
+            }],
+            'metadata': {
+                'adapter': 'mock',
+            },
+        },
+    )
+
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    with pytest.raises(ValueError, match='different lengths'):
+        api.predict(
+            nim_v1_smoke_payload(),
+            entity_ids=[601],
+            instance_ids=[601],
+            anchor_times=['2025-02-01T00:00:00Z', '2025-02-02T00:00:00Z'],
+        )
 
 
 def test_sdk_prediction_endpoint_matches_current_nim_v1_route() -> None:
@@ -230,7 +300,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
     assert result.prediction == {
         'columns': [
             'ENTITY',
-            'prediction',
+            'PREDICTION',
             'scores',
             'rankings',
             'embeddings',
