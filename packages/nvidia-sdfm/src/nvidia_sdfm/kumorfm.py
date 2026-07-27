@@ -6,7 +6,6 @@ from nvidia_sdfm.errors import MissingExtraError
 
 __all__ = [
     'Graph',
-    'LocalGraph',
     'Table',
     'LocalTable',
     'TaskTable',
@@ -25,7 +24,6 @@ if TYPE_CHECKING:
         Table,
         TaskTable,
     )
-    from kumorfm.rfm import Graph as LocalGraph
 
 
 def _engine() -> Any:

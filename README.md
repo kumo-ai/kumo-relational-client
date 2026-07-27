@@ -21,38 +21,32 @@ PQL) is an opt-in extra. Data-source drivers are opt-in the same way, via the sh
 
 ## Quickstart
 
-A `SDFMClient` owns one connection to a NIM. Requests are typed per model, so your editor
-autocompletes the fields and the client validates them before sending.
+A `SDFMClient` owns one connection to a NIM. You run inference through a model handle:
+`client.kumorfm(graph)` or `client.tabicl(context, target=, task=)`, then `.predict(...)`.
 
 TabICL (single table):
 
 ```python
-from nvidia_sdfm import SDFMClient, TabICLRequest
+from nvidia_sdfm import SDFMClient
 
 with SDFMClient(url="http://localhost:8000") as client:
-    df = client.predict(TabICLRequest(
-        context=context_df,
-        predict=predict_df,
-        task="classification",
-        target="label",
-        outputs=["prediction", "probabilities"],
-    ))
+    model = client.tabicl(context_df, target="label", task="classification")
+    df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
 KumoRFM (relational) — needs `nvidia-sdfm[kumorfm]`:
 
 ```python
-from nvidia_sdfm import SDFMClient, KumoRFMRequest, kumorfm
+from nvidia_sdfm import SDFMClient, kumorfm
 
-graph = kumorfm.LocalGraph.from_data({"users": df1, "items": df2, "orders": df3})
+graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
 
 with SDFMClient(url="http://localhost:8000") as client:
-    df = client.predict(KumoRFMRequest(
-        graph=graph,
-        query="PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
+    df = client.kumorfm(graph).predict(
+        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
         indices=[...],
         run_mode="fast",
-    ))
+    )
 ```
 
 Each `SDFMClient` holds its own transport and registry, so multiple clients can target
@@ -62,7 +56,7 @@ and retries transient failures (429/5xx) with backoff; tune it per client with
 `SDFMClient(url, timeout=30, max_retries=3)`.
 
 `from nvidia_sdfm import kumorfm` is a neutral, explicitly-exported surface for the
-driver's `Graph`, `Table`, `KumoRFM`, etc.; you never import the driver package directly.
+driver's `Graph`, `Table`, etc. for building graphs; you never import the driver package directly.
 
 ## Repository layout
 
@@ -91,9 +85,9 @@ rfm-sdk/
 Two orthogonal axes: the **adapter layer** is symmetric (every model is a peer module
 implementing `ModelAdapter`, registered in the `SDFMClient`'s `AdapterRegistry`); a **driver**
 package holds a model's heavy runtime, and a model wraps zero or one of them. Each model has
-a typed request (`TabICLRequest`, `KumoRFMRequest`) that declares which model it targets;
-`client.predict(request)` dispatches on that, validates it against the model's
-`capabilities()`, and calls the adapter.
+an internal typed request that declares which model it targets; the client dispatches on
+that, validates it against the model's `capabilities()`, and calls the adapter. You reach
+this through the handles (`client.kumorfm(...)` / `client.tabicl(...)`).
 
 Both the client (flat table reads) and the KumoRFM driver (warehouse connections for its
 graph samplers) sit on the shared **`sdfm-connectors`** package, so each warehouse is

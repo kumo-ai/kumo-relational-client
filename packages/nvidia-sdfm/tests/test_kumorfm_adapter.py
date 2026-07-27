@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+
 import pandas as pd
 import pytest
 
@@ -370,3 +372,63 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
 
     assert isinstance(result, Explanation)
     assert captured['explain'] is cfg
+
+
+@requires_engine
+def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
+    calls = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def batch_mode(self, batch_size, num_retries=1):
+            calls['batch_mode'] = (batch_size, num_retries)
+            return contextlib.nullcontext()
+
+        def predict(self, query, **kwargs):
+            calls['predicted'] = True
+            return pd.DataFrame({'ENTITY': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+    KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='g', query='PREDICT x FOR EACH t.id',
+        indices=list(range(1500)), batch_size='max', num_retries=3))
+
+    assert calls['batch_mode'] == ('max', 3)
+    assert calls.get('predicted')
+
+
+@requires_engine
+def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
+    calls = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def batch_mode(self, *args, **kwargs):
+            calls['batch_mode'] = True
+            return contextlib.nullcontext()
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'ENTITY': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+    KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='g', query='PREDICT x FOR t.id=1'))
+
+    assert 'batch_mode' not in calls
+
+
+@requires_engine
+def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMRequest(
+            graph='g', query='PREDICT x FOR t.id=1', batch_size='auto'))
+    assert err.value.code == 'INVALID_REQUEST'

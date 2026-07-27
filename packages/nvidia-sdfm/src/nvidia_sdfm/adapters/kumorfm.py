@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
@@ -85,11 +86,22 @@ class KumoRFMAdapter(ModelAdapter):
                 raise
             raise MissingExtraError('kumorfm', 'kumorfm') from error
 
-        reserved = {'indices', 'run_mode'} & set(request.options)
+        reserved = ({'indices', 'run_mode', 'batch_size', 'num_retries'}
+                    & set(request.options))
         if reserved:
             raise SdfmError(
                 f'KumoRFMRequest.options contains reserved keys {sorted(reserved)}; '
                 'set them as request fields instead',
+                code='INVALID_REQUEST',
+            )
+        batch_size = request.batch_size
+        if (batch_size is not None and batch_size != 'max'
+                and not (isinstance(batch_size, int)
+                         and not isinstance(batch_size, bool)
+                         and batch_size > 0)):
+            raise SdfmError(
+                "batch_size must be a positive int or the literal 'max'; got "
+                f"{batch_size!r}",
                 code='INVALID_REQUEST',
             )
         options = dict(request.options)
@@ -101,13 +113,19 @@ class KumoRFMAdapter(ModelAdapter):
                         verify_ssl=transport.verify_ssl,
                         _token=rfm_engine._SDFM_CLIENT_TOKEN)
         model = rfm_engine.KumoRFM(request.graph)
-        result = model.predict(
-            request.query,
-            indices=request.indices,
-            run_mode=request.run_mode,
-            explain=explain,
-            **options,
-        )
+        if batch_size is not None:
+            batch_ctx = model.batch_mode(batch_size,
+                                         num_retries=request.num_retries)
+        else:
+            batch_ctx = contextlib.nullcontext()
+        with batch_ctx:
+            result = model.predict(
+                request.query,
+                indices=request.indices,
+                run_mode=request.run_mode,
+                explain=explain,
+                **options,
+            )
         if wants_explanation:
             from kumorfm.rfm.rfm import Explanation
             if not isinstance(result, Explanation):

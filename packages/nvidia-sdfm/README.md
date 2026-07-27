@@ -21,32 +21,26 @@ validated against the model's capabilities before sending.
 TabICL (single table):
 
 ```python
-from nvidia_sdfm import SDFMClient, TabICLRequest
+from nvidia_sdfm import SDFMClient
 
 with SDFMClient(url="http://localhost:8000") as client:
-    df = client.predict(TabICLRequest(
-        context=context_df,
-        predict=predict_df,
-        task="classification",
-        target="label",
-        outputs=["prediction", "probabilities"],
-    ))
+    model = client.tabicl(context_df, target="label", task="classification")
+    df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
 KumoRFM (relational) — needs `nvidia-sdfm[kumorfm]`:
 
 ```python
-from nvidia_sdfm import SDFMClient, KumoRFMRequest, kumorfm
+from nvidia_sdfm import SDFMClient, kumorfm
 
 graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
 
 with SDFMClient(url="http://localhost:8000") as client:
-    df = client.predict(KumoRFMRequest(
-        graph=graph,
-        query="PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
+    df = client.kumorfm(graph).predict(
+        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
         indices=[...],
         run_mode="fast",
-    ))
+    )
 ```
 
 Set `explain=True` to get a `kumorfm` `Explanation` instead of a bare
@@ -62,8 +56,8 @@ with SDFMClient(url="http://localhost:8000") as client:
         "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
         explain=True,
     )
-    predictions = result.prediction   # DataFrame
-    attribution = result.details      # structured explanation
+    predictions = result.prediction
+    attribution = result.details
 ```
 
 Discover what a NIM serves with `client.models()` and

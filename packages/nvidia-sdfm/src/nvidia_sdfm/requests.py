@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Sequence
 
 import pandas as pd
 
@@ -65,4 +65,6 @@ class KumoRFMRequest(ModelRequest):
     indices: Sequence[Any] | None = None
     run_mode: str = 'fast'
     explain: bool | ExplainConfig | dict[str, Any] = False
+    batch_size: int | Literal['max'] | None = None
+    num_retries: int = 1
     options: dict[str, Any] = field(default_factory=dict)

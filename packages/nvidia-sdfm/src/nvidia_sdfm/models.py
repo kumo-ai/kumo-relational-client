@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 import pandas as pd
 
@@ -37,6 +37,8 @@ class RFMModel:
         *,
         run_mode: str = 'fast',
         explain: bool | ExplainConfig | dict[str, Any] = False,
+        batch_size: int | Literal['max'] | None = None,
+        num_retries: int = 1,
         anchor_time: Any = _UNSET,
         context_anchor_time: Any = _UNSET,
         use_prediction_time: Any = _UNSET,
@@ -70,6 +72,8 @@ class RFMModel:
             indices=indices,
             run_mode=run_mode,
             explain=explain,
+            batch_size=batch_size,
+            num_retries=num_retries,
             options=options,
         )
         return self._client._predict(request)

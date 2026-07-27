@@ -205,3 +205,26 @@ def test_tabicl_handle_forwards_request_id():
         pd.DataFrame({'x': [2]}), request_id='trace-123')
 
     assert adapter.captured.request_id == 'trace-123'
+
+
+def test_rfm_handle_forwards_batch_size():
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict('PREDICT x FOR EACH t.id',
+                                list(range(1500)),
+                                batch_size='max', num_retries=2)
+
+    req = adapter.captured
+    assert req.batch_size == 'max'
+    assert req.num_retries == 2
+
+
+def test_rfm_handle_batch_defaults_off():
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict('PREDICT x')
+
+    assert adapter.captured.batch_size is None
+    assert adapter.captured.num_retries == 1

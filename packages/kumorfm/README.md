@@ -29,9 +29,12 @@ directly:
 ```python
 from nvidia_sdfm import kumorfm
 
-graph = kumorfm.LocalGraph.from_data({"users": df1, "items": df2, "orders": df3})
-model = kumorfm.KumoRFM(graph)
-result = model.predict("PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1")
+from nvidia_sdfm import SDFMClient, kumorfm
+
+graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
+with SDFMClient(url="http://localhost:8000") as client:
+    result = client.kumorfm(graph).predict(
+        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1")
 ```
 
 ## Local development
