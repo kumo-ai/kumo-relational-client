@@ -19,6 +19,7 @@ from kumorfm.rfm import (
 from kumorfm.rfm.payload import (
     ENTITY_REFERENCE_PREFIX,
     INSTANCE_ID,
+    MAX_TABLE_ROWS,
     validate_payload_table_rows,
 )
 
@@ -520,17 +521,11 @@ def test_unknown_sanitization_is_distinct_from_zero_drops() -> None:
 
 
 @pytest.mark.parametrize(
-    'section,table_kind',
-    [
-        ('context', 'instance_table'),
-        ('context', 'related_tables'),
-        ('predict', 'instance_table'),
-        ('predict', 'related_tables'),
-    ],
+    'section',
+    ['context', 'predict'],
 )
-def test_payload_row_limit_checks_every_table_path(
+def test_payload_row_limit_checks_instance_table_paths(
     section: str,
-    table_kind: str,
 ) -> None:
     empty_table = {'format': 'arrays', 'columns': [], 'rows': []}
     payload = {
@@ -543,18 +538,35 @@ def test_payload_row_limit_checks_every_table_path(
             'related_tables': {},
         },
     }
-    if table_kind == 'instance_table':
-        payload[section]['instance_table']['rows'] = [[]] * 3
-        expected_path = f'{section}.instance_table'
-    else:
-        payload[section]['related_tables']['T'] = {
-            **empty_table,
-            'rows': [[]] * 3,
-        }
-        expected_path = f'{section}.related_tables.T'
+    payload[section]['instance_table']['rows'] = [[]] * 3
+    expected_path = f'{section}.instance_table'
 
     with pytest.raises(ValueError, match=expected_path):
         validate_payload_table_rows(payload, batch_index=7, limit=2)
+
+
+@pytest.mark.parametrize(
+    'section',
+    ['context', 'predict'],
+)
+def test_payload_row_limit_allows_large_related_tables(section: str) -> None:
+    empty_table = {'format': 'arrays', 'columns': [], 'rows': []}
+    payload = {
+        'context': {
+            'instance_table': dict(empty_table),
+            'related_tables': {},
+        },
+        'predict': {
+            'instance_table': dict(empty_table),
+            'related_tables': {},
+        },
+    }
+    payload[section]['related_tables']['T'] = {
+        **empty_table,
+        'rows': [[]] * (MAX_TABLE_ROWS + 1),
+    }
+
+    validate_payload_table_rows(payload, batch_index=7)
 
 
 def test_default_payload_row_limit_boundary() -> None:

@@ -91,23 +91,19 @@ def validate_payload_table_rows(
     batch_index: int,
     limit: int = MAX_TABLE_ROWS,
 ) -> None:
-    r"""Validate every serialized request table independently."""
+    r"""Validate instance-table row limits in serialized requests.
+
+    The Kumo RFM NIM row-caps only context/predict instance tables. Related
+    tables are bounded by the overall payload-size limit instead.
+    """
     for section_name in ('context', 'predict'):
-        section = payload[section_name]
-        tables = {
-            'instance_table': section['instance_table'],
-            **{
-                f'related_tables.{name}': table
-                for name, table in section['related_tables'].items()
-            },
-        }
-        for table_name, table in tables.items():
-            num_rows = len(table['rows'])
-            if num_rows > limit:
-                path = f'{section_name}.{table_name}'
-                raise ValueError(
-                    f"Request batch {batch_index} table '{path}' contains "
-                    f"{num_rows:,} rows, exceeding the {limit:,}-row limit")
+        table = payload[section_name]['instance_table']
+        num_rows = len(table['rows'])
+        if num_rows > limit:
+            path = f'{section_name}.instance_table'
+            raise ValueError(
+                f"Request batch {batch_index} table '{path}' contains "
+                f"{num_rows:,} rows, exceeding the {limit:,}-row limit")
 
 
 def context_size_stats(context: Context) -> str:
