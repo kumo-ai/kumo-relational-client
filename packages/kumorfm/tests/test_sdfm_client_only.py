@@ -1,0 +1,58 @@
+"""The KumoRFM engine may only be initialized by nvidia_sdfm.SDFMClient.
+
+Direct `rfm.init(...)` + `KumoRFM(graph).predict(...)` against a NIM used to
+bypass the supported SDK surface (issue #22). These tests lock in that the
+engine now redirects any non-adapter caller to SDFMClient.
+"""
+from __future__ import annotations
+
+import pytest
+
+try:
+    import kumorfm
+    import kumorfm.rfm as rfm_engine
+except (ImportError, RuntimeError) as error:
+    rfm_engine = None
+    _UNUSABLE = str(error)
+else:
+    _UNUSABLE = ''
+
+requires_engine = pytest.mark.skipif(
+    rfm_engine is None,
+    reason=f'kumorfm.rfm is not usable in this environment: {_UNUSABLE}',
+)
+
+
+@requires_engine
+def test_direct_init_is_blocked():
+    with pytest.raises(RuntimeError, match='SDFMClient'):
+        rfm_engine.init(url='http://nim.example.com:8000')
+
+
+@requires_engine
+def test_init_without_token_is_blocked_even_with_all_args():
+    with pytest.raises(RuntimeError, match='SDFMClient'):
+        rfm_engine.init(url='http://nim.example.com:8000', api_key='k',
+                        verify_ssl=False, log_level='INFO')
+
+
+@requires_engine
+def test_authorized_init_passes_the_guard(monkeypatch):
+    calls = {}
+    monkeypatch.setattr(kumorfm, 'init',
+                        lambda **kwargs: calls.update(kwargs))
+    monkeypatch.setattr(type(kumorfm.global_state), '_url', 'http://x',
+                        raising=False)
+    try:
+        rfm_engine.init(url='http://x', _token=rfm_engine._SDFM_CLIENT_TOKEN)
+        assert rfm_engine.global_state._initialized is True
+        assert calls['url'] == 'http://x'
+    finally:
+        rfm_engine.global_state.reset()
+
+
+@requires_engine
+def test_client_access_without_init_redirects_to_sdfmclient():
+    rfm_engine.global_state.reset()
+    with pytest.raises(RuntimeError, match='SDFMClient'):
+        _ = rfm_engine.global_state.client

@@ -98,7 +98,8 @@ class KumoRFMAdapter(ModelAdapter):
         wants_explanation = explain is not False
 
         rfm_engine.init(url=transport.url, api_key=transport.api_key,
-                        verify_ssl=transport.verify_ssl)
+                        verify_ssl=transport.verify_ssl,
+                        _token=rfm_engine._SDFM_CLIENT_TOKEN)
         model = rfm_engine.KumoRFM(request.graph)
         result = model.predict(
             request.query,

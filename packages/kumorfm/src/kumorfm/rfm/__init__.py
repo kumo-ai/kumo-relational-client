@@ -25,6 +25,17 @@ from .rfm import (
 
 logger = logging.getLogger('kumorfm_rfm')
 
+_SDFM_CLIENT_TOKEN = object()
+
+_DIRECT_USE_MESSAGE = (
+    "Direct use of the KumoRFM engine is not supported. Run inference through "
+    "the NVIDIA SDFM SDK:\n"
+    "    from nvidia_sdfm import SDFMClient, KumoRFMRequest, kumorfm\n"
+    "    graph = kumorfm.Graph.from_data(...)\n"
+    "    with SDFMClient(url=...) as client:\n"
+    "        client.predict(KumoRFMRequest(graph=graph, query=...))"
+)
+
 
 @dataclass
 class RfmGlobalState:
@@ -38,7 +49,7 @@ class RfmGlobalState:
     @property
     def client(self) -> KumoClient:
         if not self._initialized:
-            raise RuntimeError("KumoRFM is not yet initialized")
+            raise RuntimeError(_DIRECT_USE_MESSAGE)
         return kumorfm.global_state.client
 
     def reset(self) -> None:  # For testing only.
@@ -56,7 +67,11 @@ def init(
     api_key: str | None = None,
     verify_ssl: bool = True,
     log_level: str = "INFO",
+    *,
+    _token: object | None = None,
 ) -> None:
+    if _token is not _SDFM_CLIENT_TOKEN:
+        raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
         resolved_url = (url or os.getenv("RFM_API_URL")
                         or os.getenv("KUMO_API_ENDPOINT"))

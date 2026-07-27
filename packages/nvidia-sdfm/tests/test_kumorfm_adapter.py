@@ -53,6 +53,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         'url': client.url,
         'api_key': client.api_key,
         'verify_ssl': client.verify_ssl,
+        '_token': rfm_engine._SDFM_CLIENT_TOKEN,
     }
     assert captured['graph'] == 'fake-graph'
     assert captured['predict']['query'] == 'PREDICT target FOR entity=1'
@@ -110,6 +111,35 @@ def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
     with pytest.raises(TypeError):
         KumoRFMAdapter().predict(
             client, KumoRFMRequest(graph='g', query='PREDICT x'))
+
+
+@requires_engine
+def test_adapter_authorizes_engine_init(monkeypatch, client):
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init',
+                        lambda **kwargs: captured.update(kwargs))
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'entity': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+    KumoRFMAdapter().predict(
+        client, KumoRFMRequest(graph='g', query='PREDICT x'))
+
+    assert captured['_token'] is rfm_engine._SDFM_CLIENT_TOKEN
+
+
+def test_kumorfm_shim_does_not_expose_driver():
+    from nvidia_sdfm import kumorfm as kumorfm_shim
+
+    assert 'KumoRFM' not in kumorfm_shim.__all__
+    assert 'Graph' in kumorfm_shim.__all__
+    with pytest.raises(AttributeError):
+        kumorfm_shim.KumoRFM
 
 
 def _patch_engine_import(monkeypatch, error: BaseException) -> None:
