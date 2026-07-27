@@ -342,6 +342,83 @@ def test_entity_identity_survives_batch_local_row_indexes(
     assert result['ENTITY'].tolist() == [3, 1]
 
 
+def test_explain_surfaces_summary_from_nim_wrapped_details(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    mock_api: Any,
+) -> None:
+    nim_explanation = {
+        'format': 'kumo_rfm_v2_1',
+        'details': {
+            'summary': 'Recent order value drove the prediction.',
+            'warning': 'Sparse neighborhood for this entity.',
+            'col_grads': {'ORDERS': {'PRICE': 0.42}},
+        },
+    }
+    mock_api.post(
+        f'{MOCK_URL}/v1/predictions',
+        json=_correlated_response({
+            'prediction': 0.5,
+            'explanation': nim_explanation,
+        }),
+    )
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+
+    result = model.predict(ltv, indices=[0], explain=True, verbose=False)
+
+    assert isinstance(result, Explanation)
+    assert result.summary == 'Recent order value drove the prediction.'
+    assert result.warning == 'Sparse neighborhood for this entity.'
+    assert result.details == nim_explanation
+
+
+def test_explain_matches_live_nim_shape_with_no_summary(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    mock_api: Any,
+) -> None:
+    # Captured from the real Kumo RFM NIM driver (kumo_rfm_v2_1) on an L40:
+    # structured attribution only, no natural-language summary. This documents
+    # that summary is legitimately empty against a live NIM until the server
+    # produces one, while the rich details remain fully available.
+    live_explanation = {
+        'format': 'kumo_rfm_v2_1',
+        'details': {
+            'task_type': 'binary_classification',
+            'cohorts': [
+                {'table_name': 'accounts', 'column_name': 'amount', 'hop': 0,
+                 'stype': 'numerical', 'cohorts': ['[8 - 9.25]', '(280 - 300]'],
+                 'populations': [0.5, 0.5], 'targets': [0.0, 1.0]},
+            ],
+            'subgraphs': [
+                {'seed_id': 0, 'seed_table': 'accounts',
+                 'seed_time': '2025-02-01T00:00:00', 'tables': {}, 'context_examples': []},
+            ],
+        },
+    }
+    mock_api.post(
+        f'{MOCK_URL}/v1/predictions',
+        json=_correlated_response({
+            'prediction': 0.5,
+            'explanation': live_explanation,
+        }),
+    )
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+
+    result = model.predict(ltv, indices=[0], explain=True, verbose=False)
+
+    assert isinstance(result, Explanation)
+    assert result.summary == ''
+    assert result.warning is None
+    assert result.details == live_explanation
+    assert result.details['details']['cohorts'][0]['column_name'] == 'amount'
+    assert result.warning is None
+
+
 def test_explain_requests_explanation_output_field(
     user_store_graph: Graph,
     ltv: ValidatedPredictiveQuery,

@@ -6,20 +6,17 @@ import pandas as pd
 
 from nvidia_sdfm import kumorfm
 from nvidia_sdfm._version import __version__
-from nvidia_sdfm.base import AdapterRegistry, ModelAdapter, ModelCapabilities
+from nvidia_sdfm.base import ModelCapabilities
 from nvidia_sdfm.client import SDFMClient
 from nvidia_sdfm.core.connectors import read as _read
 from nvidia_sdfm.errors import SdfmError
-from nvidia_sdfm.requests import KumoRFMRequest, ModelRequest, TabICLRequest
+from nvidia_sdfm.models import RFMModel, TabICLModel
 
 __all__ = [
     'SDFMClient',
-    'ModelRequest',
-    'TabICLRequest',
-    'KumoRFMRequest',
+    'RFMModel',
+    'TabICLModel',
     'ModelCapabilities',
-    'ModelAdapter',
-    'AdapterRegistry',
     'read',
     'kumorfm',
     'SdfmError',

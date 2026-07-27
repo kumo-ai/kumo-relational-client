@@ -2,13 +2,21 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import ClassVar
+from typing import TYPE_CHECKING, ClassVar, Union
 
 import pandas as pd
 
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import UnknownModelError
 from nvidia_sdfm.requests import ModelRequest
+
+if TYPE_CHECKING:
+    from kumorfm.rfm.rfm import Explanation
+
+# A prediction result is a plain DataFrame, or a KumoRFM Explanation when the
+# request asks for one. Kept as a shared alias so adapters and the client agree
+# on the return contract without every layer importing the kumorfm engine.
+PredictResult = Union[pd.DataFrame, "Explanation"]
 
 
 @dataclass(frozen=True)
@@ -33,7 +41,7 @@ class ModelAdapter(ABC):
         self,
         transport: Transport,
         request: ModelRequest,
-    ) -> pd.DataFrame:
+    ) -> PredictResult:
         raise NotImplementedError
 
 

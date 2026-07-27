@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Sequence
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from nvidia_sdfm.kumorfm import ExplainConfig
 
 
 @dataclass
@@ -47,6 +50,13 @@ class KumoRFMRequest(ModelRequest):
     ``graph`` is a ``nvidia_sdfm.kumorfm`` graph, ``query`` is a PQL string, and
     ``options`` forwards any additional keyword arguments to the driver's
     ``predict`` (e.g. ``num_neighbors``, ``anchor_time``).
+
+    This is the internal request built by the public handle
+    ``client.kumorfm(graph).predict(query, ...)``. With ``explain`` set (a
+    ``bool``, an ``ExplainConfig``, or an ``ExplainConfig`` dict) the prediction
+    is limited to a single entity and ``client.kumorfm(...).predict(...)``
+    returns a ``kumorfm.rfm.rfm.Explanation`` (its ``prediction`` attribute
+    holds the plain prediction DataFrame) instead of a bare DataFrame.
     """
     model: ClassVar[str] = 'kumo-rfm'
 
@@ -54,4 +64,5 @@ class KumoRFMRequest(ModelRequest):
     query: str
     indices: Sequence[Any] | None = None
     run_mode: str = 'fast'
+    explain: bool | ExplainConfig | dict[str, Any] = False
     options: dict[str, Any] = field(default_factory=dict)

@@ -5,7 +5,8 @@ import os
 import pandas as pd
 import pytest
 
-from nvidia_sdfm import SDFMClient, TabICLRequest
+from nvidia_sdfm import SDFMClient
+from nvidia_sdfm.requests import TabICLRequest
 
 _ENV_VAR = 'SDFM_NIM_BASE_URL'
 
@@ -46,7 +47,7 @@ def test_tabicl_predict_returns_expected_shape(client: SDFMClient):
         'score': [0.72, 0.30],
     })
 
-    frame = client.predict(TabICLRequest(
+    frame = client._predict(TabICLRequest(
         context=context,
         predict=predict,
         task='classification',
@@ -73,7 +74,7 @@ def test_tabicl_predict_regression_returns_quantiles(client: SDFMClient):
         'feature_a': [4.5],
     })
 
-    frame = client.predict(TabICLRequest(
+    frame = client._predict(TabICLRequest(
         context=context,
         predict=predict,
         task='regression',

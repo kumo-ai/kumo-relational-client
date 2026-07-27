@@ -5,9 +5,15 @@ from typing import Any
 
 import pandas as pd
 
-from nvidia_sdfm.base import AdapterRegistry, ModelCapabilities
+from nvidia_sdfm.base import (
+    AdapterRegistry,
+    ModelAdapter,
+    ModelCapabilities,
+    PredictResult,
+)
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import SdfmError
+from nvidia_sdfm.models import RFMModel, TabICLModel
 from nvidia_sdfm.requests import ModelRequest
 
 
@@ -27,10 +33,11 @@ class SDFMClient:
     clients can target different endpoints (or tenants) at once without sharing
     process-global state. Use it as a context manager, or call ``close()``.
 
-    >>> from nvidia_sdfm import SDFMClient, TabICLRequest
+    Run inference through a model handle:
+
+    >>> from nvidia_sdfm import SDFMClient, kumorfm
     >>> with SDFMClient(url="http://localhost:8000") as client:
-    ...     df = client.predict(TabICLRequest(context=ctx, predict=q,
-    ...                                       task="classification", target="y"))
+    ...     df = client.kumorfm(graph).predict("PREDICT ... FOR ...", [1, 2])
     """
 
     def __init__(
@@ -67,8 +74,35 @@ class SDFMClient:
     def health_ready(self) -> bool:
         return self._transport.health_ready()
 
-    def predict(self, request: ModelRequest) -> pd.DataFrame:
-        r"""Run a typed prediction request against the NIM."""
+    def kumorfm(self, graph: Any) -> RFMModel:
+        r"""A KumoRFM handle: ``client.kumorfm(graph).predict(query, ...)``.
+
+        This is the supported way to run KumoRFM inference.
+        """
+        return RFMModel(self, graph)
+
+    def tabicl(
+        self,
+        context: pd.DataFrame,
+        *,
+        target: str,
+        task: str,
+    ) -> TabICLModel:
+        r"""A TabICL handle:
+        ``client.tabicl(context, target=..., task=...).predict(rows)``.
+
+        This is the supported way to run TabICL inference.
+        """
+        return TabICLModel(self, context, task, target)
+
+    def _predict(self, request: ModelRequest) -> PredictResult:
+        r"""Internal dispatch used by the model handles.
+
+        Not a public API: run inference through ``client.kumorfm(...)`` or
+        ``client.tabicl(...)``. Returns the adapter's typed result: a
+        prediction ``pd.DataFrame``, or a ``kumorfm.rfm.rfm.Explanation`` when a
+        KumoRFM request asks to explain.
+        """
         adapter = self._registry.get(request.model)
         if not isinstance(request, adapter.request_type):
             raise SdfmError(
@@ -96,6 +130,6 @@ class SDFMClient:
     def __repr__(self) -> str:
         return f'SDFMClient(url={self.url!r}, models={self.models()})'
 
-    def register(self, adapter: Any) -> None:
+    def _register(self, adapter: ModelAdapter) -> None:
         r"""Add a model adapter to this client's registry."""
         self._registry.register(adapter)

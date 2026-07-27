@@ -152,3 +152,191 @@ def test_predict_propagates_transitive_import_error(monkeypatch, client):
     with pytest.raises(ModuleNotFoundError, match='some_dep'):
         KumoRFMAdapter().predict(
             client, KumoRFMRequest(graph='g', query='PREDICT x'))
+
+
+@requires_engine
+def test_predict_explain_field_returns_explanation(monkeypatch, client):
+    from kumorfm.rfm.rfm import Explanation
+
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            captured.update(kwargs)
+            if kwargs.get('explain'):
+                return Explanation(
+                    prediction=pd.DataFrame({'ENTITY': [1]}),
+                    summary='Price drove the prediction.',
+                    details={'format': 'kumo_rfm_v2_1'},
+                )
+            return pd.DataFrame({'ENTITY': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='fake-graph', query='PREDICT t FOR e=1', explain=True))
+
+    assert isinstance(result, Explanation)
+    assert result.summary == 'Price drove the prediction.'
+    assert captured['explain'] is True
+
+
+@requires_engine
+def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
+    from kumorfm.rfm.rfm import Explanation
+
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            captured.update(kwargs)
+            return Explanation(
+                prediction=pd.DataFrame({'ENTITY': [1]}),
+                summary='',
+                details={'skip_summary': True},
+            )
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='fake-graph', query='PREDICT t FOR e=1',
+        options={'explain': {'skip_summary': True}}))
+
+    assert isinstance(result, Explanation)
+    assert captured['explain'] == {'skip_summary': True}
+
+
+@requires_engine
+def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            return object()
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    with pytest.raises(TypeError, match='expected a DataFrame result'):
+        KumoRFMAdapter().predict(client, KumoRFMRequest(
+            graph='fake-graph', query='PREDICT t FOR e=1'))
+
+
+@requires_engine
+def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'ENTITY': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    with pytest.raises(TypeError, match='expected an Explanation result'):
+        KumoRFMAdapter().predict(client, KumoRFMRequest(
+            graph='fake-graph', query='PREDICT t FOR e=1', explain=True))
+
+
+def test_capabilities_advertise_explanation():
+    assert 'explanation' in KumoRFMAdapter().capabilities().outputs
+
+
+@requires_engine
+@pytest.mark.parametrize('field_value', [True, {}, {'skip_summary': True}])
+def test_predict_rejects_explain_specified_twice(monkeypatch, client, field_value):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMRequest(
+            graph='fake-graph', query='PREDICT t FOR e=1',
+            explain=field_value, options={'explain': False}))
+    assert err.value.code == 'INVALID_REQUEST'
+
+
+@requires_engine
+@pytest.mark.parametrize('bad', [0, '', 'yes', 1.0])
+def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMRequest(
+            graph='fake-graph', query='PREDICT t FOR e=1',
+            options={'explain': bad}))
+    assert err.value.code == 'INVALID_REQUEST'
+
+
+@requires_engine
+def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
+    """Exercise issue #19: client.kumorfm(graph).predict(explain=True)."""
+    from kumorfm.rfm.rfm import Explanation
+
+    from nvidia_sdfm import SDFMClient
+
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            assert kwargs['explain'] is True
+            return Explanation(
+                prediction=pd.DataFrame({'ENTITY': [1]}),
+                summary='',
+                details={'format': 'kumo_rfm_v2_1', 'details': {'cohorts': []}},
+            )
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    monkeypatch.setattr(
+        'nvidia_sdfm.core.transport.Transport.health_ready', lambda self: True)
+    with SDFMClient(url='http://127.0.0.1:18001') as sdfm:
+        result = sdfm.kumorfm('fake-graph').predict(
+            'PREDICT t FOR e=1', explain=True)
+
+    assert isinstance(result, Explanation)
+    assert result.details['format'] == 'kumo_rfm_v2_1'
+
+
+@requires_engine
+def test_predict_accepts_explain_config_object(monkeypatch, client):
+    """ExplainConfig instances are a valid driver explain input, not rejected
+    as INVALID_REQUEST (the driver's predict accepts bool|ExplainConfig|dict)."""
+    from kumorfm.rfm.rfm import ExplainConfig, Explanation
+
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    captured = {}
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            captured['explain'] = kwargs['explain']
+            return Explanation(
+                prediction=pd.DataFrame({'ENTITY': [1]}),
+                summary='', details={}, warning=None)
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    cfg = ExplainConfig(skip_summary=True)
+    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='fake-graph', query='PREDICT t FOR e=1', explain=cfg))
+
+    assert isinstance(result, Explanation)
+    assert captured['explain'] is cfg

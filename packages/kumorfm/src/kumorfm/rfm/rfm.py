@@ -172,6 +172,13 @@ def _extract_explanation(
     prediction: pd.DataFrame,
     explain_config: ExplainConfig,
 ) -> tuple[pd.DataFrame, str, dict[str, Any], str | None]:
+    # The SaaS backend returned ``summary``/``warning`` at the top level; the
+    # Universal TFM NIM wraps the native driver output as ``{format, details}``
+    # and, as of today, emits structured attribution only (``cohorts`` /
+    # ``subgraphs``) with no natural-language ``summary``. We read both shapes so
+    # ``summary`` is populated the moment the NIM starts producing one; until
+    # then ``summary`` is legitimately empty against a live NIM. Generating that
+    # text is a server-side change tracked separately from #19.
     if 'explanation' not in prediction or prediction.empty:
         raise RuntimeError(
             "Prediction response did not include requested explanation.")
@@ -184,13 +191,20 @@ def _extract_explanation(
             'value': raw_explanation,
         }
 
+    nested = details.get('details')
+    nested = nested if isinstance(nested, dict) else {}
+
     summary = ''
     if not explain_config.skip_summary:
         maybe_summary = details.get('summary')
+        if not isinstance(maybe_summary, str):
+            maybe_summary = nested.get('summary')
         if isinstance(maybe_summary, str):
             summary = maybe_summary
 
     warning = details.get('warning')
+    if warning is None:
+        warning = nested.get('warning')
     if warning is not None:
         warning = str(warning)
     return prediction.drop(columns=['explanation']), summary, details, warning

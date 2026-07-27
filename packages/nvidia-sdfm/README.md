@@ -49,6 +49,23 @@ with SDFMClient(url="http://localhost:8000") as client:
     ))
 ```
 
+Set `explain=True` to get a `kumorfm` `Explanation` instead of a bare
+DataFrame. The predicted rows stay on `result.prediction`; `result.details`
+carries the driver's structured attribution (feature cohorts and subgraphs).
+`result.summary` is a natural-language string only when the backend provides
+one. If the backend returns structured attribution only, `result.summary` is
+empty.
+
+```python
+with SDFMClient(url="http://localhost:8000") as client:
+    result = client.kumorfm(graph).predict(
+        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
+        explain=True,
+    )
+    predictions = result.prediction   # DataFrame
+    attribution = result.details      # structured explanation
+```
+
 Discover what a NIM serves with `client.models()` and
 `client.capabilities("tabicl")`. The transport pools connections and retries
 transient failures (429/5xx) with backoff; tune it per client with

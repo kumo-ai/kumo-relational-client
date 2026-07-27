@@ -5,7 +5,8 @@ from typing import ClassVar
 
 import pytest
 
-from nvidia_sdfm import SDFMClient, TabICLRequest
+from nvidia_sdfm import SDFMClient
+from nvidia_sdfm.requests import TabICLRequest
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import NimRequestError, SdfmError
 from nvidia_sdfm.requests import ModelRequest
@@ -31,7 +32,7 @@ def test_predict_end_to_end_round_trip(requests_mock, context_df, predict_df):
     requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
 
     with SDFMClient(url=_URL) as client:
-        frame = client.predict(TabICLRequest(
+        frame = client._predict(TabICLRequest(
             context=context_df,
             predict=predict_df,
             task='classification',
@@ -53,7 +54,7 @@ def test_predict_unknown_model_raises():
         model: ClassVar[str] = 'not-a-real-model'
 
     with pytest.raises(SdfmError):
-        SDFMClient(url=_URL).predict(_UnknownRequest())
+        SDFMClient(url=_URL)._predict(_UnknownRequest())
 
 
 def test_predict_wrong_request_type_raises():
@@ -62,7 +63,7 @@ def test_predict_wrong_request_type_raises():
         model: ClassVar[str] = 'tabicl'
 
     with pytest.raises(SdfmError) as excinfo:
-        SDFMClient(url=_URL).predict(_MislabelledRequest())
+        SDFMClient(url=_URL)._predict(_MislabelledRequest())
     assert excinfo.value.code == 'INVALID_REQUEST'
 
 
@@ -80,7 +81,7 @@ def test_predict_propagates_nim_error(requests_mock, context_df, predict_df):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        SDFMClient(url=_URL).predict(TabICLRequest(
+        SDFMClient(url=_URL)._predict(TabICLRequest(
             context=context_df,
             predict=predict_df,
             task='classification',
