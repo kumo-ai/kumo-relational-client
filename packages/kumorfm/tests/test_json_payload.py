@@ -228,14 +228,17 @@ def test_forecast_payload_contains_universal_controls(
         'quantiles')
 
 
-def test_link_prediction_payload_requests_rankings_and_multicategorical_target(
+def test_link_prediction_payload_preserves_sampled_rhs_candidates(
     user_store_graph: Graph,
 ) -> None:
     task = TaskTable(
         task_type=TaskType.TEMPORAL_LINK_PREDICTION,
         context_df=pd.DataFrame({
             'ENTITY': [0, 1],
-            'TARGET': [['0', '1'], ['2']],
+            # Deliberately use target IDs that cannot occur in the sampled
+            # STORES table. Targets remain supervision on the instance table;
+            # payload materialization must not fabricate RHS candidate rows.
+            'TARGET': [['missing-0'], ['missing-1']],
             'ANCHOR_TIMESTAMP': pd.to_datetime([
                 '2025-01-05',
                 '2025-01-05',
@@ -279,18 +282,19 @@ def test_link_prediction_payload_requests_rankings_and_multicategorical_target(
         'TARGET')
     assert [row[target_index]
             for row in payload['context']['instance_table']['rows']] == (
-                [['0', '1'], ['2']])
+                [['missing-0'], ['missing-1']])
     stores = payload['context']['related_tables']['STORES']
     instance_index = stores['columns'].index(INSTANCE_ID)
     store_index = stores['columns'].index('STORE_ID')
-    cat_index = stores['columns'].index('CAT')
-    store_rows = {
-        (row[instance_index], str(row[store_index])): row[cat_index]
+    store_candidates = {
+        (row[instance_index], str(row[store_index]))
         for row in stores['rows']
     }
-    assert store_rows[(0, '0')] == 'burger'
-    assert store_rows[(0, '1')] == 'pizza'
-    assert store_rows[(1, '2')] == 'fries'
+    assert all(
+        store_id not in {'missing-0', 'missing-1'}
+        for _, store_id in store_candidates
+    )
+    assert {instance_id for instance_id, _ in store_candidates} == {0, 1}
 
 
 def test_link_prediction_target_values_must_be_stringlist_arrays() -> None:

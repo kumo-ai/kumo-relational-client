@@ -206,12 +206,6 @@ def _payload_tables(context: Context) -> PayloadTables:
         )
         related_table_stype_overrides[table_name] = stype_overrides
 
-    _include_link_prediction_rhs_context_targets(
-        context,
-        related_table_frames,
-        related_table_key_columns,
-    )
-
     relationships = _populate_relationship_columns(
         context,
         instance_df,
@@ -384,69 +378,6 @@ def _occurrence_dataframe(table: Any) -> tuple[pd.DataFrame, str]:
     else:
         key_column = table.primary_key
     return df, key_column
-
-
-def _include_link_prediction_rhs_context_targets(
-    context: Context,
-    related_table_frames: dict[str, pd.DataFrame],
-    related_table_key_columns: dict[str, str],
-) -> None:
-    if TaskType(context.task_type) != TaskType.TEMPORAL_LINK_PREDICTION:
-        return
-    if len(context.entity_table_names) < 2:
-        return
-    rhs_name = context.entity_table_names[1]
-    rhs_frame = related_table_frames.get(rhs_name)
-    key_column = related_table_key_columns.get(rhs_name)
-    rhs_table = context.subgraph.table_dict.get(rhs_name)
-    if rhs_frame is None or key_column is None or rhs_table is None:
-        return
-    if rhs_table.primary_key is None or rhs_table.primary_key not in rhs_table.df:
-        return
-
-    source_df = rhs_table.df.reset_index(drop=True)
-    key_lookup: dict[str, pd.Series] = {}
-    for _, row in source_df.iterrows():
-        key_lookup.setdefault(str(_json_value(row[rhs_table.primary_key])), row)
-
-    existing = {
-        (int(row[INSTANCE_ID]), str(_json_value(row[key_column])))
-        for _, row in rhs_frame.iterrows()
-        if pd.notna(row.get(INSTANCE_ID)) and pd.notna(row.get(key_column))
-    }
-    additions: list[dict[str, Any]] = []
-    for instance_id, targets in enumerate(context.y_train.tolist()):
-        if targets is None:
-            continue
-        if isinstance(targets, np.ndarray):
-            targets = targets.tolist()
-        if not isinstance(targets, (list, tuple)):
-            continue
-        for target in targets:
-            target_key = str(_json_value(target))
-            existing_key = (instance_id, target_key)
-            if existing_key in existing:
-                continue
-            source_row = key_lookup.get(target_key)
-            item: dict[str, Any] = {}
-            for column in rhs_frame.columns:
-                if column == INSTANCE_ID:
-                    item[column] = instance_id
-                elif source_row is not None and column in source_row:
-                    item[column] = source_row[column]
-                elif column == key_column:
-                    item[column] = target
-                else:
-                    item[column] = None
-            additions.append(item)
-            existing.add(existing_key)
-
-    if additions:
-        related_table_frames[rhs_name] = pd.concat(
-            [rhs_frame, pd.DataFrame(additions, columns=rhs_frame.columns)],
-            ignore_index=True,
-            sort=False,
-        )
 
 
 def _populate_relationship_columns(

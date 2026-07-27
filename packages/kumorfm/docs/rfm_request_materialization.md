@@ -35,6 +35,27 @@ semantically identical payloads and batch provenance. Live prediction and
 materialization share this seed path. Passing `None` opts out of reseeding and
 allows the sampler's random state to advance between calls.
 
+## Link-prediction context candidates
+
+For link prediction, related-table rows in a materialized request are the RHS
+candidates returned by relational neighborhood sampling. Context target lists
+remain supervision on the instance table; serialization does not turn target
+IDs that were absent from the sampled neighborhood into synthetic related-table
+rows. This matches the original KumoRFM SDK behavior and avoids assigning an
+unsampled target a feature row from another instance or anchor time.
+
+Consequently, a sampled context neighborhood can contain no positive RHS
+candidate even when its target list is non-empty. Materialization preserves
+that sampled result rather than silently changing the effective candidate set
+or class balance.
+
+A future positive-coverage policy should be implemented explicitly before
+serialization: add missing targets as supervised readout candidates, fetch
+their RHS features as of each context example's anchor time, and distinguish
+them from historically sampled neighbors. That design can improve positive
+coverage without fabricating a historical edge or copying request-wide
+features across point-in-time boundaries.
+
 ## Local installation prerequisite
 
 Materializing from a local `Graph` performs native neighborhood sampling and
