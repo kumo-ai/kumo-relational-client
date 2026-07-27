@@ -38,8 +38,6 @@ def _client_with(adapter) -> SDFMClient:
     return client
 
 
-# --- RFM handle ------------------------------------------------------------
-
 def test_rfm_returns_bound_handle():
     client = SDFMClient(url='http://nim.test')
     handle = client.kumorfm('my-graph')
@@ -75,7 +73,7 @@ def test_rfm_handle_defaults_are_minimal():
     req = adapter.captured
     assert req.indices is None
     assert req.run_mode == 'fast'
-    assert req.options == {}  # unset advanced kwargs are not forwarded
+    assert req.options == {}
 
 
 def test_rfm_handle_only_forwards_set_options():
@@ -107,8 +105,6 @@ def test_rfm_handle_matches_typed_request():
 
     assert via_handle == typed
 
-
-# --- TabICL handle ---------------------------------------------------------
 
 def test_tabicl_returns_bound_handle():
     client = SDFMClient(url='http://nim.test')
@@ -147,7 +143,7 @@ def test_tabicl_handle_defaults_are_minimal():
         pd.DataFrame({'x': [2]}))
 
     req = adapter.captured
-    assert req.outputs == ['prediction']  # dataclass default, untouched
+    assert req.outputs == ['prediction']
     assert req.positive_class is None
     assert req.max_results is None
 

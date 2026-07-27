@@ -13,9 +13,6 @@ from nvidia_sdfm.requests import ModelRequest
 if TYPE_CHECKING:
     from kumorfm.rfm.rfm import Explanation
 
-# A prediction result is a plain DataFrame, or a KumoRFM Explanation when the
-# request asks for one. Kept as a shared alias so adapters and the client agree
-# on the return contract without every layer importing the kumorfm engine.
 PredictResult = Union[pd.DataFrame, "Explanation"]
 
 
