@@ -26,7 +26,7 @@ class MockAPI:
         anchor_times: list[Any] | None = None,
     ) -> RFMPredictResponse:
         return RFMPredictResponse(prediction={
-            'columns': ['ENTITY', 'True_PROB'],
+            'columns': ['ENTITY', 'TRUE_PROB'],
             'data': [[0, 0.15]],
         })
 
@@ -923,7 +923,7 @@ def test_explanation_warning_flows_from_api_response(
         user_store_graph: Graph, ltv: ValidatedPredictiveQuery) -> None:
     """Warning from predictions[].explanation is surfaced in Explanation."""
     mock_resp = RFMPredictResponse(prediction={
-        'columns': ['ENTITY', 'SCORE', 'explanation'],
+        'columns': ['ENTITY', 'SCORE', 'EXPLANATION'],
         'data': [[1, 0.9, {
             'format': 'natural_language_summary',
             'summary': 'Summary.',

@@ -132,7 +132,7 @@ def test_predict_posts_universal_json_payload(
         'ENTITY': 3,
         'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
         'PREDICTION': 0.5,
-        'embeddings': [0.1, 0.2],
+        'EMBEDDINGS': [0.1, 0.2],
     }]
     assert receptor.headers is not None
     assert receptor.headers['Content-Type'] == 'application/json'

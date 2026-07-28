@@ -147,16 +147,16 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
     assert row == {
         'ENTITY': 'customer-7',
         'PREDICTION': 'yes',
-        'no_PROB': 0.2,
-        'yes_PROB': 0.8,
-        'scores': [0.3, 0.7],
-        'rankings': [{
+        'NO_PROB': 0.2,
+        'YES_PROB': 0.8,
+        'SCORES': [0.3, 0.7],
+        'RANKINGS': [{
             'id': 'merchant-1',
             'score': 0.9,
         }],
-        'embeddings': [0.1, 0.2],
-        'q_p50': 12.5,
-        'explanation': {
+        'EMBEDDINGS': [0.1, 0.2],
+        'Q_P50': 12.5,
+        'EXPLANATION': {
             'format': 'natural_language_summary',
             'summary': 'Recent purchases increased.',
         },
@@ -334,7 +334,7 @@ def test_forecast_response_allows_multiple_records_per_request_row() -> None:
     )
 
     assert converted.prediction == {
-        'columns': ['ENTITY', 'PREDICTION', 'q_0.5', 'forecast_step'],
+        'columns': ['ENTITY', 'PREDICTION', 'Q_0.5', 'FORECAST_STEP'],
         'data': [
             ['item-42', 10.0, 10.0, 1],
             ['item-42', 12.0, 12.0, 2],

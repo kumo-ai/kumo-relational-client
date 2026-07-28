@@ -97,18 +97,18 @@ def _prediction_item_to_row(
         row['PREDICTION'] = item.prediction
     if item.probabilities is not None:
         for name, value in item.probabilities.items():
-            row[f'{name}_PROB'] = value
+            row[f'{name.upper()}_PROB'] = value
     if item.scores is not None:
-        row['scores'] = list(item.scores)
+        row['SCORES'] = list(item.scores)
     if item.rankings is not None:
-        row['rankings'] = [dict(ranking) for ranking in item.rankings]
+        row['RANKINGS'] = [dict(ranking) for ranking in item.rankings]
     if item.embeddings is not None:
-        row['embeddings'] = list(item.embeddings)
+        row['EMBEDDINGS'] = list(item.embeddings)
     if item.quantiles is not None:
         for name, value in item.quantiles.items():
-            row[f'q_{name}'] = value
+            row[f'Q_{name.upper()}'] = value
     if item.explanation is not None:
-        row['explanation'] = item.explanation
+        row['EXPLANATION'] = item.explanation
     return row
 
 
@@ -149,7 +149,7 @@ def _prediction_item_to_ranking_rows(
         row['CLASS'] = ranking_id
         row['SCORE'] = score
         if item.explanation is not None:
-            row['explanation'] = item.explanation
+            row['EXPLANATION'] = item.explanation
         rows.append(row)
     return rows
 
@@ -243,11 +243,42 @@ def _prediction_item_rows_for_response(
     if _is_ranking_response(response):
         return _prediction_item_to_ranking_rows(
             item, entity_id=entity_id, anchor_time=anchor_time)
+    if _is_multiclass_response(response) and item.probabilities is not None:
+        return _prediction_item_to_multiclass_rows(
+            item, entity_id=entity_id, anchor_time=anchor_time)
     row = _prediction_item_to_row(
         item, entity_id=entity_id, anchor_time=anchor_time)
     if _is_forecast_response(response):
-        row['forecast_step'] = item.forecast_step
+        row['FORECAST_STEP'] = item.forecast_step
     return [row]
+
+
+def _prediction_item_to_multiclass_rows(
+    item: PredictionItem,
+    *,
+    entity_id: Any,
+    anchor_time: Any = None,
+) -> list[dict[str, Any]]:
+    r"""One row per class (CLASS, SCORE, PREDICTED), sorted by score descending.
+
+    Matches the long, per-class layout users had for multi-class classification
+    on the SaaS SDK, which is easier to read than a wide column-per-class table.
+    """
+    predicted = None if item.prediction is None else str(item.prediction)
+    ranked = sorted(
+        item.probabilities.items(), key=lambda kv: kv[1], reverse=True)
+    rows: list[dict[str, Any]] = []
+    for name, value in ranked:
+        row: dict[str, Any] = {'ENTITY': entity_id}
+        if anchor_time is not None:
+            row['ANCHOR_TIMESTAMP'] = anchor_time
+        row['CLASS'] = name
+        row['SCORE'] = value
+        row['PREDICTED'] = str(name) == predicted
+        if item.explanation is not None:
+            row['EXPLANATION'] = item.explanation
+        rows.append(row)
+    return rows
 
 
 def _is_ranking_response(response: PredictionResponse) -> bool:
@@ -263,3 +294,8 @@ def _is_forecast_response(response: PredictionResponse) -> bool:
     task_kind = str(response.metadata.get('task_kind', '')).lower()
     output_type = str(response.metadata.get('output_type', '')).lower()
     return task_kind in {'forecast', 'forecasting'} or output_type == 'forecast'
+
+
+def _is_multiclass_response(response: PredictionResponse) -> bool:
+    task_kind = str(response.metadata.get('task_kind', '')).lower()
+    return task_kind in {'multiclass', 'multiclass_classification'}

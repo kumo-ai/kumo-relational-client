@@ -48,7 +48,7 @@ class RecordingAPI:
         self.instance_ids.append(tuple(instance_ids))
         return RFMPredictResponse(
             prediction={
-                'columns': ['ENTITY', 'prediction'],
+                'columns': ['ENTITY', 'PREDICTION'],
                 'data': [[entity_id, 0.5] for entity_id in entity_ids],
             }
         )
@@ -69,7 +69,7 @@ class ExplanationRecordingAPI:
         self.requests.append(request)
         return RFMPredictResponse(
             prediction={
-                'columns': ['ENTITY', 'prediction', 'explanation'],
+                'columns': ['ENTITY', 'PREDICTION', 'EXPLANATION'],
                 'data': [
                     [
                         entity_ids[0],

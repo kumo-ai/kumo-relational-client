@@ -75,7 +75,7 @@ def test_rfm_api_predict_posts_current_v1_payload_and_parses_response(
     assert capture.headers is not None
     assert capture.headers['Content-Type'] == 'application/json'
     assert result.prediction == {
-        'columns': ['ENTITY', 'PREDICTION', 'True_PROB', 'False_PROB'],
+        'columns': ['ENTITY', 'PREDICTION', 'TRUE_PROB', 'FALSE_PROB'],
         'data': [[601, True, 0.65, 0.35]],
     }
 
@@ -114,8 +114,8 @@ def test_rfm_api_predict_reattaches_anchor_times(mock_api: Any) -> None:
             'ENTITY',
             'ANCHOR_TIMESTAMP',
             'PREDICTION',
-            'True_PROB',
-            'False_PROB',
+            'TRUE_PROB',
+            'FALSE_PROB',
         ],
         'data': [[601, '2025-02-01T00:00:00Z', True, 0.65, 0.35]],
     }
@@ -301,11 +301,11 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
         'columns': [
             'ENTITY',
             'PREDICTION',
-            'scores',
-            'rankings',
-            'embeddings',
-            'q_p50',
-            'explanation',
+            'SCORES',
+            'RANKINGS',
+            'EMBEDDINGS',
+            'Q_P50',
+            'EXPLANATION',
             'A_PROB',
             'B_PROB',
         ],
@@ -334,6 +334,52 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
                 'account-b', None, None, None, None, None, None, 0.25,
                 0.75,
             ],
+        ],
+    }
+
+
+def test_rfm_api_predict_renders_multiclass_long_format(
+    mock_api: Any,
+) -> None:
+    mock_api.post(
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
+        json={
+            'id': 'pred-multiclass-test',
+            'model': 'kumo-rfm',
+            'predictions': [{
+                'id': '601',
+                'row_index': 0,
+                'prediction': 'pro',
+                'probabilities': {
+                    'free': 0.1,
+                    'pro': 0.6,
+                    'enterprise': 0.2,
+                    'trial': 0.1,
+                },
+            }],
+            'metadata': {
+                'adapter': 'mock',
+                'task_kind': 'multiclass_classification',
+            },
+        },
+    )
+
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    result = api.predict(
+        nim_v1_smoke_payload(),
+        entity_ids=[601],
+        instance_ids=[601],
+        anchor_times=['2025-02-01T00:00:00Z'],
+    )
+
+    assert result.prediction == {
+        'columns': ['ENTITY', 'ANCHOR_TIMESTAMP', 'CLASS', 'SCORE',
+                    'PREDICTED'],
+        'data': [
+            [601, '2025-02-01T00:00:00Z', 'pro', 0.6, True],
+            [601, '2025-02-01T00:00:00Z', 'enterprise', 0.2, False],
+            [601, '2025-02-01T00:00:00Z', 'free', 0.1, False],
+            [601, '2025-02-01T00:00:00Z', 'trial', 0.1, False],
         ],
     }
 

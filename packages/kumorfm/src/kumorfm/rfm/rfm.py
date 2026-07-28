@@ -249,10 +249,10 @@ def _extract_explanation(
     # ``summary`` is populated the moment the NIM starts producing one; until
     # then ``summary`` is legitimately empty against a live NIM. Generating that
     # text is a server-side change tracked separately from #19.
-    if 'explanation' not in prediction or prediction.empty:
+    if 'EXPLANATION' not in prediction or prediction.empty:
         raise RuntimeError(
             "Prediction response did not include requested explanation.")
-    raw_explanation = prediction['explanation'].iloc[0]
+    raw_explanation = prediction['EXPLANATION'].iloc[0]
     if isinstance(raw_explanation, dict):
         details = dict(raw_explanation)
     else:
@@ -277,7 +277,7 @@ def _extract_explanation(
         warning = nested.get('warning')
     if warning is not None:
         warning = str(warning)
-    return prediction.drop(columns=['explanation']), summary, details, warning
+    return prediction.drop(columns=['EXPLANATION']), summary, details, warning
 
 
 class KumoRFM:
