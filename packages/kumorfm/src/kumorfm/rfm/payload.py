@@ -75,6 +75,31 @@ def predict_request_to_json(
 
 MAX_TABLE_ROWS = 10_000
 
+_SESSION_CREATE_SECTIONS = ('model', 'task', 'schema', 'context', 'metadata')
+_SESSION_PREDICT_SECTIONS = ('predict', 'output', 'inference', 'metadata')
+
+
+def session_create_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    r"""The context-only body for ``POST /v1/sessions``.
+
+    A session pins ``model`` + ``task`` + ``schema`` + ``context`` once; this
+    keeps exactly those sections (plus ``metadata``) from a full prediction
+    payload and drops the per-call ``predict`` / ``output`` / ``inference``.
+    """
+    return {key: payload[key]
+            for key in _SESSION_CREATE_SECTIONS if key in payload}
+
+
+def session_predict_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    r"""The per-call body for ``POST /v1/sessions/{id}/predictions``.
+
+    The session already holds ``model`` / ``task`` / ``schema`` / ``context``,
+    so only ``predict`` + ``output`` + ``inference`` (plus ``metadata``) travel
+    with each prediction.
+    """
+    return {key: payload[key]
+            for key in _SESSION_PREDICT_SECTIONS if key in payload}
+
 
 def payload_size_bytes(payload: dict[str, Any]) -> int:
     return len(

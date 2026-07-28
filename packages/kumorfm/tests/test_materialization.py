@@ -107,7 +107,9 @@ def _task() -> TaskTable:
 
 def test_materialize_task_matches_live_requests(
     user_store_graph: Graph,
+    monkeypatch: Any,
 ) -> None:
+    monkeypatch.setenv('KUMORFM_DISABLE_SESSIONS', '1')
     model = KumoRFM(user_store_graph, verbose=False)
     task = _task()
     context_before = task._context_df.copy()
@@ -348,7 +350,10 @@ def test_materialization_covers_task_types_and_request_options(
     assert 'AGE' not in payload['predict']['related_tables']['USERS']['columns']
 
 
-def test_materialize_task_seed_controls_random_neighborhoods() -> None:
+def test_materialize_task_seed_controls_random_neighborhoods(
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv('KUMORFM_DISABLE_SESSIONS', '1')
     graph = Graph.from_data(
         {
             'USERS': pd.DataFrame(

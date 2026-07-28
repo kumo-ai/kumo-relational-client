@@ -328,10 +328,17 @@ def test_entity_identity_survives_batch_local_row_indexes(
     ltv: ValidatedPredictiveQuery,
     mock_api: Any,
 ) -> None:
+    session_id = 'sess_test'
     mock_api.post(
-        f'{MOCK_URL}/v1/predictions',
+        f'{MOCK_URL}/v1/sessions',
+        json={'session_id': session_id, 'expires_at': '2099-01-01T00:00:00Z',
+              'ttl_seconds': 3600},
+    )
+    mock_api.post(
+        f'{MOCK_URL}/v1/sessions/{session_id}/predictions',
         json=_correlated_response({'prediction': 0.5}),
     )
+    mock_api.delete(f'{MOCK_URL}/v1/sessions/{session_id}', status_code=204)
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = RFMAPI(
         KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore

@@ -5,6 +5,7 @@ from typing import Any
 from kumorfm.api.rfm import RFMPredictResponse
 
 from kumorfm.client import KumoClient
+from kumorfm.client.endpoints import Endpoint, HTTPMethod
 from kumorfm.client.generated.tfm_api import (
     PredictionItem,
     PredictionResponse,
@@ -49,6 +50,83 @@ class RFMAPI:
             headers={'Content-Type': 'application/json'},
         )
         raise_on_error(response)
+        return self._parse_predict_response(
+            response,
+            entity_ids=entity_ids,
+            instance_ids=instance_ids,
+            anchor_times=anchor_times,
+        )
+
+    def create_session(self, request: Mapping[str, Any]) -> str:
+        r"""Create a persistent inference session that pins the context.
+
+        The context (``model`` + ``task`` + ``schema`` + ``context``) is
+        uploaded once; :meth:`session_predict` then references it by the
+        returned ``session_id`` so subsequent batches send only their
+        prediction rows.
+        """
+        response = self._client._request(
+            TFMOperations.create_session.endpoint,
+            json=request,
+            headers={'Content-Type': 'application/json'},
+        )
+        raise_on_error(response)
+        body = response.json()
+        session_id = body.get('session_id') if isinstance(body, dict) else None
+        if not isinstance(session_id, str) or not session_id:
+            raise ValueError(
+                'Create-session response did not include a session_id.')
+        return session_id
+
+    def session_predict(
+        self,
+        session_id: str,
+        request: Mapping[str, Any],
+        *,
+        entity_ids: Sequence[Any],
+        instance_ids: Sequence[Any],
+        anchor_times: Sequence[Any] | None = None,
+    ) -> RFMPredictResponse:
+        r"""Predict within an existing session.
+
+        ``request`` carries only ``predict`` / ``output`` / ``inference``; the
+        session supplies the pinned context. Correlation of the response back
+        to entities works exactly as in :meth:`predict`.
+        """
+        response = self._client._request(
+            Endpoint(
+                path=f'/v1/sessions/{session_id}/predictions',
+                method=HTTPMethod.POST,
+            ),
+            json=request,
+            headers={'Content-Type': 'application/json'},
+        )
+        raise_on_error(response)
+        return self._parse_predict_response(
+            response,
+            entity_ids=entity_ids,
+            instance_ids=instance_ids,
+            anchor_times=anchor_times,
+        )
+
+    def delete_session(self, session_id: str) -> None:
+        r"""Delete a session. Idempotent server-side (204 whether present or
+        already gone); callers treat this as best-effort cleanup.
+        """
+        self._client._request(
+            Endpoint(
+                path=f'/v1/sessions/{session_id}',
+                method=HTTPMethod.DELETE,
+            ))
+
+    @staticmethod
+    def _parse_predict_response(
+        response: Any,
+        *,
+        entity_ids: Sequence[Any],
+        instance_ids: Sequence[Any],
+        anchor_times: Sequence[Any] | None,
+    ) -> RFMPredictResponse:
         prediction_response = PredictionResponse.from_dict(response.json())
         return _prediction_response_to_rfm(
             prediction_response,

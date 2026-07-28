@@ -1,5 +1,6 @@
 import json
 import math
+import os
 import time
 import warnings
 from collections import defaultdict
@@ -47,6 +48,8 @@ from kumorfm.rfm.payload import (
     context_size_stats,
     payload_size_bytes,
     predict_request_to_json,
+    session_create_payload,
+    session_predict_payload,
     validate_payload_table_rows,
 )
 from kumorfm.rfm.explain_summary import generate_summary
@@ -84,6 +87,20 @@ _SIZE_LIMIT_MSG = ("Context size exceeds the 30MB limit. {stats}\nPlease "
                    "'https://github.com/kumo-ai/kumo-rfm' if you must go "
                    "beyond this for your use-case.")
 
+_SESSION_UNSUPPORTED_STATUS = frozenset({404, 405, 501})
+
+
+def _sessions_unsupported(error: HTTPException) -> bool:
+    return error.status_code in _SESSION_UNSUPPORTED_STATUS
+
+
+def _sessions_disabled_by_env() -> bool:
+    r"""Opt-out kill switch: set ``KUMORFM_DISABLE_SESSIONS`` to force the
+    stateless per-batch path even for multi-batch jobs.
+    """
+    return os.environ.get('KUMORFM_DISABLE_SESSIONS', '').strip().lower() in (
+        '1', 'true', 'yes', 'on')
+
 
 @dataclass(frozen=True)
 class MaterializedPredictionRequest:
@@ -106,6 +123,18 @@ class _GeneratedPredictionRequest:
     instance_ids: tuple[Any, ...]
     entity_dtype: Any
     anchor_times: tuple[Any, ...] | None
+
+
+@dataclass
+class _SessionHandle:
+    r"""Mutable session state for one batched prediction run.
+
+    ``id`` is the server session id once created (mutated in place so it stays
+    tracked for deletion even if a later call raises); ``active`` flips to
+    ``False`` when the NIM turns out not to support sessions.
+    """
+    id: str | None = None
+    active: bool = True
 
 
 @dataclass(repr=False)
@@ -773,6 +802,142 @@ class KumoRFM:
             entity_pkey,
         )
 
+    def _resolve_batch_size(self, task: TaskTable) -> int:
+        if self._batch_size is None:
+            return task.num_prediction_examples
+        if self._batch_size == 'max':
+            return _MAX_PRED_SIZE[task.task_type]
+        return self._batch_size
+
+    def _resolve_num_batches(self, task: TaskTable) -> int:
+        batch_size = self._resolve_batch_size(task)
+        if batch_size <= 0:
+            return 1
+        return math.ceil(task.num_prediction_examples / batch_size)
+
+    def _session_predict_batch(
+        self,
+        generated: '_GeneratedPredictionRequest',
+        session: '_SessionHandle',
+    ) -> Any:
+        r"""Send one batch through a session, uploading the pinned context only
+        once. Mutates ``session`` in place so a session created here is always
+        tracked for deletion even if a later call raises.
+
+        Robust to the NIM's session constraints: an expired or evicted session
+        (HTTP 404, TTL runs from creation) is transparently recreated and
+        retried, and a NIM without session support (404/405/501 on create)
+        disables sessions and serves the batch via the stateless path, so a
+        batched job never regresses below plain prediction.
+        """
+        payload = generated.materialized.payload
+        correlate = dict(
+            entity_ids=generated.entity_ids,
+            instance_ids=generated.instance_ids,
+            anchor_times=generated.anchor_times,
+        )
+        if session.id is None:
+            try:
+                session.id = self._api_client.create_session(
+                    session_create_payload(payload))
+            except HTTPException as error:
+                if _sessions_unsupported(error):
+                    session.active = False
+                    return self._api_client.predict(payload, **correlate)
+                raise
+        predict_payload = session_predict_payload(payload)
+        try:
+            return self._api_client.session_predict(
+                session.id, predict_payload, **correlate)
+        except HTTPException as error:
+            if error.status_code != 404:
+                raise
+            session.id = self._api_client.create_session(
+                session_create_payload(payload))
+            return self._api_client.session_predict(
+                session.id, predict_payload, **correlate)
+
+    def _delete_session_quietly(self, session_id: str) -> None:
+        r"""Best-effort session deletion; the server also reaps it on TTL."""
+        try:
+            self._api_client.delete_session(session_id)
+        except (HTTPException, RequestException):
+            pass
+
+    def _predict_batches(
+        self,
+        requests: Iterator['_GeneratedPredictionRequest'],
+        *,
+        task: TaskTable,
+        explain_config: 'ExplainConfig | None',
+        session: '_SessionHandle | None',
+        verbose: ProgressLogger,
+    ) -> tuple[list[pd.DataFrame], str | None, Any, str | None]:
+        r"""Run every batch, sending through ``session`` when active and via
+        stateless prediction otherwise, with bounded retries per batch.
+        """
+        predictions: list[pd.DataFrame] = []
+        summary: str | None = None
+        details: Any | None = None
+        warning: str | None = None
+        for generated in requests:
+            materialized = generated.materialized
+            request_payload = materialized.payload
+            for attempt in range(self._num_retries + 1):
+                try:
+                    if session is not None and session.active:
+                        resp = self._session_predict_batch(generated, session)
+                    else:
+                        resp = self._api_client.predict(
+                            request_payload,
+                            entity_ids=generated.entity_ids,
+                            instance_ids=generated.instance_ids,
+                            anchor_times=generated.anchor_times,
+                        )
+                    df = pd.DataFrame(**resp.prediction)
+                    if explain_config is not None:
+                        df, summary, details, warning = (
+                            _extract_explanation(df, explain_config))
+
+                    if 'ENTITY' in df:
+                        df['ENTITY'] = df['ENTITY'].astype(
+                            generated.entity_dtype)
+
+                    if 'ANCHOR_TIMESTAMP' in df:
+                        ser = df['ANCHOR_TIMESTAMP']
+                        if not pd.api.types.is_datetime64_any_dtype(ser):
+                            if isinstance(ser.iloc[0], str):
+                                unit = None
+                            else:
+                                unit = 'ms'
+                            df['ANCHOR_TIMESTAMP'] = pd.to_datetime(
+                                ser, errors='coerce', unit=unit)
+
+                    if 'TIME' in df:
+                        ser = df['TIME']
+                        if not pd.api.types.is_datetime64_any_dtype(ser):
+                            if isinstance(ser.iloc[0], str):
+                                unit = None
+                            else:
+                                unit = 'ms'
+                            df['TIME'] = pd.to_datetime(
+                                ser, errors='coerce', unit=unit)
+
+                    predictions.append(df.reset_index(drop=True))
+
+                    if (materialized.prediction_stop
+                            < task.num_prediction_examples
+                            or materialized.batch_index > 0):
+                        verbose.step()
+
+                    break
+                except (HTTPException, RequestException) as e:
+                    if attempt == self._num_retries:
+                        raise _nim_failure_error(
+                            e, explain_config is not None) from None
+                    time.sleep(2**attempt)
+        return predictions, summary, details, warning
+
     def _iter_task_requests(
         self,
         task: TaskTable,
@@ -807,12 +972,7 @@ class KumoRFM:
                 f"({task.num_context_examples:,}). Please provide more "
                 f"historical data or reduce the number of forecast steps.")
 
-        if self._batch_size is None:
-            batch_size = task.num_prediction_examples
-        elif self._batch_size == 'max':
-            batch_size = _MAX_PRED_SIZE[task.task_type]
-        else:
-            batch_size = self._batch_size
+        batch_size = self._resolve_batch_size(task)
 
         if batch_size > _MAX_PRED_SIZE[task.task_type]:
             raise ValueError(
@@ -1058,10 +1218,6 @@ class KumoRFM:
             verbose = ProgressLogger.default(msg=msg, verbose=verbose)
 
         with verbose as logger:
-            predictions: list[pd.DataFrame] = []
-            summary: str | None = None
-            details: Any | None = None
-            warning: str | None = None
             requests = self._iter_task_requests(
                 task,
                 explain=explain_config is not None,
@@ -1076,64 +1232,24 @@ class KumoRFM:
                 random_seed=random_seed,
                 progress_message='Predicting',
             )
-            for generated in requests:
-                materialized = generated.materialized
-                request_payload = materialized.payload
-
-                for attempt in range(self._num_retries + 1):
-                    try:
-                        resp = self._api_client.predict(
-                            request_payload,
-                            entity_ids=generated.entity_ids,
-                            instance_ids=generated.instance_ids,
-                            anchor_times=generated.anchor_times,
-                        )
-                        df = pd.DataFrame(**resp.prediction)
-                        if explain_config is not None:
-                            df, summary, details, warning = (
-                                _extract_explanation(df, explain_config))
-
-                        # Cast 'ENTITY' to correct data type:
-                        if 'ENTITY' in df:
-                            df['ENTITY'] = df['ENTITY'].astype(
-                                generated.entity_dtype
-                            )
-
-                        # Cast 'ANCHOR_TIMESTAMP' to correct data type:
-                        if 'ANCHOR_TIMESTAMP' in df:
-                            ser = df['ANCHOR_TIMESTAMP']
-                            if not pd.api.types.is_datetime64_any_dtype(ser):
-                                if isinstance(ser.iloc[0], str):
-                                    unit = None
-                                else:
-                                    unit = 'ms'
-                                df['ANCHOR_TIMESTAMP'] = pd.to_datetime(
-                                    ser, errors='coerce', unit=unit)
-
-                        if 'TIME' in df:
-                            ser = df['TIME']
-                            if not pd.api.types.is_datetime64_any_dtype(ser):
-                                if isinstance(ser.iloc[0], str):
-                                    unit = None
-                                else:
-                                    unit = 'ms'
-                                df['TIME'] = pd.to_datetime(
-                                    ser, errors='coerce', unit=unit)
-
-                        predictions.append(df.reset_index(drop=True))
-
-                        if (materialized.prediction_stop
-                                < task.num_prediction_examples
-                                or materialized.batch_index > 0):
-                            verbose.step()
-
-                        break
-                    except (HTTPException, RequestException) as e:
-                        if attempt == self._num_retries:
-                            raise _nim_failure_error(
-                                e, explain_config is not None) from None
-
-                        time.sleep(2**attempt)  # 1s, 2s, 4s, 8s, ...
+            use_sessions = (
+                explain_config is None
+                and random_seed is not None
+                and not _sessions_disabled_by_env()
+                and self._resolve_num_batches(task) > 1
+            )
+            session = _SessionHandle() if use_sessions else None
+            try:
+                predictions, summary, details, warning = self._predict_batches(
+                    requests,
+                    task=task,
+                    explain_config=explain_config,
+                    session=session,
+                    verbose=verbose,
+                )
+            finally:
+                if session is not None and session.id is not None:
+                    self._delete_session_quietly(session.id)
 
         if len(predictions) == 1:
             prediction = predictions[0]

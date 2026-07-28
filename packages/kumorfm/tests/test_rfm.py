@@ -30,6 +30,28 @@ class MockAPI:
             'data': [[0, 0.15]],
         })
 
+    def create_session(self, request: dict[str, Any]) -> str:
+        return 'sess_mock'
+
+    def session_predict(
+        self,
+        session_id: str,
+        request: dict[str, Any],
+        *,
+        entity_ids: list[Any] | None = None,
+        instance_ids: list[Any] | None = None,
+        anchor_times: list[Any] | None = None,
+    ) -> RFMPredictResponse:
+        return self.predict(
+            request,
+            entity_ids=entity_ids,
+            instance_ids=instance_ids,
+            anchor_times=anchor_times,
+        )
+
+    def delete_session(self, session_id: str) -> None:
+        pass
+
 
 @pytest.mark.parametrize('query_fixture', ['ltv'])
 @pytest.mark.parametrize('anchor_time', [Timestamp('2025-01-01')])
