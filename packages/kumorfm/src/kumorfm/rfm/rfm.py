@@ -30,6 +30,7 @@ from kumoapi.rfm import (
 from kumoapi.rfm.context import Context, Table
 from kumoapi.task import TaskType
 from kumoapi.typing import AggregationType, ProblemType, Stype
+from requests.exceptions import RequestException
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -48,6 +49,7 @@ from kumorfm.rfm.payload import (
     predict_request_to_json,
     validate_payload_table_rows,
 )
+from kumorfm.rfm.explain_summary import generate_summary
 from kumorfm.rfm.query_parser import parse_query_locally
 from kumorfm.utils import ProgressLogger, display
 
@@ -113,8 +115,17 @@ class ExplainConfig(CastMixin):
     Args:
         skip_summary: Whether to skip generating a human-readable summary of
             the explanation.
+        llm_base_url: Base URL of the OpenAI-compatible endpoint used to
+            generate the summary (e.g. an NVIDIA inference or self-hosted
+            gateway URL). Defaults to ``OPENAI_BASE_URL`` or the OpenAI host.
+        llm_api_key: API key for that endpoint. Defaults to ``OPENAI_API_KEY``.
+        llm_model: Model name to request on that endpoint. Defaults to
+            ``KUMORFM_EXPLAIN_MODEL`` or the built-in default.
     """
     skip_summary: bool = False
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str | None = None
 
 
 @dataclass(repr=False)
@@ -123,6 +134,29 @@ class Explanation:
     summary: str
     details: Any
     warning: str | None = None
+
+    def _structured_details(self) -> dict[str, Any]:
+        r"""Return the inner cohort/subgraph payload for a ``kumo_rfm_v2_1``
+        explanation, or an empty mapping for any other format.
+        """
+        if (isinstance(self.details, dict)
+                and self.details.get('format') == 'kumo_rfm_v2_1'):
+            inner = self.details.get('details')
+            if isinstance(inner, dict):
+                return inner
+        return {}
+
+    @property
+    def cohorts(self) -> list[Any]:
+        r"""Column-level cohort analysis (global view), when available."""
+        value = self._structured_details().get('cohorts')
+        return list(value) if isinstance(value, list) else []
+
+    @property
+    def subgraphs(self) -> list[Any]:
+        r"""Cell-level subgraph attribution (local view), when available."""
+        value = self._structured_details().get('subgraphs')
+        return list(value) if isinstance(value, list) else []
 
     @overload
     def __getitem__(self, index: Literal[0]) -> pd.DataFrame:
@@ -166,6 +200,42 @@ class Explanation:
 
     def _ipython_display_(self) -> None:
         self.print()
+
+
+_NIM_UNAVAILABLE_STATUS = frozenset({500, 502, 503, 504})
+
+
+def _nim_failure_error(error: Exception, explain: bool) -> RuntimeError:
+    r"""Build a clear, actionable error for a failed NIM prediction call.
+
+    A 5xx response or a dropped connection almost always means the NIM is
+    temporarily at capacity or recovering from GPU memory pressure (rather than
+    a client bug), so the caller is told to pace requests and retry instead of
+    receiving a raw traceback. Explanations are the most GPU-intensive request
+    (they hold the model's gradient graph on the device), so their message adds
+    a one-at-a-time hint. Other failures keep the original generic message.
+    """
+    status = getattr(error, 'status_code', None)
+    detail = getattr(error, 'detail', None)
+    if isinstance(detail, str):
+        try:
+            detail = json.loads(detail)['detail']
+        except Exception:
+            pass
+    unavailable = (status in _NIM_UNAVAILABLE_STATUS
+                   or isinstance(error, RequestException))
+    if unavailable:
+        subject = 'this explanation' if explain else 'this prediction'
+        pacing = (' Explanations are the most GPU-intensive request, so send '
+                  'them one at a time.') if explain else ''
+        server = f' (server said: {detail})' if detail else ''
+        return RuntimeError(
+            f'The Kumo RFM NIM could not complete {subject}: it is temporarily '
+            f'unavailable, likely at capacity or recovering from GPU memory '
+            f'pressure. Wait a few moments and retry.{pacing}{server}')
+    return RuntimeError(
+        f"An unexpected exception occurred. Please create an issue at "
+        f"'https://github.com/kumo-ai/kumo-rfm'. {detail if detail else error}")
 
 
 def _extract_explanation(
@@ -1063,17 +1133,10 @@ class KumoRFM:
                             verbose.step()
 
                         break
-                    except HTTPException as e:
+                    except (HTTPException, RequestException) as e:
                         if attempt == self._num_retries:
-                            try:
-                                msg = json.loads(e.detail)['detail']
-                            except Exception:
-                                msg = e.detail
-                            raise RuntimeError(
-                                f"An unexpected exception occurred. Please "
-                                f"create an issue at "
-                                f"'https://github.com/kumo-ai/kumo-rfm'. {msg}"
-                            ) from None
+                            raise _nim_failure_error(
+                                e, explain_config is not None) from None
 
                         time.sleep(2**attempt)  # 1s, 2s, 4s, 8s, ...
 
@@ -1084,8 +1147,30 @@ class KumoRFM:
 
         if explain_config is not None:
             assert len(predictions) == 1
-            assert summary is not None
             assert details is not None
+            summary = summary or ''
+            if (not explain_config.skip_summary and not summary
+                    and isinstance(details, dict)
+                    and details.get('format') == 'kumo_rfm_v2_1'):
+                inner = details.get('details')
+                if not isinstance(inner, dict):
+                    inner = {}
+                cohorts = inner.get('cohorts')
+                subgraphs = inner.get('subgraphs')
+                if not isinstance(cohorts, list):
+                    cohorts = []
+                if not isinstance(subgraphs, list):
+                    subgraphs = []
+                if cohorts or subgraphs:
+                    summary = generate_summary(
+                        query=getattr(task, '_query', '') or '',
+                        prediction=prediction.to_dict('records'),
+                        cohorts=cohorts,
+                        subgraphs=subgraphs,
+                        base_url=explain_config.llm_base_url,
+                        api_key=explain_config.llm_api_key,
+                        model=explain_config.llm_model,
+                    )
             return Explanation(
                 prediction=prediction,
                 summary=summary,

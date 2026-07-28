@@ -379,10 +379,12 @@ def test_explain_matches_live_nim_shape_with_no_summary(
     ltv: ValidatedPredictiveQuery,
     mock_api: Any,
 ) -> None:
-    # Captured from the real Kumo RFM NIM driver (kumo_rfm_v2_1) on an L40:
-    # structured attribution only, no natural-language summary. This documents
-    # that summary is legitimately empty against a live NIM until the server
-    # produces one, while the rich details remain fully available.
+    r"""Captured kumo_rfm_v2_1 shape from a live NIM driver: structured
+    attribution only, no server summary. With ``skip_summary`` the SDK leaves
+    ``summary`` empty and the rich details and typed accessors stay available.
+    """
+    from kumorfm.rfm.rfm import ExplainConfig
+
     live_explanation = {
         'format': 'kumo_rfm_v2_1',
         'details': {
@@ -409,14 +411,16 @@ def test_explain_matches_live_nim_shape_with_no_summary(
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
-    result = model.predict(ltv, indices=[0], explain=True, verbose=False)
+    result = model.predict(ltv, indices=[0],
+                           explain=ExplainConfig(skip_summary=True),
+                           verbose=False)
 
     assert isinstance(result, Explanation)
     assert result.summary == ''
     assert result.warning is None
     assert result.details == live_explanation
-    assert result.details['details']['cohorts'][0]['column_name'] == 'amount'
-    assert result.warning is None
+    assert result.cohorts[0]['column_name'] == 'amount'
+    assert len(result.subgraphs) == 1
 
 
 def test_explain_requests_explanation_output_field(
@@ -465,6 +469,135 @@ def test_explain_requests_explanation_output_field(
     assert 'operation' not in payload['metadata']
 
 
+def _v2_1_explanation() -> dict[str, Any]:
+    return {
+        'format': 'kumo_rfm_v2_1',
+        'details': {
+            'task_type': 'regression',
+            'cohorts': [{
+                'table_name': 'orders',
+                'column_name': 'COUNT(*)',
+                'hop': 1,
+                'cohorts': ['[0-0]', '(0-4+]'],
+                'populations': [0.2, 0.8],
+                'targets': [0.0, 0.5],
+            }],
+            'subgraphs': [{
+                'seed_id': 0,
+                'seed_table': 'users',
+                'tables': {},
+            }],
+        },
+    }
+
+
+def test_explain_generates_nl_summary_for_v2_1_payload(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    mock_api: Any,
+    monkeypatch: Any,
+) -> None:
+    calls: dict[str, Any] = {}
+
+    def fake_generate(*, query: str, prediction: Any, cohorts: Any,
+                      subgraphs: Any, **kwargs: Any) -> str:
+        calls.update(query=query, prediction=prediction, cohorts=cohorts,
+                     subgraphs=subgraphs, **kwargs)
+        return 'Generated NL summary.'
+
+    monkeypatch.setattr('kumorfm.rfm.rfm.generate_summary', fake_generate)
+    mock_api.post(
+        f'{MOCK_URL}/v1/predictions',
+        json=_correlated_response({
+            'prediction': 0.5,
+            'explanation': _v2_1_explanation(),
+        }),
+    )
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+
+    result = model.predict(ltv, indices=[0], explain=True, verbose=False)
+
+    assert isinstance(result, Explanation)
+    assert result.summary == 'Generated NL summary.'
+    assert len(result.cohorts) == 1
+    assert result.cohorts[0]['column_name'] == 'COUNT(*)'
+    assert len(result.subgraphs) == 1
+    assert result.subgraphs[0]['seed_id'] == 0
+    assert calls['query']
+    assert calls['cohorts'] == _v2_1_explanation()['details']['cohorts']
+    assert calls['subgraphs'] == _v2_1_explanation()['details']['subgraphs']
+
+
+def test_explain_skips_generation_when_skip_summary(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    mock_api: Any,
+    monkeypatch: Any,
+) -> None:
+    from kumorfm.rfm.rfm import ExplainConfig
+
+    called = False
+
+    def fake_generate(**kwargs: Any) -> str:
+        nonlocal called
+        called = True
+        return 'x'
+
+    monkeypatch.setattr('kumorfm.rfm.rfm.generate_summary', fake_generate)
+    mock_api.post(
+        f'{MOCK_URL}/v1/predictions',
+        json=_correlated_response({
+            'prediction': 0.5,
+            'explanation': _v2_1_explanation(),
+        }),
+    )
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+
+    result = model.predict(ltv, indices=[0],
+                           explain=ExplainConfig(skip_summary=True),
+                           verbose=False)
+
+    assert isinstance(result, Explanation)
+    assert result.summary == ''
+    assert called is False
+    assert len(result.cohorts) == 1
+
+
+def test_explain_prefers_server_summary_over_generation(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    mock_api: Any,
+    monkeypatch: Any,
+) -> None:
+    called = False
+
+    def fake_generate(**kwargs: Any) -> str:
+        nonlocal called
+        called = True
+        return 'x'
+
+    monkeypatch.setattr('kumorfm.rfm.rfm.generate_summary', fake_generate)
+    mock_api.post(
+        f'{MOCK_URL}/v1/predictions',
+        json=_correlated_response({
+            'prediction': 0.5,
+            'explanation': {
+                'format': 'natural_language_summary',
+                'summary': 'Server text.',
+            },
+        }),
+    )
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+
+    result = model.predict(ltv, indices=[0], explain=True, verbose=False)
+
+    assert result.summary == 'Server text.'
+    assert called is False
+
+
 def _assert_payload_matches_local_prediction_request_schema(
         payload: dict[str, Any]) -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -498,3 +631,42 @@ def _generated_source_sha(path: Path) -> str:
 
 def _file_sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_explain_gpu_pressure_surfaces_clear_error(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+) -> None:
+    from kumorfm.exceptions import HTTPException
+
+    class _FailingAPI:
+        def predict(self, *args: Any, **kwargs: Any) -> Any:
+            raise HTTPException(503, 'Service Unavailable')
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = _FailingAPI()  # type: ignore
+
+    with pytest.raises(RuntimeError) as err:
+        model.predict(ltv, indices=[0], explain=True, verbose=False)
+    msg = str(err.value)
+    assert 'temporarily unavailable' in msg
+    assert 'GPU memory pressure' in msg
+    assert 'one at a time' in msg
+
+
+def test_prediction_connection_drop_surfaces_clear_error(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+) -> None:
+    import requests
+
+    class _DroppingAPI:
+        def predict(self, *args: Any, **kwargs: Any) -> Any:
+            raise requests.exceptions.ConnectionError('connection reset by peer')
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = _DroppingAPI()  # type: ignore
+
+    with pytest.raises(RuntimeError) as err:
+        model.predict(ltv, indices=[3], verbose=False)
+    assert 'temporarily unavailable' in str(err.value)

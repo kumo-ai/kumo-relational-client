@@ -42,6 +42,9 @@ test=[
 codegen=[
     "pyyaml",
 ]
+explain=[
+    "openai>=1.40",
+]
 sqlite=[
     "sdfm-connectors[sqlite]",
 ]
