@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
 
 import pandas as pd
-from kumoapi.graph import ColumnKey, ColumnKeyGroup, GraphDefinition
-from kumoapi.table import TableDefinition
-from kumoapi.typing import Stype
+from kumorfm.api.graph import ColumnKey, ColumnKeyGroup, GraphDefinition
+from kumorfm.api.table import TableDefinition
+from kumorfm.api.typing import Stype
 from typing_extensions import Self
 
 from kumorfm import in_jupyter_notebook, in_streamlit_notebook, in_tmux

@@ -4,8 +4,8 @@ from typing import Any
 import pandas as pd
 import pytest
 from pytest_mock import MockerFixture
-from kumoapi.rfm import RFMPredictResponse
-from kumoapi.task import TaskType
+from kumorfm.api.rfm import RFMPredictResponse
+from kumorfm.api.task import TaskType
 
 from kumorfm.rfm import (
     Explanation,

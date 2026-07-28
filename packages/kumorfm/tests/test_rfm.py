@@ -4,12 +4,12 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.pquery.AST import Column, Condition, Constant
-from kumoapi.rfm import RFMPredictResponse
-from kumoapi.rfm.context import REV_REL, EdgeLayout
-from kumoapi.task import TaskType
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.pquery.AST import Column, Condition, Constant
+from kumorfm.api.rfm import RFMPredictResponse
+from kumorfm.api.rfm.context import REV_REL, EdgeLayout
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm.rfm import Graph, KumoRFM, LocalTable, TaskTable
 from kumorfm.rfm.base.utils import Timestamp

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Mapping, TypeAlias
 
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 from typing_extensions import Self
 
 from kumorfm.mixin import CastMixin

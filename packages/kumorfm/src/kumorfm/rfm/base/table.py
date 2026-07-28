@@ -6,11 +6,11 @@ from importlib.util import find_spec
 
 import numpy as np
 import pandas as pd
-from kumoapi.model_plan import MissingType
-from kumoapi.source_table import UnavailableSourceTable
-from kumoapi.table import Column as ColumnDefinition
-from kumoapi.table import TableDefinition
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.model_plan import MissingType
+from kumorfm.api.source_table import UnavailableSourceTable
+from kumorfm.api.table import Column as ColumnDefinition
+from kumorfm.api.table import TableDefinition
+from kumorfm.api.typing import Dtype, Stype
 from typing_extensions import Self
 
 from kumorfm import in_tmux

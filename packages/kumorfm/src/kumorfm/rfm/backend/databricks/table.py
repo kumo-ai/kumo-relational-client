@@ -4,8 +4,8 @@ from collections.abc import Sequence
 from typing import cast
 
 import pandas as pd
-from kumoapi.model_plan import MissingType
-from kumoapi.typing import Dtype
+from kumorfm.api.model_plan import MissingType
+from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.backend.databricks import Connection
 from kumorfm.rfm.base import (

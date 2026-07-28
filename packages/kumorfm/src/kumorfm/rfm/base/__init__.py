@@ -1,4 +1,4 @@
-from kumoapi.common import StrEnum
+from kumorfm.api.common import StrEnum
 
 
 class DataBackend(StrEnum):

@@ -1,7 +1,7 @@
 from typing import Sequence, cast
 
 import pandas as pd
-from kumoapi.model_plan import MissingType
+from kumorfm.api.model_plan import MissingType
 
 from kumorfm.rfm.base import (
     Column,

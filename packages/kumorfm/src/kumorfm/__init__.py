@@ -6,7 +6,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm._logging import _ENV_KUMO_LOG, initialize_logging
 from kumorfm._singleton import Singleton

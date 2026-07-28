@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
-from kumoapi.pquery import ValidatedPredictiveQuery
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 
 from kumorfm.rfm.backend.local import LocalGraphStore
 from kumorfm.rfm.base import DataBackend, Sampler, SamplerOutput

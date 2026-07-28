@@ -1,6 +1,6 @@
 import pandas as pd
 import pytest
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm.rfm import LocalTable
 

@@ -1,8 +1,8 @@
 import warnings
 from typing import Any
 
-from kumoapi.graph import GraphDefinition
-from kumoapi.pquery import ValidatedPredictiveQuery
+from kumorfm.api.graph import GraphDefinition
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 
 
 def parse_query_locally(
@@ -10,9 +10,8 @@ def parse_query_locally(
     graph_definition: GraphDefinition,
 ) -> ValidatedPredictiveQuery:
     try:
-        from kumorfm._vendor import kumopql as _kumopql  # noqa: F401
-        from kumopql.parser.parser import PQLParser, QueryValidationType
-        from kumopql.validator import PredictiveQueryValidator
+        from kumorfm.pql.parser.parser import PQLParser, QueryValidationType
+        from kumorfm.pql.validator import PredictiveQueryValidator
     except ImportError as exc:
         raise ValueError(
             "String predictive queries require the vendored parser runtime "

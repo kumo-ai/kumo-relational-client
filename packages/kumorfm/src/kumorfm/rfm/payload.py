@@ -5,16 +5,16 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from kumoapi.model_plan import RunMode
-from kumoapi.rfm import RFMPredictRequest
-from kumoapi.rfm.context import Context, EdgeLayout, REV_REL
-from kumoapi.rfm.inference import (
+from kumorfm.api.model_plan import RunMode
+from kumorfm.api.rfm import RFMPredictRequest
+from kumorfm.api.rfm.context import Context, EdgeLayout, REV_REL
+from kumorfm.api.rfm.inference import (
     ClassificationInferenceConfig,
     InferenceConfig,
     RegressionInferenceConfig,
 )
-from kumoapi.task import TaskType
-from kumoapi.typing import Stype
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Stype
 from kumorfm.client.generated.tfm_api import (
     TFM_MODEL_KUMO_RFM,
     TFM_OUTPUT_FIELD_EMBEDDINGS,

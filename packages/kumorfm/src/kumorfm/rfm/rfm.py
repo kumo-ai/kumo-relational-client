@@ -10,9 +10,9 @@ from typing import Any, Literal, overload
 
 import numpy as np
 import pandas as pd
-from kumoapi.model_plan import RunMode
-from kumoapi.pquery import QueryType, ValidatedPredictiveQuery
-from kumoapi.pquery.AST import (
+from kumorfm.api.model_plan import RunMode
+from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
+from kumorfm.api.pquery.AST import (
     Aggregation,
     Column,
     Condition,
@@ -20,16 +20,16 @@ from kumoapi.pquery.AST import (
     Join,
     LogicalOperation,
 )
-from kumoapi.rfm import ClassificationInferenceConfig
-from kumoapi.rfm import Explanation as ExplanationConfig
-from kumoapi.rfm import (
+from kumorfm.api.rfm import ClassificationInferenceConfig
+from kumorfm.api.rfm import Explanation as ExplanationConfig
+from kumorfm.api.rfm import (
     InferenceConfig,
     RegressionInferenceConfig,
     RFMPredictRequest,
 )
-from kumoapi.rfm.context import Context, Table
-from kumoapi.task import TaskType
-from kumoapi.typing import AggregationType, ProblemType, Stype
+from kumorfm.api.rfm.context import Context, Table
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import AggregationType, ProblemType, Stype
 from requests.exceptions import RequestException
 from rich.console import Console
 from rich.markdown import Markdown
@@ -513,7 +513,7 @@ class KumoRFM:
         -----------------------
         The ``inference_config`` argument controls inference-time model
         behavior, including ensembling. Pass either a dictionary or a config
-        object from ``kumoapi.rfm``. Dictionary inputs are cast based on the
+        object from ``kumorfm.api.rfm``. Dictionary inputs are cast based on the
         task type: classification tasks use ``ClassificationInferenceConfig``
         and regression or forecasting tasks use
         ``RegressionInferenceConfig``. If omitted, defaults are selected

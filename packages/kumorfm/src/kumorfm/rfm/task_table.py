@@ -2,8 +2,8 @@ import copy
 from collections.abc import Sequence
 
 import pandas as pd
-from kumoapi.task import TaskType
-from kumoapi.typing import Stype
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Stype
 from typing_extensions import Self
 
 from kumorfm.rfm.base import Column

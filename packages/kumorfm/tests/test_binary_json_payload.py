@@ -4,12 +4,12 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.model_plan import RunMode
-from kumoapi.rfm import RFMPredictRequest
-from kumoapi.rfm.context import Context, Subgraph, Table
-from kumoapi.rfm.inference import ClassificationInferenceConfig
-from kumoapi.task import TaskType
-from kumoapi.typing import Stype
+from kumorfm.api.model_plan import RunMode
+from kumorfm.api.rfm import RFMPredictRequest
+from kumorfm.api.rfm.context import Context, Subgraph, Table
+from kumorfm.api.rfm.inference import ClassificationInferenceConfig
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Stype
 
 from kumorfm.rfm.payload import _instance_dataframe, predict_request_to_json
 

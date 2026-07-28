@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 import pytest
 import requests
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.rfm.context import Table
-from kumoapi.task import TaskType
-from kumoapi.typing import Stype
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.rfm.context import Table
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Stype
 
 from kumorfm.client import KumoClient
 from kumorfm.client.rfm import RFMAPI

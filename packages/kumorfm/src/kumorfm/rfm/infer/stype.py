@@ -1,5 +1,5 @@
 import pandas as pd
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm.rfm.infer import (
     contains_categorical,

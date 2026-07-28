@@ -1,7 +1,7 @@
 from collections import defaultdict
 
 import pandas as pd
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 MAX_CAT = 100
 

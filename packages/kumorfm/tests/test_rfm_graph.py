@@ -2,7 +2,7 @@ import copy
 
 import pandas as pd
 import pytest
-from kumoapi.graph import ColumnKey, ColumnKeyGroup
+from kumorfm.api.graph import ColumnKey, ColumnKeyGroup
 
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph, LocalTable

@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-from kumoapi.typing import Dtype
+from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.infer import infer_dtype
 

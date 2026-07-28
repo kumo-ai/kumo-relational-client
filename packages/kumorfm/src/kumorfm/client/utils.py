@@ -15,7 +15,7 @@ from typing import (
 )
 
 import requests
-from kumoapi.json_serde import from_json
+from kumorfm.api.json_serde import from_json
 
 from kumorfm.exceptions import HTTPException
 

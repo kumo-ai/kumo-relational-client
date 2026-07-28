@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from kumoapi.rfm.context import Subgraph
+from kumorfm.api.rfm.context import Subgraph
 
 from kumorfm.rfm.backend.local import LocalTable
 from kumorfm.rfm.base import Table

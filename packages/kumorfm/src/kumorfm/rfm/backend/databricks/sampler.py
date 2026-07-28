@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.typing import Dtype
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.backend.databricks import DatabricksTable
 from kumorfm.rfm.backend.databricks.table import BACKTICK

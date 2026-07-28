@@ -2,7 +2,7 @@ from collections.abc import Mapping, Sequence
 import math
 from typing import Any
 
-from kumoapi.rfm import RFMPredictResponse
+from kumorfm.api.rfm import RFMPredictResponse
 
 from kumorfm.client import KumoClient
 from kumorfm.client.generated.tfm_api import (

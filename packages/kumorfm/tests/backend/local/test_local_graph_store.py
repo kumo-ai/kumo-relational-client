@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.rfm.context import REV_REL
-from kumoapi.typing import Stype
+from kumorfm.api.rfm.context import REV_REL
+from kumorfm.api.typing import Stype
 
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph, TaskReferenceError

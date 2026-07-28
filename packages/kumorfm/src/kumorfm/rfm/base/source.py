@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from kumoapi.typing import Dtype
+from kumorfm.api.typing import Dtype
 
 
 @dataclass

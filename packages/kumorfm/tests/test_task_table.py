@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
-from kumoapi.task import TaskType
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm.rfm import TaskTable
 from kumorfm.rfm.base import Column

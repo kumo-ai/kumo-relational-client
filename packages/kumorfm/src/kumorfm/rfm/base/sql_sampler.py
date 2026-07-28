@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
-from kumoapi.rfm.context import Subgraph
-from kumoapi.typing import Dtype
+from kumorfm.api.rfm.context import Subgraph
+from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.base import (
     LocalExpression,

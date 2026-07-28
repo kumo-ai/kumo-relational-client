@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar
 
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.pquery.AST import (
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.pquery.AST import (
     Aggregation,
     Column,
     Condition,

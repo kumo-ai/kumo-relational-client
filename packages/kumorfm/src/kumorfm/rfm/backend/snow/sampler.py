@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from kumoapi.pquery import ValidatedPredictiveQuery
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 
 from kumorfm.rfm.backend.snow import Connection, SnowTable
 from kumorfm.rfm.base import DataBackend, SQLSampler, Table

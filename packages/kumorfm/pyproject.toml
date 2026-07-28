@@ -75,7 +75,8 @@ where=["src"]
 include=["kumorfm*"]
 
 [tool.setuptools.package-data]
-"kumorfm._vendor.kumopql"=["VENDORED.md"]
+"kumorfm.api"=["SOURCE.md", "LICENSE"]
+"kumorfm.pql"=["SOURCE.md"]
 "kumorfm.rfm"=["assets/*"]
 
 [tool.setuptools.dynamic]
@@ -127,6 +128,8 @@ src=["src/kumorfm", "setup.py"]
 line-length=80
 indent-width=4
 target-version="py310"
+# Internalized upstream packages (see their SOURCE.md); not linted to our rules.
+extend-exclude=["src/kumorfm/api", "src/kumorfm/pql"]
 
 [tool.ruff.lint]
 select=[

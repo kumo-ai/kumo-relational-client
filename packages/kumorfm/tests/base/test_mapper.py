@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.typing import Dtype
+from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.base.mapper import Mapper
 

@@ -26,7 +26,7 @@ from typing import Any
 
 import pandas as pd
 import kumorfm.rfm as rfm
-from kumoapi.typing import Stype
+from kumorfm.api.typing import Stype
 
 from kumorfm.client import KumoClient
 from kumorfm.client.endpoints import Endpoint, HTTPMethod

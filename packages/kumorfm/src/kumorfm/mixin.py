@@ -1,7 +1,7 @@
 import dataclasses
 from typing import Any, Optional, Type, TypeVar
 
-from kumoapi.json_serde import dataclass_to_dict
+from kumorfm.api.json_serde import dataclass_to_dict
 
 T = TypeVar('T')
 

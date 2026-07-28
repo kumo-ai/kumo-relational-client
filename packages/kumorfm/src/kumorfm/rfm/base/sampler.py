@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
-from kumoapi.pquery import QueryType, ValidatedPredictiveQuery
-from kumoapi.pquery.AST import Aggregation, ASTNode
-from kumoapi.rfm.context import EdgeLayout, Link, Subgraph, Table
-from kumoapi.typing import ProblemType, Stype
+from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
+from kumorfm.api.pquery.AST import Aggregation, ASTNode
+from kumorfm.api.rfm.context import EdgeLayout, Link, Subgraph, Table
+from kumorfm.api.typing import ProblemType, Stype
 
 from kumorfm.rfm.base import DataBackend
 from kumorfm.rfm.base.utils import Timestamp

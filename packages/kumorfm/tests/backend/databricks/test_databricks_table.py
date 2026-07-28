@@ -1,5 +1,5 @@
 import pytest
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm.rfm.backend.local import LocalTable
 from kumorfm.rfm.base import LocalExpression

@@ -2,8 +2,8 @@ from dataclasses import dataclass
 from unittest.mock import patch
 
 import pytest
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.typing import ProblemType
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.typing import ProblemType
 
 from kumorfm.rfm import Graph, KumoRFM
 from kumorfm.rfm.query_parser import parse_query_locally
@@ -63,9 +63,8 @@ def test_parse_query_locally_returns_validated_query(
 def test_demo_prefix_offsets_assuming_location(
     user_store_graph: Graph,
 ) -> None:
-    from kumorfm._vendor import kumopql as _kumopql  # noqa: F401
-    from kumopql.parser.parser import PQLParser, QueryValidationType
-    from kumopql.validator.rfm_validator import RfmValidator
+    from kumorfm.pql.parser.parser import PQLParser, QueryValidationType
+    from kumorfm.pql.validator.rfm_validator import RfmValidator
 
     prefix = 'EXPLAIN '
     parsed = PQLParser(

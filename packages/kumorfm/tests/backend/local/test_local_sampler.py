@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.pquery.AST import (
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.pquery.AST import (
     Aggregation,
     Column,
     Condition,
@@ -11,7 +11,7 @@ from kumoapi.pquery.AST import (
     Filter,
     LogicalOperation,
 )
-from kumoapi.typing import BoolOp, Dtype
+from kumorfm.api.typing import BoolOp, Dtype
 
 import kumorfm.kumolib as kumolib
 from kumorfm.rfm import Graph

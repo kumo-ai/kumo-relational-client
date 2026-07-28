@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Dict, Iterator, Tuple, TypeAlias, Union
 
-import kumoapi.graph as api
+import kumorfm.api.graph as api
 
 from kumorfm.mixin import CastMixin
 

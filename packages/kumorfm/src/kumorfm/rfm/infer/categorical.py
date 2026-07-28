@@ -1,7 +1,7 @@
 import re
 
 import pandas as pd
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 
 def contains_categorical(

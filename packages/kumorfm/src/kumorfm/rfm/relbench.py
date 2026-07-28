@@ -6,7 +6,7 @@ from urllib.request import urlopen
 
 import pyarrow as pa
 import pyarrow.parquet
-from kumoapi.typing import Stype
+from kumorfm.api.typing import Stype
 
 from kumorfm.rfm import Graph
 from kumorfm.rfm.backend.local import LocalTable

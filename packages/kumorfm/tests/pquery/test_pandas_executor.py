@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.pquery.AST import (
+from kumorfm.api.pquery.AST import (
     Aggregation,
     Column,
     Condition,
@@ -11,7 +11,7 @@ from kumoapi.pquery.AST import (
     Join,
     LogicalOperation,
 )
-from kumoapi.typing import (
+from kumorfm.api.typing import (
     AggregationType,
     BoolOp,
     Dtype,

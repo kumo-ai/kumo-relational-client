@@ -3,7 +3,7 @@ import warnings
 
 import pandas as pd
 from dateutil.parser import UnknownTimezoneWarning
-from kumoapi.typing import Dtype, Stype
+from kumorfm.api.typing import Dtype, Stype
 
 
 def contains_timestamp(ser: pd.Series, column_name: str, dtype: Dtype) -> bool:

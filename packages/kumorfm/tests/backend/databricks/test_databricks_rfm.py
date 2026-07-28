@@ -3,9 +3,9 @@ from typing import cast
 import numpy as np
 import pandas as pd
 import pytest
-from kumoapi.pquery import ValidatedPredictiveQuery
-from kumoapi.pquery.AST import Aggregation, Column, DateOffsetRange
-from kumoapi.typing import AggregationType
+from kumorfm.api.pquery import ValidatedPredictiveQuery
+from kumorfm.api.pquery.AST import Aggregation, Column, DateOffsetRange
+from kumorfm.api.typing import AggregationType
 
 from kumorfm.rfm import Graph, KumoRFM
 
