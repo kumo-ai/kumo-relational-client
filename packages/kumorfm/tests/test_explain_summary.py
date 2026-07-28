@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 from typing import Any
 
@@ -8,9 +9,16 @@ import pytest
 from kumorfm.rfm import explain_summary
 from kumorfm.rfm.explain_summary import (
     SUMMARY_ERROR_MESSAGE,
+    SUMMARY_NEEDS_EXTRA_MESSAGE,
+    SUMMARY_NEEDS_MODEL_MESSAGE,
     SUMMARY_UNAVAILABLE_MESSAGE,
     SYSTEM_PROMPT,
     generate_summary,
+)
+
+_ENV_VARS = (
+    'OPENAI_API_KEY', 'KUMORFM_EXPLAIN_API_KEY', 'KUMORFM_EXPLAIN_BASE_URL',
+    'KUMORFM_EXPLAIN_MODEL', 'KUMORFM_EXPLAIN_TIMEOUT',
 )
 
 try:
@@ -21,6 +29,12 @@ except ImportError:
 
 requires_openai = pytest.mark.skipif(
     not _HAS_OPENAI, reason='openai (kumorfm[explain]) is not installed')
+
+
+@pytest.fixture(autouse=True)
+def _clean_env(monkeypatch: Any) -> None:
+    for name in _ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
 
 
 class _FakeCompletions:
@@ -80,16 +94,40 @@ def test_generate_summary_passes_context_and_returns_text() -> None:
     assert 'SG1' not in _user(record)
 
 
-def test_generate_summary_unavailable_without_key(monkeypatch: Any) -> None:
-    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
-    out = generate_summary('q', 'p', ['c'], ['s'])
-    assert out == SUMMARY_UNAVAILABLE_MESSAGE
+def test_missing_extra_message_when_openai_absent(monkeypatch: Any) -> None:
+    monkeypatch.setitem(sys.modules, 'openai', None)
+    monkeypatch.setenv('OPENAI_API_KEY', 'k')
+    assert generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_NEEDS_EXTRA_MESSAGE
+
+
+@requires_openai
+def test_needs_key_message_when_no_key() -> None:
+    assert generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_UNAVAILABLE_MESSAGE
+
+
+@requires_openai
+def test_custom_endpoint_without_model_message() -> None:
+    out = generate_summary('q', 'p', ['c'], ['s'],
+                           base_url='https://ep.example/v1', api_key='k')
+    assert out == SUMMARY_NEEDS_MODEL_MESSAGE
 
 
 def test_generate_summary_handles_api_error() -> None:
     client = _FakeClient(error=RuntimeError('boom'))
     out = generate_summary('q', 'p', ['c'], ['s'], client=client)
-    assert out == SUMMARY_ERROR_MESSAGE
+    assert out.startswith(SUMMARY_ERROR_MESSAGE)
+    assert 'RuntimeError' in out
+
+
+def test_generate_summary_timeout_tells_user_to_raise_timeout() -> None:
+    class APITimeoutError(Exception):
+        pass
+
+    client = _FakeClient(error=APITimeoutError('timed out'))
+    out = generate_summary('q', 'p', ['c'], ['s'], client=client, timeout=7)
+    assert 'timed out after 7s' in out
+    assert 'KUMORFM_EXPLAIN_TIMEOUT' in out
+    assert '.cohorts' in out
 
 
 def test_generate_summary_empty_content_is_error() -> None:
@@ -133,37 +171,79 @@ def test_make_client_targets_custom_endpoint() -> None:
     assert str(client.base_url).rstrip('/') == 'https://ep.example/v1'
 
 
-def test_make_client_uses_env_endpoint(monkeypatch: Any) -> None:
-    monkeypatch.setenv('OPENAI_BASE_URL', 'https://env.example/v1')
-    monkeypatch.setenv('OPENAI_API_KEY', 'envkey')
-    record: dict[str, Any] = {}
+def _capture_make_client(monkeypatch: Any) -> dict[str, Any]:
+    call: dict[str, Any] = {}
 
     def fake_make_client(base_url: str | None, api_key: str | None,
                          timeout: float) -> Any:
-        record.update(base_url=base_url, api_key=api_key)
-        return _FakeClient()
+        call.update(base_url=base_url, api_key=api_key, timeout=timeout)
+        return _FakeClient(record=call)
 
     monkeypatch.setattr(explain_summary, '_make_client', fake_make_client)
+    return call
+
+
+@requires_openai
+def test_uses_openai_env(monkeypatch: Any) -> None:
+    monkeypatch.setenv('KUMORFM_EXPLAIN_BASE_URL', 'https://openai.example/v1')
+    monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_MODEL', 'm')
+    call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
-    assert record['base_url'] == 'https://env.example/v1'
-    assert record['api_key'] == 'envkey'
+    assert call['base_url'] == 'https://openai.example/v1'
+    assert call['api_key'] == 'openai-key'
+    assert call['model'] == 'm'
 
 
-def test_generate_summary_explicit_endpoint_overrides_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('OPENAI_BASE_URL', 'https://env.example/v1')
-    monkeypatch.setenv('OPENAI_API_KEY', 'envkey')
-    record: dict[str, Any] = {}
+@requires_openai
+def test_explain_api_key_takes_precedence_over_openai_key(
+        monkeypatch: Any) -> None:
+    monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_API_KEY', 'explain-key')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_MODEL', 'm')
+    call = _capture_make_client(monkeypatch)
+    generate_summary('q', 'p', ['c'], ['s'])
+    assert call['api_key'] == 'explain-key'
 
-    def fake_make_client(base_url: str | None, api_key: str | None,
-                         timeout: float) -> Any:
-        record.update(base_url=base_url, api_key=api_key)
-        return _FakeClient()
 
-    monkeypatch.setattr(explain_summary, '_make_client', fake_make_client)
+@requires_openai
+def test_falls_back_to_openai_key(monkeypatch: Any) -> None:
+    monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
+    call = _capture_make_client(monkeypatch)
+    generate_summary('q', 'p', ['c'], ['s'])
+    assert call['api_key'] == 'openai-key'
+
+
+@requires_openai
+def test_explicit_args_override_env(monkeypatch: Any) -> None:
+    monkeypatch.setenv('KUMORFM_EXPLAIN_BASE_URL', 'https://env.example/v1')
+    monkeypatch.setenv('OPENAI_API_KEY', 'env-key')
+    call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'],
-                     base_url='https://explicit/v1', api_key='ekey')
-    assert record['base_url'] == 'https://explicit/v1'
-    assert record['api_key'] == 'ekey'
+                     base_url='https://explicit/v1', api_key='ekey',
+                     model='em', timeout=12.5)
+    assert call['base_url'] == 'https://explicit/v1'
+    assert call['api_key'] == 'ekey'
+    assert call['model'] == 'em'
+    assert call['timeout'] == 12.5
+
+
+@requires_openai
+def test_timeout_defaults_to_20_and_reads_env(monkeypatch: Any) -> None:
+    monkeypatch.setenv('OPENAI_API_KEY', 'k')
+    call = _capture_make_client(monkeypatch)
+    generate_summary('q', 'p', ['c'], ['s'])
+    assert call['timeout'] == 20.0
+
+    monkeypatch.setenv('KUMORFM_EXPLAIN_TIMEOUT', '5')
+    call2 = _capture_make_client(monkeypatch)
+    generate_summary('q', 'p', ['c'], ['s'])
+    assert call2['timeout'] == 5.0
+
+
+def test_env_float_invalid_falls_back(monkeypatch: Any) -> None:
+    monkeypatch.setenv('KUMORFM_EXPLAIN_TIMEOUT', 'not-a-number')
+    assert explain_summary._env_float('KUMORFM_EXPLAIN_TIMEOUT', 20.0) == 20.0
 
 
 def test_explanation_accessors_ignore_malformed_details() -> None:

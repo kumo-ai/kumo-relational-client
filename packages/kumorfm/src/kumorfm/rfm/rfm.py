@@ -114,18 +114,13 @@ class ExplainConfig(CastMixin):
 
     Args:
         skip_summary: Whether to skip generating a human-readable summary of
-            the explanation.
-        llm_base_url: Base URL of the OpenAI-compatible endpoint used to
-            generate the summary (e.g. an NVIDIA inference or self-hosted
-            gateway URL). Defaults to ``OPENAI_BASE_URL`` or the OpenAI host.
-        llm_api_key: API key for that endpoint. Defaults to ``OPENAI_API_KEY``.
-        llm_model: Model name to request on that endpoint. Defaults to
-            ``KUMORFM_EXPLAIN_MODEL`` or the built-in default.
+            the explanation. The summary's LLM endpoint is configured once via
+            the environment: the API key from ``KUMORFM_EXPLAIN_API_KEY`` (else
+            ``OPENAI_API_KEY``), ``KUMORFM_EXPLAIN_BASE_URL`` (for any
+            OpenAI-compatible endpoint), ``KUMORFM_EXPLAIN_MODEL`` (default
+            ``gpt-4.1-mini``) and ``KUMORFM_EXPLAIN_TIMEOUT`` (default 20s).
     """
     skip_summary: bool = False
-    llm_base_url: str | None = None
-    llm_api_key: str | None = None
-    llm_model: str | None = None
 
 
 @dataclass(repr=False)
@@ -1167,9 +1162,6 @@ class KumoRFM:
                         prediction=prediction.to_dict('records'),
                         cohorts=cohorts,
                         subgraphs=subgraphs,
-                        base_url=explain_config.llm_base_url,
-                        api_key=explain_config.llm_api_key,
-                        model=explain_config.llm_model,
                     )
             return Explanation(
                 prediction=prediction,

@@ -135,17 +135,32 @@ SYSTEM_PROMPT = _INSTRUCTIONS + "\n\n" + _EXPLAINABILITY + "\n\n"
 _DEFAULT_MODEL = "gpt-4.1-mini-2025-04-14"
 _DEFAULT_TIMEOUT = 20.0
 
+_STRUCTURED_NOTE = (
+    "The structured explanation is still available on .cohorts and .subgraphs.")
+
+SUMMARY_NEEDS_EXTRA_MESSAGE = (
+    "Natural-language explanation summary needs the 'explain' extra: "
+    "pip install 'kumorfm[explain]'. " + _STRUCTURED_NOTE)
+
 SUMMARY_UNAVAILABLE_MESSAGE = (
-    "Natural-language explanation summary is unavailable. Install the "
-    "explanation extra and provide an API key to enable it: "
-    "pip install 'kumorfm[explain]', then set OPENAI_API_KEY (and, for a "
-    "non-OpenAI deployment, OPENAI_BASE_URL and the model name) or pass them "
-    "via ExplainConfig."
-)
+    "Natural-language explanation summary needs an API key. Set OPENAI_API_KEY "
+    "(the default is OpenAI gpt-4.1-mini); for another OpenAI-compatible "
+    "endpoint set KUMORFM_EXPLAIN_API_KEY, KUMORFM_EXPLAIN_BASE_URL and "
+    "KUMORFM_EXPLAIN_MODEL. " + _STRUCTURED_NOTE)
+
+SUMMARY_NEEDS_MODEL_MESSAGE = (
+    "Natural-language explanation summary: a custom endpoint is set "
+    "(KUMORFM_EXPLAIN_BASE_URL) but no model. Set KUMORFM_EXPLAIN_MODEL to a "
+    "model that endpoint serves. " + _STRUCTURED_NOTE)
+
 SUMMARY_ERROR_MESSAGE = (
-    "Natural-language explanation summary could not be generated. Please try "
-    "again in a moment."
-)
+    "Natural-language explanation summary could not be generated. Check the "
+    "endpoint URL, API key, and model.")
+
+SUMMARY_TIMEOUT_MESSAGE = (
+    "Natural-language explanation summary timed out after {timeout:g}s. Raise "
+    "KUMORFM_EXPLAIN_TIMEOUT (or point KUMORFM_EXPLAIN_MODEL at a faster model) "
+    "and retry. " + _STRUCTURED_NOTE)
 
 
 def _build_input_message(
@@ -189,6 +204,26 @@ def _make_client(base_url: str | None, api_key: str | None,
     return OpenAI(**kwargs)
 
 
+def _env(*names: str) -> str | None:
+    r"""Return the first non-empty value among the given environment vars."""
+    for name in names:
+        value = os.environ.get(name)
+        if value:
+            return value
+    return None
+
+
+def _env_float(name: str, default: float) -> float:
+    r"""Return an environment variable parsed as a float, or ``default``."""
+    value = os.environ.get(name)
+    if not value:
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
 def generate_summary(
     query: str,
     prediction: Any,
@@ -203,25 +238,37 @@ def generate_summary(
 ) -> str:
     r"""Generate a human-readable summary of a KumoRFM explanation.
 
-    The cohort and subgraph views returned by the NIM are rendered against the
-    embedded explainability system prompt and sent to an OpenAI-compatible
-    chat-completions endpoint. The endpoint is fully configurable so the summary
-    can be produced by any deployment: pass ``base_url``, ``api_key`` and
-    ``model`` explicitly, or set ``OPENAI_BASE_URL`` / ``OPENAI_API_KEY`` /
-    ``KUMORFM_EXPLAIN_MODEL`` in the environment. When no API key or the optional
-    ``openai`` dependency is available, the call degrades to a short, actionable
-    message rather than raising.
+    Built for OpenAI (default model ``gpt-4.1-mini``), it works with any
+    OpenAI-compatible chat-completions endpoint. Configure once via the
+    environment: the API key from ``KUMORFM_EXPLAIN_API_KEY`` (else
+    ``OPENAI_API_KEY``), plus ``KUMORFM_EXPLAIN_BASE_URL`` (for another
+    endpoint), ``KUMORFM_EXPLAIN_MODEL``, and ``KUMORFM_EXPLAIN_TIMEOUT``
+    (seconds); or pass ``base_url`` / ``api_key`` / ``model`` / ``timeout`` (or
+    an already-built ``client``), which take precedence. A slow model just needs
+    a larger timeout; the summary degrades to a short message that names what to
+    set rather than raising, and the structured explanation (``.cohorts`` /
+    ``.subgraphs``) is available regardless.
     """
     if timeout is None:
-        timeout = _DEFAULT_TIMEOUT
-    base_url = base_url or os.environ.get("OPENAI_BASE_URL") or None
-    api_key = api_key or os.environ.get("OPENAI_API_KEY")
-    if model is None:
-        model = os.environ.get("KUMORFM_EXPLAIN_MODEL", _DEFAULT_MODEL)
+        timeout = _env_float("KUMORFM_EXPLAIN_TIMEOUT", _DEFAULT_TIMEOUT)
+    base_url = base_url or _env("KUMORFM_EXPLAIN_BASE_URL")
+    api_key = api_key or _env("KUMORFM_EXPLAIN_API_KEY", "OPENAI_API_KEY")
+    model_set = model or _env("KUMORFM_EXPLAIN_MODEL")
+    model = model_set or _DEFAULT_MODEL
+
     if client is None:
+        try:
+            import openai  # noqa: F401
+        except ImportError:
+            return SUMMARY_NEEDS_EXTRA_MESSAGE
+        if not api_key:
+            return SUMMARY_UNAVAILABLE_MESSAGE
+        if base_url and not model_set:
+            return SUMMARY_NEEDS_MODEL_MESSAGE
         client = _make_client(base_url, api_key, timeout)
     if client is None:
         return SUMMARY_UNAVAILABLE_MESSAGE
+
     message = _build_input_message(query, prediction, cohorts, subgraphs)
     try:
         response = client.chat.completions.create(
@@ -232,8 +279,10 @@ def generate_summary(
             ],
         )
         content = response.choices[0].message.content
-    except Exception:
-        return SUMMARY_ERROR_MESSAGE
+    except Exception as exc:
+        if type(exc).__name__ == "APITimeoutError":
+            return SUMMARY_TIMEOUT_MESSAGE.format(timeout=timeout)
+        return f"{SUMMARY_ERROR_MESSAGE} (reason: {type(exc).__name__})"
     if not content:
         return SUMMARY_ERROR_MESSAGE
     return content.strip()
