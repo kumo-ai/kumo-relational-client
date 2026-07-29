@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -23,7 +27,7 @@ from rfm_nim_payloads import (
     nim_v1_smoke_payload,
 )
 
-MOCK_URL = 'http://kumo.ai'
+MOCK_URL = 'http://nim.test'
 SDK_V1_MODELS_PATH = '/v1/models'
 
 

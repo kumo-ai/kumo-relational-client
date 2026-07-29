@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Guard: a release tag must match the tagged package's declared version.
 
 Release tags have the form ``<distribution>/v<version>`` (for example

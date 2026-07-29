@@ -121,3 +121,10 @@ return type regardless of adapter.
 
 Not wired yet. `core/transport.py` implements `predict()` only; `create_session` /
 `session_predict` / `delete_session` are deferred until the NIM session path is exercised.
+
+## License & Contributing
+
+This project is released under the [Apache License 2.0](./LICENSE); third-party
+components are listed in [`NOTICE`](./NOTICE). External contributions are
+welcome under the Developer Certificate of Origin — see
+[`CONTRIBUTING.md`](./CONTRIBUTING.md).

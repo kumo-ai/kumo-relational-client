@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Demo the Kumo RFM SDK against a local Universal TFM NIM.
 
 This example intentionally does not hand-build the Universal TFM prediction

@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate the minimal TFM API bindings used by the SDK.
 
 This is intentionally small and first-party. It reads the canonical OpenAPI

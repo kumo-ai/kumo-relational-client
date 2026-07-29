@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 try:
     import kumorfm.kumolib  # noqa: F401
 except Exception as e:
@@ -27,7 +31,7 @@ glibc version: {platform.libc_ver()[1]}
   * Windows (arm64)
 * glibc versions: <2.28
 
-Please create a feature request at 'https://github.com/kumo-ai/kumo-rfm'."""
+Please create a feature request at 'https://github.com/NVIDIA/nvidia-sdfm-sdk'."""
 
     raise RuntimeError(_msg) from e
 

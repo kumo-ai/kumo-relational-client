@@ -4,7 +4,7 @@ dynamic=["dependencies", "version"]
 authors=[
     {name="NVIDIA"},
 ]
-license="MIT"
+license = "Apache-2.0"
 license-files=["LICENSE"]
 description="RFM engine (graph, samplers, PQL, native neighbor-sampler) for the nvidia-sdfm SDK"
 readme="README.md"

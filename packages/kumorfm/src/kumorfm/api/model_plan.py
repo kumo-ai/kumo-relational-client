@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 import dataclasses
 import datetime
 import types
@@ -115,7 +119,7 @@ def compat_field(
 
 class RunMode(StrEnum):
     r"""Defines the run mode for AutoML. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/whats-the-recommended-way-to-cut-down-on-model-training-time>`_
+    documentation
     for more information."""  # noqa
     #: Speeds up the search process—typically about 4x faster than
     #: using the normal mode.
@@ -630,8 +634,7 @@ else:
 class TrainingTableGenerationPlan(PlanMixin):
     r"""Configuration parameters that define the construction of a Kumo
     training table from a predictive query. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations
-    #training-table-generation>`_ for more information.
+    documentation for more information.
 
     :ivar split: (``str``) A custom split that is used to generate a training,
         validation, and test set in the training table
@@ -890,8 +893,7 @@ class PredictionTableGenerationPlan(PlanMixin):
 class TrainingJobPlan(PlanMixin):
     r"""Configuration parameters that define the general execution of a Kumo
     AutoML search. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations
-    #training-job-plan>`_ for more information.
+    documentation for more information.
 
     :ivar num_experiments: (``int``) The number of experiments to run
         (*default:* ``run_mode``-dependent).
@@ -989,8 +991,7 @@ class TrainingJobPlan(PlanMixin):
 class ColumnProcessingPlan(PlanMixin):
     r"""Configuration parameters that define how columns are encoded in the
     training and batch prediction pipelines. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations
-    #column-processing>`_ for more information.
+    documentation for more information.
 
     :ivar encoder_overrides: (``dict[str, Encoder] | None``) A dictionary of
         encoder overrides, which maps the ``{table_name}.{column name}`` to an
@@ -1018,8 +1019,7 @@ class ColumnProcessingPlan(PlanMixin):
 class NeighborSamplingPlan(PlanMixin):
     r"""Configuration parameters that define how subgraphs are sampled in the
     training and batch prediction pipelines. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations
-    #neighbor-sampling>`_ for more information.
+    documentation for more information.
 
     :ivar num_neighbors: (``list[NumNeighborsConfig]``) Determines the number
         of neighbors to sample for each hop when sampling subgraphs for
@@ -1091,8 +1091,7 @@ class NeighborSamplingPlan(PlanMixin):
 class OptimizationPlan(PlanMixin):
     r"""Configuration parameters that define how columns are encoded in the
     training and batch prediction pipelines. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations
-    #optimization>`_ for more information.
+    documentation for more information.
 
     :ivar max_epochs: (``int``) The maximum number of epochs to train a model
         for (*default:* ``run_mode``-dependent).
@@ -1500,8 +1499,7 @@ class GraphTransformerModelPlan(MessagePassingModelPlan):
 class ModelArchitecturePlan(PlanMixin):
     r"""Configuration parameters that define how the Kumo graph neural network
     is architected. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations
-    #model-architecture>`_ for more information.
+    documentation for more information.
 
     :ivar model: (``list[GNNModelPlan | GraphTransformerModelPlan]``) A list of
         models to use. (*default:* ``[GNNModelPlan(...)]``).
@@ -1834,7 +1832,7 @@ class ModelPlan:
     :class:`~kumorfm.api.model_plan.NeighborSamplingPlan`,
     :class:`~kumorfm.api.model_plan.OptimizationPlan`, and a
     :class:`~kumorfm.api.model_plan.ModelArchitecturePlan`. Please see the
-    `Kumo documentation <https://docs.kumo.ai/docs/advanced-operations>`_
+    documentation
     for more information."""
 
     #: The training job plan.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 import logging
 
 import antlr4
@@ -186,7 +190,7 @@ class ErrorTranslator:
                     'REL_OP should be a valid operation, and CONST is a '
                     'constant. Multiple conditions can be combined with '
                     '"AND", "OR", and "NOT" logical operators. You can refer '
-                    'to our documentation at docs.kumo.ai for more details '
+                    'to the documentation for more details '
                     'on allowed operations.')
             if rule_name == 'aggregation':
                 hints.append(
@@ -196,7 +200,7 @@ class ErrorTranslator:
                     'COLUMN stands for a column name, <start> and <end> are '
                     'integers that stand for time offset, and <time_unit> is '
                     'a valid time unit. You can refer '
-                    'to our documentation at docs.kumo.ai for more details '
+                    'to the documentation for more details '
                     'on allowed operations.')
 
         maybe_hints_text = ""

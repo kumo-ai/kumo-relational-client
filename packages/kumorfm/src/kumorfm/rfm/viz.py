@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 r"""Self-contained Mermaid rendering for graph visualization.
 
 Display never requires system executables (graphviz ``dot``), CDN scripts,

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 import math
 import os
@@ -84,7 +88,7 @@ _SIZE_LIMIT_MSG = ("Context size exceeds the 30MB limit. {stats}\nPlease "
                    "number of columns (e.g., large text columns), "
                    "neighborhood configuration, or the run mode. If none of "
                    "this is possible, please create a feature request at "
-                   "'https://github.com/kumo-ai/kumo-rfm' if you must go "
+                   "'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you must go "
                    "beyond this for your use-case.")
 
 _SESSION_UNSUPPORTED_STATUS = frozenset({404, 405, 501})
@@ -259,7 +263,7 @@ def _nim_failure_error(error: Exception, explain: bool) -> RuntimeError:
             f'pressure. Wait a few moments and retry.{pacing}{server}')
     return RuntimeError(
         f"An unexpected exception occurred. Please create an issue at "
-        f"'https://github.com/kumo-ai/kumo-rfm'. {detail if detail else error}")
+        f"'https://github.com/NVIDIA/nvidia-sdfm-sdk'. {detail if detail else error}")
 
 
 def _extract_explanation(
@@ -305,9 +309,8 @@ def _extract_explanation(
 
 
 class KumoRFM:
-    r"""The Kumo Relational Foundation model (RFM) from the `KumoRFM: A
-    Foundation Model for In-Context Learning on Relational Data
-    <https://kumo.ai/research/kumo_relational_foundation_model.pdf>`_ paper.
+    r"""The Kumo Relational Foundation model (RFM) from the KumoRFM: A Foundation Model for In-Context Learning on
+    Relational Data.
 
     :class:`KumoRFM` is a foundation model to generate predictions for any
     relational dataset without training.
@@ -1816,7 +1819,7 @@ class KumoRFM:
                              f"hops (got {len(num_neighbors)}). Reduce the "
                              f"number of hops and try again. Please create a "
                              f"feature request at "
-                             f"'https://github.com/kumo-ai/kumo-rfm' if you "
+                             f"'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you "
                              f"must go beyond this for your use-case.")
 
         if _validate_references:
@@ -1855,7 +1858,7 @@ class KumoRFM:
             raise ValueError(f"Cannot query from a graph with more than 15 "
                              f"tables (got {len(subgraph.table_dict)}). "
                              f"Please create a feature request at "
-                             f"'https://github.com/kumo-ai/kumo-rfm' if you "
+                             f"'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you "
                              f"must go beyond this for your use-case.")
 
         if (task.task_type.is_link_pred

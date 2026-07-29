@@ -1,11 +1,10 @@
 # kumorfm.api
 
-Internalized copy of `kumo-api`, vendored so the SDK is self-contained (no
-external `kumo-api` dependency) for the open-source release.
+Internalized copy of the `kumo-api` wire-type package, vendored so the SDK is
+self-contained (no external `kumo-api` dependency) for the open-source release.
 
-- Source: `kumo-ai/kumo-api`
-- Version: `0.92.0` (tag `v0.92.0`, commit `9ee1c96`)
-- Changes from upstream:
+- Version baseline: `0.92.0`
+- Changes from the baseline:
   - All internal `kumoapi.*` imports rewritten to `kumorfm.api.*`.
   - `rfm/protos/` (protobuf `.proto` definitions) dropped: the SDK uses the
     JSON wire format only and never exercises the protobuf code paths, and the

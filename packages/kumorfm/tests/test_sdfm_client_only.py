@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """The KumoRFM engine may only be initialized by nvidia_sdfm.SDFMClient.
 
 Direct `rfm.init(...)` + `KumoRFM(graph).predict(...)` against a NIM used to

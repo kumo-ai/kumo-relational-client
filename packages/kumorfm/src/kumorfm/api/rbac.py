@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared RBAC dataclasses used by both the Kumo REST service and the SDK."""
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Union

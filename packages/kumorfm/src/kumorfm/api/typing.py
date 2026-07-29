@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 import builtins
 
 import pydantic
@@ -25,7 +29,7 @@ class Stype(StrEnum):
     .. note::
 
         For more information about how to select a semantic type, please
-        refer to https://docs.kumo.ai/docs/column-preprocessing.
+        refer to the column-preprocessing documentation.
 
     Attributes:
         numerical: A numerical column. Typically integers or floats.

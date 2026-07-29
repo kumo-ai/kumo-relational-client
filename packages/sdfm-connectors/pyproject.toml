@@ -7,7 +7,7 @@ authors = [
 description = "Shared data-source connectors (connect, read, SQL quoting) for the nvidia-sdfm SDK and its engines"
 readme = "README.md"
 requires-python = ">=3.10"
-license = "MIT"
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = [
     "structured-data",

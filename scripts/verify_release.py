@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Wait until a published release is visible on a PyPI simple index.
 
 Artifactory's simple index can lag a successful twine upload, so the verify

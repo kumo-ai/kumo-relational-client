@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 from kumorfm.api.common import ValidationResponse
 from kumorfm.api.graph import ColumnKey, GraphDefinition
 from kumorfm.api.pquery import ValidatedPredictiveQuery
