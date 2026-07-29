@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 import pandas as pd
 
-from nvidia_sdfm.requests import KumoRFMRequest, TabICLRequest
+from nvidia_sdfm.requests import (
+    KumoRFMRequest,
+    KumoRFMTaskRequest,
+    TabICLRequest,
+)
 
 if TYPE_CHECKING:
     from nvidia_sdfm.base import PredictResult
@@ -74,6 +78,77 @@ class RFMModel:
             graph=self._graph,
             query=query,
             indices=indices,
+            run_mode=run_mode,
+            explain=explain,
+            batch_size=batch_size,
+            num_retries=num_retries,
+            options=options,
+        )
+        return self._client._predict(request)
+
+    def predict_task(
+        self,
+        context: pd.DataFrame,
+        predict: pd.DataFrame,
+        *,
+        task_type: str,
+        entity_table: str | Sequence[str],
+        run_mode: str = 'fast',
+        explain: bool | ExplainConfig | dict[str, Any] = False,
+        batch_size: int | Literal['max'] | None = None,
+        num_retries: int = 1,
+        entity_column: str = 'ENTITY',
+        target_column: str = 'TARGET',
+        time_column: str | None = None,
+        num_forecasts: int = 1,
+        step_size: int | None = None,
+        num_neighbors: Any = _UNSET,
+        num_hops: Any = _UNSET,
+        inference_config: Any = _UNSET,
+        use_prediction_time: Any = _UNSET,
+        return_embeddings: Any = _UNSET,
+        random_seed: Any = _UNSET,
+    ) -> PredictResult:
+        r"""Predict from a caller-supplied train table instead of a PQL query.
+
+        ``context`` holds the labelled (train) rows and ``predict`` the rows to
+        score, both referencing entities of ``entity_table`` in the bound graph
+        (a ``(source, target)`` pair for temporal link prediction). Columns
+        default to ``ENTITY`` / ``TARGET`` / ``ANCHOR_TIMESTAMP`` (the
+        prediction-output convention) and are overridable.
+
+        ``task_type`` is one of ``binary_classification``,
+        ``multiclass_classification``, ``regression``, ``forecasting`` or
+        ``temporal_link_prediction`` (also on ``capabilities("kumo-rfm").tasks``).
+
+        >>> model = client.kumorfm(graph)  # doctest: +SKIP
+        >>> model.predict_task(
+        ...     context=train_df, predict=predict_df,
+        ...     task_type="multiclass_classification", entity_table="users")
+        """
+        options = {
+            name: value
+            for name, value in (
+                ('num_neighbors', num_neighbors),
+                ('num_hops', num_hops),
+                ('inference_config', inference_config),
+                ('use_prediction_time', use_prediction_time),
+                ('return_embeddings', return_embeddings),
+                ('random_seed', random_seed),
+            )
+            if value is not _UNSET
+        }
+        request = KumoRFMTaskRequest(
+            graph=self._graph,
+            context=context,
+            predict=predict,
+            task_type=task_type,
+            entity_table=entity_table,
+            entity_column=entity_column,
+            target_column=target_column,
+            time_column=time_column,
+            num_forecasts=num_forecasts,
+            step_size=step_size,
             run_mode=run_mode,
             explain=explain,
             batch_size=batch_size,

@@ -60,6 +60,22 @@ with SDFMClient(url="http://localhost:8000") as client:
     attribution = result.details
 ```
 
+Bring your own train table with `predict_task` when you want to supply the
+in-context (train) labels directly instead of deriving them from a PQL query.
+`context` holds the labelled rows and `predict` the rows to score, both
+referencing entities of `entity_table` in the graph; columns default to
+`ENTITY` / `TARGET` / `ANCHOR_TIMESTAMP`:
+
+```python
+with SDFMClient(url="http://localhost:8000") as client:
+    df = client.kumorfm(graph).predict_task(
+        context=train_df,      # ENTITY, TARGET, [ANCHOR_TIMESTAMP]
+        predict=predict_df,    # ENTITY, [ANCHOR_TIMESTAMP]
+        task_type="multiclass_classification",
+        entity_table="users",
+    )
+```
+
 Discover what a NIM serves with `client.models()` and
 `client.capabilities("tabicl")`. The transport pools connections and retries
 transient failures (429/5xx) with backoff; tune it per client with

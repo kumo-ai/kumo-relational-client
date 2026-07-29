@@ -13,7 +13,11 @@ from nvidia_sdfm import (
     TabICLModel,
 )
 from nvidia_sdfm.base import ModelAdapter, ModelCapabilities
-from nvidia_sdfm.requests import KumoRFMRequest, TabICLRequest
+from nvidia_sdfm.requests import (
+    KumoRFMRequest,
+    KumoRFMTaskRequest,
+    TabICLRequest,
+)
 
 
 class _CapturingAdapter(ModelAdapter):
@@ -232,3 +236,62 @@ def test_rfm_handle_batch_defaults_off():
 
     assert adapter.captured.batch_size is None
     assert adapter.captured.num_retries == 1
+
+
+def test_rfm_handle_predict_task_end_to_end_through_client():
+    result = pd.DataFrame({'ENTITY': [3], 'PREDICTION': ['pro']})
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMTaskRequest, result)
+    client = _client_with(adapter)
+
+    context = pd.DataFrame({'ENTITY': [1, 2], 'TARGET': ['free', 'pro']})
+    predict = pd.DataFrame({'ENTITY': [3]})
+    out = client.kumorfm('my-graph').predict_task(
+        context=context, predict=predict,
+        task_type='multiclass_classification', entity_table='users',
+        run_mode='best', num_neighbors=[8, 8])
+
+    assert out is result
+    req = adapter.captured
+    assert isinstance(req, KumoRFMTaskRequest)
+    assert req.model == 'kumo-rfm'
+    assert req.graph == 'my-graph'
+    assert req.context is context
+    assert req.predict is predict
+    assert req.task_type == 'multiclass_classification'
+    assert req.entity_table == 'users'
+    assert req.run_mode == 'best'
+    assert req.options == {'num_neighbors': [8, 8]}
+
+
+def test_rfm_handle_predict_task_defaults_are_minimal():
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMTaskRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict_task(
+        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+        predict=pd.DataFrame({'ENTITY': [2]}),
+        task_type='regression', entity_table='users')
+
+    req = adapter.captured
+    assert req.entity_column == 'ENTITY'
+    assert req.target_column == 'TARGET'
+    assert req.time_column is None
+    assert req.num_forecasts == 1
+    assert req.step_size is None
+    assert req.run_mode == 'fast'
+    assert req.options == {}
+
+
+def test_rfm_handle_predict_task_only_forwards_set_options():
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMTaskRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict_task(
+        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+        predict=pd.DataFrame({'ENTITY': [2]}),
+        task_type='regression', entity_table='users',
+        inference_config={'num_estimators': 2})
+
+    assert adapter.captured.options == {
+        'inference_config': {'num_estimators': 2},
+    }

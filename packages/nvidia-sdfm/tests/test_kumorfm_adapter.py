@@ -12,7 +12,7 @@ import pytest
 from nvidia_sdfm.adapters.kumorfm import KumoRFMAdapter
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import MissingExtraError, SdfmError
-from nvidia_sdfm.requests import KumoRFMRequest
+from nvidia_sdfm.requests import KumoRFMRequest, KumoRFMTaskRequest
 
 try:
     import kumorfm.rfm as rfm_engine
@@ -31,6 +31,13 @@ requires_engine = pytest.mark.skipif(
 @pytest.fixture
 def client() -> Transport:
     return Transport('https://nim.example.com:8000', api_key='secret')
+
+
+class _FakeGraph:
+    r"""Minimal stand-in exposing the ``tables`` mapping the adapter reads."""
+
+    def __init__(self, *table_names: str) -> None:
+        self.tables = {name: None for name in table_names}
 
 
 @requires_engine
@@ -436,3 +443,252 @@ def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
         KumoRFMAdapter().predict(client, KumoRFMRequest(
             graph='g', query='PREDICT x FOR t.id=1', batch_size='auto'))
     assert err.value.code == 'INVALID_REQUEST'
+
+
+@requires_engine
+def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeTaskTable:
+        ENTITY_TIME = '__entity_time__'
+
+        def __init__(self, **kwargs):
+            captured['task_table'] = kwargs
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            captured['graph'] = graph
+
+        def predict_task(self, task, **kwargs):
+            captured['predict_task'] = {'task': task, **kwargs}
+            return pd.DataFrame({'ENTITY': [3]})
+
+    monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    context = pd.DataFrame({
+        'ENTITY': [1, 2],
+        'TARGET': ['a', 'b'],
+        'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-01', '2025-01-02']),
+    })
+    predict = pd.DataFrame({'ENTITY': [3]})
+
+    out = KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+        graph=_FakeGraph('users'), context=context, predict=predict,
+        task_type='multiclass_classification', entity_table='users'))
+
+    assert isinstance(out, pd.DataFrame)
+    assert isinstance(captured['predict_task']['task'], FakeTaskTable)
+    assert captured['predict_task']['run_mode'] == 'fast'
+    assert captured['predict_task']['explain'] is False
+    tt = captured['task_table']
+    assert tt['task_type'] == 'multiclass_classification'
+    assert tt['entity_table_name'] == 'users'
+    assert tt['entity_column'] == 'ENTITY'
+    assert tt['target_column'] == 'TARGET'
+    assert tt['time_column'] == 'ANCHOR_TIMESTAMP'
+    assert tt['context_df'] is context
+    assert tt['pred_df'] is predict
+
+
+@requires_engine
+def test_predict_task_uses_anchor_timestamp_from_predict_only(
+        monkeypatch, client):
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeTaskTable:
+        ENTITY_TIME = '__entity_time__'
+
+        def __init__(self, **kwargs):
+            captured['task_table'] = kwargs
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict_task(self, task, **kwargs):
+            return pd.DataFrame({'ENTITY': [2]})
+
+    monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+        graph=_FakeGraph('users'),
+        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+        predict=pd.DataFrame({
+            'ENTITY': [2],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-02-01']),
+        }),
+        task_type='multiclass_classification', entity_table='users'))
+
+    assert captured['task_table']['time_column'] == 'ANCHOR_TIMESTAMP'
+
+
+@requires_engine
+def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeTaskTable:
+        ENTITY_TIME = '__entity_time__'
+
+        def __init__(self, **kwargs):
+            captured['task_table'] = kwargs
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict_task(self, task, **kwargs):
+            return pd.DataFrame({'ENTITY': [2]})
+
+    monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+        graph=_FakeGraph('users'),
+        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+        predict=pd.DataFrame({'ENTITY': [2]}),
+        task_type='multiclass_classification', entity_table='users'))
+
+    assert captured['task_table']['time_column'] == FakeTaskTable.ENTITY_TIME
+
+
+@requires_engine
+def test_predict_task_returns_explanation_and_forwards_options(
+        monkeypatch, client):
+    from kumorfm.rfm.rfm import Explanation
+
+    captured = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeTaskTable:
+        ENTITY_TIME = '__entity_time__'
+
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
+
+    explanation = Explanation.__new__(Explanation)
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict_task(self, task, **kwargs):
+            captured.update(kwargs)
+            return explanation
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    out = KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+        graph=_FakeGraph('users'),
+        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+        predict=pd.DataFrame({'ENTITY': [1]}),
+        task_type='multiclass_classification', entity_table='users',
+        explain=True, options={'num_neighbors': [4, 4]}))
+
+    assert out is explanation
+    assert captured['explain'] is True
+    assert captured['num_neighbors'] == [4, 4]
+
+
+@requires_engine
+def test_predict_task_rejects_reserved_option_keys(monkeypatch, client):
+    called = {}
+    monkeypatch.setattr(rfm_engine, 'init',
+                        lambda **kwargs: called.setdefault('init', True))
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame({'ENTITY': [1]}),
+            task_type='regression', entity_table='users',
+            options={'run_mode': 'best'}))
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'init' not in called
+
+
+def test_capabilities_list_both_request_types():
+    assert (KumoRFMAdapter().capabilities().request_type
+            == 'KumoRFMRequest | KumoRFMTaskRequest')
+
+
+@requires_engine
+def test_predict_task_rejects_unknown_task_type(monkeypatch, client):
+    called = {}
+    monkeypatch.setattr(rfm_engine, 'init',
+                        lambda **kwargs: called.setdefault('init', True))
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame({'ENTITY': [2]}),
+            task_type='__unknown_task_type__', entity_table='users'))
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'task_type' in str(err.value)
+    assert 'init' not in called
+
+
+@requires_engine
+def test_predict_task_rejects_entity_table_absent_from_graph(
+        monkeypatch, client):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+            graph=_FakeGraph('users', 'orders'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame({'ENTITY': [2]}),
+            task_type='regression', entity_table='customers'))
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'customers' in str(err.value)
+
+
+@requires_engine
+def test_predict_task_rejects_missing_target_column(monkeypatch, client):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1]}),
+            predict=pd.DataFrame({'ENTITY': [2]}),
+            task_type='regression', entity_table='users'))
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'context' in str(err.value)
+    assert 'TARGET' in str(err.value)
+
+
+@requires_engine
+def test_predict_task_rejects_missing_entity_column_in_predict(
+        monkeypatch, client):
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    with pytest.raises(SdfmError) as err:
+        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame({'WRONG': [2]}),
+            task_type='regression', entity_table='users'))
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'predict' in str(err.value)
+
+
+def test_capabilities_advertise_supported_task_types():
+    from nvidia_sdfm.adapters.kumorfm import RFM_TASK_TYPES
+    tasks = KumoRFMAdapter().capabilities().tasks
+    assert tasks == RFM_TASK_TYPES
+    assert 'multiclass_classification' in tasks
+
+
+def test_task_types_match_engine_task_type_enum():
+    task_module = pytest.importorskip('kumorfm.api.task')
+    from nvidia_sdfm.adapters.kumorfm import RFM_TASK_TYPES
+    for name in RFM_TASK_TYPES:
+        assert task_module.TaskType(name).value == name

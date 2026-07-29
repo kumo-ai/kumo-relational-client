@@ -19,6 +19,15 @@ if TYPE_CHECKING:
 
 PredictResult = Union[pd.DataFrame, "Explanation"]
 
+RequestTypes = Union[type[ModelRequest], tuple[type[ModelRequest], ...]]
+
+
+def request_type_names(request_type: RequestTypes) -> str:
+    r"""Render an adapter's accepted request type(s) for messages and capabilities."""
+    types = (request_type
+             if isinstance(request_type, tuple) else (request_type, ))
+    return ' | '.join(rt.__name__ for rt in types)
+
 
 @dataclass(frozen=True)
 class ModelCapabilities:
@@ -31,7 +40,7 @@ class ModelCapabilities:
 
 class ModelAdapter(ABC):
     name: str
-    request_type: ClassVar[type[ModelRequest]]
+    request_type: ClassVar[RequestTypes]
 
     @abstractmethod
     def capabilities(self) -> ModelCapabilities:

@@ -14,6 +14,7 @@ from nvidia_sdfm.base import (
     ModelAdapter,
     ModelCapabilities,
     PredictResult,
+    request_type_names,
 )
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import SdfmError
@@ -111,7 +112,7 @@ class SDFMClient:
         if not isinstance(request, adapter.request_type):
             raise SdfmError(
                 f"model {request.model!r} expects a "
-                f"{adapter.request_type.__name__}, got "
+                f"{request_type_names(adapter.request_type)}, got "
                 f"{type(request).__name__}",
                 code='INVALID_REQUEST',
             )

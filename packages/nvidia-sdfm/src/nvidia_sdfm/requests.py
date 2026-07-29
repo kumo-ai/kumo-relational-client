@@ -72,3 +72,40 @@ class KumoRFMRequest(ModelRequest):
     batch_size: int | Literal['max'] | None = None
     num_retries: int = 1
     options: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class KumoRFMTaskRequest(ModelRequest):
+    r"""A KumoRFM prediction request with a caller-supplied context table.
+
+    Where :class:`KumoRFMRequest` derives its in-context (train) examples from a
+    PQL ``query``, this request carries them directly: ``context`` holds the
+    labelled rows and ``predict`` the rows to score, both referencing entities of
+    ``entity_table`` in the ``graph`` (a ``(source, target)`` pair for temporal
+    link prediction). Their columns follow the same convention as the prediction
+    output -- ``ENTITY``, ``TARGET`` and an optional ``ANCHOR_TIMESTAMP`` --
+    overridable via ``entity_column`` / ``target_column`` / ``time_column``.
+    ``time_column`` defaults to ``ANCHOR_TIMESTAMP`` when present, otherwise the
+    entity table's own time column.
+
+    This is the internal request built by the public handle
+    ``client.kumorfm(graph).predict_task(...)``. ``run_mode``, ``explain``,
+    ``batch_size`` and ``options`` behave as in :class:`KumoRFMRequest`.
+    """
+    model: ClassVar[str] = 'kumo-rfm'
+
+    graph: Any
+    context: pd.DataFrame
+    predict: pd.DataFrame
+    task_type: str
+    entity_table: str | Sequence[str]
+    entity_column: str = 'ENTITY'
+    target_column: str = 'TARGET'
+    time_column: str | None = None
+    num_forecasts: int = 1
+    step_size: int | None = None
+    run_mode: str = 'fast'
+    explain: bool | ExplainConfig | dict[str, Any] = False
+    batch_size: int | Literal['max'] | None = None
+    num_retries: int = 1
+    options: dict[str, Any] = field(default_factory=dict)
