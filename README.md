@@ -4,6 +4,16 @@ One client SDK for NVIDIA structured-data foundation model NIMs, served behind t
 Universal TFM API. A thin, model-agnostic client dispatches to per-model adapters;
 heavy model drivers are optional, installed only when you ask for them.
 
+## Documentation
+
+Full documentation lives under [`docs/`](docs/index.md):
+
+- [Overview](docs/about/overview.md) — what the SDK is and when to use it
+- [Architecture](docs/about/architecture.md) — how the client, adapters, drivers, and connectors fit together
+- [Prerequisites](docs/get-started/prerequisites.md) and [Installation](docs/get-started/installation.md)
+- [Quickstart](docs/get-started/quickstart.md) — your first TabICL and KumoRFM predictions
+- [Environment Variables](docs/reference/environment-variables.md)
+
 ## Install
 
 | Command | You get |
