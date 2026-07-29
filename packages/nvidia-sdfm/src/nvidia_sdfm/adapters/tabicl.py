@@ -22,6 +22,8 @@ _CLASSIFICATION_KINDS = frozenset({
     'multiclass_classification',
 })
 
+_TASK_KINDS = _CLASSIFICATION_KINDS | frozenset({'regression'})
+
 
 def _new_request_id() -> str:
     return f'sdfm_{uuid.uuid4().hex[:12]}'
@@ -57,6 +59,11 @@ def build_request(
     max_results: int | None = None,
     request_id: str | None = None,
 ) -> dict[str, Any]:
+    if task not in _TASK_KINDS:
+        raise SdfmError(
+            f'task must be one of {sorted(_TASK_KINDS)}; got {task!r}',
+            code='INVALID_REQUEST',
+        )
     if target not in context.columns:
         raise SdfmError(
             f'target column {target!r} not found in context',
@@ -127,7 +134,7 @@ class TabICLAdapter(ModelAdapter):
         return ModelCapabilities(
             model='tabicl',
             request_type=self.request_type.__name__,
-            tasks=('classification', 'regression'),
+            tasks=tuple(sorted(_TASK_KINDS)),
             outputs=('prediction', 'probabilities', 'quantiles'),
         )
 

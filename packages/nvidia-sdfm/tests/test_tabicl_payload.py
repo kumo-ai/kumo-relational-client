@@ -126,6 +126,19 @@ def test_build_request_missing_target_raises(context_df, predict_df):
         )
 
 
+def test_build_request_unknown_task_raises(context_df, predict_df):
+    with pytest.raises(SdfmError) as err:
+        build_request(
+            context=context_df,
+            predict=predict_df,
+            task='__unknown_task__',
+            target='y',
+            outputs=['prediction'],
+        )
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'task' in str(err.value)
+
+
 def test_table_payload_preserves_rows_for_zero_column_frame():
     from nvidia_sdfm.adapters.tabicl import _table_payload
 
