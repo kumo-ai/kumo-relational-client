@@ -21,8 +21,8 @@ from kumorfm.rfm.explain_summary import (
 )
 
 _ENV_VARS = (
-    'OPENAI_API_KEY', 'KUMORFM_EXPLAIN_API_KEY', 'KUMORFM_EXPLAIN_BASE_URL',
-    'KUMORFM_EXPLAIN_MODEL', 'KUMORFM_EXPLAIN_TIMEOUT',
+    'OPENAI_API_KEY', 'KUMORFM_EXPLAIN_LLM_API_KEY', 'KUMORFM_EXPLAIN_LLM_BASE_URL',
+    'KUMORFM_EXPLAIN_LLM_MODEL', 'KUMORFM_EXPLAIN_LLM_TIMEOUT',
 )
 
 try:
@@ -130,7 +130,7 @@ def test_generate_summary_timeout_tells_user_to_raise_timeout() -> None:
     client = _FakeClient(error=APITimeoutError('timed out'))
     out = generate_summary('q', 'p', ['c'], ['s'], client=client, timeout=7)
     assert 'timed out after 7s' in out
-    assert 'KUMORFM_EXPLAIN_TIMEOUT' in out
+    assert 'KUMORFM_EXPLAIN_LLM_TIMEOUT' in out
     assert '.cohorts' in out
 
 
@@ -141,7 +141,7 @@ def test_generate_summary_empty_content_is_error() -> None:
 
 
 def test_generate_summary_uses_env_model(monkeypatch: Any) -> None:
-    monkeypatch.setenv('KUMORFM_EXPLAIN_MODEL', 'env-model')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'env-model')
     record: dict[str, Any] = {}
     client = _FakeClient(record=record)
     generate_summary('q', 'p', ['c'], ['s'], client=client)
@@ -149,7 +149,7 @@ def test_generate_summary_uses_env_model(monkeypatch: Any) -> None:
 
 
 def test_generate_summary_explicit_model_overrides_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('KUMORFM_EXPLAIN_MODEL', 'env-model')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'env-model')
     record: dict[str, Any] = {}
     client = _FakeClient(record=record)
     generate_summary('q', 'p', ['c'], ['s'], client=client, model='explicit')
@@ -189,9 +189,9 @@ def _capture_make_client(monkeypatch: Any) -> dict[str, Any]:
 
 @requires_openai
 def test_uses_openai_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('KUMORFM_EXPLAIN_BASE_URL', 'https://openai.example/v1')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_BASE_URL', 'https://openai.example/v1')
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
-    monkeypatch.setenv('KUMORFM_EXPLAIN_MODEL', 'm')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'm')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['base_url'] == 'https://openai.example/v1'
@@ -203,8 +203,8 @@ def test_uses_openai_env(monkeypatch: Any) -> None:
 def test_explain_api_key_takes_precedence_over_openai_key(
         monkeypatch: Any) -> None:
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
-    monkeypatch.setenv('KUMORFM_EXPLAIN_API_KEY', 'explain-key')
-    monkeypatch.setenv('KUMORFM_EXPLAIN_MODEL', 'm')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_API_KEY', 'explain-key')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'm')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['api_key'] == 'explain-key'
@@ -220,7 +220,7 @@ def test_falls_back_to_openai_key(monkeypatch: Any) -> None:
 
 @requires_openai
 def test_explicit_args_override_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('KUMORFM_EXPLAIN_BASE_URL', 'https://env.example/v1')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_BASE_URL', 'https://env.example/v1')
     monkeypatch.setenv('OPENAI_API_KEY', 'env-key')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'],
@@ -239,15 +239,15 @@ def test_timeout_defaults_to_20_and_reads_env(monkeypatch: Any) -> None:
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['timeout'] == 20.0
 
-    monkeypatch.setenv('KUMORFM_EXPLAIN_TIMEOUT', '5')
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_TIMEOUT', '5')
     call2 = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call2['timeout'] == 5.0
 
 
 def test_env_float_invalid_falls_back(monkeypatch: Any) -> None:
-    monkeypatch.setenv('KUMORFM_EXPLAIN_TIMEOUT', 'not-a-number')
-    assert explain_summary._env_float('KUMORFM_EXPLAIN_TIMEOUT', 20.0) == 20.0
+    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_TIMEOUT', 'not-a-number')
+    assert explain_summary._env_float('KUMORFM_EXPLAIN_LLM_TIMEOUT', 20.0) == 20.0
 
 
 def test_explanation_accessors_ignore_malformed_details() -> None:
@@ -273,6 +273,85 @@ def test_explanation_accessors_ignore_malformed_details() -> None:
                  'details': {'cohorts': [{'c': 1}], 'subgraphs': [{'s': 2}]}})
     assert good.cohorts == [{'c': 1}]
     assert good.subgraphs == [{'s': 2}]
+
+
+def _explanation(subgraphs: Any) -> Any:
+    import pandas as pd
+
+    from kumorfm.rfm.rfm import Explanation
+    return Explanation(
+        prediction=pd.DataFrame(), summary='',
+        details={'format': 'kumo_rfm_v2_1',
+                 'details': {'subgraphs': subgraphs}})
+
+
+def _subgraph(tables: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    subgraph = {'seed_id': 0, 'seed_table': 'users',
+                'seed_time': '2025-04-30T00:00:00', 'tables': tables,
+                'context_examples': []}
+    subgraph.update(extra)
+    return subgraph
+
+
+def test_feature_importance_aggregates_scores_by_table_column() -> None:
+    from kumorfm.api.explain import GraphGradientScore
+
+    exp = _explanation([_subgraph({
+        'users': {'0': {'cells': {
+            'status': {'value': 'ACTIVE', 'score': 1.0},
+            'age': {'value': None, 'score': 0.089}}}},
+        'orders': {
+            '1': {'cells': {'amount': {'value': 5.0, 'score': 0.4}}},
+            '2': {'cells': {'amount': {'value': 2.0, 'score': 0.1}}}},
+    })])
+    fi = exp.feature_importance
+    assert isinstance(fi, GraphGradientScore)
+    assert set(fi.tables) == {'users', 'orders'}
+    assert fi['users']['status'] == 1.0
+    assert fi['users']['age'] == pytest.approx(0.089)  # null value still scores
+    assert fi['orders']['amount'] == pytest.approx(0.5)  # summed across nodes
+    assert fi['users'].total_score == pytest.approx(1.089)
+
+    frame = fi.to_pandas()
+    assert list(frame.columns) == ['table', 'column', 'score']
+    assert frame.iloc[0]['score'] == 1.0  # sorted descending
+
+
+def test_feature_importance_sums_across_multiple_subgraphs() -> None:
+    exp = _explanation([
+        _subgraph({'users': {'0': {'cells': {
+            'age': {'value': 30, 'score': 0.2}}}}}),
+        _subgraph({'users': {'0': {'cells': {
+            'age': {'value': 40, 'score': 0.5}}}}}),
+    ])
+    assert exp.feature_importance['users']['age'] == pytest.approx(0.7)
+
+
+def test_feature_importance_ignores_context_examples_and_non_numeric() -> None:
+    exp = _explanation([
+        _subgraph(
+            {'orders': {'1': {'cells': {
+                'amount': {'value': 5.0, 'score': 0.3},
+                'note': {'value': 'x', 'score': None}}}}},
+            context_examples=[{'entity_id': 1, 'score': 0.9, 'label': True}]),
+        {'seed_id': 1},  # a subgraph without a 'tables' map is ignored
+    ])
+    fi = exp.feature_importance
+    assert set(fi.tables) == {'orders'}
+    assert fi['orders']['amount'] == pytest.approx(0.3)
+    assert 'note' not in fi['orders'].columns  # non-numeric score skipped
+
+
+def test_feature_importance_empty_when_no_subgraphs() -> None:
+    import pandas as pd
+
+    from kumorfm.api.explain import GraphGradientScore
+    from kumorfm.rfm.rfm import Explanation
+    exp = Explanation(prediction=pd.DataFrame(), summary='', details=None)
+    fi = exp.feature_importance
+    assert isinstance(fi, GraphGradientScore)
+    assert fi.tables == {}
+    assert fi.to_pandas().empty
 
 
 def test_nim_failure_error_explain_reports_gpu_pressure() -> None:

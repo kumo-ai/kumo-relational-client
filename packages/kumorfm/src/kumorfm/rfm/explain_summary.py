@@ -149,12 +149,12 @@ SUMMARY_NEEDS_EXTRA_MESSAGE = (
 SUMMARY_UNAVAILABLE_MESSAGE = (
     "Natural-language explanation summary needs an API key. Set OPENAI_API_KEY "
     "(the default is OpenAI gpt-4.1-mini); for another OpenAI-compatible "
-    "endpoint set KUMORFM_EXPLAIN_API_KEY, KUMORFM_EXPLAIN_BASE_URL and "
-    "KUMORFM_EXPLAIN_MODEL. " + _STRUCTURED_NOTE)
+    "endpoint set KUMORFM_EXPLAIN_LLM_API_KEY, KUMORFM_EXPLAIN_LLM_BASE_URL and "
+    "KUMORFM_EXPLAIN_LLM_MODEL. " + _STRUCTURED_NOTE)
 
 SUMMARY_NEEDS_MODEL_MESSAGE = (
     "Natural-language explanation summary: a custom endpoint is set "
-    "(KUMORFM_EXPLAIN_BASE_URL) but no model. Set KUMORFM_EXPLAIN_MODEL to a "
+    "(KUMORFM_EXPLAIN_LLM_BASE_URL) but no model. Set KUMORFM_EXPLAIN_LLM_MODEL to a "
     "model that endpoint serves. " + _STRUCTURED_NOTE)
 
 SUMMARY_ERROR_MESSAGE = (
@@ -163,7 +163,7 @@ SUMMARY_ERROR_MESSAGE = (
 
 SUMMARY_TIMEOUT_MESSAGE = (
     "Natural-language explanation summary timed out after {timeout:g}s. Raise "
-    "KUMORFM_EXPLAIN_TIMEOUT (or point KUMORFM_EXPLAIN_MODEL at a faster model) "
+    "KUMORFM_EXPLAIN_LLM_TIMEOUT (or point KUMORFM_EXPLAIN_LLM_MODEL at a faster model) "
     "and retry. " + _STRUCTURED_NOTE)
 
 
@@ -244,9 +244,9 @@ def generate_summary(
 
     Built for OpenAI (default model ``gpt-4.1-mini``), it works with any
     OpenAI-compatible chat-completions endpoint. Configure once via the
-    environment: the API key from ``KUMORFM_EXPLAIN_API_KEY`` (else
-    ``OPENAI_API_KEY``), plus ``KUMORFM_EXPLAIN_BASE_URL`` (for another
-    endpoint), ``KUMORFM_EXPLAIN_MODEL``, and ``KUMORFM_EXPLAIN_TIMEOUT``
+    environment: the API key from ``KUMORFM_EXPLAIN_LLM_API_KEY`` (else
+    ``OPENAI_API_KEY``), plus ``KUMORFM_EXPLAIN_LLM_BASE_URL`` (for another
+    endpoint), ``KUMORFM_EXPLAIN_LLM_MODEL``, and ``KUMORFM_EXPLAIN_LLM_TIMEOUT``
     (seconds); or pass ``base_url`` / ``api_key`` / ``model`` / ``timeout`` (or
     an already-built ``client``), which take precedence. A slow model just needs
     a larger timeout; the summary degrades to a short message that names what to
@@ -254,10 +254,10 @@ def generate_summary(
     ``.subgraphs``) is available regardless.
     """
     if timeout is None:
-        timeout = _env_float("KUMORFM_EXPLAIN_TIMEOUT", _DEFAULT_TIMEOUT)
-    base_url = base_url or _env("KUMORFM_EXPLAIN_BASE_URL")
-    api_key = api_key or _env("KUMORFM_EXPLAIN_API_KEY", "OPENAI_API_KEY")
-    model_set = model or _env("KUMORFM_EXPLAIN_MODEL")
+        timeout = _env_float("KUMORFM_EXPLAIN_LLM_TIMEOUT", _DEFAULT_TIMEOUT)
+    base_url = base_url or _env("KUMORFM_EXPLAIN_LLM_BASE_URL")
+    api_key = api_key or _env("KUMORFM_EXPLAIN_LLM_API_KEY", "OPENAI_API_KEY")
+    model_set = model or _env("KUMORFM_EXPLAIN_LLM_MODEL")
     model = model_set or _DEFAULT_MODEL
 
     if client is None:

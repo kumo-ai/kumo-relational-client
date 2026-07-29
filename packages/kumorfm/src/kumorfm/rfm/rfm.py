@@ -15,6 +15,7 @@ from typing import Any, Literal, overload
 
 import numpy as np
 import pandas as pd
+from kumorfm.api.explain import GraphGradientScore
 from kumorfm.api.model_plan import RunMode
 from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
 from kumorfm.api.pquery.AST import (
@@ -148,10 +149,10 @@ class ExplainConfig(CastMixin):
     Args:
         skip_summary: Whether to skip generating a human-readable summary of
             the explanation. The summary's LLM endpoint is configured once via
-            the environment: the API key from ``KUMORFM_EXPLAIN_API_KEY`` (else
-            ``OPENAI_API_KEY``), ``KUMORFM_EXPLAIN_BASE_URL`` (for any
-            OpenAI-compatible endpoint), ``KUMORFM_EXPLAIN_MODEL`` (default
-            ``gpt-4.1-mini``) and ``KUMORFM_EXPLAIN_TIMEOUT`` (default 20s).
+            the environment: the API key from ``KUMORFM_EXPLAIN_LLM_API_KEY`` (else
+            ``OPENAI_API_KEY``), ``KUMORFM_EXPLAIN_LLM_BASE_URL`` (for any
+            OpenAI-compatible endpoint), ``KUMORFM_EXPLAIN_LLM_MODEL`` (default
+            ``gpt-4.1-mini``) and ``KUMORFM_EXPLAIN_LLM_TIMEOUT`` (default 20s).
     """
     skip_summary: bool = False
 
@@ -185,6 +186,54 @@ class Explanation:
         r"""Cell-level subgraph attribution (local view), when available."""
         value = self._structured_details().get('subgraphs')
         return list(value) if isinstance(value, list) else []
+
+    @property
+    def feature_importance(self) -> GraphGradientScore:
+        r"""Gradient feature importance, as in the old SDK.
+
+        Sums the explained entity's per-cell subgraph attribution into
+        per-table, per-column scores and returns a :class:`GraphGradientScore`:
+        ``fi[table][column]`` -> score, ``fi[table].total_score``,
+        ``fi.print_summary(normalize=...)``, ``fi.normalize()``,
+        ``fi.to_pandas()``. Empty when no subgraph attribution is present.
+        """
+        scores = GraphGradientScore()
+        for table, column, cell in self._iter_cells():
+            value = cell.get('score')
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            table_scores = scores[str(table)]
+            table_scores.columns[column] = (
+                table_scores.columns.get(column, 0.0) + float(value))
+        return scores
+
+    def _iter_cells(
+        self,
+    ) -> Iterator[tuple[str, str, dict[str, Any]]]:
+        r"""Yield ``(table, column, cell)`` over every attributed cell.
+
+        The NIM returns each subgraph as ``{'tables': {table: {node_id:
+        {'cells': {column: {'value', 'score'}}}}}}``; the table name is the key
+        under ``tables`` and a table may span several nodes.
+        """
+        for entry in self.subgraphs:
+            if not isinstance(entry, dict):
+                continue
+            tables = entry.get('tables')
+            if not isinstance(tables, dict):
+                continue
+            for table, nodes in tables.items():
+                if not isinstance(nodes, dict):
+                    continue
+                for node in nodes.values():
+                    if not isinstance(node, dict):
+                        continue
+                    cells = node.get('cells')
+                    if not isinstance(cells, dict):
+                        continue
+                    for column, cell in cells.items():
+                        if isinstance(cell, dict):
+                            yield table, column, cell
 
     @overload
     def __getitem__(self, index: Literal[0]) -> pd.DataFrame:

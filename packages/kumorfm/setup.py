@@ -30,6 +30,7 @@ setup(
         "antlr4-python3-runtime==4.9.3",
         "rich>=9.0.0",
         "jinja2",
+        "tabulate",
     ],
     **kwargs,
 )
