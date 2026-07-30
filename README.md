@@ -117,8 +117,9 @@ needs the ADBC driver's `adbc_ingest`, which is a separate concern).
 
 ## Why the KumoRFM adapter isn't symmetric with TabICL
 
-`TabICLRequest` (`context` / `predict` / `task` / `target`) maps cleanly onto the Universal
-wire envelope, but `KumoRFMRequest` (`graph` / `query` / `indices`) does not: `KumoRFM.predict()`
+The internal `TabICLRequest` (`context` / `predict` / `task` / `target`) maps cleanly onto the
+Universal wire envelope, but `KumoRFMRequest` (`graph` / `query` / `indices`) does not — these
+are the shapes the handles build for the adapters, not a user-facing API. `KumoRFM.predict()`
 takes a PQL query plus an entity-graph and builds/samples/sends the request as one fused
 operation — there is no standalone "build a payload from two flat DataFrames" step to call
 into. Reimplementing that outside the driver would duplicate PQL parsing, subgraph sampling,

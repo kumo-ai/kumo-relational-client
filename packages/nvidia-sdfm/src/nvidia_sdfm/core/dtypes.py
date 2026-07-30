@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 JSON_SAFE_INT_MAX = 9007199254740991
@@ -28,9 +29,13 @@ def infer_tfm_dtype(series: pd.Series) -> str:
 def _is_missing(value: Any) -> bool:
     if value is None:
         return True
-    if isinstance(value, (list, dict)):
+    try:
+        result = pd.isna(value)
+    except (TypeError, ValueError):
         return False
-    return bool(pd.isna(value))
+    if isinstance(result, (bool, np.bool_)):
+        return bool(result)
+    return False  # Array-likes (lists, ndarrays) are values, not nulls.
 
 
 def serialize_cell(value: Any, dtype: str) -> Any:

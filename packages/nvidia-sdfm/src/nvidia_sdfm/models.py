@@ -197,6 +197,34 @@ class TabICLModel:
         max_results: Any = _UNSET,
         request_id: Any = _UNSET,
     ) -> pd.DataFrame:
+        r"""Scores ``predict`` against the bound context table.
+
+        Args:
+            predict: The unlabelled rows to score. Must share the context's
+                feature columns and hold at least one row.
+            outputs: The fields to return, defaulting to ``['prediction']``.
+                TabICL produces ``'probabilities'`` for a classification task
+                and ``'quantiles'`` for a regression one; asking for a field
+                the task cannot produce raises.
+            positive_class: The class to treat as positive in a binary
+                classification. Must be one of the classes in the context's
+                target column. Currently ignored by the TabICL NIM.
+            prediction_statistic: The statistic to reduce a regression
+                prediction with, e.g. ``'mean'``.
+            quantile_levels: The quantiles to return alongside a regression
+                prediction, each strictly between 0 and 1.
+            score_format: Requested encoding of ``'probabilities'``.
+                Currently ignored by the TabICL NIM, which always returns an
+                object keyed by class.
+            embedding_dtype: Requested encoding of returned embeddings.
+                Currently ignored by the TabICL NIM.
+            max_results: Requested cap on the number of returned rows.
+                Currently ignored by the TabICL NIM, which scores every row.
+            request_id: An id to correlate this request with server logs. One
+                is generated when omitted.
+
+        A classification context may declare at most 10 distinct classes.
+        """
         extra = {
             name: value
             for name, value in (

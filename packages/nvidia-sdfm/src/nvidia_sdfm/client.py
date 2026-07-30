@@ -69,11 +69,19 @@ class SDFMClient:
         return self._transport.url
 
     def models(self) -> list[str]:
-        r"""The model ids this client can serve."""
+        r"""The model ids this client can serve.
+
+        Describes the client's own adapter registry, not the connected
+        endpoint: a NIM serving only one of these models still reports both.
+        """
         return self._registry.names()
 
     def capabilities(self, model: str) -> ModelCapabilities:
-        r"""What ``model`` supports (tasks, outputs, request type)."""
+        r"""What ``model`` supports (tasks, outputs, request type).
+
+        Like :meth:`models`, this describes the client-side adapter and is not
+        read from the connected endpoint.
+        """
         return self._registry.get(model).capabilities()
 
     def health_ready(self) -> bool:

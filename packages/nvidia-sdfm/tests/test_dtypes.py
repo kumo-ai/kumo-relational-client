@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -71,3 +72,16 @@ def test_serialize_cell_timestamp_converts_offset_to_utc():
 def test_serialize_column_preserves_order():
     series = pd.Series([3, 1, 2])
     assert serialize_column(series, 'int64') == [3, 1, 2]
+
+
+def test_serialize_cell_treats_ndarray_as_a_value_not_a_null():
+    # Regression: bugs/tabicl-request-builder-crashes-on-ndarray-and-duplicate-
+    # columns.md -- ``bool(pd.isna(array))`` used to raise ValueError here.
+    assert serialize_cell(np.array([1, 2]), 'string') == '[1 2]'
+    assert serialize_cell(np.array([]), 'string') == '[]'
+    assert serialize_cell(np.array([float('nan')]), 'string') == '[nan]'
+
+
+def test_serialize_cell_treats_list_like_values_as_values():
+    assert serialize_cell([1, 2], 'string') == '[1, 2]'
+    assert serialize_cell((1, 2), 'string') == '(1, 2)'

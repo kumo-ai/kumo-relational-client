@@ -375,3 +375,48 @@ def test_sample_target() -> None:
     assert len(test.entity_pkey) == 0
     assert len(test.anchor_time) == 0
     assert len(test.target) == 0
+
+
+def test_sample_target_empty_entity_table_names_the_table() -> None:
+    # Regression: bugs/quality-missing-f-prefix-error-messages.md -- this
+    # message used to print the literal '{query.entity_table}'.
+    df_dict = {
+        'USERS':
+        pd.DataFrame({
+            'USER_ID': [1, 2, 3],
+            'AGE': [20, 30, 40],
+        }),
+        'ORDERS':
+        pd.DataFrame({
+            'ORDER_ID': range(6),
+            'USER_ID': [1, 1, 2, 2, 3, 3],
+            'AMOUNT': range(6),
+            'TIME': pd.date_range('2025-01-01', periods=6, freq='D'),
+        }),
+    }
+    graph = Graph.from_data(df_dict, verbose=False)
+    sampler = LocalSampler(graph, verbose=False)
+    query = ValidatedPredictiveQuery(
+        target_ast=Condition(
+            target=Aggregation(
+                aggr='SUM',
+                target=Column(fqn='ORDERS.AMOUNT'),
+                aggr_time_range=DateOffsetRange(0, 7),
+            ),
+            op='>',
+            value=Constant(value='5', dtype_maybe=Dtype.int),
+        ),
+        entity_ast=Column(fqn='USERS.USER_ID'),
+    )
+    sampler._sample_entity_table = lambda **kwargs: pd.DataFrame()
+
+    with pytest.raises(ValueError, match="entity table 'USERS'"):
+        sampler.sample_target(
+            query,
+            num_train_examples=1,
+            train_anchor_time=Timestamp('2025-01-05'),
+            num_train_trials=5,
+            num_test_examples=0,
+            test_anchor_time=Timestamp('2025-01-04'),
+            num_test_trials=5,
+        )

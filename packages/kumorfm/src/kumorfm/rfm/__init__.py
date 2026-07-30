@@ -34,10 +34,10 @@ _SDFM_CLIENT_TOKEN = object()
 _DIRECT_USE_MESSAGE = (
     "Direct use of the KumoRFM engine is not supported. Run inference through "
     "the NVIDIA SDFM SDK:\n"
-    "    from nvidia_sdfm import SDFMClient, KumoRFMRequest, kumorfm\n"
+    "    from nvidia_sdfm import SDFMClient, kumorfm\n"
     "    graph = kumorfm.Graph.from_data(...)\n"
     "    with SDFMClient(url=...) as client:\n"
-    "        client.predict(KumoRFMRequest(graph=graph, query=...))"
+    "        client.kumorfm(graph).predict(query, indices=[...])"
 )
 
 

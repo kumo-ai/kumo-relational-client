@@ -97,22 +97,18 @@ def build_demo_graph() -> rfm.Graph:
 
 
 def run_high_level_prediction(base_url: str, api_key: str | None) -> None:
-    print('\n=== SDFMClient.predict(...) ===')
-    from nvidia_sdfm import KumoRFMRequest, SDFMClient
+    print('\n=== client.kumorfm(graph).predict(...) ===')
+    from nvidia_sdfm import SDFMClient
 
     graph = build_demo_graph()
-    request = KumoRFMRequest(
-        graph=graph,
-        query='PREDICT USERS.STATUS = "A" FOR USERS.USER_ID = 4',
-        run_mode='best',
-        options={
-            'anchor_time': pd.Timestamp('2025-01-10'),
-            'num_neighbors': [],
-            'inference_config': {'num_estimators': 1},
-        },
-    )
     with SDFMClient(url=base_url, api_key=api_key) as client:
-        result = client.predict(request)
+        result = client.kumorfm(graph).predict(
+            'PREDICT USERS.STATUS = "A" FOR USERS.USER_ID = 4',
+            run_mode='best',
+            anchor_time=pd.Timestamp('2025-01-10'),
+            num_neighbors=[],
+            inference_config={'num_estimators': 1},
+        )
 
     print(result.to_string(index=False))
 

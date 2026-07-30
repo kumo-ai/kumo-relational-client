@@ -473,8 +473,8 @@ class Sampler(ABC):
         )
 
         if len(entity_df) == 0:
-            raise ValueError("Failed to find any rows in the entity table "
-                             "'{query.entity_table}'.")
+            raise ValueError(f"Failed to find any rows in the entity table "
+                             f"'{query.entity_table}'.")
 
         entity_pkey = entity_df[self.primary_key_dict[query.entity_table]]
         entity_time: pd.Series | None = None

@@ -40,8 +40,9 @@ endpoints or tenants in the same process without sharing global state.
 
 Every model is a peer module implementing the `ModelAdapter` interface and
 registered in the client's `AdapterRegistry`. An adapter advertises its
-capabilities, shapes a typed request (`TabICLRequest`, `KumoRFMRequest`) into the
-Universal TFM API envelope, and normalizes the NIM's response into a consistent
+capabilities, shapes an internal typed request (`TabICLRequest`, `KumoRFMRequest`,
+built by the model handles) into the Universal TFM API envelope, and normalizes
+the NIM's response into a consistent
 pandas DataFrame. Adding a model means adding one adapter module — the client
 core does not change.
 

@@ -1069,8 +1069,9 @@ class KumoRFM:
             raise ValueError(
                 f"Cannot predict for more than "
                 f"{_MAX_PRED_SIZE[task.task_type]:,} entities at once "
-                f"(got {batch_size:,}). Use `KumoRFM.batch_mode` to process "
-                "entities in batches with a sufficient batch size.")
+                f"(got {batch_size:,}). Pass `batch_size=` to `predict(...)` "
+                f"(for example `batch_size=500`) to process entities in "
+                f"batches.")
 
         num_batches = math.ceil(task.num_prediction_examples / batch_size)
         if num_batches > 1:

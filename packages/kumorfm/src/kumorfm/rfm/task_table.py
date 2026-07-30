@@ -46,14 +46,17 @@ class TaskTable:
     ) -> None:
 
         task_type = TaskType(task_type)
-        if task_type not in {  # Currently supported task types:
-                TaskType.BINARY_CLASSIFICATION,
-                TaskType.MULTICLASS_CLASSIFICATION,
-                TaskType.REGRESSION,
-                TaskType.FORECASTING,
-                TaskType.TEMPORAL_LINK_PREDICTION,
-        }:
-            raise ValueError  # TODO
+        supported_task_types = {  # Currently supported task types:
+            TaskType.BINARY_CLASSIFICATION,
+            TaskType.MULTICLASS_CLASSIFICATION,
+            TaskType.REGRESSION,
+            TaskType.FORECASTING,
+            TaskType.TEMPORAL_LINK_PREDICTION,
+        }
+        if task_type not in supported_task_types:
+            supported = sorted(t.value for t in supported_task_types)
+            raise ValueError(f"Task type '{task_type.value}' is not supported "
+                             f"by 'TaskTable' (got one of {supported})")
         self._task_type = task_type
 
         # TODO Check dfs (unify from local table)
@@ -79,7 +82,10 @@ class TaskTable:
                 entity_table_name[1],
             )
         else:
-            raise ValueError  # TODO
+            raise ValueError(f"'entity_table_name' must hold one entity table "
+                             f"name, or two for link prediction tasks (got "
+                             f"{len(entity_table_name)}: "
+                             f"{list(entity_table_name)})")
 
         self._entity_column: str = ''
         self._target_column: str = ''
@@ -345,4 +351,5 @@ def _get_target_stype(task_type: TaskType) -> Stype:
         return Stype.numerical
     if task_type.is_link_pred:
         return Stype.multicategorical
-    raise ValueError
+    raise ValueError(f"Cannot determine the semantic type of the target "
+                     f"column for task type '{task_type.value}'")

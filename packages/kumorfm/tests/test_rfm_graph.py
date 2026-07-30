@@ -10,6 +10,7 @@ from kumorfm.api.graph import ColumnKey, ColumnKeyGroup
 
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph, LocalTable
+from kumorfm.rfm.base import ColumnSpec
 
 
 @pytest.fixture
@@ -467,3 +468,44 @@ def test_to_mermaid_no_edges(sample_tables: list[LocalTable]) -> None:
 
     assert "users {" in mermaid
     assert "o|--o{" not in mermaid
+
+
+# Regression tests for bugs/quality-validate-error-message-defects.md.
+def test_validate_primary_key_as_foreign_key_message(
+        sample_dfs: dict[str, pd.DataFrame],  #
+) -> None:
+    users_table = LocalTable(sample_dfs['users'], 'users',
+                             primary_key='user_id')
+    orders_table = LocalTable(sample_dfs['orders'], 'orders',
+                              primary_key='user_id')
+
+    graph = Graph(tables=[users_table, orders_table])
+    graph.link('orders', 'user_id', 'users')
+
+    with pytest.raises(ValueError) as err:
+        graph.validate()
+
+    assert 'the link before proceeding.' in str(err.value)
+    assert 'before before' not in str(err.value)
+
+
+def test_validate_non_key_foreign_key_dtype_message(
+        sample_dfs: dict[str, pd.DataFrame],  #
+) -> None:
+    users_table = LocalTable(sample_dfs['users'], 'users',
+                             primary_key='user_id')
+    orders_table = LocalTable(sample_dfs['orders'], 'orders',
+                              primary_key='order_id')
+
+    graph = Graph(tables=[users_table, orders_table])
+    graph.link('orders', 'user_id', 'users')
+    graph['orders'].remove_column('user_id')
+    graph['orders'].add_column(
+        ColumnSpec('user_id', dtype='date', stype='timestamp'))
+
+    with pytest.raises(ValueError) as err:
+        graph.validate()
+
+    message = str(err.value)
+    assert "(got 'date')" in message
+    assert message.count('(') == message.count(')')

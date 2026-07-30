@@ -17,6 +17,7 @@ keywords = [
 ]
 dependencies = [
     "requests>=2.28",
+    "numpy>=1.24",
     "pandas>=2.0",
     "sdfm-connectors>=0.2,<1",
 ]
@@ -57,6 +58,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["nvidia_sdfm*"]
+
+[tool.setuptools.package-data]
+"nvidia_sdfm" = ["py.typed"]
 
 [tool.setuptools.dynamic]
 version = {attr = "nvidia_sdfm._version.__version__"}

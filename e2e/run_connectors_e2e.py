@@ -11,6 +11,16 @@ import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'nvidia-sdfm', 'src'))
 import nvidia_sdfm as sdfm  # noqa: E402
+from nvidia_sdfm import SDFMClient  # noqa: E402
+
+_client: SDFMClient | None = None
+
+
+def predict_tabicl(*, context, predict, task, target, **kwargs):
+    assert _client is not None
+    handle = _client.tabicl(context, target=target, task=task)
+    return handle.predict(predict, **kwargs)
+
 
 BASE_URL = os.environ.get('SDFM_NIM_BASE_URL', '').rstrip('/')
 DATA_DIR = os.environ.get('SDFM_DATA_DIR', os.path.join(os.path.dirname(__file__), 'data'))
@@ -42,8 +52,8 @@ def classify_job_outcomes(frame: pd.DataFrame, source: str) -> None:
     predict_full = frame.iloc[2000:2300]
     predict = predict_full.drop(columns=['status']).reset_index(drop=True)
 
-    result = sdfm.predict(
-        model='tabicl', context=context, predict=predict,
+    result = predict_tabicl(
+        context=context, predict=predict,
         task='classification', target='status',
         outputs=['prediction', 'probabilities'],
     )
@@ -86,8 +96,8 @@ def sqlite_connector() -> None:
     predict_full = frame.iloc[2000:2200]
     predict = predict_full.drop(columns=['avg_power_w']).reset_index(drop=True)
 
-    result = sdfm.predict(
-        model='tabicl', context=context, predict=predict,
+    result = predict_tabicl(
+        context=context, predict=predict,
         task='regression', target='avg_power_w',
         outputs=['prediction'],
     )
@@ -118,8 +128,8 @@ def duckdb_connector() -> None:
     predict_full = frame.iloc[2000:2200]
     predict = predict_full.drop(columns=['gpu_hours']).reset_index(drop=True)
 
-    result = sdfm.predict(
-        model='tabicl', context=context, predict=predict,
+    result = predict_tabicl(
+        context=context, predict=predict,
         task='regression', target='gpu_hours',
         outputs=['prediction', 'quantiles'],
         prediction_statistic='mean', quantile_levels=[0.1, 0.5, 0.9],
@@ -159,7 +169,8 @@ def main() -> None:
         print('Set SDFM_NIM_BASE_URL to run the connector checks.')
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
-    sdfm.init(url=BASE_URL)
+    global _client
+    _client = SDFMClient(url=BASE_URL)
 
     for step in (local_csv_connector, sqlite_connector, duckdb_connector, snowflake_connector):
         try:

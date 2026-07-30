@@ -8,7 +8,7 @@ import time
 from kumorfm import rfm
 from kumorfm.testing.databricks import connect
 
-from nvidia_sdfm import KumoRFMRequest, SDFMClient
+from nvidia_sdfm import SDFMClient
 
 nim_url = os.environ.get('RFM_API_URL') or os.environ['KUMO_API_ENDPOINT']
 
@@ -32,13 +32,11 @@ query = ("PREDICT COUNT(order_lines.*, 0, 30)=0 "
          "FOR EACH customers.customer_id")
 # `order_lines` is large (~1.4M rows), so cap the per-hop neighbor fan-out to
 # keep the in-context tables under the request-size limit:
-request = KumoRFMRequest(
-    graph=graph,
-    query=query,
-    indices=indices,
-    run_mode='fast',
-    options={'num_neighbors': [4]},
-)
 with SDFMClient(url=nim_url) as client:
-    pred = client.predict(request)
+    pred = client.kumorfm(graph).predict(
+        query,
+        indices=indices,
+        run_mode='fast',
+        num_neighbors=[4],
+    )
 print(pred)

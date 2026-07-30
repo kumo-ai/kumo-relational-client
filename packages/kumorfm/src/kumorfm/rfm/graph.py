@@ -1819,7 +1819,7 @@ class Graph:
                 raise ValueError(f"Cannot treat the primary key of table "
                                  f"'{src_table}' as a foreign key. Remove "
                                  f"either the primary key or the link before "
-                                 f"before proceeding.")
+                                 f"proceeding.")
 
             # Check that fkey/pkey have valid and consistent data types. Every
             # backend populates data types from its own catalog, so this check
@@ -1834,7 +1834,7 @@ class Graph:
             if not src_number and not src_string:
                 raise ValueError(
                     f"{edge} is invalid as foreign key must be a number "
-                    f"or string (got '{src_key.dtype}'")
+                    f"or string (got '{src_key.dtype}')")
 
             if src_number != dst_number or src_string != dst_string:
                 raise ValueError(

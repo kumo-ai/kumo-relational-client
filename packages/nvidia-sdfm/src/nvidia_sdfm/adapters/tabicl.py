@@ -24,9 +24,44 @@ _CLASSIFICATION_KINDS = frozenset({
 
 _TASK_KINDS = _CLASSIFICATION_KINDS | frozenset({'regression'})
 
+# The NIM serves the two canonical kinds only; the finer-grained names are
+# aliases for the same estimator and must be normalized before they go out.
+_WIRE_TASK_KINDS = {
+    'binary_classification': 'classification',
+    'multiclass_classification': 'classification',
+}
+
+# TabICL builds its KV cache for a fixed number of classes; beyond that the
+# model raises and the NIM answers with an opaque 500.
+_MAX_CLASSES = 10
+
+# Fields TabICL can produce per task kind. Anything else is accepted by the
+# contract but dropped server-side without comment.
+_OUTPUT_FIELDS = {
+    'classification': ('prediction', 'probabilities'),
+    'regression': ('prediction', 'quantiles'),
+}
+
 
 def _new_request_id() -> str:
     return f'sdfm_{uuid.uuid4().hex[:12]}'
+
+
+def _check_columns(name: str, frame: pd.DataFrame) -> None:
+    if frame.columns.has_duplicates:
+        duplicates = sorted({str(column) for column in
+                             frame.columns[frame.columns.duplicated()]})
+        raise SdfmError(
+            f'{name} has duplicate column name(s) {duplicates}',
+            code='INVALID_REQUEST',
+        )
+    non_strings = [column for column in frame.columns
+                   if not isinstance(column, str)]
+    if non_strings:
+        raise SdfmError(
+            f'{name} column names must be strings; got {non_strings}',
+            code='INVALID_REQUEST',
+        )
 
 
 def _table_payload(frame: pd.DataFrame, dtypes: dict[str, str]) -> dict[str, Any]:
@@ -64,9 +99,49 @@ def build_request(
             f'task must be one of {sorted(_TASK_KINDS)}; got {task!r}',
             code='INVALID_REQUEST',
         )
+    wire_task = _WIRE_TASK_KINDS.get(task, task)
+
+    _check_columns('context', context)
+    _check_columns('predict', predict)
+
     if target not in context.columns:
         raise SdfmError(
             f'target column {target!r} not found in context',
+            code='INVALID_REQUEST',
+        )
+    if len(context) == 0:
+        raise SdfmError(
+            'context is empty; TabICL needs at least one labelled row',
+            code='INVALID_REQUEST',
+        )
+    if len(predict) == 0:
+        raise SdfmError(
+            'predict is empty; TabICL needs at least one row to score',
+            code='INVALID_REQUEST',
+        )
+
+    unlabelled = context[target].isna()
+    if bool(unlabelled.any()):
+        rows = list(context.index[unlabelled][:10])
+        raise SdfmError(
+            f'context target {target!r} has {int(unlabelled.sum())} missing '
+            f'value(s) at rows {rows}; drop or fill them',
+            code='INVALID_REQUEST',
+        )
+
+    unsupported = [field for field in outputs
+                   if field not in _OUTPUT_FIELDS[wire_task]]
+    if unsupported:
+        raise SdfmError(
+            f'TabICL does not produce {unsupported} for a {wire_task} task; '
+            f'supported output fields: {list(_OUTPUT_FIELDS[wire_task])}',
+            code='INVALID_REQUEST',
+        )
+    if quantile_levels is not None and not all(
+            0.0 < level < 1.0 for level in quantile_levels):
+        raise SdfmError(
+            f'quantile_levels must lie strictly between 0 and 1; got '
+            f'{quantile_levels}',
             code='INVALID_REQUEST',
         )
 
@@ -75,7 +150,7 @@ def build_request(
         dtypes.setdefault(column, infer_tfm_dtype(predict[column]))
 
     task_spec: dict[str, Any] = {
-        'kind': task,
+        'kind': wire_task,
         'target': {
             'column_name': target,
             'dtype': dtypes[target],
@@ -83,9 +158,22 @@ def build_request(
     }
     if task in _CLASSIFICATION_KINDS:
         classes = sorted(str(value) for value in context[target].dropna().unique())
+        if len(classes) > _MAX_CLASSES:
+            raise SdfmError(
+                f'TabICL supports at most {_MAX_CLASSES} classes; context '
+                f'target {target!r} has {len(classes)}',
+                code='INVALID_REQUEST',
+            )
         task_spec['target']['classes'] = classes
         if positive_class is not None:
-            task_spec['target']['positive_class'] = positive_class
+            wire_positive_class = str(positive_class)
+            if wire_positive_class not in classes:
+                raise SdfmError(
+                    f'positive_class {positive_class!r} is not one of the '
+                    f'context classes {classes}',
+                    code='INVALID_REQUEST',
+                )
+            task_spec['target']['positive_class'] = wire_positive_class
 
     output_spec: dict[str, Any] = {'fields': outputs}
     if prediction_statistic is not None:

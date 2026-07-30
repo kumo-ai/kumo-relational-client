@@ -8,6 +8,7 @@ from kumorfm.api.task import TaskType
 from kumorfm.api.typing import Dtype, Stype
 
 from kumorfm.rfm import TaskTable
+from kumorfm.rfm.task_table import _get_target_stype
 from kumorfm.rfm.base import Column
 
 
@@ -160,3 +161,50 @@ def test_custom_features() -> None:
     assert task_table['FEAT_1'].stype == Stype.categorical
     assert task_table['FEAT_2'].dtype == Dtype.string
     assert task_table['FEAT_2'].stype == Stype.categorical
+
+
+# Regression tests for bugs/quality-task-table-message-less-raises.md: these
+# three sites used to raise ``ValueError`` with an empty message.
+def test_unsupported_task_type_message() -> None:
+    with pytest.raises(ValueError) as err:
+        TaskTable(
+            task_type=TaskType.MULTILABEL_RANKING,
+            context_df=pd.DataFrame({
+                'ENTITY': [0, 1],
+                'TARGET': [[0], [1]],
+            }),
+            pred_df=pd.DataFrame({'ENTITY': [2]}),
+            entity_table_name='USER',
+            entity_column='ENTITY',
+            target_column='TARGET',
+        )
+
+    assert 'multilabel_ranking' in str(err.value)
+    assert 'not supported' in str(err.value)
+
+
+@pytest.mark.parametrize('entity_table_name', [[], ['A', 'B', 'C']])
+def test_invalid_entity_table_name_arity_message(
+        entity_table_name: list[str], ) -> None:
+    with pytest.raises(ValueError) as err:
+        TaskTable(
+            task_type=TaskType.BINARY_CLASSIFICATION,
+            context_df=pd.DataFrame({
+                'ENTITY': [0, 1],
+                'TARGET': [True, False],
+            }),
+            pred_df=pd.DataFrame({'ENTITY': [2]}),
+            entity_table_name=entity_table_name,
+            entity_column='ENTITY',
+            target_column='TARGET',
+        )
+
+    assert 'entity_table_name' in str(err.value)
+    assert str(len(entity_table_name)) in str(err.value)
+
+
+def test_get_target_stype_unsupported_task_type_message() -> None:
+    with pytest.raises(ValueError) as err:
+        _get_target_stype(TaskType.MULTILABEL_CLASSIFICATION)
+
+    assert 'multilabel_classification' in str(err.value)

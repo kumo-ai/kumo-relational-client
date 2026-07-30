@@ -205,7 +205,7 @@ class SnowTable(Table):
             num_rows = result[7]
 
         if num_rows == 0:
-            raise RuntimeError("Table '{self.source_name}' is empty")
+            raise RuntimeError(f"Table '{self.source_name}' is empty")
 
         return num_rows
 

@@ -16,14 +16,15 @@ import requests
 from sklearn.datasets import load_breast_cancer, load_wine
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'nvidia-sdfm', 'src'))
-from nvidia_sdfm import SDFMClient, TabICLRequest  # noqa: E402
+from nvidia_sdfm import SDFMClient  # noqa: E402
 
 _client: SDFMClient | None = None
 
 
-def predict_tabicl(**kwargs):
+def predict_tabicl(*, context, predict, task, target, **kwargs):
     assert _client is not None
-    return _client.predict(TabICLRequest(**kwargs))
+    handle = _client.tabicl(context, target=target, task=task)
+    return handle.predict(predict, **kwargs)
 
 BASE_URL = os.environ.get('SDFM_NIM_BASE_URL', '').rstrip('/')
 

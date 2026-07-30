@@ -51,6 +51,9 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 include = ["sdfm_connectors*"]
 
+[tool.setuptools.package-data]
+"sdfm_connectors" = ["py.typed"]
+
 [tool.setuptools.dynamic]
 version = {attr = "sdfm_connectors.__version__"}
 
