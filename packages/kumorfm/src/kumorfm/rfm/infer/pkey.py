@@ -123,10 +123,10 @@ def infer_primary_key(
     if scores[0][1] != scores[1][1]:
         return scores[0][0]
 
-    max_score = max(scores, key=lambda x: x[1])
-    candidates = [col_name for col_name, score in scores if score == max_score]
+    max_score = max(score for _, score in scores)
+    tied = [col_name for col_name, score in scores if score == max_score]
     warnings.warn(f"Found multiple potential primary keys in table "
-                  f"'{table_name}': {candidates}. Please specify the primary "
+                  f"'{table_name}': {tied}. Please specify the primary "
                   f"key for this table manually.")
 
     return None

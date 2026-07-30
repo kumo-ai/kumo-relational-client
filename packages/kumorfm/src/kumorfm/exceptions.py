@@ -32,6 +32,41 @@ class ProjectNotSetError(Exception):
             "operations.")
 
 
+class InvalidResponseError(ValueError):
+    r"""The NIM answered, but its response does not match the contract.
+
+    Subclasses :class:`ValueError` so existing callers keep working, while
+    letting the SDK report a malformed *server* response as such instead of
+    blaming the caller's request — and stopping a body that will never parse
+    from being retried as though the NIM were merely busy.
+    """
+
+
+class NimFailureError(RuntimeError):
+    r"""A failed Kumo RFM NIM prediction, classified and ready to re-wrap.
+
+    Subclasses :class:`RuntimeError` so existing callers keep working, and
+    carries the structured facts a caller (or the ``nvidia-sdfm`` adapter) needs
+    to map it onto its own error hierarchy without re-parsing the message:
+    the HTTP status, the problem document's ``detail``, its RFC-9457
+    ``invalid_params`` entries, and whether the failure looks transient.
+    """
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: Optional[int] = None,
+        detail: Optional[str] = None,
+        invalid_params: Optional[list] = None,
+        transient: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.detail = detail
+        self.invalid_params = invalid_params or []
+        self.transient = transient
+
+
 class HTTPException(Exception):
     r"""An HTTP exception, with detailed information and headers."""
     def __init__(

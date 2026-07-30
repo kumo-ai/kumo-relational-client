@@ -55,6 +55,10 @@ class KumoRFMRequest(ModelRequest):
     ``options`` forwards any additional keyword arguments to the driver's
     ``predict`` (e.g. ``num_neighbors``, ``anchor_time``).
 
+    ``num_retries`` applies whether or not ``batch_size`` is set: each failed
+    request is retried that many times with an exponential backoff. Set it to
+    ``0`` to fail on the first error.
+
     This is the internal request built by the public handle
     ``client.kumorfm(graph).predict(query, ...)``. With ``explain`` set (a
     ``bool``, an ``ExplainConfig``, or an ``ExplainConfig`` dict) the prediction

@@ -16,6 +16,7 @@ from kumorfm.client.generated.tfm_api import (
     TFMOperations,
 )
 from kumorfm.client.utils import raise_on_error
+from kumorfm.exceptions import InvalidResponseError
 
 
 class RFMAPI:
@@ -131,13 +132,26 @@ class RFMAPI:
         instance_ids: Sequence[Any],
         anchor_times: Sequence[Any] | None,
     ) -> RFMPredictResponse:
-        prediction_response = PredictionResponse.from_dict(response.json())
-        return _prediction_response_to_rfm(
-            prediction_response,
-            entity_ids=entity_ids,
-            instance_ids=instance_ids,
-            anchor_times=anchor_times,
-        )
+        # The identity mappings describe the request we sent, so a mismatch
+        # among them is a caller-side contract error and must not be reported
+        # as a malformed response. Checked before the guard below, which turns
+        # everything it catches into an InvalidResponseError.
+        _validate_identity_mappings(entity_ids, instance_ids, anchor_times)
+        try:
+            prediction_response = PredictionResponse.from_dict(response.json())
+            return _prediction_response_to_rfm(
+                prediction_response,
+                entity_ids=entity_ids,
+                instance_ids=instance_ids,
+                anchor_times=anchor_times,
+            )
+        except InvalidResponseError:
+            raise
+        except (ValueError, KeyError, TypeError, AttributeError) as error:
+            raise InvalidResponseError(
+                f'The Kumo RFM NIM returned a prediction response that does '
+                f'not match the contract '
+                f'({type(error).__name__}: {error or "no detail"})') from error
 
 
 def _prediction_response_to_rfm(
@@ -236,6 +250,27 @@ def _prediction_item_to_ranking_rows(
     return rows
 
 
+def _validate_identity_mappings(
+    entity_ids: Sequence[Any],
+    instance_ids: Sequence[Any],
+    anchor_times: Sequence[Any] | None,
+) -> None:
+    r"""Check the parallel request mappings against each other.
+
+    These describe the request, not the response, so a mismatch is a caller
+    contract error and stays a plain ``ValueError``.
+    """
+    expected_count = len(entity_ids)
+    if len(instance_ids) != expected_count:
+        raise ValueError(
+            'Kumo RFM request identity mappings have different lengths: '
+            f'{expected_count} entities and {len(instance_ids)} instances.')
+    if anchor_times is not None and len(anchor_times) != expected_count:
+        raise ValueError(
+            'Kumo RFM request identity mappings have different lengths: '
+            f'{expected_count} entities and {len(anchor_times)} anchor times.')
+
+
 def _correlated_prediction_rows(
     response: PredictionResponse,
     *,
@@ -243,18 +278,11 @@ def _correlated_prediction_rows(
     instance_ids: Sequence[Any],
     anchor_times: Sequence[Any] | None = None,
 ) -> list[dict[str, Any]]:
+    _validate_identity_mappings(entity_ids, instance_ids, anchor_times)
     entities = list(entity_ids)
     instances = list(instance_ids)
     anchors = list(anchor_times) if anchor_times is not None else None
     expected_count = len(entities)
-    if len(instances) != expected_count:
-        raise ValueError(
-            'Kumo RFM request identity mappings have different lengths: '
-            f'{expected_count} entities and {len(instances)} instances.')
-    if anchors is not None and len(anchors) != expected_count:
-        raise ValueError(
-            'Kumo RFM request identity mappings have different lengths: '
-            f'{expected_count} entities and {len(anchors)} anchor times.')
     is_forecast = _is_forecast_response(response)
     forecast_steps_by_index: dict[int, set[int]] = {}
     if not is_forecast and len(response.predictions) != expected_count:

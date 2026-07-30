@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import sqlite3
+from pathlib import PurePosixPath
 
 import pandas as pd
 import pyarrow as pa
@@ -83,6 +84,98 @@ def test_read_local_rejects_both_data_and_path(tmp_path):
     with pytest.raises(ConnectorError) as excinfo:
         read('local', data={'a': [1]}, path=str(path))
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+def test_read_local_rejects_unknown_kwarg():
+    r"""connectors-local-source-raw-typeerror.md"""
+    with pytest.raises(ConnectorError) as excinfo:
+        read('local', data={'a': [1]}, bogus=1)
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert excinfo.value.details['arguments'] == ['bogus']
+
+
+def test_read_local_rejects_storage_options():
+    r"""connectors-local-source-raw-typeerror.md: valid for s3, not for local."""
+    with pytest.raises(ConnectorError) as excinfo:
+        read('local', path='table.csv', storage_options={})
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+@pytest.mark.parametrize('name', ['table.json', 'table.tsv', 'table.orc'])
+def test_read_local_rejects_unsupported_format(tmp_path, name):
+    r"""connectors-unsupported-format-silent-csv-fallback.md"""
+    path = tmp_path / name
+    pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']}).to_json(path)
+    with pytest.raises(ConnectorError) as excinfo:
+        read('local', path=str(path))
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert excinfo.value.details['suffix'] == PurePosixPath(name).suffix
+
+
+def test_read_local_accepts_parquet_aliases(tmp_path):
+    r"""connectors-unsupported-format-silent-csv-fallback.md: '.pq' is Parquet."""
+    path = tmp_path / 'table.pq'
+    pd.DataFrame({'a': [1, 2, 3]}).to_parquet(path)
+    assert read('local', path=str(path)).shape == (3, 1)
+
+
+def test_read_local_accepts_compressed_csv(tmp_path):
+    path = tmp_path / 'table.csv.gz'
+    pd.DataFrame({'a': [1, 2]}).to_csv(path, index=False)
+    assert read('local', path=str(path)).shape == (2, 1)
+
+
+def test_read_local_format_override_reads_suffixless_file(tmp_path):
+    r"""connectors-unsupported-format-silent-csv-fallback.md: escape hatch."""
+    path = tmp_path / 'table'
+    pd.DataFrame({'a': [1, 2]}).to_csv(path, index=False)
+    assert read('local', path=str(path), format='csv').shape == (2, 1)
+    with pytest.raises(ConnectorError) as excinfo:
+        read('local', path=str(path), format='avro')
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+def test_read_local_parquet_directory_without_trailing_slash(tmp_path):
+    r"""connectors-unsupported-format-silent-csv-fallback.md"""
+    dataset = tmp_path / 'dataset'
+    dataset.mkdir()
+    pd.DataFrame({'a': [1, 2, 3]}).to_parquet(dataset / 'part-0.parquet')
+    assert read('local', path=str(dataset)).shape == (3, 1)
+
+
+def test_read_sqlite_missing_database_is_not_found(tmp_path):
+    r"""connectors-sqlite-creates-missing-database-file.md"""
+    database = tmp_path / 'typo.sqlite'
+    with pytest.raises(ConnectorError) as excinfo:
+        read('sqlite', database=str(database), table='items')
+    assert excinfo.value.code == 'NOT_FOUND'
+    assert not database.exists()
+
+
+def test_read_sqlite_rejects_database_and_uri_together(tmp_path):
+    r"""connectors-database-uri-precedence-and-connect-asymmetry.md"""
+    first, second = str(tmp_path / 'a.sqlite'), str(tmp_path / 'b.sqlite')
+    for database in (first, second):
+        with sqlite3.connect(database) as connection:
+            pd.DataFrame({'a': [1]}).to_sql('items', connection, index=False)
+    with pytest.raises(ConnectorError) as excinfo:
+        read('sqlite', database=first, uri=second, table='items')
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+def test_read_table_runs_in_the_caller_duckdb_session():
+    r"""connectors-duckdb-cursor-loses-caller-session.md"""
+    import duckdb
+    connection = duckdb.connect()
+    try:
+        connection.register('mydf', pd.DataFrame({'a': [1, 2, 3]}))
+        connection.execute('CREATE TEMP TABLE tmp_t AS SELECT 1 AS a')
+
+        assert read_table(connection, table='mydf').shape == (3, 1)
+        assert read_table(connection, query='SELECT * FROM tmp_t').shape == (1, 1)
+        assert connection.execute('SELECT 1').fetchall() == [(1, )]
+    finally:
+        connection.close()
 
 
 def test_read_sqlite_by_table_and_query(tmp_path):

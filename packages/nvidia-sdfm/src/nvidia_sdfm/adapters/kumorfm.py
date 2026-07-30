@@ -11,7 +11,7 @@ import pandas as pd
 
 from nvidia_sdfm.base import ModelAdapter, ModelCapabilities, request_type_names
 from nvidia_sdfm.core.transport import Transport
-from nvidia_sdfm.errors import MissingExtraError, SdfmError
+from nvidia_sdfm.errors import MissingExtraError, NimRequestError, SdfmError
 from nvidia_sdfm.requests import KumoRFMRequest, KumoRFMTaskRequest
 
 if TYPE_CHECKING:
@@ -94,6 +94,63 @@ def _reject_reserved_options(options: dict[str, Any]) -> None:
         raise SdfmError(
             f'KumoRFM request options contain reserved keys {sorted(reserved)}; '
             'set them as request fields instead',
+            code='INVALID_REQUEST',
+        )
+
+
+def _driver_error_types() -> tuple[Any, Any]:
+    r"""The driver's classified error types, or ``(None, None)`` without it."""
+    try:
+        from kumorfm.exceptions import InvalidResponseError, NimFailureError
+    except Exception:
+        return None, None
+    return NimFailureError, InvalidResponseError
+
+
+def _translate_engine_error(error: Exception, url: str) -> SdfmError:
+    r"""Map a driver failure onto this SDK's own exception hierarchy.
+
+    The driver cannot depend on ``nvidia_sdfm``, so its NIM failures arrive as
+    ``NimFailureError`` (a ``RuntimeError``) carrying the status and the
+    problem document's ``invalid_params``. Translating here means ``except
+    SdfmError`` is a complete catch on this path, as it already is for TabICL.
+
+    Caller-input failures the engine validates itself (an anchor time before
+    the context window, an unknown option) arrive as ``ValueError``/
+    ``TypeError`` with messages that are already actionable: those keep their
+    message and become ``INVALID_REQUEST``, not ``INTERNAL_ERROR``. A response
+    that does not match the contract is ``INVALID_RESPONSE``, so a malformed
+    server answer is never blamed on the request. Only genuinely unanticipated
+    failures get ``INTERNAL_ERROR``, and they name the endpoint so the report
+    is actionable.
+    """
+    failure_type, invalid_response_type = _driver_error_types()
+    if failure_type is not None and isinstance(error, failure_type):
+        details = ({'invalid_params': error.invalid_params}
+                   if error.invalid_params else {})
+        if error.status_code is None:
+            return SdfmError(str(error), code='TRANSPORT_ERROR',
+                             details=details)
+        return NimRequestError(error.status_code, code=None,
+                               message=str(error), details=details)
+    if (invalid_response_type is not None
+            and isinstance(error, invalid_response_type)):
+        return SdfmError(str(error), code='INVALID_RESPONSE')
+    if isinstance(error, (ValueError, TypeError)):
+        return SdfmError(str(error), code='INVALID_REQUEST')
+    return SdfmError(
+        f'The kumo-rfm prediction at {url} failed unexpectedly with '
+        f'{type(error).__name__}: {error}',
+        code='INTERNAL_ERROR',
+    )
+
+
+def _validate_num_retries(num_retries: Any) -> None:
+    if (not isinstance(num_retries, int) or isinstance(num_retries, bool)
+            or num_retries < 0):
+        raise SdfmError(
+            'num_retries must be a non-negative int; got '
+            f'{num_retries!r}',
             code='INVALID_REQUEST',
         )
 
@@ -225,6 +282,7 @@ class KumoRFMAdapter(ModelAdapter):
         engine = _load_engine()
 
         _validate_batch_size(request.batch_size)
+        _validate_num_retries(request.num_retries)
         options = dict(request.options)
         _reject_reserved_options(options)
         explain = _resolve_explain(request.explain, options)
@@ -239,22 +297,31 @@ class KumoRFMAdapter(ModelAdapter):
         if request.batch_size is not None:
             batch_ctx = model.batch_mode(request.batch_size,
                                          num_retries=request.num_retries)
+        elif request.num_retries:
+            # Without a batch context the retry count used to be dropped, so
+            # 'num_retries' was a silent no-op on the default path.
+            batch_ctx = model.retry(request.num_retries)
         else:
             batch_ctx = contextlib.nullcontext()
-        with batch_ctx:
-            if isinstance(request, KumoRFMTaskRequest):
-                result = model.predict_task(
-                    _build_task_table(engine, request),
-                    run_mode=request.run_mode,
-                    explain=explain,
-                    **options,
-                )
-            else:
-                result = model.predict(
-                    request.query,
-                    indices=request.indices,
-                    run_mode=request.run_mode,
-                    explain=explain,
-                    **options,
-                )
+        try:
+            with batch_ctx:
+                if isinstance(request, KumoRFMTaskRequest):
+                    result = model.predict_task(
+                        _build_task_table(engine, request),
+                        run_mode=request.run_mode,
+                        explain=explain,
+                        **options,
+                    )
+                else:
+                    result = model.predict(
+                        request.query,
+                        indices=request.indices,
+                        run_mode=request.run_mode,
+                        explain=explain,
+                        **options,
+                    )
+        except SdfmError:
+            raise
+        except Exception as error:
+            raise _translate_engine_error(error, transport.url) from error
         return _coerce_result(result, explain is not False)

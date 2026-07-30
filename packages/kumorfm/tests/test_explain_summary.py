@@ -420,12 +420,88 @@ def test_nim_failure_error_timeout_points_at_the_timeout_setting() -> None:
     assert 'GPU memory pressure' not in msg
 
 
-def test_nim_failure_error_client_error_stays_generic() -> None:
+def test_nim_failure_error_client_error_is_not_an_sdk_bug_report() -> None:
+    r"""rfm-nim-validation-details-discarded.md
+
+    A 4xx is about the request the caller sent, so it is reported as a rejected
+    request rather than routed to the SDK's issue tracker.
+    """
     from kumorfm.exceptions import HTTPException
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    msg = str(_nim_failure_error(
-        HTTPException(400, '{"detail": "bad predictive query"}'), explain=True))
+    error = _nim_failure_error(
+        HTTPException(400, '{"detail": "bad predictive query"}'), explain=True)
+    msg = str(error)
     assert 'bad predictive query' in msg
-    assert 'create an issue' in msg
+    assert 'create an issue' not in msg
     assert 'GPU memory pressure' not in msg
+    assert error.status_code == 400
+    assert error.transient is False
+
+
+def test_nim_failure_error_surfaces_invalid_params() -> None:
+    r"""rfm-nim-validation-details-discarded.md
+
+    The NIM names the exact table, row and column it rejected; the top-level
+    ``detail`` is often only "Request validation failed."
+    """
+    import json
+
+    from kumorfm.exceptions import HTTPException
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    body = json.dumps({
+        'type': '/problems/validation-failed',
+        'status': 422,
+        'detail': 'Request validation failed.',
+        'invalid_params': [{
+            'name': 'context.related_tables.users.rows[0][big_feature]',
+            'reason': 'int64 value 4611686018427387905 exceeds the JSON safe '
+                      'integer range and must be encoded as a base-10 string.',
+        }],
+    })
+    error = _nim_failure_error(HTTPException(422, body), explain=False)
+    msg = str(error)
+    assert 'context.related_tables.users.rows[0][big_feature]' in msg
+    assert 'base-10 string' in msg
+    assert 'create an issue' not in msg
+    assert error.status_code == 422
+    assert len(error.invalid_params) == 1
+
+
+def test_nim_failure_error_caps_invalid_params() -> None:
+    r"""rfm-nim-validation-details-discarded.md"""
+    import json
+
+    from kumorfm.exceptions import HTTPException
+    from kumorfm.rfm.rfm import _MAX_INVALID_PARAMS, _nim_failure_error
+
+    body = json.dumps({
+        'detail': 'Request validation failed.',
+        'invalid_params': [{'name': f'col{index}', 'reason': 'bad'}
+                           for index in range(_MAX_INVALID_PARAMS + 3)],
+    })
+    msg = str(_nim_failure_error(HTTPException(422, body), explain=False))
+    assert 'col0: bad' in msg
+    assert f'col{_MAX_INVALID_PARAMS}' not in msg
+    assert 'and 3 more' in msg
+
+
+def test_nim_failure_error_unclassifiable_still_invites_an_issue() -> None:
+    r"""rfm-nim-validation-details-discarded.md: the invitation is reserved."""
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    msg = str(_nim_failure_error(RuntimeError('something odd'), explain=False))
+    assert 'create an issue' in msg
+
+
+def test_nim_failure_error_is_a_runtime_error() -> None:
+    r"""client-rfm-path-never-raises-sdfmerror.md: existing callers keep working."""
+    from kumorfm.exceptions import HTTPException, NimFailureError
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    error = _nim_failure_error(HTTPException(503, 'busy'), explain=False)
+    assert isinstance(error, NimFailureError)
+    assert isinstance(error, RuntimeError)
+    assert error.transient is True
+    assert error.status_code == 503

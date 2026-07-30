@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import suppress
+from pathlib import PurePosixPath
 from typing import Any
 
 import pandas as pd
@@ -20,6 +22,11 @@ from sdfm_connectors.sql import (
 
 _SQL_SOURCES = ('sqlite', 'duckdb', 'snowflake', 'databricks')
 _FILE_SOURCES = ('local', 's3')
+
+_PARQUET_SUFFIXES = ('.parquet', '.pq', '.parq')
+_CSV_SUFFIXES = ('.csv', '.txt')
+_COMPRESSION_SUFFIXES = ('.gz', '.bz2', '.zip', '.xz', '.zst', '.tar')
+_FILE_FORMATS = ('csv', 'parquet')
 
 _NULLABLE_INTEGER_DTYPES = {
     pa.int8(): pd.Int8Dtype(),
@@ -48,6 +55,12 @@ def read(source: str, **kwargs: Any) -> pd.DataFrame:
     table = kwargs.pop('table', None)
     query = kwargs.pop('query', None)
     if source in ('sqlite', 'duckdb'):
+        if 'database' in kwargs and 'uri' in kwargs:
+            raise ConnectorError(
+                f"{source} connector accepts exactly one of 'database' or "
+                f"'uri', not both",
+                code='INVALID_CONNECTOR_ARGS',
+            )
         uri = kwargs.pop('database', None)
         uri = kwargs.pop('uri', uri)
         connection = connect(source, uri, **kwargs)
@@ -62,6 +75,24 @@ def read(source: str, **kwargs: Any) -> pd.DataFrame:
                 connection.close()
 
 
+def _query_handle(connection: Any) -> tuple[Any, bool]:
+    r"""Return the ``(handle, owned)`` to run a query on.
+
+    ``DuckDBPyConnection.cursor()`` hands back a *new independent connection*
+    rather than a cursor on the same session, so the caller's temp tables and
+    registered DataFrames are invisible to it. A driver whose ``cursor()``
+    yields an object of the connection's own type is duplicating the
+    connection, so the query runs on the handle the caller passed in — and only
+    a genuine cursor we created is ours to close.
+    """
+    cursor = connection.cursor()
+    if isinstance(cursor, type(connection)):
+        with suppress(Exception):
+            cursor.close()
+        return connection, False
+    return cursor, True
+
+
 def read_table(
     connection: Any,
     *,
@@ -70,7 +101,7 @@ def read_table(
 ) -> pd.DataFrame:
     sql = resolve_sql(table=table, query=query)
     with driver_guard('QUERY_FAILED', 'query execution failed', sql=sql):
-        cursor = connection.cursor()
+        cursor, owned = _query_handle(connection)
         try:
             cursor.execute(sql)
             if hasattr(cursor, 'fetch_arrow_all'):
@@ -89,8 +120,9 @@ def read_table(
             columns = [description[0] for description in cursor.description]
             return pd.DataFrame(rows, columns=columns)
         finally:
-            with suppress(Exception):
-                cursor.close()
+            if owned:
+                with suppress(Exception):
+                    cursor.close()
 
 
 def _arrow_to_pandas(arrow_table: Any) -> pd.DataFrame:
@@ -115,7 +147,16 @@ def _read_local(
     *,
     data: pd.DataFrame | dict[str, Any] | None = None,
     path: str | None = None,
+    format: str | None = None,
+    **extra: Any,
 ) -> pd.DataFrame:
+    if extra:
+        raise ConnectorError(
+            f'local connector got unexpected arguments {sorted(extra)}; '
+            "supported: 'data', 'path' and 'format'",
+            code='INVALID_CONNECTOR_ARGS',
+            details={'arguments': sorted(extra)},
+        )
     if data is not None and path is not None:
         raise ConnectorError(
             "local connector accepts exactly one of 'data' or 'path', "
@@ -138,19 +179,20 @@ def _read_local(
             "local connector requires either 'data' or 'path'",
             code='INVALID_CONNECTOR_ARGS',
         )
-    return _read_file(path)
+    return _read_file(path, format=format)
 
 
 def _read_s3(
     *,
     path: str | None = None,
     storage_options: dict[str, Any] | None = None,
+    format: str | None = None,
     **extra: Any,
 ) -> pd.DataFrame:
     if extra:
         raise ConnectorError(
             f's3 connector got unexpected arguments {sorted(extra)}; '
-            "supported: 'path' and 'storage_options'",
+            "supported: 'path', 'storage_options' and 'format'",
             code='INVALID_CONNECTOR_ARGS',
             details={'arguments': sorted(extra)},
         )
@@ -166,15 +208,54 @@ def _read_s3(
             details={'path': path},
         )
     require_driver('s3', 's3fs', 's3fs')
-    return _read_file(path, storage_options=storage_options)
+    return _read_file(path, storage_options=storage_options, format=format)
+
+
+def _resolve_format(path: str) -> str:
+    r"""Decide the file format from ``path``, or reject it.
+
+    Falling back to CSV for any unrecognised suffix does not fail loudly: a
+    ``.json`` file parses into junk column names and zero rows, and a ``.tsv``
+    into a single column. Only the documented formats are read, and a directory
+    (with or without a trailing separator) is a Parquet dataset.
+    """
+    if path.endswith(('/', os.sep)) or os.path.isdir(path):
+        return 'parquet'
+    suffix = PurePosixPath(path.lower()).suffix
+    if suffix in _COMPRESSION_SUFFIXES:
+        suffix = PurePosixPath(path.lower()).suffixes[-2:-1]
+        suffix = suffix[0] if suffix else ''
+    if suffix in _PARQUET_SUFFIXES:
+        return 'parquet'
+    if suffix in _CSV_SUFFIXES:
+        return 'csv'
+    raise ConnectorError(
+        f'unsupported file format {suffix or path!r} for {path!r}; supported: '
+        f'{sorted(_PARQUET_SUFFIXES + _CSV_SUFFIXES)} (optionally compressed) '
+        f'and Parquet directories. Pass format="csv" or format="parquet" to '
+        f'read a file whose name does not carry one of these suffixes.',
+        code='INVALID_CONNECTOR_ARGS',
+        details={'path': path, 'suffix': suffix},
+    )
 
 
 def _read_file(
     path: str,
     storage_options: dict[str, Any] | None = None,
+    format: str | None = None,
 ) -> pd.DataFrame:
+    if format is None:
+        resolved = _resolve_format(path)
+    elif format in _FILE_FORMATS:
+        resolved = format
+    else:
+        raise ConnectorError(
+            f'unknown format {format!r}; supported: {sorted(_FILE_FORMATS)}',
+            code='INVALID_CONNECTOR_ARGS',
+            details={'format': format},
+        )
     with driver_guard('READ_FAILED', f'failed to read {path!r}',
                       missing_as_not_found=True, path=path):
-        if path.lower().endswith('.parquet') or path.endswith('/'):
+        if resolved == 'parquet':
             return pd.read_parquet(path, storage_options=storage_options)
         return pd.read_csv(path, storage_options=storage_options)

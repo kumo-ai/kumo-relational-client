@@ -13,9 +13,22 @@ It provides:
   DataFrame (also handles `local` DataFrames / CSV / Parquet, and `s3` object
   URIs: `read('s3', path='s3://bucket/table.parquet', storage_options=...)`).
 - `read_table(connection, table=…, query=…) -> DataFrame` — driver-agnostic
-  fetch over an open connection.
+  fetch over an open connection, in that connection's own session.
 - `quote_ident(ident, char='"')` and `resolve_sql(table=…, query=…)` — SQL
   identifier quoting and a safe table/query guard.
+
+File reads (`local` and `s3`) accept `.csv` / `.txt` (optionally compressed) and
+`.parquet` / `.pq` / `.parq`, plus a directory as a Parquet dataset. Any other
+suffix is rejected with `INVALID_CONNECTOR_ARGS` rather than parsed as CSV; pass
+`format='csv'` or `format='parquet'` to read a file whose name carries no
+recognised suffix.
+
+The SQL backends accept `database=` and `uri=` as aliases for the same argument
+(supplying both is an error), and reject connection keywords their driver does
+not declare — `driver_options={...}` passes anything else straight through. The
+`snowflake` backend reuses an active Snowpark session when no authentication
+arguments are given; a borrowed session cannot be reconfigured, so passing
+session-scoped arguments such as `schema=` alongside it is an error.
 
 Failures raised by `connect` / `read` / `read_table` surface as
 `ConnectorError` with a stable `code`: `UNKNOWN_CONNECTOR`,

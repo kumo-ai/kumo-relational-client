@@ -42,7 +42,7 @@ from rich.markdown import Markdown
 
 from kumorfm import in_notebook
 from kumorfm.client.rfm import RFMAPI
-from kumorfm.exceptions import HTTPException
+from kumorfm.exceptions import HTTPException, NimFailureError
 from kumorfm.mixin import CastMixin
 from kumorfm.rfm import Graph, TaskTable
 from kumorfm.rfm.base import DataBackend, Sampler
@@ -304,6 +304,7 @@ class Explanation:
 
 _NIM_UNAVAILABLE_STATUS = frozenset({500, 502, 503, 504})
 
+_OPTIMIZABLE_BACKENDS = frozenset({DataBackend.SQLITE, DataBackend.DUCKDB})
 
 def _class_dtype(task: TaskTable, context: Context) -> Any:
     r"""The dtype the ``CLASS`` column of a prediction frame should carry.
@@ -333,7 +334,56 @@ def _cast_class_column(values: pd.Series, dtype: Any) -> pd.Series:
         return values
 
 
-def _nim_failure_error(error: Exception, explain: bool) -> RuntimeError:
+
+_MAX_INVALID_PARAMS = 5
+
+
+def _problem_document(error: Exception) -> dict[str, Any]:
+    r"""The RFC-9457 problem document the NIM returned, if it returned one.
+
+    ``HTTPException.detail`` carries the raw response body; a NIM error body is
+    a problem document, but a proxy or a partially-deployed NIM may return
+    anything at all.
+    """
+    detail = getattr(error, 'detail', None)
+    if isinstance(detail, str):
+        try:
+            document = json.loads(detail)
+        except Exception:
+            return {}
+        if isinstance(document, dict):
+            return document
+    return {}
+
+
+def _invalid_params_summary(document: dict[str, Any]) -> str:
+    r"""Render the NIM's per-field validation diagnosis.
+
+    The NIM names the exact table, row and column it rejected in
+    ``invalid_params``; the top-level ``detail`` is often only "Request
+    validation failed.", so dropping this leaves the caller with nothing to act
+    on.
+    """
+    params = document.get('invalid_params')
+    if not isinstance(params, list):
+        return ''
+    entries = []
+    for param in params[:_MAX_INVALID_PARAMS]:
+        if not isinstance(param, dict):
+            continue
+        name, reason = param.get('name'), param.get('reason')
+        if name and reason:
+            entries.append(f'{name}: {reason}')
+        elif name or reason:
+            entries.append(str(name or reason))
+    if not entries:
+        return ''
+    omitted = len(params) - len(entries)
+    more = f' (and {omitted} more)' if omitted > 0 else ''
+    return ' ' + '; '.join(entries) + more
+
+
+def _nim_failure_error(error: Exception, explain: bool) -> NimFailureError:
     r"""Build a clear, actionable error for a failed NIM prediction call.
 
     A 5xx response or a dropped connection almost always means the NIM is
@@ -341,38 +391,71 @@ def _nim_failure_error(error: Exception, explain: bool) -> RuntimeError:
     a client bug), so the caller is told to pace requests and retry instead of
     receiving a raw traceback. Explanations are the most GPU-intensive request
     (they hold the model's gradient graph on the device), so their message adds
-    a one-at-a-time hint. Other failures keep the original generic message.
+    a one-at-a-time hint.
+
+    A 4xx is by definition about the request the caller sent, so it is reported
+    as such — quoting the NIM's per-field ``invalid_params`` diagnosis and
+    without inviting a bug report against the SDK. Only genuinely unclassifiable
+    failures keep that invitation.
 
     A timeout is called out separately: it is the one failure the caller can
     fix from their side, by raising the timeout they configured.
     """
+    subject = 'this explanation' if explain else 'this prediction'
     if isinstance(error, Timeout):
-        subject = 'this explanation' if explain else 'this prediction'
-        return RuntimeError(
+        return NimFailureError(
             f'The Kumo RFM NIM did not answer {subject} within the configured '
             'timeout. Raise it with SDFMClient(url, timeout=...), or retry '
-            f'when the NIM is less busy. Original error: {error}')
+            f'when the NIM is less busy. Original error: {error}',
+            transient=True)
     status = getattr(error, 'status_code', None)
-    detail = getattr(error, 'detail', None)
-    if isinstance(detail, str):
-        try:
-            detail = json.loads(detail)['detail']
-        except Exception:
-            pass
-    unavailable = (status in _NIM_UNAVAILABLE_STATUS
-                   or isinstance(error, RequestException))
-    if unavailable:
-        subject = 'this explanation' if explain else 'this prediction'
+    document = _problem_document(error)
+    detail = document.get('detail', getattr(error, 'detail', None))
+    invalid_params = document.get('invalid_params')
+    invalid_params = (invalid_params if isinstance(invalid_params, list)
+                      else [])
+    fields = _invalid_params_summary(document)
+
+    if status in _NIM_UNAVAILABLE_STATUS or isinstance(error, RequestException):
         pacing = (' Explanations are the most GPU-intensive request, so send '
                   'them one at a time.') if explain else ''
         server = f' (server said: {detail})' if detail else ''
-        return RuntimeError(
+        return NimFailureError(
             f'The Kumo RFM NIM could not complete {subject}: it is temporarily '
             f'unavailable, likely at capacity or recovering from GPU memory '
-            f'pressure. Wait a few moments and retry.{pacing}{server}')
-    return RuntimeError(
+            f'pressure. Wait a few moments and retry.{pacing}{server}',
+            status_code=status, detail=detail,
+            invalid_params=invalid_params, transient=True)
+
+    if isinstance(status, int) and 400 <= status < 500:
+        reason = str(detail or error).rstrip('.')
+        return NimFailureError(
+            f'The Kumo RFM NIM rejected {subject} (HTTP {status}): '
+            f'{reason}.{fields}',
+            status_code=status, detail=detail, invalid_params=invalid_params)
+
+    return NimFailureError(
         f"An unexpected exception occurred. Please create an issue at "
-        f"'https://github.com/NVIDIA/nvidia-sdfm-sdk'. {detail if detail else error}")
+        f"'https://github.com/NVIDIA/nvidia-sdfm-sdk'. "
+        f"{detail if detail else error}{fields}",
+        status_code=status, detail=detail, invalid_params=invalid_params)
+
+
+def _check_anchor_time(value: Any, name: str) -> None:
+    r"""Reject an anchor time that is neither a ``Timestamp`` nor ``'entity'``.
+
+    A date *string* is what most pandas users reach for first, and it used to
+    land on a bare ``assert`` with an empty message — and, under ``python -O``,
+    on no check at all.
+    """
+    if value is None or isinstance(value, pd.Timestamp):
+        return
+    if isinstance(value, str) and value == 'entity':
+        return
+    hint = f'; try pd.Timestamp({value!r})' if isinstance(value, str) else ''
+    raise TypeError(
+        f"'{name}' must be a pandas.Timestamp or the literal 'entity' (got "
+        f'{type(value).__name__} {value!r}){hint}')
 
 
 def _extract_explanation(
@@ -455,7 +538,8 @@ class KumoRFM:
         optimize: If set to ``True``, will optimize the underlying data backend
             for optimal querying. For example, for transactional database
             backends, will create any missing indices. Requires write-access to
-            the data backend.
+            the data backend. Only the :obj:`"sqlite"` and :obj:`"duckdb"`
+            backends implement this; passing it on any other backend warns.
     """
     def __init__(
         self,
@@ -465,6 +549,12 @@ class KumoRFM:
     ) -> None:
         graph = graph.validate()
         self._graph_def = graph._to_api_graph_definition()
+
+        if optimize and graph.backend not in _OPTIMIZABLE_BACKENDS:
+            warnings.warn(f"'optimize=True' has no effect on the "
+                          f"'{graph.backend.value}' backend; it is implemented "
+                          f"only for "
+                          f"{sorted(b.value for b in _OPTIMIZABLE_BACKENDS)}")
 
         if graph.backend == DataBackend.LOCAL:
             from kumorfm.rfm.backend.local import LocalSampler
@@ -526,9 +616,12 @@ class KumoRFM:
             raise ValueError(f"'num_retries' must be greater than or equal to "
                              f"zero (got {num_retries})")
 
+        previous = self._num_retries
         self._num_retries = num_retries
-        yield
-        self._num_retries = 0
+        try:
+            yield
+        finally:
+            self._num_retries = previous
 
     @contextmanager
     def batch_mode(
@@ -549,14 +642,19 @@ class KumoRFM:
             num_retries: The maximum number of retries for failed queries due
                 to unexpected server issues.
         """
-        if batch_size != 'max' and batch_size <= 0:
-            raise ValueError(f"'batch_size' must be greater than zero "
-                             f"(got {batch_size})")
+        if batch_size != 'max' and (not isinstance(batch_size, int)
+                                    or isinstance(batch_size, bool)
+                                    or batch_size <= 0):
+            raise ValueError(f"'batch_size' must be a positive int or the "
+                             f"literal 'max' (got {batch_size!r})")
 
+        previous = self._batch_size
         self._batch_size = batch_size
-        with self.retry(self._num_retries or num_retries):
-            yield
-        self._batch_size = None
+        try:
+            with self.retry(num_retries):
+                yield
+        finally:
+            self._batch_size = previous
 
     @overload
     def predict(
@@ -719,8 +817,9 @@ class KumoRFM:
                 ``explain=dict(skip_summary=True)`` to disable it.
             return_embeddings: Whether to also return the embeddings for each
                 prediction example.
-            anchor_time: The anchor timestamp for the prediction. If set to
-                ``None``, will use the maximum timestamp in the data.
+            anchor_time: The anchor timestamp for the prediction, as a
+                :class:`pandas.Timestamp`; a date string is not coerced. If set
+                to ``None``, will use the maximum timestamp in the data.
                 If set to ``"entity"``, will use the timestamp of the entity.
             context_anchor_time: The maximum anchor timestamp for context
                 examples. If set to ``None``, ``anchor_time`` will
@@ -735,10 +834,12 @@ class KumoRFM:
             inference_config: Optional inference-time model configuration. See
                 the inference configuration section above for supported
                 dictionary keys.
-            num_hops: The number of hops to sample when generating the context.
-                Deprecated in favor of ``num_neighbors``.
+            num_hops: The number of hops to sample when generating the
+                context, between 1 and 6. Deprecated in favor of
+                ``num_neighbors``.
             max_pq_iterations: The maximum number of iterations to perform to
-                collect valid labels. It is advised to increase the number of
+                collect valid labels, at least 1. It is advised to increase the
+                number of
                 iterations in case the predictive query has strict entity
                 filters, in which case, :class:`KumoRFM` needs to sample more
                 entities to find valid labels.
@@ -889,6 +990,13 @@ class KumoRFM:
             )
         if num_neighbors is None:
             key = RunMode.FAST if task.task_type.is_link_pred else run_mode
+            # 'num_hops' is a slice bound, so an out-of-range value would be
+            # silently reinterpreted: -1 asks for fewer hops and yields the
+            # second-deepest sample, and anything above the maximum clamps.
+            max_hops = len(_DEFAULT_NUM_NEIGHBORS[key])
+            if not 1 <= num_hops <= max_hops:
+                raise ValueError(f"'num_hops' must be between 1 and "
+                                 f"{max_hops} (got {num_hops})")
             num_neighbors = _DEFAULT_NUM_NEIGHBORS[key][:num_hops]
 
         if inference_config is None:
@@ -1284,7 +1392,8 @@ class KumoRFM:
                 If specified, the ``num_hops`` option will be ignored.
             inference_config: Optional inference-time model configuration. See
                 :meth:`predict` for supported dictionary keys.
-            num_hops: The number of hops to sample when generating the context.
+            num_hops: The number of hops to sample when generating the
+                context, between 1 and 6.
             verbose: Whether to print verbose output.
             exclude_cols_dict: Any column in any table to exclude from the
                 model input.
@@ -1445,6 +1554,7 @@ class KumoRFM:
         Returns:
             The labels as a :class:`pandas.DataFrame`.
         """
+        _check_anchor_time(anchor_time, 'anchor_time')
         query_def = self._parse_query(query)
 
         if anchor_time is None:
@@ -1731,6 +1841,12 @@ class KumoRFM:
         random_seed: int | None = _RANDOM_SEED,
         logger: ProgressLogger | None = None,
     ) -> TaskTable:
+
+        _check_anchor_time(anchor_time, 'anchor_time')
+        _check_anchor_time(context_anchor_time, 'context_anchor_time')
+        if max_pq_iterations < 1:
+            raise ValueError(f"'max_pq_iterations' must be greater than zero "
+                             f"(got {max_pq_iterations})")
 
         task_type = self._get_task_type(
             query=query,

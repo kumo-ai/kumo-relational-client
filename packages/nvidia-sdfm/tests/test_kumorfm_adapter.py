@@ -11,7 +11,7 @@ import pytest
 
 from nvidia_sdfm.adapters.kumorfm import KumoRFMAdapter
 from nvidia_sdfm.core.transport import Transport
-from nvidia_sdfm.errors import MissingExtraError, SdfmError
+from nvidia_sdfm.errors import MissingExtraError, NimRequestError, SdfmError
 from nvidia_sdfm.requests import KumoRFMRequest, KumoRFMTaskRequest
 
 try:
@@ -40,6 +40,14 @@ class _FakeGraph:
         self.tables = {name: None for name in table_names}
 
 
+class _FakeEngineModel:
+    r"""Base for the engine stand-ins, supplying the retry context manager the
+    adapter now enters whenever ``num_retries`` is non-zero."""
+
+    def retry(self, num_retries=1):
+        return contextlib.nullcontext()
+
+
 @requires_engine
 def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
     captured = {}
@@ -48,7 +56,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         lambda **kwargs: captured.update(init=kwargs),
     )
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             captured['graph'] = graph
 
@@ -79,7 +87,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
 def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
     captured = {}
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -101,7 +109,7 @@ def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
 def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
     captured = {}
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -134,7 +142,7 @@ def test_predict_rejects_reserved_option_keys(monkeypatch, client):
 
 @requires_engine
 def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -155,7 +163,7 @@ def test_adapter_authorizes_engine_init(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init',
                         lambda **kwargs: captured.update(kwargs))
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -227,7 +235,7 @@ def test_predict_explain_field_returns_explanation(monkeypatch, client):
     captured = {}
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -258,7 +266,7 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
     captured = {}
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -284,7 +292,7 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
 def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -302,7 +310,7 @@ def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
 def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -355,7 +363,7 @@ def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
 
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -388,7 +396,7 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
     captured = {}
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -413,7 +421,7 @@ def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -439,7 +447,7 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -468,6 +476,175 @@ def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
     assert err.value.code == 'INVALID_REQUEST'
 
 
+def _failing_engine(monkeypatch, error: BaseException) -> None:
+    class FakeKumoRFM(_FakeEngineModel):
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            raise error
+
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+
+def _predict(client):
+    return KumoRFMAdapter().predict(
+        client, KumoRFMRequest(graph='g', query='PREDICT x FOR t.id=1'))
+
+
+@requires_engine
+def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
+    r"""client-rfm-path-never-raises-sdfmerror.md +
+    rfm-nim-validation-details-discarded.md"""
+    from kumorfm.exceptions import NimFailureError
+
+    params = [{'name': 'context.related_tables.users.rows[0][big]',
+               'reason': 'exceeds the JSON safe integer range'}]
+    _failing_engine(monkeypatch, NimFailureError(
+        'The Kumo RFM NIM rejected this prediction (HTTP 422): bad data.',
+        status_code=422, detail='bad data', invalid_params=params))
+
+    with pytest.raises(NimRequestError) as excinfo:
+        _predict(client)
+    assert isinstance(excinfo.value, SdfmError)
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.details['invalid_params'] == params
+    assert 'create an issue' not in str(excinfo.value)
+
+
+@requires_engine
+def test_nim_failure_without_a_status_becomes_a_transport_error(
+        monkeypatch, client):
+    r"""client-rfm-path-never-raises-sdfmerror.md"""
+    from kumorfm.exceptions import NimFailureError
+
+    _failing_engine(monkeypatch, NimFailureError(
+        'did not answer within the configured timeout', transient=True))
+
+    with pytest.raises(SdfmError) as excinfo:
+        _predict(client)
+    assert excinfo.value.code == 'TRANSPORT_ERROR'
+
+
+@requires_engine
+def test_unexpected_engine_failure_becomes_internal_error(monkeypatch, client):
+    r"""client-rfm-path-never-raises-sdfmerror.md: no bare KeyError escapes."""
+    _failing_engine(monkeypatch, KeyError('id'))
+
+    with pytest.raises(SdfmError) as excinfo:
+        _predict(client)
+    assert excinfo.value.code == 'INTERNAL_ERROR'
+    assert client.url in str(excinfo.value)
+    assert 'KeyError' in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, KeyError)
+
+
+@requires_engine
+def test_malformed_response_becomes_invalid_response(monkeypatch, client):
+    r"""client-rfm-path-never-raises-sdfmerror.md
+
+    A malformed server response is the server's fault, so it must not be
+    reported as a bad request.
+    """
+    from kumorfm.exceptions import InvalidResponseError
+
+    _failing_engine(monkeypatch, InvalidResponseError(
+        'The Kumo RFM NIM returned a prediction response that does not match '
+        'the contract (KeyError: id)'))
+
+    with pytest.raises(SdfmError) as excinfo:
+        _predict(client)
+    assert excinfo.value.code == 'INVALID_RESPONSE'
+    assert 'does not match the contract' in str(excinfo.value)
+
+
+@requires_engine
+def test_engine_validation_error_keeps_its_message(monkeypatch, client):
+    r"""client-rfm-path-never-raises-sdfmerror.md
+
+    Client-side validation the engine performs is already actionable, so it
+    must not be relabelled as an internal SDK failure.
+    """
+    _failing_engine(monkeypatch, ValueError(
+        'Context anchor timestamp is too early for the given graph'))
+
+    with pytest.raises(SdfmError) as excinfo:
+        _predict(client)
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert 'Context anchor timestamp is too early' in str(excinfo.value)
+
+
+@requires_engine
+def test_adapter_sdfm_error_is_not_rewrapped(monkeypatch, client):
+    original = SdfmError('already ours', code='INVALID_REQUEST')
+    _failing_engine(monkeypatch, original)
+
+    with pytest.raises(SdfmError) as excinfo:
+        _predict(client)
+    assert excinfo.value is original
+
+
+@requires_engine
+def test_num_retries_applies_without_batch_size(monkeypatch, client):
+    r"""rfm-num-retries-silent-noop.md"""
+    calls = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM(_FakeEngineModel):
+        def __init__(self, graph):
+            pass
+
+        def retry(self, num_retries=1):
+            calls['retry'] = num_retries
+            return contextlib.nullcontext()
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'ENTITY': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+    KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='g', query='PREDICT x FOR t.id=1', num_retries=5))
+
+    assert calls['retry'] == 5
+
+
+@requires_engine
+def test_zero_num_retries_enters_no_context(monkeypatch, client):
+    r"""rfm-num-retries-silent-noop.md"""
+    calls = {}
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+
+    class FakeKumoRFM(_FakeEngineModel):
+        def __init__(self, graph):
+            pass
+
+        def retry(self, num_retries=1):
+            calls['retry'] = num_retries
+            return contextlib.nullcontext()
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'ENTITY': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+    KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='g', query='PREDICT x FOR t.id=1', num_retries=0))
+
+    assert 'retry' not in calls
+
+
+@requires_engine
+def test_adapter_rejects_negative_num_retries(monkeypatch, client):
+    r"""rfm-num-retries-silent-noop.md: rejected on both paths, not just batch."""
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
+
+    with pytest.raises(SdfmError) as excinfo:
+        KumoRFMAdapter().predict(client, KumoRFMRequest(
+            graph='g', query='PREDICT x FOR t.id=1', num_retries=-1))
+    assert excinfo.value.code == 'INVALID_REQUEST'
+
+
 @requires_engine
 def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
     captured = {}
@@ -479,7 +656,7 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
         def __init__(self, **kwargs):
             captured['task_table'] = kwargs
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             captured['graph'] = graph
 
@@ -527,7 +704,7 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
         def __init__(self, **kwargs):
             captured['task_table'] = kwargs
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -560,7 +737,7 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
         def __init__(self, **kwargs):
             captured['task_table'] = kwargs
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 
@@ -597,7 +774,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
 
     explanation = Explanation.__new__(Explanation)
 
-    class FakeKumoRFM:
+    class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph):
             pass
 

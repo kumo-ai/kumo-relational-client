@@ -671,6 +671,124 @@ def test_batch_mode(
     assert len(df) == 2
 
 
+def test_optimize_warns_on_a_backend_that_ignores_it(
+    user_store_graph: Graph,
+) -> None:
+    r"""sampler-optimize-flag-silently-dropped.md"""
+    with pytest.warns(UserWarning, match="'optimize=True' has no effect"):
+        KumoRFM(user_store_graph, verbose=False, optimize=True)
+
+
+def test_optimize_left_unset_does_not_warn(user_store_graph: Graph) -> None:
+    import warnings
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        KumoRFM(user_store_graph, verbose=False)
+
+    assert [str(item.message) for item in caught
+            if 'optimize' in str(item.message)] == []
+
+
+def test_batch_mode_restores_state_after_an_exception(
+    user_store_graph: Graph,
+) -> None:
+    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    with pytest.raises(RuntimeError, match='user code blew up'):
+        with model.batch_mode(batch_size=25, num_retries=3):
+            raise RuntimeError('user code blew up')
+    assert model._batch_size is None
+    assert model._num_retries == 0
+
+
+def test_retry_restores_state_after_an_exception(
+    user_store_graph: Graph,
+) -> None:
+    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    with pytest.raises(RuntimeError):
+        with model.retry(7):
+            raise RuntimeError('boom')
+    assert model._num_retries == 0
+
+
+def test_nested_batch_mode_honours_the_inner_retry_count(
+    user_store_graph: Graph,
+) -> None:
+    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    with model.retry(2):
+        assert model._num_retries == 2
+        with model.batch_mode(batch_size=3, num_retries=9):
+            assert model._num_retries == 9
+        assert model._num_retries == 2
+    assert model._num_retries == 0
+
+
+def test_batch_mode_rejects_a_non_max_string(user_store_graph: Graph) -> None:
+    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    with pytest.raises(ValueError, match="'batch_size' must be a positive int"):
+        with model.batch_mode(batch_size='MAX'):
+            pass
+
+
+@pytest.mark.parametrize('anchor_time', ['2024-10-01', 1_700_000_000])
+def test_predict_rejects_a_non_timestamp_anchor_time(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    anchor_time: Any,
+) -> None:
+    r"""rfm-bare-assertionerror-empty-message.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = MockAPI()  # type: ignore
+    with pytest.raises(TypeError, match="'anchor_time' must be a "
+                                        'pandas.Timestamp'):
+        model.predict(ltv, indices=[0, 1], anchor_time=anchor_time,
+                      verbose=False)
+
+
+def test_predict_anchor_time_string_hint_names_the_timestamp_call(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+) -> None:
+    r"""rfm-bare-assertionerror-empty-message.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = MockAPI()  # type: ignore
+    with pytest.raises(TypeError, match="pd.Timestamp\\('2024-10-01'\\)"):
+        model.predict(ltv, indices=[0, 1], anchor_time='2024-10-01',
+                      verbose=False)
+
+
+@pytest.mark.parametrize('max_pq_iterations', [0, -5])
+def test_predict_rejects_non_positive_max_pq_iterations(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    max_pq_iterations: int,
+) -> None:
+    r"""rfm-bare-assertionerror-empty-message.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = MockAPI()  # type: ignore
+    with pytest.raises(ValueError, match="'max_pq_iterations' must be greater "
+                                         'than zero'):
+        model.predict(ltv, indices=[0, 1],
+                      max_pq_iterations=max_pq_iterations, verbose=False)
+
+
+@pytest.mark.parametrize('num_hops', [-1, 0, 100])
+def test_predict_rejects_out_of_range_num_hops(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    num_hops: int,
+) -> None:
+    r"""rfm-negative-num-hops-becomes-max-hops.md"""
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = MockAPI()  # type: ignore
+    with pytest.raises(ValueError, match="'num_hops' must be between 1 and"):
+        model.predict(ltv, indices=[0, 1], num_hops=num_hops, verbose=False)
+
+
 def test_regression_quantile_output_config(
     user_store_graph: Graph,
     ltv: ValidatedPredictiveQuery,

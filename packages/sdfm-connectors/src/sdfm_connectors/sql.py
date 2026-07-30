@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
+import difflib
 import importlib
 import re
 from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Collection, Iterator
 
 _TABLE_IDENTIFIER_RE = re.compile(
     r'^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$',
@@ -98,6 +99,64 @@ def driver_guard(
             code=mapped,
             details={'driver_error': type(error).__name__, **details},
         ) from error
+
+
+def check_connect_args(
+    backend: str,
+    kwargs: dict[str, Any],
+    allowed: Collection[str],
+) -> None:
+    r"""Reject connection keywords the driver would silently ignore.
+
+    The Snowflake and Databricks drivers accept ``**kwargs`` without complaint,
+    so a misspelled parameter is otherwise dropped and the read runs against
+    whatever catalog/schema the connection defaults to — a wrong answer rather
+    than an error. ``allowed`` is read off the driver itself so it stays
+    accurate across driver upgrades, and ``driver_options`` is the escape hatch
+    for anything genuinely outside it.
+    """
+    unknown = sorted(set(kwargs) - set(allowed))
+    if not unknown:
+        return
+    named = []
+    for name in unknown:
+        close = difflib.get_close_matches(name, allowed, n=1)
+        named.append(f'{name!r} (did you mean {close[0]!r}?)' if close
+                     else repr(name))
+    raise ConnectorError(
+        f'{backend} connector got unexpected arguments {", ".join(named)}; '
+        "pass driver-specific options through 'driver_options'",
+        code='INVALID_CONNECTOR_ARGS',
+        details={'arguments': unknown},
+    )
+
+
+def merge_driver_options(
+    backend: str,
+    kwargs: dict[str, Any],
+    driver_options: dict[str, Any] | None,
+) -> dict[str, Any]:
+    r"""Fold the ``driver_options`` escape hatch into the connection arguments.
+
+    ``driver_options`` deliberately bypasses the allow-list, so it must not be
+    able to quietly restate an argument that was already validated: naming a
+    key both ways is rejected rather than letting one silently win, matching
+    every other mutually-exclusive pair in this package. Merging before the
+    backend inspects the result also means an option supplied through the
+    escape hatch is never silently dropped from the connection decision.
+    """
+    options = dict(driver_options or {})
+    if not options:
+        return kwargs
+    overlap = sorted(set(options) & set(kwargs))
+    if overlap:
+        raise ConnectorError(
+            f'{backend} connector got {overlap} both as a connection argument '
+            f"and in 'driver_options'; pass each one once",
+            code='INVALID_CONNECTOR_ARGS',
+            details={'arguments': overlap},
+        )
+    return {**kwargs, **options}
 
 
 def quote_ident(ident: str, char: str = '"') -> str:

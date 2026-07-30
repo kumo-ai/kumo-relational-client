@@ -4,10 +4,15 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 from typing import Any, TypeAlias
 
-from sdfm_connectors.sql import require_driver
+from sdfm_connectors.sql import (
+    check_connect_args,
+    merge_driver_options,
+    require_driver,
+)
 
 _ABSENT = ('databricks', 'databricks.sql', 'databricks.sql.client')
 
@@ -35,7 +40,32 @@ _ENV_BY_ARG = {
 }
 
 
-def connect(**kwargs: Any) -> Connection:
+
+def _declared_connect_args() -> frozenset[str]:
+    r"""The driver's own named connection parameters.
+
+    Read off the driver so the allow-list tracks driver upgrades. The driver
+    also takes ``**kwargs`` and silently ignores anything it does not know, so
+    without this a typo'd ``catalog=`` reads from the environment default
+    instead — the wrong catalog, with no error.
+    """
+    parameters = inspect.signature(Connection.__init__).parameters.values()
+    return frozenset(
+        parameter.name for parameter in parameters
+        if parameter.kind is not parameter.VAR_KEYWORD
+        and parameter.name != 'self')
+
+
+_CONNECT_ARGS = _declared_connect_args() | frozenset(_ENV_BY_ARG)
+
+
+def connect(
+    *,
+    driver_options: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> Connection:
+    check_connect_args('databricks', kwargs, _CONNECT_ARGS)
+    kwargs = merge_driver_options('databricks', kwargs, driver_options)
     for arg, env in _ENV_BY_ARG.items():
         if kwargs.get(arg) is None:
             kwargs[arg] = os.getenv(env)

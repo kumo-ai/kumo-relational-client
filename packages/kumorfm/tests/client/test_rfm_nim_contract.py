@@ -403,13 +403,21 @@ def test_prediction_response_rejects_bad_probability_shape(
         },
     )
 
+    from kumorfm.exceptions import InvalidResponseError
+
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    with pytest.raises(TypeError, match='Expected mapping value'):
+    # A mis-shaped *response* is the server's error, not the caller's, so it
+    # surfaces as InvalidResponseError with the driver reason preserved rather
+    # than as a bare TypeError from deep inside the parser.
+    with pytest.raises(InvalidResponseError,
+                       match='does not match the contract') as excinfo:
         api.predict(
             nim_v1_smoke_payload(),
             entity_ids=[601],
             instance_ids=[601],
         )
+    assert 'Expected mapping value' in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, TypeError)
 
 
 def test_payload_factories_return_isolated_deep_copies() -> None:
@@ -456,3 +464,93 @@ def test_session_payload_helpers_match_current_v1_session_contract() -> None:
 
     assert set(predict) == {'predict', 'output'}
     assert predict['output']['fields'] == ['prediction', 'probabilities']
+
+
+class _StubResponse:
+    r"""Minimal stand-in for the ``requests`` response the parser reads."""
+    def __init__(self, body: Any, error: Exception | None = None) -> None:
+        self._body = body
+        self._error = error
+
+    def json(self) -> Any:
+        if self._error is not None:
+            raise self._error
+        return self._body
+
+
+def test_non_json_prediction_body_is_an_invalid_response_error() -> None:
+    r"""client-rfm-path-never-raises-sdfmerror.md
+
+    A body that will never parse must not be reported as a transient failure
+    the caller should retry.
+    """
+    from kumorfm.exceptions import InvalidResponseError
+
+    response = _StubResponse(None, requests.exceptions.JSONDecodeError(
+        'Expecting value', '<html>', 0))
+
+    with pytest.raises(InvalidResponseError) as excinfo:
+        RFMAPI._parse_predict_response(
+            response, entity_ids=[1], instance_ids=['1'], anchor_times=None)
+    assert 'does not match the contract' in str(excinfo.value)
+    assert isinstance(excinfo.value, ValueError)
+
+
+def test_prediction_item_missing_id_is_an_invalid_response_error() -> None:
+    r"""client-rfm-path-never-raises-sdfmerror.md: no bare KeyError escapes."""
+    from kumorfm.exceptions import InvalidResponseError
+
+    response = _StubResponse({
+        'id': 'pred-1',
+        'model': 'kumo-rfm',
+        'predictions': [{'row_index': 0, 'prediction': True}],
+    })
+
+    with pytest.raises(InvalidResponseError):
+        RFMAPI._parse_predict_response(
+            response, entity_ids=[1], instance_ids=['1'], anchor_times=None)
+
+
+def test_identity_mapping_mismatch_stays_a_caller_error() -> None:
+    r"""MR !69 review: identity mappings describe the request, not the response.
+
+    ``entity_ids``/``instance_ids``/``anchor_times`` are built by the caller, so
+    a length mismatch among them must not be reported as a malformed NIM
+    response.
+    """
+    from kumorfm.exceptions import InvalidResponseError
+
+    body = {
+        'id': 'pred-1',
+        'model': 'kumo-rfm',
+        'predictions': [{'id': '1', 'row_index': 0, 'prediction': True}],
+    }
+
+    with pytest.raises(ValueError) as excinfo:
+        RFMAPI._parse_predict_response(
+            _StubResponse(body), entity_ids=[1, 2], instance_ids=['1'],
+            anchor_times=None)
+    assert not isinstance(excinfo.value, InvalidResponseError)
+    assert 'identity mappings have different lengths' in str(excinfo.value)
+
+    with pytest.raises(ValueError) as excinfo:
+        RFMAPI._parse_predict_response(
+            _StubResponse(body), entity_ids=[1], instance_ids=['1'],
+            anchor_times=[None, None])
+    assert not isinstance(excinfo.value, InvalidResponseError)
+    assert 'anchor times' in str(excinfo.value)
+
+
+def test_response_count_mismatch_is_still_an_invalid_response() -> None:
+    r"""MR !69 review: the neighbouring response-side check keeps its class."""
+    from kumorfm.exceptions import InvalidResponseError
+
+    response = _StubResponse({
+        'id': 'pred-1',
+        'model': 'kumo-rfm',
+        'predictions': [],
+    })
+
+    with pytest.raises(InvalidResponseError):
+        RFMAPI._parse_predict_response(
+            response, entity_ids=[1], instance_ids=['1'], anchor_times=None)
