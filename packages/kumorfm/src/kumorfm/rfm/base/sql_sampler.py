@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from abc import abstractmethod
 from collections import defaultdict
 from typing import TYPE_CHECKING, Literal
@@ -37,6 +38,8 @@ class SQLSampler(Sampler):
         verbose: bool | ProgressLogger = True,
     ) -> None:
         super().__init__(graph=graph, verbose=verbose)
+
+        self._warned_random_seed = False
 
         self._source_name_dict: dict[str, str] = {
             table.name: table._quoted_source_name
@@ -76,6 +79,22 @@ class SQLSampler(Sampler):
                     column_proj_dict[column.name] = ident
             self._table_column_ref_dict[table.name] = column_ref_dict
             self._table_column_proj_dict[table.name] = column_proj_dict
+
+    def _warn_random_seed_unsupported(self, random_seed: int | None) -> None:
+        r"""Warns once that this backend cannot draw a reproducible random
+        sample of rows, rather than dropping ``random_seed`` silently.
+
+        Args:
+            random_seed: The seed requested by the caller.
+        """
+        if random_seed is None or self._warned_random_seed:
+            return
+
+        self._warned_random_seed = True
+        warnings.warn(f"The '{self.backend}' backend does not support seeded "
+                      f"random sampling, so 'random_seed' is ignored when "
+                      f"drawing in-context examples. Repeated calls with the "
+                      f"same seed may return different predictions.")
 
     @property
     def source_name_dict(self) -> dict[str, str]:
@@ -117,7 +136,8 @@ class SQLSampler(Sampler):
     ) -> SamplerOutput:
 
         # SQL backends do not use the local pseudo-random neighborhood
-        # sampler, so this option does not affect their traversal.
+        # sampler, so this option does not affect their traversal. Random row
+        # sampling is seeded in `_sample_entity_table` instead.
         del random_seed
 
         # Make sure to always include primary key, foreign key and time columns
@@ -357,7 +377,7 @@ class SQLSampler(Sampler):
                 inverse_dict[table] = inverse
 
         df_dict = {  # Post-filter column set:
-            table: df[list(columns_dict[table])]
+            table: df[sorted(columns_dict[table], key=df.columns.get_loc)]
             for table, df in df_dict.items()
         }
         batch_dict = {

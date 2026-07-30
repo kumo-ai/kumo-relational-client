@@ -128,7 +128,7 @@ class LocalSampler(Sampler):
                 else:
                     df = df.iloc[node]
             df = df.reset_index(drop=True)
-            df = df[list(columns)]
+            df = df[sorted(columns, key=df.columns.get_loc)]
             df_dict[table_name] = df
 
         num_sampled_nodes_dict = {
@@ -185,7 +185,8 @@ class LocalSampler(Sampler):
                 ignore_index=True,
             )
         df = self._graph_store.df_dict[table_name]
-        df = df.iloc[pkey_map['arange']][list(columns)]
+        df = df.iloc[pkey_map['arange']][sorted(
+            columns, key=df.columns.get_loc)]
         return df
 
     def _sample_query_data(
@@ -227,7 +228,7 @@ class LocalSampler(Sampler):
         for table_name, columns in columns_dict.items():
             df = self._graph_store.df_dict[table_name]
             df = df.iloc[node_dict[table_name]].reset_index(drop=True)
-            df = df[list(columns)]
+            df = df[sorted(columns, key=df.columns.get_loc)]
             feat_dict[table_name] = df
 
             time_column = self.time_column_dict.get(table_name)

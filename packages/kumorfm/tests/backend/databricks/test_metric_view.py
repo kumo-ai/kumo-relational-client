@@ -672,6 +672,18 @@ class _FakeCursor:
     def __exit__(self, *args: object) -> None:
         pass
 
+    @staticmethod
+    def _literal(sql: str, column: str) -> str | None:
+        r"""Returns the value ``column`` is compared against, mimicking
+        `information_schema`, which holds canonical (lower-case) names and
+        compares them as case-sensitive string literals.
+        """
+        match = re.search(rf"lower\({column}\) = lower\('([^']+)'\)", sql)
+        if match is not None:
+            return match.group(1).lower()
+        match = re.search(rf"{column} = '([^']+)'", sql)
+        return match.group(1) if match is not None else None
+
     def execute(self, sql: str) -> None:
         self._rows = []
         self._arrow = None
@@ -682,9 +694,12 @@ class _FakeCursor:
             return
 
         if 'information_schema.columns' in sql:
-            table = re.search(r"table_name = '([^']+)'", sql).group(1)
-            self._rows = [(name, dtype, 'YES')
-                          for name, dtype in _COLUMN_TYPES[table].items()]
+            schema = self._literal(sql, 'table_schema')
+            table = self._literal(sql, 'table_name')
+            column_types = (_COLUMN_TYPES.get(table, {})
+                            if schema == _SCHEMA else {})
+            self._rows = [(name, dtype, 'YES', _CATALOG, _SCHEMA, table)
+                          for name, dtype in column_types.items()]
             return
 
         if 'information_schema' in sql:
@@ -734,12 +749,13 @@ class _FakeCursor:
 class _FakeConnection(Connection):
     def __init__(self, describe_rows: list = _DESCRIBE_ROWS) -> None:
         self._describe_rows = describe_rows
+        self.closed = False
 
     def cursor(self) -> _FakeCursor:  # type: ignore[override]
         return _FakeCursor(self._describe_rows)
 
     def close(self) -> None:
-        pass
+        self.closed = True
 
     def __del__(self) -> None:
         pass
@@ -857,6 +873,218 @@ def test_read_metric_view_definition() -> None:
     }
     assert catalog == _CATALOG
     assert schema == _SCHEMA
+
+
+def _metric_view(definition: str, dtypes: dict[str, str]) -> list:
+    return [(name, dtype, None) for name, dtype in dtypes.items()] + [
+        ('', '', None),
+        ('# Detailed Table Information', '', None),
+        ('Catalog', _CATALOG, None),
+        ('Database', _SCHEMA, None),
+        ('Table', 'audit_mv', None),
+        ('Type', 'METRIC_VIEW', None),
+        ('View Text', definition, None),
+        ('Language', 'YAML', None),
+    ]
+
+
+_REJECTED_JOIN_YAML = '''
+version: "1.1"
+source: cat.sch.order_lines
+joins:
+  - name: ord
+    source: cat.sch.refunds
+    on: source.order_date = ord.order_line_id
+dimensions:
+  - name: product_line
+    expr: source.product_line
+measures:
+  - name: total_amount
+    expr: SUM(source.amount)
+'''
+
+_REJECTED_JOIN_DERIVED_KEY_YAML = '''
+version: "1.1"
+source: cat.sch.order_lines
+joins:
+  - name: ord
+    source: cat.sch.refunds
+    on: source.product_id = ord.refund_date
+dimensions:
+  - name: product_id
+    expr: UPPER(source.product_id)
+measures:
+  - name: total_amount
+    expr: SUM(source.amount)
+'''
+
+
+def test_from_databricks_metric_view_rejected_join_does_not_leak_column(
+) -> None:
+    # Regression test for `graph-metric-view-rejected-join-mutates-tables.md`:
+    # a join that is reported as not added must not graft its key column onto
+    # the fact table, where it can go on to become the graph's time column.
+    describe_rows = _metric_view(_REJECTED_JOIN_YAML,
+                                 {'product_line': 'string'})
+
+    with pytest.warns(UserWarning) as caught:
+        graph = Graph.from_databricks_metric_view(
+            'audit_mv',
+            connection=_FakeConnection(describe_rows),
+            verbose=False,
+        )
+
+    assert "Failed to add join 'ord'" in str(caught[0].message)
+
+    assert set(graph.tables) == {'order_lines'}
+    assert set(graph.edges) == set()
+
+    fact = graph['order_lines']
+    assert {column.name for column in fact.columns} == {'product_line'}
+    assert fact.primary_key is None
+    assert fact.time_column is None
+
+
+def test_from_databricks_metric_view_rejected_join_keeps_expression() -> None:
+    # Regression test for `graph-metric-view-rejected-join-mutates-tables.md`:
+    # a join that is reported as not added must not replace a declared
+    # dimension with its physical source column.
+    describe_rows = _metric_view(_REJECTED_JOIN_DERIVED_KEY_YAML,
+                                 {'product_id': 'string'})
+
+    with pytest.warns(UserWarning) as caught:
+        graph = Graph.from_databricks_metric_view(
+            'audit_mv',
+            connection=_FakeConnection(describe_rows),
+            verbose=False,
+        )
+
+    message = str(caught[0].message)
+    assert "Failed to add join 'ord'" in message
+    assert 'Replaced the derived column' not in message
+
+    assert set(graph.tables) == {'order_lines'}
+
+    fact = graph['order_lines']
+    assert {column.name for column in fact.columns} == {'product_id'}
+    assert str(fact['product_id'].expr) == 'UPPER(product_id)'
+
+
+def test_from_databricks_case_insensitive_identifiers() -> None:
+    # Regression test for `graph-warehouse-identifier-case-sensitivity.md`:
+    # `information_schema` compares string literals case-sensitively, so
+    # identifiers must be canonicalized rather than compared verbatim.
+    graph = Graph.from_databricks(
+        connection=_FakeConnection(),
+        catalog=_CATALOG.upper(),
+        schema=_SCHEMA.upper(),
+        tables=[
+            dict(name='CUSTOMERS', columns=['customer_id', 'segment'],
+                 primary_key='customer_id'),
+            dict(name='ORDER_LINES', columns=['line_id', 'customer_id'],
+                 primary_key='line_id'),
+        ],
+        edges=[('ORDER_LINES', 'customer_id', 'CUSTOMERS')],
+        infer_metadata=False,
+        verbose=False,
+    )
+
+    assert graph['CUSTOMERS'].source_name == 'cat.sch.customers'
+    assert graph['ORDER_LINES'].source_name == 'cat.sch.order_lines'
+    assert graph.validate() is graph
+
+
+def test_from_databricks_unknown_table() -> None:
+    with pytest.raises(ValueError, match='does not exist'):
+        Graph.from_databricks(
+            connection=_FakeConnection(),
+            catalog=_CATALOG,
+            schema=_SCHEMA,
+            tables=['does_not_exist'],
+            infer_metadata=False,
+            verbose=False,
+        )
+
+
+def test_from_databricks_metric_view_tracks_internal_connection(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression test for `graph-warehouse-connection-never-closed.md`: a
+    # connection the SDK opened is a connection the SDK owns and closes.
+    connection = _FakeConnection()
+    monkeypatch.setattr(
+        'kumorfm.rfm.backend.databricks.connect',
+        lambda **kwargs: connection,
+    )
+
+    with pytest.warns(UserWarning):
+        graph = Graph.from_databricks_metric_view(
+            'sales_mv',
+            connection=dict(server_hostname='localhost'),
+            verbose=False,
+        )
+    assert graph._connection is connection
+
+    with pytest.warns(UserWarning):
+        graph = Graph.from_databricks_metric_view(
+            'sales_mv',
+            connection=connection,
+            verbose=False,
+        )
+    assert graph._connection is None
+
+
+def test_from_databricks_closes_internal_connection_on_error(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # A connection the SDK opened must not leak in case the graph is never
+    # constructed and can therefore never take ownership of it:
+    connection = _FakeConnection()
+    monkeypatch.setattr(
+        'kumorfm.rfm.backend.databricks.connect',
+        lambda **kwargs: connection,
+    )
+
+    with pytest.raises(ValueError, match='does not exist'):
+        Graph.from_databricks(
+            connection=dict(server_hostname='localhost'),
+            catalog=_CATALOG,
+            schema=_SCHEMA,
+            tables=['does_not_exist'],
+            infer_metadata=False,
+            verbose=False,
+        )
+    assert connection.closed
+
+
+def test_from_databricks_keeps_external_connection_open_on_error() -> None:
+    connection = _FakeConnection()
+
+    with pytest.raises(ValueError, match='does not exist'):
+        Graph.from_databricks(
+            connection=connection,
+            catalog=_CATALOG,
+            schema=_SCHEMA,
+            tables=['does_not_exist'],
+            infer_metadata=False,
+            verbose=False,
+        )
+    assert not connection.closed
+
+
+def test_from_databricks_metric_view_closes_internal_connection_on_error(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    connection = _FakeConnection()
+    monkeypatch.setattr(
+        'kumorfm.rfm.backend.databricks.connect',
+        lambda **kwargs: connection,
+    )
+
+    with pytest.raises(ValueError, match='Invalid metric view name'):
+        Graph.from_databricks_metric_view(
+            'SELECT * FROM sales_mv',
+            connection=dict(server_hostname='localhost'),
+            verbose=False,
+        )
+    assert connection.closed
 
 
 

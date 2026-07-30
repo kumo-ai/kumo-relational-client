@@ -678,6 +678,9 @@ class KumoRFM:
                 filters, in which case, :class:`KumoRFM` needs to sample more
                 entities to find valid labels.
             random_seed: A manual seed for generating pseudo-random numbers.
+                The :obj:`"sqlite"` and :obj:`"snowflake"` backends cannot
+                seed their random row sampling and warn once when a seed is
+                given.
             verbose: Whether to print verbose output.
 
         Returns:
@@ -1214,7 +1217,9 @@ class KumoRFM:
             top_k: The number of predictions to return per entity.
             random_seed: A manual seed for neighborhood sampling. Reusing a
                 seed produces the same sampled local neighborhoods for the
-                same graph, ordered task rows, batching, and options.
+                same graph, ordered task rows, batching, and options. The
+                :obj:`"sqlite"` and :obj:`"snowflake"` backends cannot seed
+                their random row sampling and warn once when a seed is given.
 
         Returns:
             The predictions as a :class:`pandas.DataFrame`.

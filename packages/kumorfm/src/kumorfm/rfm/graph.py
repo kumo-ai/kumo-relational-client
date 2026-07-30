@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import copy
 import io
+import re
 import warnings
 from collections import defaultdict
 from collections.abc import Sequence
@@ -23,7 +24,7 @@ from typing_extensions import Self
 from kumorfm import in_jupyter_notebook, in_streamlit_notebook, in_tmux
 from kumorfm.graph.graph import Edge, EdgeLike
 from kumorfm.mixin import CastMixin
-from kumorfm.rfm.base import ColumnSpec, DataBackend, Table
+from kumorfm.rfm.base import Column, ColumnSpec, DataBackend, Table
 from kumorfm.rfm.base.utils import Timedelta
 from kumorfm.rfm.infer import infer_time_column
 from kumorfm.utils import display, quote_ident
@@ -45,6 +46,21 @@ class SqliteConnectionConfig(CastMixin):
 class DuckDBConnectionConfig(CastMixin):
     uri: str | Path | None = None
     kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+def _qualifier_pattern(table_name: str) -> re.Pattern[str]:
+    r"""Returns a pattern that matches a ``<table_name>.`` qualifier within a
+    SQL expression, ignoring case just like SQL identifier resolution does.
+
+    Args:
+        table_name: The name of the qualifying table.
+    """
+    return re.compile(
+        rf'(?<![A-Za-z0-9_$."])'
+        rf'(?:{re.escape(quote_ident(table_name))}|{re.escape(table_name)})'
+        rf'\s*\.',
+        flags=re.IGNORECASE,
+    )
 
 
 class Graph:
@@ -468,49 +484,60 @@ class Graph:
         """
         from kumorfm.rfm.backend.snow import Connection, SnowTable, connect
 
+        internal_connection = False
         if not isinstance(connection, Connection):
             connection = connect(**(connection or {}))
+            internal_connection = True
         assert isinstance(connection, Connection)
 
-        if database is None or schema is None:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()")
-                result = cursor.fetchone()
-                assert result is not None
-                database = database or result[0]
-                assert database is not None
-                schema = schema or result[1]
+        try:
+            if database is None or schema is None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()")
+                    result = cursor.fetchone()
+                    assert result is not None
+                    database = database or result[0]
+                    assert database is not None
+                    schema = schema or result[1]
 
-        if tables is None:
-            if schema is None:
-                raise ValueError("No current 'schema' set. Please specify the "
-                                 "Snowflake schema manually")
+            if tables is None:
+                if schema is None:
+                    raise ValueError("No current 'schema' set. Please specify "
+                                     "the Snowflake schema manually")
 
-            with connection.cursor() as cursor:
-                cursor.execute(f"""
-                SELECT TABLE_NAME
-                FROM {database}.INFORMATION_SCHEMA.TABLES
-                WHERE TABLE_SCHEMA = '{schema}'
-                """)
-                tables = [row[0] for row in cursor.fetchall()]
+                with connection.cursor() as cursor:
+                    cursor.execute(f"""
+                    SELECT TABLE_NAME
+                    FROM {database}.INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_SCHEMA = '{schema}'
+                    """)
+                    tables = [row[0] for row in cursor.fetchall()]
 
-        table_kwargs: list[dict[str, Any]] = []
-        for table in tables:
-            if isinstance(table, str):
-                kwargs = dict(name=table, database=database, schema=schema)
-            else:
-                kwargs = copy.copy(table)
-                kwargs.setdefault('database', database)
-                kwargs.setdefault('schema', schema)
-            table_kwargs.append(kwargs)
+            table_kwargs: list[dict[str, Any]] = []
+            for table in tables:
+                if isinstance(table, str):
+                    kwargs = dict(name=table, database=database, schema=schema)
+                else:
+                    kwargs = copy.copy(table)
+                    kwargs.setdefault('database', database)
+                    kwargs.setdefault('schema', schema)
+                table_kwargs.append(kwargs)
 
-        graph = cls(
-            tables=[
-                SnowTable(connection=connection, **kwargs)
-                for kwargs in table_kwargs
-            ],
-            edges=edges or [],
-        )
+            graph = cls(
+                tables=[
+                    SnowTable(connection=connection, **kwargs)
+                    for kwargs in table_kwargs
+                ],
+                edges=edges or [],
+            )
+        except BaseException:
+            if internal_connection:
+                connection.close()
+            raise
+
+        if internal_connection:
+            graph._connection = connection
 
         if infer_metadata:
             graph.infer_metadata(verbose=False)
@@ -591,50 +618,62 @@ class Graph:
             connect,
         )
 
+        internal_connection = False
         if not isinstance(connection, Connection):
             connection = connect(**(connection or {}))
+            internal_connection = True
         assert isinstance(connection, Connection)
 
-        if catalog is None or schema is None:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT current_catalog(), current_schema()")
-                result = cursor.fetchone()
-                assert result is not None
-                catalog = catalog or result[0]
-                assert catalog is not None
-                schema = schema or result[1]
+        try:
+            if catalog is None or schema is None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT current_catalog(), current_schema()")
+                    result = cursor.fetchone()
+                    assert result is not None
+                    catalog = catalog or result[0]
+                    assert catalog is not None
+                    schema = schema or result[1]
 
-        if tables is None:
-            if schema is None:
-                raise ValueError("No current 'schema' set. Please specify the "
-                                 "Databricks schema manually")
+            if tables is None:
+                if schema is None:
+                    raise ValueError("No current 'schema' set. Please specify "
+                                     "the Databricks schema manually")
 
-            with connection.cursor() as cursor:
-                cursor.execute(f"""
-                SELECT table_name
-                FROM {quote_ident(catalog, char='`')}.information_schema.tables
-                WHERE table_schema = {quote_ident(schema, char="'")}
-                  AND table_type != 'METRIC_VIEW'
-                """)
-                tables = [row[0] for row in cursor.fetchall()]
+                quoted_catalog = quote_ident(catalog, char='`')
+                with connection.cursor() as cursor:
+                    cursor.execute(f"""
+                    SELECT table_name
+                    FROM {quoted_catalog}.information_schema.tables
+                    WHERE table_schema = {quote_ident(schema, char="'")}
+                      AND table_type != 'METRIC_VIEW'
+                    """)
+                    tables = [row[0] for row in cursor.fetchall()]
 
-        table_kwargs: list[dict[str, Any]] = []
-        for table in tables:
-            if isinstance(table, str):
-                kwargs = dict(name=table, catalog=catalog, schema=schema)
-            else:
-                kwargs = copy.copy(table)
-                kwargs.setdefault('catalog', catalog)
-                kwargs.setdefault('schema', schema)
-            table_kwargs.append(kwargs)
+            table_kwargs: list[dict[str, Any]] = []
+            for table in tables:
+                if isinstance(table, str):
+                    kwargs = dict(name=table, catalog=catalog, schema=schema)
+                else:
+                    kwargs = copy.copy(table)
+                    kwargs.setdefault('catalog', catalog)
+                    kwargs.setdefault('schema', schema)
+                table_kwargs.append(kwargs)
 
-        graph = cls(
-            tables=[
-                DatabricksTable(connection=connection, **kwargs)
-                for kwargs in table_kwargs
-            ],
-            edges=edges or [],
-        )
+            graph = cls(
+                tables=[
+                    DatabricksTable(connection=connection, **kwargs)
+                    for kwargs in table_kwargs
+                ],
+                edges=edges or [],
+            )
+        except BaseException:
+            if internal_connection:
+                connection.close()
+            raise
+
+        if internal_connection:
+            graph._connection = connection
 
         if infer_metadata:
             graph.infer_metadata(verbose=False)
@@ -715,62 +754,73 @@ class Graph:
             unquote_ident,
         )
 
+        internal_connection = False
         if not isinstance(connection, Connection):
             connection = connect(**(connection or {}))
+            internal_connection = True
         assert isinstance(connection, Connection)
 
-        name_parts = parse_table_reference(metric_view_name)
-        if name_parts is None:
-            raise ValueError(f"Invalid metric view name '{metric_view_name}'")
-        if len(name_parts) == 1 and schema is not None:
-            name_parts = (schema, *name_parts)
-        if len(name_parts) == 2 and catalog is not None:
-            name_parts = (catalog, *name_parts)
-        quoted_name = '.'.join(
-            quote_ident(part, char='`') for part in name_parts)
+        try:
+            name_parts = parse_table_reference(metric_view_name)
+            if name_parts is None:
+                raise ValueError(f"Invalid metric view name "
+                                 f"'{metric_view_name}'")
+            if len(name_parts) == 1 and schema is not None:
+                name_parts = (schema, *name_parts)
+            if len(name_parts) == 2 and catalog is not None:
+                name_parts = (catalog, *name_parts)
+            quoted_name = '.'.join(
+                quote_ident(part, char='`') for part in name_parts)
 
-        definition, dtype_names, view_catalog, view_schema = (
-            read_metric_view_definition(connection, quoted_name))
-        spec = parse_metric_view(definition)
-        msgs = list(spec.messages)
+            definition, dtype_names, view_catalog, view_schema = (
+                read_metric_view_definition(connection, quoted_name))
+            spec = parse_metric_view(definition)
+            msgs = list(spec.messages)
 
-        def _table_parts(parts: tuple[str, ...]) -> tuple[str, str, str]:
-            if len(parts) == 2 and view_catalog is not None:
-                parts = (view_catalog, *parts)
-            elif len(parts) == 1 and view_catalog and view_schema:
-                parts = (view_catalog, view_schema, *parts)
-            if len(parts) != 3:
-                raise ValueError(f"Could not fully qualify table "
-                                 f"'{'.'.join(parts)}' referenced by metric "
-                                 f"view '{metric_view_name}'")
-            return parts[0], parts[1], parts[2]
+            def _table_parts(parts: tuple[str, ...]) -> tuple[str, str, str]:
+                if len(parts) == 2 and view_catalog is not None:
+                    parts = (view_catalog, *parts)
+                elif len(parts) == 1 and view_catalog and view_schema:
+                    parts = (view_catalog, view_schema, *parts)
+                if len(parts) != 3:
+                    raise ValueError(f"Could not fully qualify table "
+                                     f"'{'.'.join(parts)}' referenced by "
+                                     f"metric view '{metric_view_name}'")
+                return parts[0], parts[1], parts[2]
 
-        dtypes = {
-            name: DatabricksTable._to_dtype(data_type)
-            for name, data_type in dtype_names.items()
-        }
+            dtypes = {
+                name: DatabricksTable._to_dtype(data_type)
+                for name, data_type in dtype_names.items()
+            }
 
-        columns_by_alias: dict[str, list[ColumnSpec]] = defaultdict(list)
-        for column_spec in spec.columns:
-            if unquote_ident(column_spec.expr) == column_spec.name:
-                columns_by_alias[column_spec.alias].append(
-                    ColumnSpec(name=column_spec.name))
-            else:
-                columns_by_alias[column_spec.alias].append(
-                    ColumnSpec(
-                        name=column_spec.name,
-                        expr=column_spec.expr,
-                        dtype=dtypes.get(column_spec.name),
-                    ))
+            columns_by_alias: dict[str, list[ColumnSpec]] = defaultdict(list)
+            for column_spec in spec.columns:
+                if unquote_ident(column_spec.expr) == column_spec.name:
+                    columns_by_alias[column_spec.alias].append(
+                        ColumnSpec(name=column_spec.name))
+                else:
+                    columns_by_alias[column_spec.alias].append(
+                        ColumnSpec(
+                            name=column_spec.name,
+                            expr=column_spec.expr,
+                            dtype=dtypes.get(column_spec.name),
+                        ))
 
-        fact_catalog, fact_schema, fact_source = _table_parts(spec.source)
-        if any(join.alias == fact_source for join in spec.joins):
-            raise ValueError(
-                f"Cannot convert metric view '{metric_view_name}' into a "
-                f"graph since the join name '{fact_source}' collides with "
-                f"the name of the source table")
+            fact_catalog, fact_schema, fact_source = _table_parts(spec.source)
+            if any(join.alias == fact_source for join in spec.joins):
+                raise ValueError(
+                    f"Cannot convert metric view '{metric_view_name}' into a "
+                    f"graph since the join name '{fact_source}' collides with "
+                    f"the name of the source table")
 
-        graph = cls(tables=[])
+            graph = cls(tables=[])
+        except BaseException:
+            if internal_connection:
+                connection.close()
+            raise
+
+        if internal_connection:
+            graph._connection = connection
 
         fact_table = DatabricksTable(
             connection,
@@ -803,6 +853,13 @@ class Graph:
                 primary_key=None,
             )
 
+            # Adding a join mutates tables that are already part of the graph,
+            # so record every mutation and undo it in full in case the join is
+            # rejected - a dropped join must not leave any trace behind:
+            undo_columns: list[tuple[Table, str, Column | None]] = []
+            undo_primary_key: tuple[Table, str, Stype] | None = None
+            join_msgs: list[str] = []
+
             try:
                 other_alias, other_key, child_key = resolve_join_keys(
                     join,
@@ -829,25 +886,40 @@ class Graph:
                                        (many_table, many_key)):
                     if not key_table.has_column(key):
                         key_table.add_column(key)
+                        undo_columns.append((key_table, key, None))
                     elif not key_table[key].is_source:
+                        undo_columns.append((key_table, key, key_table[key]))
                         key_table.remove_column(key)
                         key_table.add_column(key)
-                        msgs.append(
+                        join_msgs.append(
                             f"Replaced the derived column '{key}' of table "
                             f"'{key_table.name}' with its physical source "
                             f"column since join '{join.alias}' references "
                             f"it as a key")
 
                 if one_table._primary_key is None:
+                    undo_primary_key = (one_table, one_key,
+                                        one_table[one_key].stype)
                     one_table.primary_key = one_key
 
                 graph.add_table(table)
                 table_dict[join.alias] = table
                 graph.link(many_table.name, many_key, one_table.name)
+                msgs.extend(join_msgs)
             except ValueError as error:
                 if table_dict.get(join.alias) is table:
                     graph.remove_table(join.alias)
                     del table_dict[join.alias]
+                if undo_primary_key is not None:
+                    undo_table, undo_key, undo_stype = undo_primary_key
+                    undo_table.primary_key = None
+                    undo_table[undo_key].stype = undo_stype
+                for undo_table, undo_key, undo_column in reversed(
+                        undo_columns):
+                    if undo_table.has_column(undo_key):
+                        undo_table.remove_column(undo_key)
+                    if undo_column is not None:
+                        undo_table._column_dict[undo_key] = undo_column
                 if isinstance(error, UnsupportedJoinError):
                     msgs.append(str(error))
                 else:
@@ -891,19 +963,29 @@ class Graph:
 
         from kumorfm.rfm.backend.snow import Connection, SnowTable, connect
 
+        internal_connection = False
         if not isinstance(connection, Connection):
             connection = connect(**(connection or {}))
+            internal_connection = True
         assert isinstance(connection, Connection)
 
-        with connection.cursor() as cursor:
-            sql = (f"SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW("
-                   f"'{semantic_view_name}')")
-            cursor.execute(sql)
-            result = cursor.fetchone()
-            assert result is not None
-            cfg = yaml.safe_load(result[0])
+        try:
+            with connection.cursor() as cursor:
+                sql = (f"SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW("
+                       f"'{semantic_view_name}')")
+                cursor.execute(sql)
+                result = cursor.fetchone()
+                assert result is not None
+                cfg = yaml.safe_load(result[0])
 
-        graph = cls(tables=[])
+            graph = cls(tables=[])
+        except BaseException:
+            if internal_connection:
+                connection.close()
+            raise
+
+        if internal_connection:
+            graph._connection = connection
 
         msgs = []
         table_names = {table_cfg['name'] for table_cfg in cfg['tables']}
@@ -923,6 +1005,12 @@ class Graph:
                                 f"'{table_name}' since composite primary keys "
                                 f"are not yet supported")
 
+            self_pattern = _qualifier_pattern(table_name)
+            other_patterns = [
+                _qualifier_pattern(name) for name in table_names
+                if name != table_name
+            ]
+
             columns: list[ColumnSpec] = []
             unsupported_columns: list[str] = []
             for column_cfg in chain(
@@ -938,15 +1026,15 @@ class Graph:
                     columns.append(ColumnSpec(name=column_name))
                     continue
 
-                column_expr = column_expr.replace(f'{table_name}.', '')
+                column_expr = self_pattern.sub('', column_expr).strip()
 
                 if column_expr == column_name:
                     columns.append(ColumnSpec(name=column_name))
                     continue
 
                 # Drop expressions that reference other tables (for now):
-                if any(f'{name.upper()}.' in column_expr.upper()
-                       for name in table_names):
+                if any(pattern.search(column_expr)
+                       for pattern in other_patterns):
                     unsupported_columns.append(column_name)
                     continue
 
@@ -1733,26 +1821,27 @@ class Graph:
                                  f"either the primary key or the link before "
                                  f"before proceeding.")
 
-            if self.backend == DataBackend.LOCAL:
-                # Check that fkey/pkey have valid and consistent data types:
-                assert src_key.dtype is not None
-                src_number = src_key.dtype.is_int() or src_key.dtype.is_float()
-                src_string = src_key.dtype.is_string()
-                assert dst_key.dtype is not None
-                dst_number = dst_key.dtype.is_int() or dst_key.dtype.is_float()
-                dst_string = dst_key.dtype.is_string()
+            # Check that fkey/pkey have valid and consistent data types. Every
+            # backend populates data types from its own catalog, so this check
+            # applies to remote tables just as much as to local ones:
+            assert src_key.dtype is not None
+            src_number = src_key.dtype.is_int() or src_key.dtype.is_float()
+            src_string = src_key.dtype.is_string()
+            assert dst_key.dtype is not None
+            dst_number = dst_key.dtype.is_int() or dst_key.dtype.is_float()
+            dst_string = dst_key.dtype.is_string()
 
-                if not src_number and not src_string:
-                    raise ValueError(
-                        f"{edge} is invalid as foreign key must be a number "
-                        f"or string (got '{src_key.dtype}'")
+            if not src_number and not src_string:
+                raise ValueError(
+                    f"{edge} is invalid as foreign key must be a number "
+                    f"or string (got '{src_key.dtype}'")
 
-                if src_number != dst_number or src_string != dst_string:
-                    raise ValueError(
-                        f"{edge} is invalid as foreign key '{fkey}' and "
-                        f"primary key '{dst_key.name}' have incompatible data "
-                        f"types (got foreign key data type '{src_key.dtype}' "
-                        f"and primary key data type '{dst_key.dtype}')")
+            if src_number != dst_number or src_string != dst_string:
+                raise ValueError(
+                    f"{edge} is invalid as foreign key '{fkey}' and "
+                    f"primary key '{dst_key.name}' have incompatible data "
+                    f"types (got foreign key data type '{src_key.dtype}' "
+                    f"and primary key data type '{dst_key.dtype}')")
 
         return self
 

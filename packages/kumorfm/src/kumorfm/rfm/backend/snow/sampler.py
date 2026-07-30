@@ -27,8 +27,12 @@ if TYPE_CHECKING:
 def paramstyle(connection: Connection, style: str = 'qmark') -> Iterator[None]:
     _style = connection._paramstyle
     connection._paramstyle = style
-    yield
-    connection._paramstyle = _style
+    try:
+        yield
+    finally:
+        # The connection is usually owned by the caller, so restore it no
+        # matter how the block exits:
+        connection._paramstyle = _style
 
 
 class SnowSampler(SQLSampler):
@@ -92,7 +96,11 @@ class SnowSampler(SQLSampler):
         random_seed: int | None = None,
         entity_ids: list | None = None,
     ) -> pd.DataFrame:
-        # NOTE Snowflake does support `SEED` only as part of `SYSTEM` sampling.
+        # NOTE Snowflake does support `SEED` only as part of `SYSTEM` sampling,
+        # which samples blocks rather than a fixed number of rows.
+        if entity_ids is None:
+            self._warn_random_seed_unsupported(random_seed)
+
         num_rows = min(num_rows, 1_000_000)  # Snowflake's upper limit.
 
         source_table = self.source_table_dict[table_name]

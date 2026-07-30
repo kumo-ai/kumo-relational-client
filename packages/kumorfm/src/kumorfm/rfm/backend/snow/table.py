@@ -23,6 +23,24 @@ from kumorfm.rfm.base import (
 )
 from kumorfm.utils import quote_ident
 
+# Snowflake reports an object it cannot resolve as SQL compilation error
+# `002003`, which the connector surfaces as `errno=2003`:
+_MISSING_OBJECT_ERRNO = 2003
+
+
+def _is_missing_object_error(error: Exception) -> bool:
+    r"""Whether ``error`` reports an object that Snowflake could not resolve.
+
+    Any other failure - an expired session, a dropped connection, a missing
+    privilege on the warehouse - says nothing about whether a table exists.
+
+    Args:
+        error: The error raised by the connector.
+    """
+    if getattr(error, 'errno', None) == _MISSING_OBJECT_ERRNO:
+        return True
+    return 'does not exist' in str(error).lower()
+
 
 class SnowTable(Table):
     r"""A table backed by a :class:`sqlite` database.
@@ -95,14 +113,33 @@ class SnowTable(Table):
         return cast(DataBackend, DataBackend.SNOWFLAKE)
 
     def _get_source_columns(self) -> list[SourceColumn]:
+        # NOTE Quoted identifiers are case-sensitive in Snowflake, while
+        # unquoted ones resolve to their upper-case form. Try the given
+        # spelling first, then its folded form, and adopt whichever resolves
+        # for all subsequent look-ups:
+        names: tuple[str, str, str] = (self._database, self._schema,
+                                       self._source_name)
+        folded: tuple[str, str, str] = (names[0].upper(), names[1].upper(),
+                                        names[2].upper())
+        candidates = [names] if names == folded else [names, folded]
+
         source_columns: list[SourceColumn] = []
         with self._connection.cursor() as cursor:
-            try:
-                sql = f"DESCRIBE TABLE {self._quoted_source_name}"
-                cursor.execute(sql)
-            except Exception as e:
+            error: Exception | None = None
+            for candidate in candidates:
+                quoted = '.'.join(quote_ident(name) for name in candidate)
+                try:
+                    cursor.execute(f"DESCRIBE TABLE {quoted}")
+                except Exception as e:
+                    if not _is_missing_object_error(e):
+                        raise
+                    error = error or e
+                    continue
+                self._database, self._schema, self._source_name = candidate
+                break
+            else:
                 raise ValueError(f"Table '{self.source_name}' does not exist "
-                                 f"in the remote data backend") from e
+                                 f"in the remote data backend") from error
 
             for row in cursor.fetchall():
                 column, dtype, _, null, _, is_pkey, is_unique, *_ = row

@@ -106,10 +106,15 @@ class DatabricksTable(Table):
         source_name = quote_ident(self._source_name, char="'")
 
         with self._connection.cursor() as cursor:
-            sql = (f"SELECT column_name, full_data_type, is_nullable\n"
+            # NOTE Databricks resolves identifiers case-insensitively, while
+            # `information_schema` holds their canonical spelling and compares
+            # them as case-sensitive string literals. Match case-insensitively
+            # and adopt the canonical names for all subsequent look-ups:
+            sql = (f"SELECT column_name, full_data_type, is_nullable,\n"
+                   f"       table_catalog, table_schema, table_name\n"
                    f"FROM {self._quoted_catalog}.information_schema.columns\n"
-                   f"WHERE table_schema = {schema}\n"
-                   f"  AND table_name = {source_name}\n"
+                   f"WHERE lower(table_schema) = lower({schema})\n"
+                   f"  AND lower(table_name) = lower({source_name})\n"
                    f"ORDER BY ordinal_position")
             cursor.execute(sql)
             rows = cursor.fetchall()
@@ -117,6 +122,10 @@ class DatabricksTable(Table):
             if len(rows) == 0:
                 raise ValueError(f"Table '{self.source_name}' does not exist "
                                  f"in the remote data backend")
+
+            self._catalog, self._schema, self._source_name = rows[0][3:6]
+            schema = quote_ident(self._schema, char="'")
+            source_name = quote_ident(self._source_name, char="'")
 
             # Primary key and unique key constraints are informational only and
             # exposed via the Unity Catalog `information_schema`. They may be
@@ -135,8 +144,8 @@ class DatabricksTable(Table):
                     f"  ON tc.constraint_catalog = kcu.constraint_catalog\n"
                     f" AND tc.constraint_schema = kcu.constraint_schema\n"
                     f" AND tc.constraint_name = kcu.constraint_name\n"
-                    f"WHERE tc.table_schema = {schema}\n"
-                    f"  AND tc.table_name = {source_name}\n"
+                    f"WHERE lower(tc.table_schema) = lower({schema})\n"
+                    f"  AND lower(tc.table_name) = lower({source_name})\n"
                     f"  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')")
                 cursor.execute(sql)
                 constraint_rows = cursor.fetchall()
@@ -155,7 +164,7 @@ class DatabricksTable(Table):
                 pass
 
         source_columns: list[SourceColumn] = []
-        for column, dtype, is_nullable in rows:
+        for column, dtype, is_nullable, *_ in rows:
             source_column = SourceColumn(
                 name=column,
                 dtype=self._to_dtype(dtype),
@@ -198,8 +207,8 @@ class DatabricksTable(Table):
                     f"ccu.constraint_schema\n"
                     f" AND rc.unique_constraint_name = ccu.constraint_name\n"
                     f"WHERE tc.constraint_type = 'FOREIGN KEY'\n"
-                    f"  AND tc.table_schema = {schema}\n"
-                    f"  AND tc.table_name = {source_name}")
+                    f"  AND lower(tc.table_schema) = lower({schema})\n"
+                    f"  AND lower(tc.table_name) = lower({source_name})")
                 cursor.execute(sql)
                 rows = cursor.fetchall()
             except Exception:

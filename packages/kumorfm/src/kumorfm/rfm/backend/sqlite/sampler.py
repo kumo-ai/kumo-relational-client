@@ -159,6 +159,8 @@ class SQLiteSampler(SQLSampler):
         entity_ids: list | None = None,
     ) -> pd.DataFrame:
         # NOTE SQLite does not natively support passing a `random_seed`.
+        if entity_ids is None:
+            self._warn_random_seed_unsupported(random_seed)
 
         source_table = self.source_table_dict[table_name]
         filters: list[str] = []

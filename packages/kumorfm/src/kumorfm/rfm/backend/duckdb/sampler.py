@@ -118,13 +118,14 @@ class DuckDBSampler(SQLSampler):
         random_seed: int | None = None,
     ) -> str:
         # NOTE DuckDB's sampling avoids SQLite's ORDER BY RANDOM() full sort.
-        del random_seed
-
         sql = f"SELECT {', '.join(projections)}\n"
         sql += f"FROM (SELECT * FROM {self.source_name_dict[table_name]}"
         if len(filters) > 0:
             sql += f"\nWHERE{' AND'.join(filters)}"
-        return sql + f")\nUSING SAMPLE {num_rows} ROWS"
+        sql += f")\nUSING SAMPLE reservoir({num_rows} ROWS)"
+        if random_seed is not None:
+            sql += f" REPEATABLE ({random_seed})"
+        return sql
 
     def _by_pkey(
         self,
