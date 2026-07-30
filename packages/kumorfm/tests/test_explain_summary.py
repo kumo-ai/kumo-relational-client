@@ -408,6 +408,18 @@ def test_nim_failure_error_connection_drop_is_unavailable() -> None:
     assert 'temporarily unavailable' in msg
 
 
+def test_nim_failure_error_timeout_points_at_the_timeout_setting() -> None:
+    import requests
+
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    msg = str(_nim_failure_error(
+        requests.exceptions.ReadTimeout('read timed out'), explain=False))
+    assert 'timeout' in msg
+    assert 'SDFMClient(url, timeout=...)' in msg
+    assert 'GPU memory pressure' not in msg
+
+
 def test_nim_failure_error_client_error_stays_generic() -> None:
     from kumorfm.exceptions import HTTPException
     from kumorfm.rfm.rfm import _nim_failure_error

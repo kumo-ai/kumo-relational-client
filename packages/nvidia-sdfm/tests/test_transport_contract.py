@@ -12,9 +12,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 
 import pytest
+from urllib3.util.retry import Retry
 
 from nvidia_sdfm import SDFMClient
 from nvidia_sdfm.requests import TabICLRequest
+from nvidia_sdfm.core import transport as transport_module
 from nvidia_sdfm.core.transport import _PREDICTIONS_PATH, Transport
 from nvidia_sdfm.errors import NimRequestError, SdfmError
 from nvidia_sdfm.requests import ModelRequest
@@ -187,6 +189,26 @@ def test_transport_mounts_retry_policy():
     assert 'POST' in retry.allowed_methods
 
 
+def test_retry_policy_survives_urllib3_without_retry_after_max(monkeypatch):
+    r"""urllib3 < 2.3 rejects ``retry_after_max``; the policy must still build.
+
+    CI runs a urllib3 that accepts the keyword, so the fallback in
+    ``_build_retry`` is only ever reached by forcing the ``TypeError`` here.
+    """
+    def _reject_cap(**options):
+        if 'retry_after_max' in options:
+            raise TypeError("__init__() got an unexpected keyword argument "
+                            "'retry_after_max'")
+        return Retry(**options)
+
+    monkeypatch.setattr(transport_module, 'Retry', _reject_cap)
+    retry = transport_module._build_retry(3, 0.5)
+
+    assert retry.total == 3
+    assert 503 in retry.status_forcelist
+    assert retry.respect_retry_after_header is True
+
+
 def test_client_forwards_timeout_and_max_retries():
     client = SDFMClient(_URL, timeout=12.0, max_retries=7)
     transport = client._transport
@@ -275,3 +297,75 @@ def test_redirects_are_still_followed(servers):
 
     assert body == {'predictions': []}
     assert len(target['headers']) == 1
+
+def test_nim_error_string_carries_the_http_status(requests_mock):
+    requests_mock.post(
+        _URL + '/v1/predictions',
+        status_code=422,
+        json={'detail': 'schema validation failed', 'code': 'INVALID_SCHEMA'},
+    )
+
+    with pytest.raises(NimRequestError) as excinfo:
+        Transport(_URL).predict({'model': 'tabicl'})
+    assert str(excinfo.value) == (
+        '[422 INVALID_SCHEMA] schema validation failed')
+
+
+def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
+    requests_mock.post(_URL + '/v1/predictions', status_code=403,
+                       text='Forbidden')
+
+    with pytest.raises(NimRequestError) as excinfo:
+        Transport(_URL).predict({'model': 'tabicl'})
+    assert str(excinfo.value) == '[403] Forbidden'
+
+
+def test_nim_error_truncates_a_huge_response_body(requests_mock):
+    requests_mock.post(_URL + '/v1/predictions', status_code=502,
+                       text='<html>' + 'x' * 3_000_000 + '</html>')
+
+    with pytest.raises(NimRequestError) as excinfo:
+        Transport(_URL).predict({'model': 'tabicl'})
+    assert len(str(excinfo.value)) < 1024
+    assert 'truncated' in str(excinfo.value)
+    assert excinfo.value.status_code == 502
+
+
+@pytest.mark.parametrize('timeout', [-1, 0, 'sixty', None])
+def test_invalid_timeout_is_rejected_at_construction(timeout):
+    with pytest.raises(SdfmError) as excinfo:
+        Transport(_URL, timeout=timeout)
+    assert excinfo.value.code == 'INVALID_CONFIGURATION'
+
+
+@pytest.mark.parametrize('max_retries', [-1, 2.5, 'three'])
+def test_invalid_max_retries_is_rejected_at_construction(max_retries):
+    with pytest.raises(SdfmError) as excinfo:
+        Transport(_URL, max_retries=max_retries)
+    assert excinfo.value.code == 'INVALID_CONFIGURATION'
+
+
+@pytest.mark.parametrize('api_key', [None, 'secret'])
+def test_url_without_a_host_is_rejected_at_construction(api_key):
+    with pytest.raises(SdfmError) as excinfo:
+        Transport('http://', api_key=api_key)
+    assert excinfo.value.code == 'INVALID_CONFIGURATION'
+    assert 'missing a host' in str(excinfo.value)
+
+
+def test_predict_after_close_is_rejected(requests_mock, context_df,
+                                         predict_df):
+    requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
+    client = SDFMClient(url=_URL)
+    client.close()
+
+    with pytest.raises(SdfmError) as excinfo:
+        client._predict(TabICLRequest(
+            context=context_df,
+            predict=predict_df,
+            task='classification',
+            target='target_col',
+            outputs=['prediction'],
+        ))
+    assert excinfo.value.code == 'INVALID_CONFIGURATION'
+    assert requests_mock.call_count == 0

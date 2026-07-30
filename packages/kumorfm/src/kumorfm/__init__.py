@@ -29,6 +29,7 @@ class GlobalState(metaclass=Singleton):
     _url: Optional[str] = None
     _api_key: Optional[str] = None
     _verify_ssl: bool = True
+    _timeout: Optional[float] = None
 
     thread_local: threading.local = field(default_factory=threading.local)
 
@@ -42,6 +43,7 @@ class GlobalState(metaclass=Singleton):
         self._url = None
         self._api_key = None
         self._verify_ssl = True
+        self._timeout = None
 
     @property
     def initialized(self) -> bool:
@@ -57,7 +59,8 @@ class GlobalState(metaclass=Singleton):
             return self.thread_local._client
 
         client = KumoClient(self._url, self._api_key,
-                            verify_ssl=self._verify_ssl)
+                            verify_ssl=self._verify_ssl,
+                            timeout=self._timeout)
         self.thread_local._client = client
         return client
 
@@ -70,6 +73,7 @@ def init(
     api_key: Optional[str] = None,
     verify_ssl: bool = True,
     log_level: str = "INFO",
+    timeout: Optional[float] = None,
 ) -> None:
     r"""Initializes the KumoRFM client against a Universal TFM NIM.
 
@@ -77,6 +81,9 @@ def init(
     needed when a deployment fronts the NIM with an authenticating gateway.
     Re-initializing with different settings reconfigures the client and closes
     the previous session; re-initializing with identical settings is a no-op.
+
+    ``timeout`` bounds each individual request attempt, in seconds; ``None``
+    leaves requests unbounded.
     """
     set_log_level(os.getenv(_ENV_KUMO_LOG, log_level))
 
@@ -91,17 +98,20 @@ def init(
     if global_state.initialized:
         unchanged = (url == global_state._url
                      and api_key == global_state._api_key
-                     and verify_ssl == global_state._verify_ssl)
+                     and verify_ssl == global_state._verify_ssl
+                     and timeout == global_state._timeout)
         if unchanged:
             return
         global_state.clear()
 
-    client = KumoClient(url=url, api_key=api_key, verify_ssl=verify_ssl)
+    client = KumoClient(url=url, api_key=api_key, verify_ssl=verify_ssl,
+                        timeout=timeout)
     client.authenticate()
 
     global_state._url = client._url
     global_state._api_key = client._api_key
     global_state._verify_ssl = verify_ssl
+    global_state._timeout = timeout
 
     logging.getLogger('kumorfm').info(
         f"Initialized KumoRFM SDK v{__version__} against deployment '{url}'")

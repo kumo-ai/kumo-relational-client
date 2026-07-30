@@ -72,6 +72,7 @@ def init(
     verify_ssl: bool = True,
     log_level: str = "INFO",
     *,
+    timeout: float | None = None,
     _token: object | None = None,
 ) -> None:
     if _token is not _SDFM_CLIENT_TOKEN:
@@ -81,7 +82,7 @@ def init(
                         or os.getenv("KUMO_API_ENDPOINT"))
 
         kumorfm.init(url=resolved_url, api_key=api_key, verify_ssl=verify_ssl,
-                     log_level=log_level)
+                     log_level=log_level, timeout=timeout)
 
         global_state._url = kumorfm.global_state._url
         global_state._initialized = True

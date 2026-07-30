@@ -57,3 +57,8 @@ class NimRequestError(SdfmError):
     ) -> None:
         super().__init__(message, code=code, details=details)
         self.status_code = status_code
+
+    def __str__(self) -> str:
+        if self.code:
+            return f'[{self.status_code} {self.code}] {self.message}'
+        return f'[{self.status_code}] {self.message}'

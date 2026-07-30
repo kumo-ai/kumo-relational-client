@@ -66,12 +66,35 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         'url': client.url,
         'api_key': client.api_key,
         'verify_ssl': client.verify_ssl,
+        'timeout': client.timeout,
         '_token': rfm_engine._SDFM_CLIENT_TOKEN,
     }
     assert captured['graph'] == 'fake-graph'
     assert captured['predict']['query'] == 'PREDICT target FOR entity=1'
     assert captured['predict']['run_mode'] == 'fast'
     assert list(result['entity']) == [1, 2, 3]
+
+
+@requires_engine
+def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
+    captured = {}
+
+    class FakeKumoRFM:
+        def __init__(self, graph):
+            pass
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'entity': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'init',
+                        lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    transport = Transport('https://nim.example.com:8000', timeout=3.5)
+    KumoRFMAdapter().predict(
+        transport, KumoRFMRequest(graph='g', query='PREDICT x'))
+
+    assert captured['timeout'] == 3.5
 
 
 @requires_engine

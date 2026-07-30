@@ -36,7 +36,7 @@ from kumorfm.api.rfm import (
 from kumorfm.api.rfm.context import Context, Table
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import AggregationType, ProblemType, Stype
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, Timeout
 from rich.console import Console
 from rich.markdown import Markdown
 
@@ -313,7 +313,16 @@ def _nim_failure_error(error: Exception, explain: bool) -> RuntimeError:
     receiving a raw traceback. Explanations are the most GPU-intensive request
     (they hold the model's gradient graph on the device), so their message adds
     a one-at-a-time hint. Other failures keep the original generic message.
+
+    A timeout is called out separately: it is the one failure the caller can
+    fix from their side, by raising the timeout they configured.
     """
+    if isinstance(error, Timeout):
+        subject = 'this explanation' if explain else 'this prediction'
+        return RuntimeError(
+            f'The Kumo RFM NIM did not answer {subject} within the configured '
+            'timeout. Raise it with SDFMClient(url, timeout=...), or retry '
+            f'when the NIM is less busy. Original error: {error}')
     status = getattr(error, 'status_code', None)
     detail = getattr(error, 'detail', None)
     if isinstance(detail, str):

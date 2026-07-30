@@ -233,6 +233,7 @@ class KumoRFMAdapter(ModelAdapter):
 
         engine.init(url=transport.url, api_key=transport.api_key,
                     verify_ssl=transport.verify_ssl,
+                    timeout=transport.timeout,
                     _token=engine._SDFM_CLIENT_TOKEN)
         model = engine.KumoRFM(request.graph)
         if request.batch_size is not None:

@@ -108,6 +108,7 @@ class SDFMClient:
         prediction ``pd.DataFrame``, or a ``kumorfm.rfm.rfm.Explanation`` when a
         KumoRFM request asks to explain.
         """
+        self._transport._require_open()
         adapter = self._registry.get(request.model)
         if not isinstance(request, adapter.request_type):
             raise SdfmError(

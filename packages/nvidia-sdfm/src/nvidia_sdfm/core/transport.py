@@ -19,6 +19,8 @@ _DEFAULT_TIMEOUT_SECONDS = 60.0
 _DEFAULT_MAX_RETRIES = 3
 _DEFAULT_BACKOFF_FACTOR = 0.5
 _RETRY_STATUS = (429, 500, 502, 503, 504)
+_RETRY_AFTER_MAX_SECONDS = 60
+_MAX_BODY_SNIPPET = 512
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 
 
@@ -29,7 +31,12 @@ def _validate_url(url: str, api_key: str | None) -> None:
             f'url must start with http:// or https://, got {url!r}',
             code='INVALID_CONFIGURATION',
         )
-    host = (parsed.hostname or '').lower()
+    if not parsed.hostname:
+        raise SdfmError(
+            f'url is missing a host, got {url!r}',
+            code='INVALID_CONFIGURATION',
+        )
+    host = parsed.hostname.lower()
     if api_key and parsed.scheme == 'http' and host not in _LOCAL_HOSTS:
         raise SdfmError(
             'refusing to send an API key over plaintext HTTP; use an https:// '
@@ -59,6 +66,60 @@ class _Session(requests.Session):
                 previous_url, prepared_request.url):
             prepared_request.headers.pop('X-API-Key', None)
 
+def _validate_limits(timeout: Any, max_retries: Any) -> None:
+    r"""Reject unusable transport limits at construction.
+
+    Without this the offending value first surfaces as a raw ``ValueError``
+    from urllib3, on the first request rather than at the call that set it.
+    """
+    if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
+            or timeout <= 0):
+        raise SdfmError(
+            f'timeout must be a positive number of seconds, got {timeout!r}',
+            code='INVALID_CONFIGURATION',
+        )
+    if (isinstance(max_retries, bool) or not isinstance(max_retries, int)
+            or max_retries < 0):
+        raise SdfmError(
+            f'max_retries must be a non-negative integer, got {max_retries!r}',
+            code='INVALID_CONFIGURATION',
+        )
+
+
+def _build_retry(max_retries: int, backoff_factor: float) -> Retry:
+    r"""The retry policy shared by every request this transport makes.
+
+    ``retry_after_max`` caps how long a server-chosen ``Retry-After`` header
+    may park the caller; it needs urllib3 >= 2.3, and older versions fall back
+    to urllib3's own (6 hour) cap.
+    """
+    options: dict[str, Any] = {
+        'total': max_retries,
+        'connect': max_retries,
+        'read': max_retries,
+        'status': max_retries,
+        'backoff_factor': backoff_factor,
+        'status_forcelist': _RETRY_STATUS,
+        'allowed_methods': frozenset({'GET', 'POST'}),
+        'respect_retry_after_header': True,
+        'raise_on_status': False,
+    }
+    try:
+        return Retry(retry_after_max=_RETRY_AFTER_MAX_SECONDS, **options)
+    except TypeError:
+        return Retry(**options)
+
+
+def _snippet(text: str) -> str:
+    r"""A one-line, length-capped view of a response body, so a multi-megabyte
+    HTML error page cannot become a multi-megabyte exception message.
+    """
+    text = ' '.join(text.split())
+    if len(text) <= _MAX_BODY_SNIPPET:
+        return text
+    return (f'{text[:_MAX_BODY_SNIPPET]}... '
+            f'[truncated, {len(text)} chars total]')
+
 
 def _build_session(
     api_key: str | None,
@@ -68,18 +129,8 @@ def _build_session(
     session = _Session()
     if api_key:
         session.headers['X-API-Key'] = api_key
-    retry = Retry(
-        total=max_retries,
-        connect=max_retries,
-        read=max_retries,
-        status=max_retries,
-        backoff_factor=backoff_factor,
-        status_forcelist=_RETRY_STATUS,
-        allowed_methods=frozenset({'GET', 'POST'}),
-        respect_retry_after_header=True,
-        raise_on_status=False,
-    )
-    adapter = HTTPAdapter(max_retries=retry)
+    adapter = HTTPAdapter(max_retries=_build_retry(max_retries,
+                                                   backoff_factor))
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     return session
@@ -91,6 +142,10 @@ class Transport:
     Owns a pooled ``requests.Session`` with retry/backoff on transient
     failures (429/5xx). Not part of the public API surface; a ``SDFMClient``
     holds one of these.
+
+    ``timeout`` bounds each individual attempt, not the call as a whole: a
+    request that exhausts ``max_retries`` can take up to
+    ``(max_retries + 1) * timeout`` plus backoff.
     """
 
     def __init__(
@@ -104,10 +159,12 @@ class Transport:
         backoff_factor: float = _DEFAULT_BACKOFF_FACTOR,
     ) -> None:
         _validate_url(url, api_key)
+        _validate_limits(timeout, max_retries)
         self._url = url.rstrip('/')
         self._api_key = api_key
         self._verify_ssl = verify_ssl
         self._timeout = timeout
+        self._closed = False
         self._session = _build_session(api_key, max_retries, backoff_factor)
 
     @property
@@ -127,14 +184,29 @@ class Transport:
         return self._timeout
 
     def close(self) -> None:
+        self._closed = True
         self._session.close()
 
+    def _require_open(self) -> None:
+        if self._closed:
+            raise SdfmError(
+                'this client is closed; construct a new SDFMClient',
+                code='INVALID_CONFIGURATION',
+            )
+
     def health_ready(self) -> bool:
-        response = self._session.get(
-            self._url + _HEALTH_READY_PATH,
-            timeout=self._timeout,
-            verify=self._verify_ssl,
-        )
+        self._require_open()
+        try:
+            response = self._session.get(
+                self._url + _HEALTH_READY_PATH,
+                timeout=self._timeout,
+                verify=self._verify_ssl,
+            )
+        except requests.RequestException as error:
+            raise SdfmError(
+                f'Request to {self._url + _HEALTH_READY_PATH} failed: {error}',
+                code='TRANSPORT_ERROR',
+            ) from error
         return response.status_code == 200
 
     def predict(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -160,6 +232,7 @@ class Transport:
         )
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._require_open()
         try:
             response = self._session.post(
                 self._url + path,
@@ -198,7 +271,8 @@ def _to_nim_error(response: requests.Response) -> NimRequestError:
     if not isinstance(body, dict):
         body = {}
     code = body.get('code')
-    message = body.get('detail') or body.get('title') or response.text or (
+    reported = body.get('detail') or body.get('title') or response.text
+    message = _snippet(str(reported)) if reported else (
         f'NIM request failed with status {response.status_code}'
     )
     details = {

@@ -55,6 +55,7 @@ class KumoClient:
         url: str,
         api_key: Optional[str] = None,
         verify_ssl: bool = True,
+        timeout: Optional[float] = None,
     ) -> None:
         r"""Creates a client for KumoRFM requests against a Universal TFM NIM.
 
@@ -62,10 +63,15 @@ class KumoClient:
         needed when a deployment adds its own authenticating gateway; when
         given it is sent as the ``X-API-Key`` header, otherwise no auth header
         is set.
+
+        ``timeout`` bounds each individual request attempt, in seconds.
+        ``None`` (the default) leaves requests unbounded, so a hung NIM blocks
+        the caller until the connection drops.
         """
         self._url = url
         self._api_key = api_key
         self._verify_ssl = verify_ssl
+        self._timeout = timeout
 
         retry_strategy = Retry(
             total=10,
@@ -141,18 +147,22 @@ class KumoClient:
 
     def _get(self, endpoint: str, **kwargs: Any) -> requests.Response:
         url = self._format_endpoint_url(endpoint)
+        kwargs.setdefault('timeout', self._timeout)
         return self._session.get(url, verify=self._verify_ssl, **kwargs)
 
     def _post(self, endpoint: str, **kwargs: Any) -> requests.Response:
         url = self._format_endpoint_url(endpoint)
+        kwargs.setdefault('timeout', self._timeout)
         return self._session.post(url, verify=self._verify_ssl, **kwargs)
 
     def _patch(self, endpoint: str, **kwargs: Any) -> requests.Response:
         url = self._format_endpoint_url(endpoint)
+        kwargs.setdefault('timeout', self._timeout)
         return self._session.patch(url, verify=self._verify_ssl, **kwargs)
 
     def _delete(self, endpoint: str, **kwargs: Any) -> requests.Response:
         url = self._format_endpoint_url(endpoint)
+        kwargs.setdefault('timeout', self._timeout)
         return self._session.delete(url, verify=self._verify_ssl, **kwargs)
 
     def _format_endpoint_url(self, endpoint: str) -> str:

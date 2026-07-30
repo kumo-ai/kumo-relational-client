@@ -99,9 +99,12 @@ with SDFMClient(url="http://localhost:8000") as client:
 Discover what a NIM serves with `client.models()` and
 `client.capabilities("tabicl")`. The transport pools connections and retries
 transient failures (429/5xx) with backoff; tune it per client with
-`SDFMClient(url, timeout=30, max_retries=3)`. Each client holds its own
-transport and registry, so multiple clients can target different endpoints at
-once.
+`SDFMClient(url, timeout=30, max_retries=3)`. `timeout` bounds each attempt
+rather than the call as a whole, so a retried call can take up to
+`(max_retries + 1) * timeout` plus backoff. Each client holds its own transport
+and registry, so multiple clients can target different endpoints at once.
+`close()` (or leaving the `with` block) releases the pooled connections and
+retires the client; use a new `SDFMClient` afterwards.
 
 `from nvidia_sdfm import kumorfm` is the supported surface onto the KumoRFM
 driver (`Graph`, `Table`, `KumoRFM`, ...); you never import the driver package
