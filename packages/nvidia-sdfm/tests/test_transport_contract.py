@@ -4,14 +4,18 @@
 
 from __future__ import annotations
 
+import json
+import threading
+from collections.abc import Iterator
 from dataclasses import dataclass
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 
 import pytest
 
 from nvidia_sdfm import SDFMClient
 from nvidia_sdfm.requests import TabICLRequest
-from nvidia_sdfm.core.transport import Transport
+from nvidia_sdfm.core.transport import _PREDICTIONS_PATH, Transport
 from nvidia_sdfm.errors import NimRequestError, SdfmError
 from nvidia_sdfm.requests import ModelRequest
 
@@ -188,3 +192,86 @@ def test_client_forwards_timeout_and_max_retries():
     transport = client._transport
     assert transport.timeout == 12.0
     assert transport._session.get_adapter(_URL).max_retries.total == 7
+
+
+# `X-API-Key` must not follow a redirect to another origin; see
+# bugs/security-api-key-follows-cross-origin-redirects.md. `requests_mock`
+# cannot exercise redirect resolution, so these run over real sockets.
+
+
+def _make_handler(state: dict) -> type[BaseHTTPRequestHandler]:
+    class _Handler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def do_POST(self) -> None:  # noqa: N802
+            state['headers'].append(dict(self.headers))
+            self.rfile.read(int(self.headers.get('Content-Length') or 0))
+            location = state.get('redirect_to')
+            if location and not state['redirected']:
+                state['redirected'] = True
+                self.send_response(307)
+                self.send_header('Location', location)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            body = json.dumps({'predictions': []}).encode()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    return _Handler
+
+
+@pytest.fixture
+def servers() -> Iterator[tuple[dict, dict]]:
+    states: list[dict] = []
+    running: list[ThreadingHTTPServer] = []
+    for _ in range(2):
+        state: dict = {'headers': [], 'redirected': False}
+        server = ThreadingHTTPServer(('127.0.0.1', 0), _make_handler(state))
+        state['url'] = f'http://localhost:{server.server_address[1]}'
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        states.append(state)
+        running.append(server)
+    try:
+        yield states[0], states[1]
+    finally:
+        for server in running:
+            server.shutdown()
+            server.server_close()
+
+
+def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(servers):
+    origin, target = servers
+    origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
+
+    Transport(origin['url'], api_key='secret').predict({'model': 'kumo-rfm'})
+
+    assert origin['headers'][0]['X-API-Key'] == 'secret'
+    assert target['headers'][0].get('X-API-Key') is None
+
+
+def test_api_key_is_kept_on_a_same_origin_redirect(servers):
+    origin, _ = servers
+    origin['redirect_to'] = origin['url'] + '/v1/predictions/'
+
+    Transport(origin['url'], api_key='secret').predict({'model': 'kumo-rfm'})
+
+    assert len(origin['headers']) == 2
+    assert origin['headers'][1]['X-API-Key'] == 'secret'
+
+
+def test_redirects_are_still_followed(servers):
+    origin, target = servers
+    origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
+
+    body = Transport(origin['url']).predict({'model': 'kumo-rfm'})
+
+    assert body == {'predictions': []}
+    assert len(target['headers']) == 1

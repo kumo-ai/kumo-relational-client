@@ -38,12 +38,34 @@ def _validate_url(url: str, api_key: str | None) -> None:
         )
 
 
+class _Session(requests.Session):
+    r"""A ``Session`` that drops ``X-API-Key`` on a cross-origin redirect.
+
+    ``requests`` strips only the standard ``Authorization`` header when a
+    redirect changes origin; a custom header set on the session is re-sent
+    verbatim. Without this the configured endpoint could hand the API key --
+    and, on a 307/308, the request body -- to any host it names, defeating
+    ``_validate_url``.
+    """
+
+    def rebuild_auth(
+        self,
+        prepared_request: requests.PreparedRequest,
+        response: requests.Response,
+    ) -> None:
+        super().rebuild_auth(prepared_request, response)
+        previous_url = response.request.url
+        if previous_url and prepared_request.url and self.should_strip_auth(
+                previous_url, prepared_request.url):
+            prepared_request.headers.pop('X-API-Key', None)
+
+
 def _build_session(
     api_key: str | None,
     max_retries: int,
     backoff_factor: float,
 ) -> requests.Session:
-    session = requests.Session()
+    session = _Session()
     if api_key:
         session.headers['X-API-Key'] = api_key
     retry = Retry(

@@ -509,8 +509,8 @@ class Graph:
                 with connection.cursor() as cursor:
                     cursor.execute(f"""
                     SELECT TABLE_NAME
-                    FROM {database}.INFORMATION_SCHEMA.TABLES
-                    WHERE TABLE_SCHEMA = '{schema}'
+                    FROM {quote_ident(database)}.INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_SCHEMA = {quote_ident(schema, char="'")}
                     """)
                     tables = [row[0] for row in cursor.fetchall()]
 
@@ -971,8 +971,8 @@ class Graph:
 
         try:
             with connection.cursor() as cursor:
-                sql = (f"SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW("
-                       f"'{semantic_view_name}')")
+                name = quote_ident(semantic_view_name, char="'")
+                sql = f"SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW({name})"
                 cursor.execute(sql)
                 result = cursor.fetchone()
                 assert result is not None

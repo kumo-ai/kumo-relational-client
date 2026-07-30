@@ -118,11 +118,15 @@ class SnowSampler(SQLSampler):
             column_ref = self.table_column_ref_dict[table_name][column]
             filters.append(f" {column_ref} IS NOT NULL")
 
+        # A specific set of entities: bind the ids as parameters rather than
+        # interpolating them into the SQL, so that string keys containing
+        # quotes are handled safely (same pattern as `_by_pkey`).
+        parameters: tuple | None = None
         if entity_ids is not None:
             key_ref = self.table_column_ref_dict[table_name][key]
-            formatted = ', '.join(
-                repr(v) if isinstance(v, str) else str(v) for v in entity_ids)
-            filters.append(f" {key_ref} IN ({formatted})")
+            placeholders = ', '.join(['?'] * len(entity_ids))
+            filters.append(f" {key_ref} IN ({placeholders})")
+            parameters = tuple(entity_ids)
 
         projections = [
             self.table_column_proj_dict[table_name][column]
@@ -138,9 +142,9 @@ class SnowSampler(SQLSampler):
         if len(filters) > 0:
             sql += f"\nWHERE{' AND'.join(filters)}"
 
-        with self._connection.cursor() as cursor:
+        with paramstyle(self._connection), self._connection.cursor() as cursor:
             # NOTE This may return duplicate primary keys. This is okay.
-            cursor.execute(sql)
+            cursor.execute(sql, parameters)
             table = cursor.fetch_arrow_all(force_return_table=True)
 
         return Table._sanitize(

@@ -46,9 +46,9 @@ with SDFMClient(url="http://localhost:8000") as client:
 Set `explain=True` to get a `kumorfm` `Explanation` instead of a bare
 DataFrame. The predicted rows stay on `result.prediction`; `result.details`
 carries the driver's structured attribution (feature cohorts and subgraphs).
-`result.summary` is a natural-language string only when the backend provides
-one. If the backend returns structured attribution only, `result.summary` is
-empty.
+`result.summary` is a natural-language string, either from the backend or, when
+the backend returns structured attribution only, generated locally by the SDK
+(see the warning below).
 
 ```python
 with SDFMClient(url="http://localhost:8000") as client:
@@ -59,6 +59,26 @@ with SDFMClient(url="http://localhost:8000") as client:
     predictions = result.prediction
     attribution = result.details
 ```
+
+> **Data egress warning — the explanation summary calls a third-party LLM.**
+> When the backend returns structured attribution without a summary (which is
+> what the NIM does today), the SDK generates `result.summary` itself by POSTing
+> the predictive query, the returned predictions, the cohort analysis and the
+> subgraph attribution — **including the raw cell values of the explained
+> entity's subgraph** — to an OpenAI-compatible chat-completions endpoint.
+> Unless `KUMORFM_EXPLAIN_LLM_BASE_URL` points elsewhere, that endpoint is
+> OpenAI's `https://api.openai.com/v1/` (model `gpt-4.1-mini`), a non-NVIDIA
+> service. The API key is read from `KUMORFM_EXPLAIN_LLM_API_KEY` and **falls
+> back to the ambient `OPENAI_API_KEY`**, so a key exported for an unrelated
+> tool is enough to enable this.
+>
+> Nothing is sent if no key is discoverable or the `kumorfm[explain]` extra is
+> not installed. To keep the data on the machine while still getting the
+> structured attribution, disable the summary:
+>
+> ```python
+> result = client.kumorfm(graph).predict(query, explain=dict(skip_summary=True))
+> ```
 
 Bring your own train table with `predict_task` when you want to supply the
 in-context (train) labels directly instead of deriving them from a PQL query.

@@ -353,11 +353,15 @@ class DuckDBSampler(SQLSampler):
             column_ref = self.table_column_ref_dict[table_name][column]
             filters.append(f" {column_ref} IS NOT NULL")
 
+        # A specific set of entities: bind the ids as parameters rather than
+        # interpolating them into the SQL, so that string keys containing
+        # quotes are handled safely (same pattern as `_by_pkey`).
+        parameters: list | None = None
         if entity_ids is not None:
             key_ref = self.table_column_ref_dict[table_name][key]
-            formatted = ', '.join(
-                repr(v) if isinstance(v, str) else str(v) for v in entity_ids)
-            filters.append(f" {key_ref} IN ({formatted})")
+            placeholders = ', '.join(['?'] * len(entity_ids))
+            filters.append(f" {key_ref} IN ({placeholders})")
+            parameters = list(entity_ids)
 
         projections = [
             self.table_column_proj_dict[table_name][column]
@@ -379,7 +383,7 @@ class DuckDBSampler(SQLSampler):
             )
 
         with self._connection.cursor() as cursor:
-            cursor.execute(sql)
+            cursor.execute(sql, parameters)
             table = cursor.fetch_arrow_table()
 
         return Table._sanitize(

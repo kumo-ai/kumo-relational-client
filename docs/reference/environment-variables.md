@@ -22,6 +22,28 @@ without passing the values explicitly.
 | `KUMO_API_KEY` | No | None | API key sent to the NIM. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. |
 | `KUMO_LOG` | No | `INFO` | Log level for the KumoRFM driver, for example `DEBUG`, `INFO`, or `WARNING`. |
 
+## Explanation Summary (Third-Party LLM)
+
+When you call `predict(..., explain=True)` and the NIM returns structured
+attribution without a natural-language summary, the SDK generates that summary
+itself by calling an OpenAI-compatible chat-completions endpoint. The request
+carries the predictive query, the returned predictions, the cohort analysis and
+the subgraph attribution, which includes the raw cell values of the explained
+entity's subgraph. Unless `KUMORFM_EXPLAIN_LLM_BASE_URL` is set, the destination
+is OpenAI's `https://api.openai.com/v1/`, a non-NVIDIA service.
+
+Nothing is sent when no API key is discoverable or the `kumorfm[explain]` extra
+is not installed. To disable the call while keeping the structured explanation,
+pass `explain=dict(skip_summary=True)`.
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `KUMORFM_EXPLAIN_LLM_API_KEY` | No | None | API key for the summary endpoint. **Falls back to `OPENAI_API_KEY`**, so a key exported for another tool enables the call. |
+| `OPENAI_API_KEY` | No | None | Fallback API key, read when `KUMORFM_EXPLAIN_LLM_API_KEY` is unset. |
+| `KUMORFM_EXPLAIN_LLM_BASE_URL` | No | OpenAI (`https://api.openai.com/v1/`) | Base URL of any OpenAI-compatible endpoint, including a self-hosted one. Set this to keep the data inside your own network. |
+| `KUMORFM_EXPLAIN_LLM_MODEL` | Conditional | `gpt-4.1-mini` | Model name. Required when `KUMORFM_EXPLAIN_LLM_BASE_URL` is set. |
+| `KUMORFM_EXPLAIN_LLM_TIMEOUT` | No | `20` | Request timeout in seconds. |
+
 ## Databricks Connector
 
 When you use the Databricks connector without passing connection arguments, it

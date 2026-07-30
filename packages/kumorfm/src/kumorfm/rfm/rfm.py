@@ -146,13 +146,35 @@ class _SessionHandle:
 class ExplainConfig(CastMixin):
     """Configuration for explainability.
 
+    .. warning::
+
+        **The natural-language summary is generated off-machine.** With
+        ``skip_summary=False`` (the default), the ``openai`` package installed
+        (``pip install 'kumorfm[explain]'``) and an API key discoverable, the
+        SDK sends the predictive query, the returned predictions, the cohort
+        analysis and the subgraph attribution -- which contains the **raw
+        cell values** of the explained entity's subgraph -- to an
+        OpenAI-compatible chat-completions endpoint. Unless
+        ``KUMORFM_EXPLAIN_LLM_BASE_URL`` points somewhere else, that endpoint
+        is OpenAI's ``https://api.openai.com/v1/``, a non-NVIDIA service. The
+        key is read from ``KUMORFM_EXPLAIN_LLM_API_KEY`` and falls back to the
+        ambient ``OPENAI_API_KEY``, so a key exported for an unrelated tool is
+        enough to enable this.
+
+        Pass ``skip_summary=True`` (e.g.
+        ``predict(..., explain=dict(skip_summary=True))``) to turn it off. The
+        structured explanation on ``.cohorts`` / ``.subgraphs`` is computed by
+        the NIM and is unaffected. Nothing leaves the machine when no API key
+        is discoverable or ``openai`` is not installed.
+
     Args:
         skip_summary: Whether to skip generating a human-readable summary of
             the explanation. The summary's LLM endpoint is configured once via
-            the environment: the API key from ``KUMORFM_EXPLAIN_LLM_API_KEY`` (else
-            ``OPENAI_API_KEY``), ``KUMORFM_EXPLAIN_LLM_BASE_URL`` (for any
-            OpenAI-compatible endpoint), ``KUMORFM_EXPLAIN_LLM_MODEL`` (default
-            ``gpt-4.1-mini``) and ``KUMORFM_EXPLAIN_LLM_TIMEOUT`` (default 20s).
+            the environment: the API key from ``KUMORFM_EXPLAIN_LLM_API_KEY``
+            (else ``OPENAI_API_KEY``), ``KUMORFM_EXPLAIN_LLM_BASE_URL`` (for
+            any OpenAI-compatible endpoint, including a self-hosted one),
+            ``KUMORFM_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini``) and
+            ``KUMORFM_EXPLAIN_LLM_TIMEOUT`` (default 20s).
     """
     skip_summary: bool = False
 
@@ -652,6 +674,11 @@ class KumoRFM:
                 over which parts of explanation are generated.
                 Explainability is currently only supported for single entity
                 predictions with ``run_mode="FAST"``.
+                Note that the natural-language summary is built by an external
+                LLM endpoint (OpenAI by default) and sends the query,
+                predictions and raw subgraph cell values off the machine --
+                see :class:`ExplainConfig` for what is transmitted and pass
+                ``explain=dict(skip_summary=True)`` to disable it.
             return_embeddings: Whether to also return the embeddings for each
                 prediction example.
             anchor_time: The anchor timestamp for the prediction. If set to
@@ -1201,6 +1228,11 @@ class KumoRFM:
                 over which parts of explanation are generated.
                 Explainability is currently only supported for single entity
                 predictions with ``run_mode="FAST"``.
+                Note that the natural-language summary is built by an external
+                LLM endpoint (OpenAI by default) and sends the query,
+                predictions and raw subgraph cell values off the machine --
+                see :class:`ExplainConfig` for what is transmitted and pass
+                ``explain=dict(skip_summary=True)`` to disable it.
             return_embeddings: Whether to also return the embeddings for each
                 prediction example.
             run_mode: The :class:`RunMode` for the query.

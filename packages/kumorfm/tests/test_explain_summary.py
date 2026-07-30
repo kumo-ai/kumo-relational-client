@@ -218,6 +218,28 @@ def test_falls_back_to_openai_key(monkeypatch: Any) -> None:
     assert call['api_key'] == 'openai-key'
 
 
+# The egress above is opt-out, so it has to be discoverable from the docstrings
+# a caller reads; see
+# bugs/security-explain-summary-sends-row-data-to-openai.md.
+
+
+def test_explain_config_docstring_discloses_the_egress() -> None:
+    from kumorfm.rfm import ExplainConfig
+
+    doc = ExplainConfig.__doc__ or ''
+    assert 'api.openai.com' in doc
+    assert 'cell values' in doc
+    assert 'OPENAI_API_KEY' in doc
+    assert 'skip_summary=True' in doc
+
+
+def test_generate_summary_docstring_discloses_the_egress() -> None:
+    doc = generate_summary.__doc__ or ''
+    assert 'api.openai.com' in doc
+    assert 'cell values' in doc
+    assert 'skip_summary=True' in doc
+
+
 @requires_openai
 def test_explicit_args_override_env(monkeypatch: Any) -> None:
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_BASE_URL', 'https://env.example/v1')

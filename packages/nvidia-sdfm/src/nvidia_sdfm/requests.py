@@ -61,6 +61,11 @@ class KumoRFMRequest(ModelRequest):
     is limited to a single entity and ``client.kumorfm(...).predict(...)``
     returns a ``kumorfm.rfm.rfm.Explanation`` (its ``prediction`` attribute
     holds the plain prediction DataFrame) instead of a bare DataFrame.
+
+    Filling in ``Explanation.summary`` calls an external LLM endpoint (OpenAI
+    by default) with the query, the predictions and the raw subgraph cell
+    values. Pass ``explain=dict(skip_summary=True)`` to keep that data on the
+    machine; see ``kumorfm.rfm.ExplainConfig`` for the full disclosure.
     """
     model: ClassVar[str] = 'kumo-rfm'
 

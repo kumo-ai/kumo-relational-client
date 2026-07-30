@@ -242,6 +242,17 @@ def generate_summary(
 ) -> str:
     r"""Generate a human-readable summary of a KumoRFM explanation.
 
+    .. warning::
+
+        This sends ``query``, ``prediction``, ``cohorts`` and ``subgraphs``
+        -- the last of which carries the **raw cell values** of the explained
+        entity's subgraph -- to the configured chat-completions endpoint.
+        Unless ``base_url`` / ``KUMORFM_EXPLAIN_LLM_BASE_URL`` says otherwise
+        that endpoint is OpenAI's ``https://api.openai.com/v1/``, a
+        non-NVIDIA service. Callers that must not egress row-level data
+        should not reach this function; set ``skip_summary=True`` on
+        :class:`~kumorfm.rfm.ExplainConfig`.
+
     Built for OpenAI (default model ``gpt-4.1-mini``), it works with any
     OpenAI-compatible chat-completions endpoint. Configure once via the
     environment: the API key from ``KUMORFM_EXPLAIN_LLM_API_KEY`` (else
