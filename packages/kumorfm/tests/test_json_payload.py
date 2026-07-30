@@ -5,6 +5,7 @@
 import hashlib
 import json
 import re
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -747,3 +748,62 @@ def test_prediction_connection_drop_surfaces_clear_error(
     with pytest.raises(RuntimeError) as err:
         model.predict(ltv, indices=[3], verbose=False)
     assert 'temporarily unavailable' in str(err.value)
+
+
+def _feature_payload(feature: Any) -> dict[str, Any]:
+    users = pd.DataFrame({
+        'USER_ID': np.arange(8, dtype='int64'),
+        'FEATURE': feature,
+    })
+    orders = pd.DataFrame({
+        'ORDER_ID': np.arange(16, dtype='int64'),
+        'USER_ID': np.repeat(np.arange(8, dtype='int64'), 2),
+        'AMOUNT': np.arange(16, dtype='float64'),
+        'TIME': pd.to_datetime(['2025-01-01'] * 16),
+    })
+    graph = Graph.from_data({'USERS': users, 'ORDERS': orders}, verbose=False)
+    task = TaskTable(
+        task_type=TaskType.REGRESSION,
+        context_df=pd.DataFrame({
+            'ENTITY': np.arange(6, dtype='int64'),
+            'TARGET': np.arange(6, dtype='float64'),
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 6),
+        }),
+        pred_df=pd.DataFrame({
+            'ENTITY': np.arange(6, 8, dtype='int64'),
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 2),
+        }),
+        entity_table_name='USERS',
+        entity_column='ENTITY',
+        target_column='TARGET',
+        time_column='ANCHOR_TIMESTAMP',
+    )
+    return KumoRFM(graph, verbose=False).materialize_task(
+        task,
+        verbose=False,
+    )[0].payload
+
+
+@pytest.mark.parametrize('value', [float('inf'), float('-inf')])
+def test_non_finite_cell_names_its_table_column_and_row(value: float) -> None:
+    # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
+    # -- these used to escape as a bare ValueError out of ``json.dumps`` inside
+    # the request-size helper, naming neither table, column nor row.
+    with pytest.raises(ValueError, match=r"Column 'USERS.FEATURE' row 3"):
+        _feature_payload([1.0, 1.0, 1.0, value] + [1.0] * 4)
+
+
+def test_decimal_cells_serialize_as_their_declared_string_dtype() -> None:
+    # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
+    # -- every DB-API driver returns Decimal for NUMERIC columns, which used to
+    # raise 'Object of type Decimal is not JSON serializable'.
+    payload = _feature_payload([Decimal(f'-{index}.50') for index in range(8)])
+    table = payload['context']['related_tables']['USERS']
+    schema = payload['schema']['related_tables']['USERS']['columns']
+    index = table['columns'].index('FEATURE')
+    assert schema['FEATURE']['dtype'] == 'string'
+    assert {row[index] for row in table['rows']} <= {
+        f'-{position}.50' for position in range(8)
+    }
+    assert '-0.50' in {row[index] for row in table['rows']}
+    json.dumps(payload)

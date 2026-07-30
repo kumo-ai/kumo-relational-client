@@ -128,6 +128,7 @@ class _GeneratedPredictionRequest:
     instance_ids: tuple[Any, ...]
     entity_dtype: Any
     anchor_times: tuple[Any, ...] | None
+    class_dtype: Any = None
 
 
 @dataclass
@@ -302,6 +303,34 @@ class Explanation:
 
 
 _NIM_UNAVAILABLE_STATUS = frozenset({500, 502, 503, 504})
+
+
+def _class_dtype(task: TaskTable, context: Context) -> Any:
+    r"""The dtype the ``CLASS`` column of a prediction frame should carry.
+
+    Class names and ranking ids are string-keyed on the wire, so ``CLASS``
+    arrives as :class:`str`. Restoring the dtype of the column it names keeps
+    it comparable and joinable, the way ``ENTITY`` already is.
+    """
+    if task.task_type.is_link_pred:
+        table = context.subgraph.table_dict[context.entity_table_names[-1]]
+        if table.primary_key is None:
+            return None
+        return table.df[table.primary_key].dtype
+    if task.task_type == TaskType.MULTICLASS_CLASSIFICATION:
+        return task._context_df[task.target_column.name].dtype
+    return None
+
+
+def _cast_class_column(values: pd.Series, dtype: Any) -> pd.Series:
+    # A bool dtype is excluded: every non-empty class name would cast to
+    # ``True``, which is worse than leaving the strings alone.
+    if dtype is None or pd.api.types.is_bool_dtype(dtype):
+        return values
+    try:
+        return values.astype(dtype)
+    except (TypeError, ValueError, OverflowError):
+        return values
 
 
 def _nim_failure_error(error: Exception, explain: bool) -> RuntimeError:
@@ -994,6 +1023,10 @@ class KumoRFM:
                         df['ENTITY'] = df['ENTITY'].astype(
                             generated.entity_dtype)
 
+                    if 'CLASS' in df:
+                        df['CLASS'] = _cast_class_column(
+                            df['CLASS'], generated.class_dtype)
+
                     if 'ANCHOR_TIMESTAMP' in df:
                         ser = df['ANCHOR_TIMESTAMP']
                         if not pd.api.types.is_datetime64_any_dtype(ser):
@@ -1153,6 +1186,7 @@ class KumoRFM:
                 anchor_times=tuple(
                     row[anchor_index] for row in predict_table['rows']
                 ) if anchor_index is not None else None,
+                class_dtype=_class_dtype(task, context),
             )
 
     @overload

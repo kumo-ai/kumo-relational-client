@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import pandas as pd
@@ -23,8 +24,17 @@ _ITEM_FIELDS = (
     'metadata',
 )
 
+# Columns a caller is entitled to index into even when every value is null.
+# Everything else is an optional output the NIM omits unless asked for, and is
+# dropped when empty so it does not clutter the frame.
+_KEPT_FIELDS = ('row_index', 'prediction')
 
-def parse_prediction_response(response: dict[str, Any]) -> pd.DataFrame:
+
+def parse_prediction_response(
+    response: dict[str, Any],
+    *,
+    requested_fields: Iterable[str] | None = None,
+) -> pd.DataFrame:
     predictions = response.get('predictions')
     if predictions is None:
         raise SdfmError(
@@ -44,15 +54,25 @@ def parse_prediction_response(response: dict[str, Any]) -> pd.DataFrame:
                 f'prediction item must be an object, got {type(item).__name__}',
                 code='INVALID_RESPONSE',
             )
-        if 'row_index' not in item:
+        if item.get('row_index') is None:
             raise SdfmError(
                 "prediction item is missing required field 'row_index'",
                 code='INVALID_RESPONSE',
             )
         rows.append({field: item.get(field) for field in _ITEM_FIELDS})
     frame = pd.DataFrame(rows, columns=_ITEM_FIELDS)
-    frame = frame.dropna(axis='columns', how='all')
-    if 'row_index' in frame.columns and len(frame) > 0:
-        frame = frame.sort_values('row_index', kind='stable')
+    kept = set(_KEPT_FIELDS) | set(requested_fields or ())
+    frame = frame.drop(columns=[
+        column for column in frame.columns
+        if column not in kept and frame[column].isna().all()
+    ])
+    if len(frame) > 0:
+        try:
+            frame = frame.sort_values('row_index', kind='stable')
+        except TypeError as error:
+            raise SdfmError(
+                "response field 'row_index' has values that cannot be ordered",
+                code='INVALID_RESPONSE',
+            ) from error
         frame = frame.reset_index(drop=True)
     return frame

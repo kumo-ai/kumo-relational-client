@@ -39,18 +39,33 @@ def is_datetime(ser: pd.Series) -> bool:
     return pd.api.types.is_datetime64_any_dtype(ser)
 
 
-def to_datetime(ser: pd.Series) -> pd.Series:
-    """Converts a :class:`pandas.Series` to ``datetime64[ns]`` format."""
+def to_datetime(ser: pd.Series, column_name: str | None = None) -> pd.Series:
+    """Converts a :class:`pandas.Series` to ``datetime64[ns]`` format.
+
+    Unparseable values become ``NaT``. Pass ``column_name`` to warn about them
+    instead of dropping them silently; leave it unset when probing candidate
+    columns, where failing to parse is an expected outcome.
+    """
     if isinstance(ser.dtype, pd.ArrowDtype):
         ser = pd.Series(ser.to_numpy(), index=ser.index, name=ser.name)
 
     if not pd.api.types.is_datetime64_any_dtype(ser):
+        source = ser
         with warnings.catch_warnings():
             warnings.filterwarnings(
                 'ignore',
                 message='Could not infer format',
             )
             ser = pd.to_datetime(ser, unit='ns', errors='coerce')
+        if column_name is not None:
+            coerced = ser.isna() & source.notna()
+            num_coerced = int(coerced.sum())
+            if num_coerced > 0:
+                examples = source[coerced].unique()[:3].tolist()
+                warnings.warn(
+                    f"Could not parse {num_coerced:,} of {len(source):,} "
+                    f"value(s) of time column '{column_name}' (for example "
+                    f"{examples}); they were dropped as 'NaT'", stacklevel=2)
 
     if isinstance(ser.dtype, pd.DatetimeTZDtype):
         ser = ser.dt.tz_convert('UTC').dt.tz_localize(None)

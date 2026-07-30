@@ -395,3 +395,69 @@ def test_build_request_serializes_ndarray_cells(predict_df):
     assert payload['context']['instance_table']['rows'] == [
         ['[1 2]', 'a'], ['[3 4]', 'b'],
     ]
+
+
+def test_predict_frame_fractions_survive_an_int_typed_context_column():
+    # Regression: bugs/tabicl-predict-frame-int-truncation.md -- the context
+    # frame's int64 dtype used to be applied to the predict frame, flooring
+    # every value with a bare ``int()``.
+    context = pd.DataFrame({
+        'price': [1, 2, 3, 4],
+        'target_col': ['a', 'b', 'a', 'b'],
+    })
+    predict = pd.DataFrame({'price': [1.9, 2.5, 3.7]})
+    payload = build_request(
+        context=context,
+        predict=predict,
+        task='classification',
+        target='target_col',
+        outputs=['prediction'],
+    )
+    columns = payload['schema']['instance_table']['columns']
+    assert columns['price']['dtype'] == 'float64'
+    assert payload['predict']['instance_table']['rows'] == [
+        [1.9], [2.5], [3.7],
+    ]
+    assert payload['context']['instance_table']['rows'] == [
+        [1.0, 'a'], [2.0, 'b'], [3.0, 'a'], [4.0, 'b'],
+    ]
+
+
+def test_predict_frame_nan_upcast_does_not_truncate_the_column():
+    # Regression: bugs/tabicl-predict-frame-int-truncation.md -- a single
+    # missing value upcasts an integer column to float64 in pandas, which used
+    # to hand the whole predict column to the truncating branch.
+    context = pd.DataFrame({
+        'price': [30, 41, 52, 63],
+        'target_col': ['a', 'b', 'a', 'b'],
+    })
+    predict = pd.DataFrame({'price': [30.5, float('nan'), 41.99]})
+    payload = build_request(
+        context=context,
+        predict=predict,
+        task='classification',
+        target='target_col',
+        outputs=['prediction'],
+    )
+    assert payload['predict']['instance_table']['rows'] == [
+        [30.5], [None], [41.99],
+    ]
+
+
+def test_build_request_rejects_non_finite_values(predict_df):
+    # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
+    # -- ``inf`` used to be emitted verbatim, producing invalid JSON.
+    context = pd.DataFrame({
+        'score': [1.0, float('inf'), 2.0],
+        'target_col': ['a', 'b', 'a'],
+    })
+    with pytest.raises(SdfmError) as err:
+        build_request(
+            context=context,
+            predict=predict_df[['score']],
+            task='classification',
+            target='target_col',
+            outputs=['prediction'],
+        )
+    assert err.value.code == 'INVALID_REQUEST'
+    assert 'not JSON-representable' in str(err.value)

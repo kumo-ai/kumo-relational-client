@@ -3,7 +3,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import math
 from dataclasses import dataclass
+from decimal import Decimal
 from numbers import Real
 from typing import Any
 
@@ -36,6 +38,9 @@ ANCHOR_TIME_PREFIX = '__kumo_anchor_time'
 
 JSON_SAFE_INT_MAX = 9007199254740991
 JSON_SAFE_INT_MIN = -9007199254740991
+
+_NON_FINITE_MSG = ("encountered a non-finite value ({value}); NIM requests "
+                   "must contain finite numbers or nulls")
 
 
 @dataclass(frozen=True)
@@ -184,9 +189,9 @@ def _base_payload(
                 _instance_payload_dataframe(
                     tables.context_instance_table,
                     context,
-                )),
+                ), 'instance_table'),
             'related_tables': {
-                table_name: _dataframe_table(df)
+                table_name: _dataframe_table(df, table_name)
                 for table_name, df in tables.context_related_tables.items()
             },
         },
@@ -196,9 +201,9 @@ def _base_payload(
                 _instance_payload_dataframe(
                     tables.predict_instance_table,
                     context,
-                )),
+                ), 'instance_table'),
             'related_tables': {
-                table_name: _dataframe_table(df)
+                table_name: _dataframe_table(df, table_name)
                 for table_name, df in tables.predict_related_tables.items()
             },
         },
@@ -665,13 +670,25 @@ def _unique_internal_column(occupied: set[str], prefix: str) -> str:
     return f'{prefix}_{suffix}'
 
 
-def _dataframe_table(df: pd.DataFrame) -> dict[str, Any]:
-    return {
-        'format': 'arrays',
-        'columns': df.columns.tolist(),
-        'rows': [[_cell_json_value(value) for value in row]
-                 for row in df.itertuples(index=False, name=None)],
-    }
+def _dataframe_table(
+    df: pd.DataFrame,
+    table_name: str | None = None,
+) -> dict[str, Any]:
+    columns = df.columns.tolist()
+    rows = []
+    for row_index, row in enumerate(df.itertuples(index=False, name=None)):
+        cells = []
+        for column_index, value in enumerate(row):
+            try:
+                cells.append(_cell_json_value(value))
+            except ValueError as error:
+                column = columns[column_index]
+                qualified = (f"'{table_name}.{column}'"
+                             if table_name is not None else f"'{column}'")
+                raise ValueError(
+                    f"Column {qualified} row {row_index}: {error}") from error
+        rows.append(cells)
+    return {'format': 'arrays', 'columns': columns, 'rows': rows}
 
 
 def _output_fields(
@@ -857,6 +874,16 @@ def _json_value(value: Any) -> Any:
         return [_json_value(v) for v in value]
     if isinstance(value, dict):
         return {str(k): _json_value(v) for k, v in value.items()}
+    if isinstance(value, float) and not math.isfinite(value):
+        if math.isnan(value):
+            return None
+        raise ValueError(_NON_FINITE_MSG.format(value=value))
+    if isinstance(value, Decimal):
+        if value.is_nan():
+            return None
+        if not value.is_finite():
+            raise ValueError(_NON_FINITE_MSG.format(value=value))
+        return str(value)  # The wire dtype of a `Decimal` column is `string`.
     try:
         if pd.isna(value):
             return None

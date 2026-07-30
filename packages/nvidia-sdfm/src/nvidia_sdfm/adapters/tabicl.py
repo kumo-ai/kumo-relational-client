@@ -10,7 +10,11 @@ from typing import Any
 import pandas as pd
 
 from nvidia_sdfm.base import ModelAdapter, ModelCapabilities
-from nvidia_sdfm.core.dtypes import infer_tfm_dtype, serialize_column
+from nvidia_sdfm.core.dtypes import (
+    infer_tfm_dtype,
+    serialize_column,
+    widen_tfm_dtype,
+)
 from nvidia_sdfm.core.response import parse_prediction_response
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import SdfmError
@@ -145,9 +149,15 @@ def build_request(
             code='INVALID_REQUEST',
         )
 
-    dtypes = {column: infer_tfm_dtype(context[column]) for column in context.columns}
-    for column in predict.columns:
-        dtypes.setdefault(column, infer_tfm_dtype(predict[column]))
+    # A column typed differently in the two frames travels under the wider of
+    # the two dtypes, so neither frame's values are coerced to the other's.
+    dtypes = {
+        column: widen_tfm_dtype(
+            infer_tfm_dtype(frame[column])
+            for frame in (context, predict) if column in frame.columns
+        )
+        for column in dict.fromkeys([*context.columns, *predict.columns])
+    }
 
     task_spec: dict[str, Any] = {
         'kind': wire_task,
@@ -246,4 +256,5 @@ class TabICLAdapter(ModelAdapter):
             request_id=request.request_id,
         )
         response = transport.predict(payload)
-        return parse_prediction_response(response)
+        return parse_prediction_response(
+            response, requested_fields=request.outputs)

@@ -975,3 +975,102 @@ def test_explanation_warning_flows_from_api_response(
     assert result.summary == 'Summary.'
     assert result.details['format'] == 'natural_language_summary'
     assert result.warning == "Cross-region fallback used."
+
+
+class MockMulticlassAPI(MockAPI):
+    r"""Returns a multi-class frame whose CLASS values are strings, exactly as
+    the wire format delivers them.
+    """
+    def predict(
+        self,
+        request: dict[str, Any],
+        *,
+        entity_ids: list[Any] | None = None,
+        instance_ids: list[Any] | None = None,
+        anchor_times: list[Any] | None = None,
+    ) -> RFMPredictResponse:
+        return RFMPredictResponse(prediction={
+            'columns': ['ENTITY', 'CLASS', 'SCORE', 'PREDICTED'],
+            'data': [
+                [0, '2', 0.7, True],
+                [0, '1', 0.3, False],
+            ],
+        })
+
+
+def test_multiclass_class_column_keeps_the_target_dtype(
+    user_store_graph: Graph,
+) -> None:
+    # Regression: bugs/rfm-class-column-dtype-inconsistency.md -- CLASS came
+    # back as str while ENTITY in the same frame was int64, so `df['CLASS'] ==
+    # 2` was False everywhere and a merge back to the source table raised.
+    task = TaskTable(
+        task_type=TaskType.MULTICLASS_CLASSIFICATION,
+        context_df=pd.DataFrame({
+            'ENTITY': [0, 1, 3, 0],
+            'TARGET': pd.Series([1, 2, 1, 2], dtype='int64'),
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 4),
+        }),
+        pred_df=pd.DataFrame({
+            'ENTITY': [0],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
+        }),
+        entity_table_name='USERS',
+        entity_column='ENTITY',
+        target_column='TARGET',
+        time_column='ANCHOR_TIMESTAMP',
+    )
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = MockMulticlassAPI()  # type: ignore
+    df = model.predict_task(task, verbose=False)
+
+    assert df['CLASS'].dtype == df['ENTITY'].dtype
+    assert df['CLASS'].tolist() == [2, 1]
+    assert (df['CLASS'] == 2).sum() == 1
+
+
+class MockRankingAPI(MockAPI):
+    def predict(
+        self,
+        request: dict[str, Any],
+        *,
+        entity_ids: list[Any] | None = None,
+        instance_ids: list[Any] | None = None,
+        anchor_times: list[Any] | None = None,
+    ) -> RFMPredictResponse:
+        return RFMPredictResponse(prediction={
+            'columns': ['ENTITY', 'CLASS', 'SCORE'],
+            'data': [[0, '1', 0.9], [0, '2', 0.5]],
+        })
+
+
+def test_link_prediction_class_column_keeps_the_target_key_dtype(
+    user_store_graph: Graph,
+) -> None:
+    # Regression: bugs/rfm-class-column-dtype-inconsistency.md -- ranking ids
+    # arrive as strings, so a merge back to the destination table raised
+    # 'You are trying to merge on str and int64 columns'.
+    task = TaskTable(
+        task_type=TaskType.TEMPORAL_LINK_PREDICTION,
+        context_df=pd.DataFrame({
+            'ENTITY': [0, 1, 3, 0],
+            'TARGET': [[0, 1], [1, 2], [0, 2], [1]],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 4),
+        }),
+        pred_df=pd.DataFrame({
+            'ENTITY': [0],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
+        }),
+        entity_table_name=('USERS', 'STORES'),
+        entity_column='ENTITY',
+        target_column='TARGET',
+        time_column='ANCHOR_TIMESTAMP',
+    )
+
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = MockRankingAPI()  # type: ignore
+    df = model.predict_task(task, verbose=False)
+
+    assert df['CLASS'].dtype == user_store_graph['STORES']['STORE_ID'].dtype
+    assert df['CLASS'].tolist() == [1, 2]

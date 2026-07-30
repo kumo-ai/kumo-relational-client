@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from datetime import timedelta, timezone
 
 import pandas as pd
@@ -41,3 +42,29 @@ def test_to_datetime_normalizes_timezone() -> None:
                                     ])).dt.tz_localize(timezone(timedelta(
                                         hours=-8)))
     assert to_datetime(ser).iloc[0] == pd.Timestamp('2026-01-02 01:00:00')
+
+
+def test_to_datetime_warns_about_coerced_values() -> None:
+    # Regression: bugs/graph-unparseable-time-column-silently-coerced.md --
+    # unparseable values became NaT with no warning and no count.
+    ser = pd.Series(['2026-01-01', 'not a date', 'nope', None])
+    with pytest.warns(UserWarning, match='Could not parse 2 of 4') as record:
+        out = to_datetime(ser, 'TS')
+    assert out.isna().tolist() == [False, True, True, True]
+    assert "'TS'" in str(record[0].message)
+    assert 'not a date' in str(record[0].message)
+
+
+def test_to_datetime_is_quiet_without_a_column_name() -> None:
+    # Candidate probing parses columns that are not expected to be dates.
+    ser = pd.Series(['2026-01-01', 'not a date'])
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        assert to_datetime(ser).isna().tolist() == [False, True]
+
+
+def test_to_datetime_does_not_warn_about_already_null_values() -> None:
+    ser = pd.Series(['2026-01-01', None, pd.NaT])
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        assert to_datetime(ser, 'TS').isna().tolist() == [False, True, True]

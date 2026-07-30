@@ -4,13 +4,27 @@
 
 from __future__ import annotations
 
+import math
+from collections.abc import Iterable
 from typing import Any
 
 import numpy as np
 import pandas as pd
 
+from nvidia_sdfm.errors import SdfmError
+
 JSON_SAFE_INT_MAX = 9007199254740991
 JSON_SAFE_INT_MIN = -9007199254740991
+
+# Ordered from narrowest to widest; anything outside this map (timestamps,
+# strings) has no numeric widening and falls back to 'string'.
+_NUMERIC_WIDTH = {
+    'bool': 0,
+    'int32': 1,
+    'int64': 2,
+    'float32': 3,
+    'float64': 4,
+}
 
 
 def infer_tfm_dtype(series: pd.Series) -> str:
@@ -26,6 +40,24 @@ def infer_tfm_dtype(series: pd.Series) -> str:
     return 'string'
 
 
+def widen_tfm_dtype(dtypes: Iterable[str]) -> str:
+    r"""The narrowest wire dtype that can hold every one of ``dtypes``.
+
+    A column typed differently in two frames must travel under a dtype that
+    represents both, otherwise the values of one frame are coerced to the other
+    frame's dtype and silently corrupted.
+    """
+    candidates = list(dict.fromkeys(dtypes))
+    if len(candidates) == 1:
+        return candidates[0]
+    if any(dtype not in _NUMERIC_WIDTH for dtype in candidates):
+        return 'string'
+    widest = max(candidates, key=_NUMERIC_WIDTH.__getitem__)
+    if widest == 'float32' and 'int64' in candidates:
+        return 'float64'
+    return widest
+
+
 def _is_missing(value: Any) -> bool:
     if value is None:
         return True
@@ -36,6 +68,16 @@ def _is_missing(value: Any) -> bool:
     if isinstance(result, (bool, np.bool_)):
         return bool(result)
     return False  # Array-likes (lists, ndarrays) are values, not nulls.
+
+
+def _require_finite(value: Any) -> None:
+    r"""``inf`` has no JSON literal; emitting it produces invalid JSON."""
+    if isinstance(value, (float, np.floating)) and not math.isfinite(value):
+        raise SdfmError(
+            f'value {value!r} is not JSON-representable; replace non-finite '
+            'numbers with a finite value or a null',
+            code='INVALID_REQUEST',
+        )
 
 
 def serialize_cell(value: Any, dtype: str) -> Any:
@@ -49,11 +91,19 @@ def serialize_cell(value: Any, dtype: str) -> Any:
             timestamp = timestamp.tz_convert('UTC')
         return timestamp.isoformat(timespec='microseconds').replace('+00:00', 'Z')
     if dtype in ('int64', 'int32'):
+        _require_finite(value)
         integer_value = int(value)
+        if isinstance(value, (float, np.floating)) and integer_value != value:
+            raise SdfmError(
+                f'value {value!r} cannot be sent as {dtype} without losing its '
+                'fractional part',
+                code='INVALID_REQUEST',
+            )
         if integer_value > JSON_SAFE_INT_MAX or integer_value < JSON_SAFE_INT_MIN:
             return str(integer_value)
         return integer_value
     if dtype in ('float64', 'float32'):
+        _require_finite(value)
         return float(value)
     if dtype == 'bool':
         return bool(value)

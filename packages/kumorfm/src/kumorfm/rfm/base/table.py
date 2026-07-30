@@ -684,9 +684,9 @@ class Table(ABC):
             stype = (stype_dict or {}).get(column_name)
 
             if dtype == Dtype.time:
-                df[column_name] = to_datetime(df[column_name])
+                df[column_name] = to_datetime(df[column_name], column_name)
             elif stype == Stype.timestamp:
-                df[column_name] = to_datetime(df[column_name])
+                df[column_name] = to_datetime(df[column_name], column_name)
             elif dtype is not None and dtype.is_list():
                 df[column_name] = _to_list(df[column_name], dtype)
             elif stype == Stype.sequence:

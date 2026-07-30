@@ -86,3 +86,58 @@ def test_parse_prediction_response_missing_row_index_raises():
 def test_parse_prediction_response_empty_predictions():
     frame = parse_prediction_response({'predictions': []})
     assert len(frame) == 0
+
+
+def test_parse_prediction_response_empty_keeps_prediction_column():
+    # Regression: bugs/client-response-parser-drops-requested-columns.md -- an
+    # empty prediction set used to yield a frame with no columns at all.
+    frame = parse_prediction_response({'predictions': []})
+    assert list(frame.columns) == ['row_index', 'prediction']
+    assert len(frame['prediction']) == 0
+
+
+def test_parse_prediction_response_keeps_all_null_prediction_column():
+    # Regression: bugs/client-response-parser-drops-requested-columns.md
+    response = {
+        'predictions': [
+            {'row_index': 0, 'prediction': None},
+            {'row_index': 1, 'prediction': None},
+        ],
+    }
+    frame = parse_prediction_response(response)
+    assert list(frame['prediction']) == [None, None]
+
+
+def test_parse_prediction_response_keeps_requested_fields_when_all_null():
+    # Regression: bugs/client-response-parser-drops-requested-columns.md
+    response = {
+        'predictions': [{'row_index': 0, 'prediction': 'a'}],
+    }
+    frame = parse_prediction_response(
+        response, requested_fields=['prediction', 'probabilities'])
+    assert 'probabilities' in frame.columns
+    assert 'quantiles' not in frame.columns
+
+
+def test_parse_prediction_response_unorderable_row_index_raises():
+    # Regression: bugs/client-response-parser-drops-requested-columns.md -- a
+    # raw pandas TypeError used to escape the SdfmError contract.
+    response = {
+        'predictions': [
+            {'row_index': 0, 'prediction': 'a'},
+            {'row_index': 'x', 'prediction': 'b'},
+        ],
+    }
+    with pytest.raises(SdfmError) as err:
+        parse_prediction_response(response)
+    assert err.value.code == 'INVALID_RESPONSE'
+
+
+def test_parse_prediction_response_null_row_index_raises():
+    # Regression: bugs/client-response-parser-drops-requested-columns.md -- a
+    # null row_index passed the presence check and was then dropped, leaving
+    # the rows silently unsorted.
+    with pytest.raises(SdfmError) as err:
+        parse_prediction_response(
+            {'predictions': [{'row_index': None, 'prediction': 'a'}]})
+    assert err.value.code == 'INVALID_RESPONSE'

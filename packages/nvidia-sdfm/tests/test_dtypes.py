@@ -13,7 +13,9 @@ from nvidia_sdfm.core.dtypes import (
     infer_tfm_dtype,
     serialize_cell,
     serialize_column,
+    widen_tfm_dtype,
 )
+from nvidia_sdfm.errors import SdfmError
 
 
 @pytest.mark.parametrize(('values', 'expected'), [
@@ -85,3 +87,36 @@ def test_serialize_cell_treats_ndarray_as_a_value_not_a_null():
 def test_serialize_cell_treats_list_like_values_as_values():
     assert serialize_cell([1, 2], 'string') == '[1, 2]'
     assert serialize_cell((1, 2), 'string') == '(1, 2)'
+
+
+@pytest.mark.parametrize(('candidates', 'expected'), [
+    (['int64'], 'int64'),
+    (['int64', 'float64'], 'float64'),
+    (['int64', 'float32'], 'float64'),
+    (['int32', 'float32'], 'float32'),
+    (['bool', 'int32'], 'int32'),
+    (['int64', 'string'], 'string'),
+    (['timestamp[us]', 'int64'], 'string'),
+])
+def test_widen_tfm_dtype(candidates, expected):
+    # Regression: bugs/tabicl-predict-frame-int-truncation.md
+    assert widen_tfm_dtype(candidates) == expected
+
+
+def test_serialize_cell_rejects_fractional_value_under_an_int_dtype():
+    # Regression: bugs/tabicl-predict-frame-int-truncation.md -- ``int(3.7)``
+    # used to silently truncate to ``3``.
+    with pytest.raises(SdfmError) as err:
+        serialize_cell(3.7, 'int64')
+    assert err.value.code == 'INVALID_REQUEST'
+    assert serialize_cell(3.0, 'int64') == 3
+
+
+def test_serialize_cell_rejects_non_finite_numbers():
+    # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
+    for dtype in ('float64', 'int64'):
+        with pytest.raises(SdfmError) as err:
+            serialize_cell(float('inf'), dtype)
+        assert err.value.code == 'INVALID_REQUEST'
+    with pytest.raises(SdfmError):
+        serialize_cell(float('-inf'), 'float64')
