@@ -8,6 +8,7 @@ from contextlib import suppress
 from typing import Any
 
 import pandas as pd
+import pyarrow as pa
 
 from sdfm_connectors.backends import connect, owns_connection
 from sdfm_connectors.sql import (
@@ -19,6 +20,17 @@ from sdfm_connectors.sql import (
 
 _SQL_SOURCES = ('sqlite', 'duckdb', 'snowflake', 'databricks')
 _FILE_SOURCES = ('local', 's3')
+
+_NULLABLE_INTEGER_DTYPES = {
+    pa.int8(): pd.Int8Dtype(),
+    pa.int16(): pd.Int16Dtype(),
+    pa.int32(): pd.Int32Dtype(),
+    pa.int64(): pd.Int64Dtype(),
+    pa.uint8(): pd.UInt8Dtype(),
+    pa.uint16(): pd.UInt16Dtype(),
+    pa.uint32(): pd.UInt32Dtype(),
+    pa.uint64(): pd.UInt64Dtype(),
+}
 
 
 def read(source: str, **kwargs: Any) -> pd.DataFrame:
@@ -61,20 +73,42 @@ def read_table(
         cursor = connection.cursor()
         try:
             cursor.execute(sql)
+            if hasattr(cursor, 'fetch_arrow_all'):
+                arrow_table = cursor.fetch_arrow_all()
+                if arrow_table is not None:
+                    return _arrow_to_pandas(arrow_table)
             if hasattr(cursor, 'fetch_pandas_all'):
                 return cursor.fetch_pandas_all()
             if hasattr(cursor, 'fetchdf'):
                 return cursor.fetchdf()
             if hasattr(cursor, 'fetch_arrow_table'):
-                return cursor.fetch_arrow_table().to_pandas()
+                return _arrow_to_pandas(cursor.fetch_arrow_table())
             if hasattr(cursor, 'fetchall_arrow'):
-                return cursor.fetchall_arrow().to_pandas()
+                return _arrow_to_pandas(cursor.fetchall_arrow())
             rows = cursor.fetchall()
             columns = [description[0] for description in cursor.description]
             return pd.DataFrame(rows, columns=columns)
         finally:
             with suppress(Exception):
                 cursor.close()
+
+
+def _arrow_to_pandas(arrow_table: Any) -> pd.DataFrame:
+    r"""Convert an Arrow table without widening null-bearing integers.
+
+    The numpy default represents nulls in an integer column by promoting it to
+    ``float64``, which silently rounds values beyond 2**53. Such columns use a
+    null-aware integer dtype instead, matching what DuckDB already returns.
+    Integer columns without nulls keep their numpy dtype.
+    """
+    df = arrow_table.to_pandas(types_mapper=_NULLABLE_INTEGER_DTYPES.get)
+    for position, dtype in enumerate(df.dtypes):
+        if (isinstance(dtype, pd.api.extensions.ExtensionDtype)
+                and pd.api.types.is_integer_dtype(dtype)):
+            column = df.iloc[:, position]
+            if not column.isna().any():
+                df.isetitem(position, column.astype(dtype.numpy_dtype))
+    return df
 
 
 def _read_local(

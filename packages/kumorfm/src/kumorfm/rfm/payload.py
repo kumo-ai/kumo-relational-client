@@ -34,6 +34,9 @@ SYNTHETIC_NODE_ID = '__node_id'
 ENTITY_REFERENCE_PREFIX = '__kumo_entity_ref'
 ANCHOR_TIME_PREFIX = '__kumo_anchor_time'
 
+JSON_SAFE_INT_MAX = 9007199254740991
+JSON_SAFE_INT_MIN = -9007199254740991
+
 
 @dataclass(frozen=True)
 class PayloadTables:
@@ -666,7 +669,7 @@ def _dataframe_table(df: pd.DataFrame) -> dict[str, Any]:
     return {
         'format': 'arrays',
         'columns': df.columns.tolist(),
-        'rows': [[_json_value(value) for value in row]
+        'rows': [[_cell_json_value(value) for value in row]
                  for row in df.itertuples(index=False, name=None)],
     }
 
@@ -859,6 +862,19 @@ def _json_value(value: Any) -> Any:
             return None
     except (TypeError, ValueError):
         pass
+    return value
+
+
+def _cell_json_value(value: Any) -> Any:
+    r"""Serializes a table cell, honoring the JSON safe-integer rule.
+
+    ``int64`` values outside the JavaScript safe-integer range must travel as
+    base-10 strings; sending them as JSON numbers is rejected by the NIM.
+    """
+    value = _json_value(value)
+    if isinstance(value, int) and not isinstance(value, bool):
+        if value > JSON_SAFE_INT_MAX or value < JSON_SAFE_INT_MIN:
+            return str(value)
     return value
 
 

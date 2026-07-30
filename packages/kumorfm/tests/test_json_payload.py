@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -325,6 +326,71 @@ def test_stringlist_dtype_detection_rejects_mixed_or_null_items() -> None:
 
     with pytest.raises(ValueError, match='must not contain null items'):
         _dtype_name(pd.Series([['a', None]], dtype=object))
+
+
+def test_payload_encodes_unsafe_int64_as_base10_strings() -> None:
+    large_id = 9007199254740993
+    large_feature = 2**62 + 1
+    users = pd.DataFrame({
+        'USER_ID': np.arange(large_id, large_id + 8, dtype='int64'),
+        'BIG_FEATURE': np.full(8, large_feature, dtype='int64'),
+        'AGE': np.arange(20, 28, dtype='int64'),
+    })
+    orders = pd.DataFrame({
+        'ORDER_ID': np.arange(16, dtype='int64'),
+        'USER_ID': np.repeat(users['USER_ID'].to_numpy(), 2),
+        'AMOUNT': np.arange(16, dtype='float64'),
+        'TIME': pd.to_datetime(['2025-01-01'] * 16),
+    })
+    graph = Graph.from_data({'USERS': users, 'ORDERS': orders}, verbose=False)
+    task = TaskTable(
+        task_type=TaskType.REGRESSION,
+        context_df=pd.DataFrame({
+            'ENTITY': users['USER_ID'].to_numpy()[:6],
+            'TARGET': np.arange(6, dtype='float64'),
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 6),
+        }),
+        pred_df=pd.DataFrame({
+            'ENTITY': users['USER_ID'].to_numpy()[6:],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 2),
+        }),
+        entity_table_name='USERS',
+        entity_column='ENTITY',
+        target_column='TARGET',
+        time_column='ANCHOR_TIMESTAMP',
+    )
+
+    payload = KumoRFM(graph, verbose=False).materialize_task(
+        task,
+        verbose=False,
+    )[0].payload
+
+    users_table = payload['context']['related_tables']['USERS']
+    users_schema = payload['schema']['related_tables']['USERS']['columns']
+    user_id_index = users_table['columns'].index('USER_ID')
+    feature_index = users_table['columns'].index('BIG_FEATURE')
+    age_index = users_table['columns'].index('AGE')
+    assert users_schema['USER_ID']['dtype'] == 'int64'
+    assert users_schema['BIG_FEATURE']['dtype'] == 'int64'
+    assert users_table['rows'][0][user_id_index] == str(large_id)
+    assert users_table['rows'][0][feature_index] == str(large_feature)
+    assert users_table['rows'][0][age_index] == 20
+
+    orders_table = payload['context']['related_tables']['ORDERS']
+    fkey_index = orders_table['columns'].index('USER_ID')
+    assert orders_table['rows'][0][fkey_index] == str(large_id)
+
+    instance_table = payload['context']['instance_table']
+    entity_ref_column = next(column for column in instance_table['columns']
+                             if column.startswith(ENTITY_REFERENCE_PREFIX))
+    entity_index = instance_table['columns'].index(entity_ref_column)
+    assert payload['schema']['instance_table']['columns'][entity_ref_column][
+        'dtype'] == 'int64'
+    assert instance_table['rows'][0][entity_index] == str(large_id)
+
+    encoded = json.dumps(payload)
+    assert not re.search(rf'(?<![\d"]){large_id}(?![\d"])', encoded)
+    assert not re.search(rf'(?<![\d"]){large_feature}(?![\d"])', encoded)
 
 
 def test_entity_identity_survives_batch_local_row_indexes(

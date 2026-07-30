@@ -53,7 +53,7 @@ def to_datetime(ser: pd.Series) -> pd.Series:
             ser = pd.to_datetime(ser, unit='ns', errors='coerce')
 
     if isinstance(ser.dtype, pd.DatetimeTZDtype):
-        ser = ser.dt.tz_localize(None)
+        ser = ser.dt.tz_convert('UTC').dt.tz_localize(None)
 
     if ser.dtype != 'datetime64[ns]':
         ser = ser.astype('datetime64[ns]')
