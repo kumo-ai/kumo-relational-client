@@ -51,6 +51,13 @@ class GlobalState(metaclass=Singleton):
 
     @property
     def client(self) -> KumoClient:
+        # Under pytest an ambient KUMO_API_ENDPOINT must not silently connect a
+        # test run to a real endpoint, which is what the removed import-time
+        # init() guarded against; require an explicit init() there instead.
+        if (self._url is None and os.getenv("KUMO_API_ENDPOINT")
+                and "pytest" not in sys.modules):
+            init()
+
         if self._url is None:
             raise ValueError("Client creation or authentication failed. "
                              "Please re-create your client before proceeding.")
@@ -89,7 +96,7 @@ def init(
 
     api_key = api_key or os.getenv("KUMO_API_KEY")
     url = url or os.getenv("KUMO_API_ENDPOINT")
-    if url is None:
+    if not url:
         raise ValueError("KumoRFM initialization failed since no endpoint "
                          "URL was provided. Please either set the "
                          "'KUMO_API_ENDPOINT' environment variable or "
@@ -120,10 +127,6 @@ def init(
 def set_log_level(level: str) -> None:
     r"""Sets the Kumo logging level."""
     logging.getLogger('kumorfm').setLevel(level)
-
-
-if "pytest" not in sys.modules and "KUMO_API_ENDPOINT" in os.environ:
-    init()
 
 
 @lru_cache

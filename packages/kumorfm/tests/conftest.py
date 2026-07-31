@@ -29,7 +29,7 @@ from kumorfm.api.typing import (
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
 
 # Not mock:// due to https://stackoverflow.com/a/76056002
-MOCK_URL = "http://nim.test"
+MOCK_URL = "https://nim.test"
 
 
 def pytest_addoption(parser):

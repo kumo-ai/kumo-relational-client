@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 from urllib.parse import urlparse
 
@@ -22,6 +23,11 @@ _RETRY_STATUS = (429, 500, 502, 503, 504)
 _RETRY_AFTER_MAX_SECONDS = 60
 _MAX_BODY_SNIPPET = 512
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
+# Well above any real prediction response -- a full-precision float64 column
+# for a million rows is ~25 MB of JSON -- but far below what a compressed
+# hostile body can inflate to.
+_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
+_RESPONSE_CHUNK_BYTES = 1024 * 1024
 
 
 def _validate_url(url: str, api_key: str | None) -> None:
@@ -121,6 +127,26 @@ def _snippet(text: str) -> str:
             f'[truncated, {len(text)} chars total]')
 
 
+def _read_capped(response: requests.Response, url: str) -> bytes:
+    r"""Reads a streamed response body, refusing anything past the cap.
+
+    ``requests`` inflates ``Content-Encoding: gzip`` with no ratio limit, so
+    an unbounded read lets a small compressed body expand into hundreds of
+    megabytes of client memory before anything is parsed. See
+    ``bugs/security-hostile-server-response-unbounded.md``.
+    """
+    body = bytearray()
+    for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
+        if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
+            raise SdfmError(
+                f'Response body from {url} exceeds the '
+                f'{_MAX_RESPONSE_BYTES} byte limit',
+                code='TRANSPORT_ERROR',
+            )
+        body.extend(chunk)
+    return bytes(body)
+
+
 def _build_session(
     api_key: str | None,
     max_retries: int,
@@ -197,17 +223,20 @@ class Transport:
     def health_ready(self) -> bool:
         self._require_open()
         try:
-            response = self._session.get(
-                self._url + _HEALTH_READY_PATH,
-                timeout=self._timeout,
-                verify=self._verify_ssl,
-            )
+            # Streamed and closed unread: only the status matters, and the
+            # body is attacker-controlled on a misconfigured endpoint.
+            with self._session.get(
+                    self._url + _HEALTH_READY_PATH,
+                    timeout=self._timeout,
+                    verify=self._verify_ssl,
+                    stream=True,
+            ) as response:
+                return response.status_code == 200
         except requests.RequestException as error:
             raise SdfmError(
                 f'Request to {self._url + _HEALTH_READY_PATH} failed: {error}',
                 code='TRANSPORT_ERROR',
             ) from error
-        return response.status_code == 200
 
     def predict(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._post(_PREDICTIONS_PATH, payload)
@@ -233,47 +262,54 @@ class Transport:
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_open()
+        url = self._url + path
         try:
-            response = self._session.post(
-                self._url + path,
-                json=payload,
-                timeout=self._timeout,
-                verify=self._verify_ssl,
-            )
+            with self._session.post(
+                    url,
+                    json=payload,
+                    timeout=self._timeout,
+                    verify=self._verify_ssl,
+                    stream=True,
+            ) as response:
+                status_code = response.status_code
+                content = _read_capped(response, url)
         except requests.RequestException as error:
             raise SdfmError(
-                f'Request to {self._url + path} failed: {error}',
+                f'Request to {url} failed: {error}',
                 code='TRANSPORT_ERROR',
             ) from error
-        if response.status_code >= 400:
-            raise _to_nim_error(response)
+        if status_code >= 400:
+            raise _to_nim_error(status_code, content)
         try:
-            body = response.json()
-        except ValueError as error:
+            # A deeply nested body raises RecursionError, which is a
+            # RuntimeError and would otherwise escape the SdfmError contract.
+            body = json.loads(content)
+        except (ValueError, RecursionError) as error:
             raise SdfmError(
-                f'Invalid JSON response from {self._url + path}',
+                f'Invalid JSON response from {url}',
                 code='TRANSPORT_ERROR',
             ) from error
         if not isinstance(body, dict):
             raise SdfmError(
-                f'Expected a JSON object from {self._url + path}, '
+                f'Expected a JSON object from {url}, '
                 f'got {type(body).__name__}',
                 code='TRANSPORT_ERROR',
             )
         return body
 
 
-def _to_nim_error(response: requests.Response) -> NimRequestError:
+def _to_nim_error(status_code: int, content: bytes) -> NimRequestError:
     try:
-        body = response.json()
-    except ValueError:
+        body = json.loads(content)
+    except (ValueError, RecursionError):
         body = {}
     if not isinstance(body, dict):
         body = {}
     code = body.get('code')
-    reported = body.get('detail') or body.get('title') or response.text
+    reported = (body.get('detail') or body.get('title')
+                or content.decode('utf-8', 'replace'))
     message = _snippet(str(reported)) if reported else (
-        f'NIM request failed with status {response.status_code}'
+        f'NIM request failed with status {status_code}'
     )
     details = {
         key: value
@@ -281,7 +317,7 @@ def _to_nim_error(response: requests.Response) -> NimRequestError:
         if key not in ('code', 'detail', 'title', 'type', 'status', 'instance')
     }
     return NimRequestError(
-        response.status_code,
+        status_code,
         code=code,
         message=message,
         details=details,

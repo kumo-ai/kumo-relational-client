@@ -18,8 +18,8 @@ without passing the values explicitly.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `KUMO_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. If set, the driver initializes against this endpoint automatically at import time (outside test runs). |
-| `KUMO_API_KEY` | No | None | API key sent to the NIM. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. |
+| `KUMO_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. Read when the driver initializes; importing the package never connects. |
+| `KUMO_API_KEY` | No | None | API key sent to the NIM as `X-API-Key`. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. It is refused on a plaintext `http://` endpoint other than localhost. |
 | `KUMO_LOG` | No | `INFO` | Log level for the KumoRFM driver, for example `DEBUG`, `INFO`, or `WARNING`. |
 
 ## Explanation Summary (Third-Party LLM)

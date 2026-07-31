@@ -27,7 +27,7 @@ from rfm_nim_payloads import (
     nim_v1_smoke_payload,
 )
 
-MOCK_URL = 'http://nim.test'
+MOCK_URL = 'https://nim.test'
 SDK_V1_MODELS_PATH = '/v1/models'
 
 

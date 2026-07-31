@@ -8,6 +8,7 @@ import os
 from contextlib import suppress
 from pathlib import PurePosixPath
 from typing import Any
+from urllib.parse import urlparse
 
 import pandas as pd
 import pyarrow as pa
@@ -179,7 +180,37 @@ def _read_local(
             "local connector requires either 'data' or 'path'",
             code='INVALID_CONNECTOR_ARGS',
         )
+    _require_local_path(path)
     return _read_file(path, format=format)
+
+
+def _require_local_path(path: str) -> None:
+    r"""Reject a URI handed to the connector named ``local``.
+
+    ``pandas`` resolves any fsspec/urllib-supported URL, so without this the
+    'safe, no-network' source reaches the network and returns the response as
+    a DataFrame. A single-character scheme is a Windows drive letter, not a
+    URI. A ``file://`` URI naming a host is refused too: ``urllib`` drops the
+    authority and reads the path locally, so the URI does not mean what it
+    says. See ``bugs/security-local-connector-fetches-arbitrary-urls.md``.
+    """
+    parsed = urlparse(path)
+    if len(parsed.scheme) > 1 and parsed.scheme != 'file':
+        raise ConnectorError(
+            f'the local connector reads local filesystem paths, got a '
+            f'{parsed.scheme!r} URI: {path!r}. Use the matching connector, '
+            f"e.g. source='s3'.",
+            code='INVALID_CONNECTOR_ARGS',
+            details={'path': path},
+        )
+    if parsed.scheme == 'file' and parsed.netloc.lower() not in ('',
+                                                                'localhost'):
+        raise ConnectorError(
+            f'the local connector reads local filesystem paths, got a '
+            f'file:// URI naming the host {parsed.netloc!r}: {path!r}',
+            code='INVALID_CONNECTOR_ARGS',
+            details={'path': path},
+        )
 
 
 def _read_s3(

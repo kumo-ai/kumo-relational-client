@@ -8,7 +8,7 @@ from kumorfm.client import KumoClient
 
 
 def test_authenticate_accepts_universal_tfm_nim(requests_mock):
-    base_url = 'http://nim.test'
+    base_url = 'https://nim.test'
     requests_mock.get(
         f'{base_url}/v1/health/ready',
         json={
@@ -48,7 +48,7 @@ def test_authenticate_rejects_unready_universal_tfm_nim(
     requests_mock,
     ready_payload,
 ):
-    base_url = 'http://nim.test'
+    base_url = 'https://nim.test'
     requests_mock.get(
         f'{base_url}/v1/health/ready',
         json=ready_payload,
@@ -62,7 +62,7 @@ def test_authenticate_rejects_unready_universal_tfm_nim(
 
 @pytest.mark.parametrize('status_code', [401, 403])
 def test_authenticate_surfaces_gateway_auth_error(requests_mock, status_code):
-    base_url = 'http://nim.test'
+    base_url = 'https://nim.test'
     requests_mock.get(f'{base_url}/v1/health/ready',
                       json={'status': 'ready'})
     requests_mock.get(f'{base_url}/v1/models', status_code=status_code)

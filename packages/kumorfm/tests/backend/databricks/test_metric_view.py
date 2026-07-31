@@ -970,6 +970,45 @@ def test_from_databricks_metric_view_rejected_join_keeps_expression() -> None:
     assert str(fact['product_id'].expr) == 'UPPER(product_id)'
 
 
+_HOSTILE_EXPR_YAML = '''
+version: "1.1"
+source: cat.sch.order_lines
+dimensions:
+  - name: product_line
+    expr: source.product_line
+  - name: leaked
+    expr: (SELECT MAX(amount) FROM cat.sch.payments)
+measures:
+  - name: total_amount
+    expr: SUM(source.amount)
+'''
+
+
+def test_from_databricks_metric_view_drops_a_hostile_expression() -> None:
+    # Regression test for
+    # `bugs/security-column-expr-executes-verbatim-warehouse-sql.md`: a
+    # dimension expression comes from whoever authored the view but runs
+    # under the caller's warehouse role, so a sub-query that reads a table
+    # outside the graph must never be lifted into a `ColumnSpec`.
+    describe_rows = _metric_view(_HOSTILE_EXPR_YAML, {
+        'product_line': 'string',
+        'leaked': 'double',
+    })
+
+    with pytest.warns(UserWarning) as caught:
+        graph = Graph.from_databricks_metric_view(
+            'audit_mv',
+            connection=_FakeConnection(describe_rows),
+            verbose=False,
+        )
+
+    assert "Failed to add column 'leaked'" in str(caught[0].message)
+
+    fact = graph['order_lines']
+    assert not fact.has_column('leaked')
+    assert {column.name for column in fact.columns} == {'product_line'}
+
+
 def test_from_databricks_case_insensitive_identifiers() -> None:
     # Regression test for `graph-warehouse-identifier-case-sensitivity.md`:
     # `information_schema` compares string literals case-sensitively, so

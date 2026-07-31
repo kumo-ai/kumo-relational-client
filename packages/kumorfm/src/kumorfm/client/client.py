@@ -4,6 +4,7 @@
 
 import logging
 from typing import Any, NoReturn, Optional
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -14,6 +15,29 @@ from kumorfm.client.endpoints import Endpoint, HTTPMethod
 logger = logging.getLogger('kumorfm')
 
 _AUTH_STATUS_CODES = frozenset({401, 403})
+_LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
+_MAX_BODY_SNIPPET = 512
+
+
+def _validate_url(url: str, api_key: Optional[str]) -> None:
+    r"""Mirrors ``nvidia_sdfm.core.transport._validate_url``.
+
+    This client carries every KumoRFM prediction, so the guard the SDK
+    documents has to hold here too rather than only on the path that happens
+    to construct a ``Transport`` first. See the KumoClient plaintext-guard
+    report under ``bugs/``.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme not in ('http', 'https'):
+        raise ValueError(
+            f"url must start with http:// or https://, got {url!r}")
+    if not parsed.hostname:
+        raise ValueError(f"url is missing a host, got {url!r}")
+    if (api_key and parsed.scheme == 'http'
+            and parsed.hostname.lower() not in _LOCAL_HOSTS):
+        raise ValueError(
+            f"refusing to send an API key over plaintext HTTP; use an "
+            f"https:// URL (or a localhost endpoint), got {url!r}")
 
 
 def _json_or_none(response: requests.Response) -> Any:
@@ -23,12 +47,25 @@ def _json_or_none(response: requests.Response) -> Any:
         return None
 
 
+def _snippet(response: Optional[requests.Response]) -> str:
+    r"""A one-line, length-capped view of a response body, so a multi-megabyte
+    error page cannot become a multi-megabyte exception message.
+    """
+    if response is None:
+        return ''
+    text = ' '.join(response.text.split())
+    if len(text) <= _MAX_BODY_SNIPPET:
+        return text
+    return (f'{text[:_MAX_BODY_SNIPPET]}... '
+            f'[truncated, {len(text)} chars total]')
+
+
 def _raise_init_error(url: str, exc: BaseException) -> NoReturn:
     """Translate an init-time requests exception into a user-facing error."""
     if isinstance(exc, requests.exceptions.HTTPError):
         response = exc.response
         status_code = (response.status_code if response is not None else None)
-        body = response.text if response is not None else ''
+        body = _snippet(response)
         if status_code in _AUTH_STATUS_CODES:
             raise ValueError(
                 f"Client authentication failed for {url!r}. If the NIM is "
@@ -68,6 +105,7 @@ class KumoClient:
         ``None`` (the default) leaves requests unbounded, so a hung NIM blocks
         the caller until the connection drops.
         """
+        _validate_url(url, api_key)
         self._url = url
         self._api_key = api_key
         self._verify_ssl = verify_ssl

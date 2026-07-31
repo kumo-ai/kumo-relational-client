@@ -63,6 +63,45 @@ def _qualifier_pattern(table_name: str) -> re.Pattern[str]:
     )
 
 
+_UNSAFE_EXPR_TOKENS = (';', '--', '/*', '*/')
+_QUOTED_EXPR_TEXT = re.compile(
+    r"""'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`""")
+_UNSAFE_EXPR_KEYWORDS = re.compile(
+    r'\b(?:select|insert|update|delete|merge|create|alter|drop|truncate'
+    r'|grant|revoke|execute)\b',
+    flags=re.IGNORECASE,
+)
+
+
+def _unsafe_expr_reason(expr: str) -> str | None:
+    r"""Returns why a column expression must not be lifted out of a remote
+    view definition, or ``None`` if it is an ordinary scalar expression.
+
+    A semantic/metric view is authored by a third party, yet its column
+    expressions are spliced verbatim into sampler queries and run under the
+    caller's warehouse role. A scalar expression never needs a statement
+    separator, a comment or a sub-query, so those are refused while
+    arithmetic, casts, ``CASE`` and function calls are left alone. See
+    ``bugs/security-column-expr-executes-verbatim-warehouse-sql.md``.
+
+    Keywords are matched only outside string literals and quoted identifiers,
+    since a keyword inside one is data rather than SQL and rejecting it would
+    drop a legitimate column. The token check deliberately stays on the raw
+    expression: quoting rules vary by dialect, so a separator or comment must
+    not become invisible just because this function believes it is quoted.
+
+    Args:
+        expr: The expression as written in the view definition.
+    """
+    for token in _UNSAFE_EXPR_TOKENS:
+        if token in expr:
+            return f"it contains {token!r}"
+    unquoted = _QUOTED_EXPR_TEXT.sub(' ', expr)
+    if match := _UNSAFE_EXPR_KEYWORDS.search(unquoted):
+        return f"it contains the SQL keyword '{match.group()}'"
+    return None
+
+
 class Graph:
     r"""A graph of :class:`Table` objects, akin to relationships between
     tables in a relational database.
@@ -709,6 +748,12 @@ class Graph:
         instead. Elements that cannot be represented in a graph are dropped
         with a warning.
 
+        A dimension expression becomes SQL that later runs under your own
+        warehouse credentials, so the view definition is executable input.
+        Expressions that are not plain scalar expressions -- ones carrying a
+        statement separator, a comment or a sub-query -- are dropped with a
+        warning; load metric views you trust.
+
         .. code-block:: python
 
             >>> # doctest: +SKIP
@@ -798,6 +843,11 @@ class Graph:
                 if unquote_ident(column_spec.expr) == column_spec.name:
                     columns_by_alias[column_spec.alias].append(
                         ColumnSpec(name=column_spec.name))
+                elif reason := _unsafe_expr_reason(column_spec.expr):
+                    msgs.append(f"Failed to add column '{column_spec.name}' "
+                                f"since {reason}, and expressions taken from "
+                                f"the metric view are executed as SQL under "
+                                f"your warehouse credentials")
                 else:
                     columns_by_alias[column_spec.alias].append(
                         ColumnSpec(
@@ -1036,6 +1086,14 @@ class Graph:
                 if any(pattern.search(column_expr)
                        for pattern in other_patterns):
                     unsupported_columns.append(column_name)
+                    continue
+
+                if reason := _unsafe_expr_reason(column_expr):
+                    msgs.append(f"Failed to add column '{column_name}' of "
+                                f"table '{table_name}' since {reason}, and "
+                                f"expressions taken from the semantic view "
+                                f"are executed as SQL under your warehouse "
+                                f"credentials")
                     continue
 
                 column = ColumnSpec(

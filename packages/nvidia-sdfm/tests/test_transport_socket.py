@@ -11,6 +11,7 @@ a local ``http.server`` instead.
 
 from __future__ import annotations
 
+import gzip
 import threading
 import time
 from contextlib import contextmanager
@@ -22,11 +23,12 @@ import pytest
 import urllib3.util.retry
 
 from nvidia_sdfm.core.transport import (
+    _MAX_RESPONSE_BYTES,
     _RETRY_AFTER_MAX_SECONDS,
     Transport,
     _build_retry,
 )
-from nvidia_sdfm.errors import SdfmError
+from nvidia_sdfm.errors import NimRequestError, SdfmError
 
 _REFUSED_URL = 'http://127.0.0.1:1'
 _RETRY_AFTER_SECONDS = 3600
@@ -34,10 +36,17 @@ _RETRY_AFTER_CAP_APPLIES = (getattr(_build_retry(1, 0.0), 'retry_after_max',
                                     None) == _RETRY_AFTER_MAX_SECONDS)
 
 
+def _predictions_body(size: int) -> bytes:
+    r"""A syntactically valid prediction response of roughly ``size`` bytes."""
+    filler = b'0,' * (max(size - 18, 0) // 2)
+    return b'{"predictions":[' + filler + b'0]}'
+
+
 @dataclass
 class _Reply:
     status: int = 200
     body: str = '{"predictions": []}'
+    raw: bytes | None = None
     headers: dict[str, str] = field(default_factory=dict)
     delay: float = 0.0
 
@@ -63,7 +72,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.server.received.append(self.path)
         if reply.delay:
             time.sleep(reply.delay)
-        body = reply.body.encode()
+        body = reply.raw if reply.raw is not None else reply.body.encode()
         try:
             self.send_response(reply.status)
             for name, value in reply.headers.items():
@@ -135,6 +144,70 @@ def test_health_ready_wraps_unreachable_host():
     transport = Transport(_REFUSED_URL, timeout=2.0, max_retries=0)
     with pytest.raises(SdfmError) as excinfo:
         transport.health_ready()
+    assert excinfo.value.code == 'TRANSPORT_ERROR'
+
+
+def test_gzip_bomb_is_refused_instead_of_inflated():
+    r"""A small compressed body that inflates past the cap must not be parsed.
+
+    Without the cap ``requests`` inflates this to ``_MAX_RESPONSE_BYTES + 1``
+    bytes of valid JSON and ``predict`` returns it. See
+    ``bugs/security-hostile-server-response-unbounded.md``.
+    """
+    bomb = gzip.compress(_predictions_body(_MAX_RESPONSE_BYTES + 1),
+                         compresslevel=1)
+    assert len(bomb) < 1024 * 1024
+
+    with _serve(_Reply(raw=bomb,
+                       headers={'Content-Encoding': 'gzip'})) as (_, url):
+        transport = Transport(url, max_retries=0)
+        with pytest.raises(SdfmError) as excinfo:
+            transport.predict({'model': 'tabicl'})
+
+    assert excinfo.value.code == 'TRANSPORT_ERROR'
+    assert 'exceeds' in str(excinfo.value)
+
+
+@pytest.mark.parametrize('encode', [False, True])
+def test_large_legitimate_response_is_returned_intact(encode):
+    r"""The cap must be generous: an 8 MB prediction body still parses."""
+    body = _predictions_body(8 * 1024 * 1024)
+    headers = {'Content-Encoding': 'gzip'} if encode else {}
+    raw = gzip.compress(body, compresslevel=1) if encode else body
+
+    with _serve(_Reply(raw=raw, headers=headers)) as (_, url):
+        transport = Transport(url, max_retries=0)
+        result = transport.predict({'model': 'tabicl'})
+
+    assert len(body) > 8 * 1024 * 1024
+    assert len(result['predictions']) == body.count(b',') + 1
+
+
+def test_oversized_error_body_is_refused_before_it_becomes_a_message():
+    bomb = gzip.compress(b'x' * (_MAX_RESPONSE_BYTES + 1), compresslevel=1)
+
+    with _serve(_Reply(status=500, raw=bomb,
+                       headers={'Content-Encoding': 'gzip'})) as (_, url):
+        transport = Transport(url, max_retries=0)
+        with pytest.raises(SdfmError) as excinfo:
+            transport.predict({'model': 'tabicl'})
+
+    assert not isinstance(excinfo.value, NimRequestError)
+    assert excinfo.value.code == 'TRANSPORT_ERROR'
+
+
+def test_deeply_nested_json_stays_inside_the_error_contract():
+    r"""``json`` raises ``RecursionError`` -- a ``RuntimeError``, not a
+    ``ValueError`` -- so ``except SdfmError`` used to miss it entirely.
+    """
+    depth = 200_000
+    nested = b'[' * depth + b']' * depth
+
+    with _serve(_Reply(raw=nested)) as (_, url):
+        transport = Transport(url, max_retries=0)
+        with pytest.raises(SdfmError) as excinfo:
+            transport.predict({'model': 'tabicl'})
+
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
