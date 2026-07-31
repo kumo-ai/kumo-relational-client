@@ -55,6 +55,26 @@ class SDFMClient:
         max_retries: int = 3,
         registry: AdapterRegistry | None = None,
     ) -> None:
+        r"""Opens a client against one NIM.
+
+        No request is made here: the endpoint is first contacted by
+        :meth:`health_ready` or by a prediction.
+
+        Args:
+            url: Base URL of the NIM, e.g. ``'http://localhost:8000'``. Must be
+                ``http://`` or ``https://``.
+            api_key: Sent as ``X-API-Key`` when an authenticating gateway
+                fronts the NIM. Refused over plaintext ``http://`` to a
+                non-local host.
+            verify_ssl: Whether to verify the server's TLS certificate.
+            timeout: Seconds to wait for each individual attempt -- not for the
+                call as a whole. A call that exhausts ``max_retries`` can take
+                up to ``(max_retries + 1) * timeout`` plus backoff.
+            max_retries: Retries on transient failures (429, 500, 502, 503,
+                504) with exponential backoff. ``0`` disables retrying.
+            registry: The adapter registry to dispatch with. Defaults to the
+                built-in TabICL and KumoRFM adapters.
+        """
         self._transport = Transport(
             url,
             api_key,
@@ -66,6 +86,7 @@ class SDFMClient:
 
     @property
     def url(self) -> str:
+        r"""The NIM base URL this client was opened against."""
         return self._transport.url
 
     def models(self) -> list[str]:
@@ -85,6 +106,12 @@ class SDFMClient:
         return self._registry.get(model).capabilities()
 
     def health_ready(self) -> bool:
+        r"""Whether the NIM answers ``GET /v1/health/ready`` with 200.
+
+        Raises:
+            SdfmError: With code ``TRANSPORT_ERROR`` if the endpoint cannot be
+                reached at all.
+        """
         return self._transport.health_ready()
 
     def kumorfm(self, graph: Any) -> RFMModel:
@@ -106,7 +133,7 @@ class SDFMClient:
 
         This is the supported way to run TabICL inference.
         """
-        return TabICLModel(self, context, task, target)
+        return TabICLModel(self, context, task=task, target=target)
 
     def _predict(self, request: ModelRequest) -> PredictResult:
         r"""Internal dispatch used by the model handles.
@@ -128,6 +155,11 @@ class SDFMClient:
         return adapter.predict(self._transport, request)
 
     def close(self) -> None:
+        r"""Releases the pooled connections and retires this client.
+
+        Every later call raises; construct a new ``SDFMClient`` instead.
+        Leaving a ``with`` block does this for you.
+        """
         self._transport.close()
 
     def __enter__(self) -> SDFMClient:

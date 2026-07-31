@@ -72,8 +72,14 @@ class ErrorTranslator:
 
             response.errors.append(
                 ValidationError("Invalid Syntax", message=error_message))
-            logger.warning(f'Parser error {log_error} was translated to: '
-                           f'{error_message}. Input query: `{query}`.')
+            # DEBUG, not WARNING: the caller raises a ValueError carrying
+            # `error_message` and the query on the very next line, so this
+            # record is a duplicate for everyone except a grammar maintainer.
+            # The raw query is deliberately omitted -- PQL embeds literal
+            # filter values, and WARNING-and-above records are typically
+            # shipped to a central log store.
+            logger.debug('Parser error %s was translated to: %s',
+                         log_error, error_message)
         return response
 
     def _summarize_error(self, err: Antlr4SyntaxError) -> str | None:

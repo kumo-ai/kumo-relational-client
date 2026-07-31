@@ -30,6 +30,20 @@ not declare — `driver_options={...}` passes anything else straight through. Th
 arguments are given; a borrowed session cannot be reconfigured, so passing
 session-scoped arguments such as `schema=` alongside it is an error.
 
+`table=` accepts only plain, unquoted, dot-separated ASCII identifiers, and
+interpolates them as written — so they are subject to each backend's default
+case folding (Snowflake upper-cases, Databricks lower-cases). A name that needs
+quoting (spaces, non-ASCII characters, a leading digit) is rejected with
+`INVALID_CONNECTOR_ARGS`. A reserved word such as `select` is a plain
+identifier by that rule, so it is accepted here and instead fails at execution
+as `QUERY_FAILED`. Either way, reach the table through `query=` with
+`quote_ident`, choosing the quote character your backend uses (`"` for
+SQLite/DuckDB/Snowflake, `` ` `` for Databricks):
+
+```python
+read('duckdb', database='w.db', query=f'SELECT * FROM {quote_ident("café")}')
+```
+
 Failures raised by `connect` / `read` / `read_table` surface as
 `ConnectorError` with a stable `code`: `UNKNOWN_CONNECTOR`,
 `INVALID_CONNECTOR_ARGS`, `CONNECT_FAILED`, `QUERY_FAILED`, `READ_FAILED`, or

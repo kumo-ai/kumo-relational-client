@@ -9,16 +9,22 @@ from typing import TYPE_CHECKING, Any
 from nvidia_sdfm.errors import MissingExtraError
 
 __all__ = [
-    'Graph',
-    'Table',
-    'LocalTable',
-    'TaskTable',
+    'Dtype',
     'ExplainConfig',
     'Explanation',
+    'Graph',
+    'LocalTable',
     'MaterializedPredictionRequest',
+    'Stype',
+    'Table',
+    'TaskTable',
 ]
 
+# Names exported from the driver package root rather than from ``kumorfm.rfm``.
+_ROOT_NAMES = frozenset({'Dtype', 'Stype'})
+
 if TYPE_CHECKING:
+    from kumorfm import Dtype, Stype
     from kumorfm.rfm import (
         ExplainConfig,
         Explanation,
@@ -30,19 +36,20 @@ if TYPE_CHECKING:
     )
 
 
-def _engine() -> Any:
+def _import(module_name: str) -> Any:
     try:
-        import kumorfm.rfm as engine
+        module = __import__(module_name, fromlist=['__name__'])
     except ModuleNotFoundError as error:
         if error.name != 'kumorfm':
             raise
         raise MissingExtraError('kumorfm', 'kumorfm') from error
-    return engine
+    return module
 
 
 def __getattr__(name: str) -> Any:
     if name in __all__:
-        return getattr(_engine(), name)
+        module = _import('kumorfm' if name in _ROOT_NAMES else 'kumorfm.rfm')
+        return getattr(module, name)
     raise AttributeError(
         f"module 'nvidia_sdfm.kumorfm' has no attribute {name!r}")
 

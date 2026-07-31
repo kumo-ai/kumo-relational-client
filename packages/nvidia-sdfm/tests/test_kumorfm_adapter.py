@@ -186,6 +186,42 @@ def test_kumorfm_shim_does_not_expose_driver():
         kumorfm_shim.KumoRFM
 
 
+def test_kumorfm_shim_namespace_is_pinned():
+    from nvidia_sdfm import kumorfm as kumorfm_shim
+
+    # This namespace is the documented KumoRFM surface (README, quickstart
+    # notebook). Pinned so a change here has to be a change to the docs too.
+    assert kumorfm_shim.__all__ == [
+        'Dtype',
+        'ExplainConfig',
+        'Explanation',
+        'Graph',
+        'LocalTable',
+        'MaterializedPredictionRequest',
+        'Stype',
+        'Table',
+        'TaskTable',
+    ]
+    assert kumorfm_shim.__dir__() == sorted(kumorfm_shim.__all__)
+
+
+@requires_engine
+def test_kumorfm_shim_every_exported_name_resolves():
+    from nvidia_sdfm import kumorfm as kumorfm_shim
+
+    for name in kumorfm_shim.__all__:
+        assert getattr(kumorfm_shim, name) is not None, name
+
+
+@requires_engine
+def test_kumorfm_shim_exposes_stype_documented_by_the_quickstart():
+    # The quickstart documents `graph[t][c].stype = kumorfm.Stype.<type>`.
+    from nvidia_sdfm import kumorfm as kumorfm_shim
+
+    assert kumorfm_shim.Stype.categorical is not None
+    assert kumorfm_shim.Dtype.bool is not None
+
+
 def _patch_engine_import(monkeypatch, error: BaseException) -> None:
     import builtins
     real_import = builtins.__import__

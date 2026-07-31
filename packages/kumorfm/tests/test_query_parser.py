@@ -2,7 +2,10 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
+from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import Iterator
 from unittest.mock import patch
 
 import pytest
@@ -504,3 +507,96 @@ def test_parse_invalid_queries_report_useful_errors(
     message = str(exc_info.value)
     assert query in message
     assert expected_message in message
+
+
+class _RecordCollector(logging.Handler):
+    r"""Collects records straight off the ``kumorfm`` logger.
+
+    Not ``caplog``: that handler lives on the root logger, and the package sets
+    ``propagate = False``, so whether it observes anything at all depends on
+    the environment. It also collects records from every other library, which
+    would make "no warnings were emitted" assertions fail on unrelated output.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.DEBUG)
+        self.records: list[logging.LogRecord] = []
+
+    def emit(self, record: logging.LogRecord) -> None:
+        self.records.append(record)
+
+
+@contextmanager
+def _capture_kumorfm_logs() -> Iterator[_RecordCollector]:
+    logger = logging.getLogger('kumorfm')
+    collector = _RecordCollector()
+    previous_level = logger.level
+    logger.addHandler(collector)
+    logger.setLevel(logging.DEBUG)
+    try:
+        yield collector
+    finally:
+        logger.removeHandler(collector)
+        logger.setLevel(previous_level)
+
+
+@contextmanager
+def _restored_logging() -> Iterator[None]:
+    r"""Restore every logger ``initialize_logging`` touches."""
+    names = ['kumorfm', 'matplotlib', 'urllib3', 'snowflake']
+    loggers = [logging.getLogger(name) for name in names]
+    saved = [(logger, list(logger.handlers), logger.propagate, logger.level)
+             for logger in loggers]
+    root = logging.getLogger()
+    saved_root = (list(root.handlers), root.propagate, root.level)
+    try:
+        yield
+    finally:
+        for logger, handlers, propagate, level in saved:
+            logger.handlers[:] = handlers
+            logger.propagate = propagate
+            logger.setLevel(level)
+        root.handlers[:], root.propagate, root.level = saved_root
+
+
+def test_parse_failure_does_not_log_the_raw_query_at_warning(
+    user_store_graph: Graph,
+) -> None:
+    # PQL carries literal filter values, and WARNING-and-above records are
+    # typically shipped to a central log store; the raised ValueError already
+    # quotes the query, so the log record must not repeat it.
+    secret = 'ssn-123-45-6789'
+    query = (f"PREDICT SUM(ORDERS.AMOUNT, 0, 30, dayz) FOR EACH USERS.USER_ID "
+             f"WHERE USERS.STATUS = '{secret}'")
+
+    with _capture_kumorfm_logs() as captured:
+        with pytest.raises(ValueError, match=secret):
+            KumoRFM(user_store_graph, verbose=False)._parse_query(query)
+
+    # Guard against the assertions below passing on an empty capture.
+    assert captured.records, 'the parser must still log the translated error'
+    assert [r for r in captured.records if r.levelno >= logging.WARNING] == []
+    assert not any(secret in r.getMessage() for r in captured.records)
+    assert any('was translated to' in r.getMessage()
+               and r.levelno == logging.DEBUG for r in captured.records)
+
+
+def test_importing_and_using_the_driver_leaves_the_root_logger_alone() -> None:
+    # A library must never call logging.basicConfig(): it attaches a handler to
+    # the root logger and silently reconfigures the host application.
+    import kumorfm._logging
+
+    with _restored_logging():
+        root = logging.getLogger()
+        before = list(root.handlers)
+        kumorfm._logging.initialize_logging()
+        assert list(root.handlers) == before
+
+        logger = logging.getLogger('kumorfm')
+        assert logger.handlers, 'kumorfm must handle its own records'
+        assert logger.propagate is False
+
+        # Idempotent: repeated initialization must not stack handlers.
+        count = len(logger.handlers)
+        kumorfm._logging.initialize_logging()
+        assert len(logger.handlers) == count

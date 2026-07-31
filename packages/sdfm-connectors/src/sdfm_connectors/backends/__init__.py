@@ -18,6 +18,24 @@ _ownership: weakref.WeakKeyDictionary[Any, bool] = weakref.WeakKeyDictionary()
 
 
 def connect(backend: str, *args: Any, **kwargs: Any) -> Any:
+    r"""Opens a connection to one of the supported SQL backends.
+
+    Args:
+        backend: One of ``'sqlite'``, ``'duckdb'``, ``'snowflake'`` or
+            ``'databricks'``.
+        *args: Positional arguments forwarded to the backend's driver, e.g. the
+            database path for ``sqlite`` / ``duckdb``.
+        **kwargs: Keyword arguments forwarded to the backend's driver.
+
+    Returns:
+        An open DB-API style connection owned by the caller.
+
+    Raises:
+        ConnectorError: ``UNKNOWN_CONNECTOR`` for an unsupported ``backend``,
+            ``CONNECT_FAILED`` if the driver refuses the connection.
+        MissingBackendError: If the backend's optional driver is not installed.
+        ImportError: If the driver is installed but broken.
+    """
     if backend not in _SQL_BACKENDS:
         raise ConnectorError(
             f'unknown backend {backend!r}; supported: {list(_SQL_BACKENDS)}',

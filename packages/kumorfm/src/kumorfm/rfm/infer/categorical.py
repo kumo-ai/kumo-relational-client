@@ -17,7 +17,7 @@ def contains_categorical(
     if not Stype.categorical.supports_dtype(dtype):
         return False
 
-    if Dtype == Dtype.bool:
+    if dtype == Dtype.bool:
         return True
 
     if dtype.is_numerical():

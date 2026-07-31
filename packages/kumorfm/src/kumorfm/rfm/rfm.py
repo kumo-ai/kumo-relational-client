@@ -26,9 +26,8 @@ from kumorfm.api.pquery.AST import (
     Join,
     LogicalOperation,
 )
-from kumorfm.api.rfm import ClassificationInferenceConfig
-from kumorfm.api.rfm import Explanation as ExplanationConfig
 from kumorfm.api.rfm import (
+    ClassificationInferenceConfig,
     InferenceConfig,
     RegressionInferenceConfig,
     RFMPredictRequest,
@@ -151,7 +150,7 @@ class ExplainConfig(CastMixin):
 
         **The natural-language summary is generated off-machine.** With
         ``skip_summary=False`` (the default), the ``openai`` package installed
-        (``pip install 'kumorfm[explain]'``) and an API key discoverable, the
+        (``pip install 'nvidia-sdfm[explain]'``) and an API key discoverable, the
         SDK sends the predictive query, the returned predictions, the cohort
         analysis and the subgraph attribution -- which contains the **raw
         cell values** of the explained entity's subgraph -- to an
@@ -174,7 +173,7 @@ class ExplainConfig(CastMixin):
             the environment: the API key from ``KUMORFM_EXPLAIN_LLM_API_KEY``
             (else ``OPENAI_API_KEY``), ``KUMORFM_EXPLAIN_LLM_BASE_URL`` (for
             any OpenAI-compatible endpoint, including a self-hosted one),
-            ``KUMORFM_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini``) and
+            ``KUMORFM_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini-2025-04-14``) and
             ``KUMORFM_EXPLAIN_LLM_TIMEOUT`` (default 20s).
     """
     skip_summary: bool = False
@@ -774,7 +773,16 @@ class KumoRFM:
           across estimators. Supported values are ``"clip"``, ``"power"``,
           ``"quantile"``, and ``None``. Defaults to ``["quantile"]``.
         * ``output_type``: How to summarize the output distribution. Supported
-          values are ``"median"`` and ``"mean"``. Defaults to ``"median"``.
+          values are ``"median"``, ``"mean"`` and ``"quantiles"``. Defaults to
+          ``"median"``. ``"quantiles"`` returns the full distribution as
+          additional ``Q_<level>`` columns alongside the point prediction.
+
+        .. warning::
+
+            Keys other than those listed above are currently dropped silently
+            instead of raising, so a misspelled option runs to completion and
+            returns the default result. Check the spelling if an option appears
+            to have no effect.
 
         .. code-block:: python
 
@@ -935,21 +943,8 @@ class KumoRFM:
                 num_hops=num_hops,
             )
         )
-        explain_config = self._resolve_explain_config(explain)
-        if (explain_config is not None
-                and run_mode in {RunMode.NORMAL, RunMode.BEST}):
-            warnings.warn(
-                "Explainability is currently only supported for run mode "
-                f"'FAST' (got '{run_mode}'). Provided run mode has been reset. "
-                "Please lower the run mode to suppress this warning.",
-                stacklevel=2,
-            )
-            run_mode = RunMode.FAST
-        if (explain_config is not None
-                and task.num_prediction_examples > 1):
-            raise ValueError(
-                "Cannot explain predictions for more than a single entity "
-                f"(got {task.num_prediction_examples:,})")
+        explain_config, run_mode = self._apply_explain_guard(
+            explain, run_mode, task)
 
         if not isinstance(verbose, ProgressLogger):
             verbose = ProgressLogger.default(
@@ -971,6 +966,35 @@ class KumoRFM:
                 random_seed=random_seed,
             )
             return tuple(request.materialized for request in requests)
+
+    def _apply_explain_guard(
+        self,
+        explain: bool | ExplainConfig | dict[str, Any],
+        run_mode: RunMode,
+        task: TaskTable,
+    ) -> tuple[ExplainConfig | None, RunMode]:
+        r"""Resolves ``explain`` and enforces what explainability requires.
+
+        Explanations are only produced for a single entity at ``RunMode.FAST``;
+        a higher run mode is lowered with a warning, more than one prediction
+        example is an error.
+        """
+        explain_config = self._resolve_explain_config(explain)
+        if explain_config is None:
+            return None, run_mode
+        if run_mode in {RunMode.NORMAL, RunMode.BEST}:
+            warnings.warn(
+                f"Explainability is currently only supported for run mode "
+                f"'FAST' (got '{run_mode}'). Provided run mode has been reset. "
+                f"Please lower the run mode to suppress this warning.",
+                stacklevel=3,
+            )
+            run_mode = RunMode.FAST
+        if task.num_prediction_examples > 1:
+            raise ValueError(
+                f"Cannot explain predictions for more than a single entity "
+                f"(got {task.num_prediction_examples:,})")
+        return explain_config, run_mode
 
     def _resolve_task_request_options(
         self,
@@ -1421,23 +1445,8 @@ class KumoRFM:
             )
         )
 
-        explain_config = self._resolve_explain_config(explain)
-
-        if explain_config is not None and run_mode in {
-                RunMode.NORMAL, RunMode.BEST
-        }:
-            warnings.warn(
-                f"Explainability is currently only supported for run mode "
-                f"'FAST' (got '{run_mode}'). Provided run mode has been reset. "
-                f"Please lower the run mode to suppress this warning.",
-                stacklevel=2,
-            )
-            run_mode = RunMode.FAST
-
-        if explain_config is not None and task.num_prediction_examples > 1:
-            raise ValueError(f"Cannot explain predictions for more than a "
-                             f"single entity "
-                             f"(got {task.num_prediction_examples:,})")
+        explain_config, run_mode = self._apply_explain_guard(
+            explain, run_mode, task)
 
         if not isinstance(verbose, ProgressLogger):
             if task.task_type == TaskType.BINARY_CLASSIFICATION:

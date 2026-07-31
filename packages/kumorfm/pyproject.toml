@@ -5,34 +5,39 @@ authors=[
     {name="NVIDIA"},
 ]
 license = "Apache-2.0"
-license-files=["LICENSE"]
+license-files=["LICENSE", "NOTICE"]
 description="RFM engine (graph, samplers, PQL, native neighbor-sampler) for the nvidia-sdfm SDK"
 readme="README.md"
-requires-python=">=3.10"
+# Upper bound matches the cibuildwheel matrix in .gitlab-ci.yml: this package
+# ships binary wheels only (no sdist), so a version with no wheel must fail
+# resolution rather than fail to find a distribution.
+requires-python=">=3.10,<3.13"
 keywords=[
     "deep-learning",
     "graph-neural-networks",
     "relational-foundation-model",
     "predictive-query",
 ]
+# Only the interpreter versions `build_kumorfm_wheels` actually builds.
 classifiers=[
     "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
-    "Programming Language :: Python :: 3.14",
     "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
 ]
 
+[project.urls]
+Homepage = "https://github.com/NVIDIA/nvidia-sdfm-sdk"
+Source = "https://github.com/NVIDIA/nvidia-sdfm-sdk"
+Issues = "https://github.com/NVIDIA/nvidia-sdfm-sdk/issues"
+
 [project.optional-dependencies]
-doc=[
-    "sphinx",
-    "sphinx-book-theme",
-    "sphinx-copybutton",
-    "sphinx-autodoc-typehints",
-]
 test=[
     "packaging",
     "pytest",
@@ -44,6 +49,9 @@ codegen=[
 ]
 explain=[
     "openai>=1.40",
+]
+relbench=[
+    "pooch",
 ]
 sqlite=[
     "sdfm-connectors[sqlite]",
@@ -75,7 +83,8 @@ where=["src"]
 include=["kumorfm*"]
 
 [tool.setuptools.package-data]
-"kumorfm.api"=["SOURCE.md", "LICENSE"]
+"kumorfm"=["py.typed"]
+"kumorfm.api"=["SOURCE.md"]
 "kumorfm.pql"=["SOURCE.md"]
 "kumorfm.rfm"=["assets/*"]
 
@@ -124,6 +133,9 @@ include_trailing_comma=true
 skip=[".gitignore", "__init__.py"]
 
 [tool.ruff]  # https://docs.astral.sh/ruff/rules
+# Inherit the workspace lint baseline so this package cannot silently opt out of
+# it; see the root pyproject.toml for the shared rule set.
+extend="../../pyproject.toml"
 src=["src/kumorfm", "setup.py"]
 line-length=80
 indent-width=4
@@ -132,7 +144,7 @@ target-version="py310"
 extend-exclude=["src/kumorfm/api", "src/kumorfm/pql"]
 
 [tool.ruff.lint]
-select=[
+extend-select=[
     "D",  # pydocstyle
 ]
 ignore = [

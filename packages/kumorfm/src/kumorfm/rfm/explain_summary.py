@@ -142,9 +142,11 @@ _DEFAULT_TIMEOUT = 20.0
 _STRUCTURED_NOTE = (
     "The structured explanation is still available on .cohorts and .subgraphs.")
 
+# Names the extra on the distribution users install (`nvidia-sdfm`), not on this
+# engine package, which the SDK documents as an implementation detail.
 SUMMARY_NEEDS_EXTRA_MESSAGE = (
     "Natural-language explanation summary needs the 'explain' extra: "
-    "pip install 'kumorfm[explain]'. " + _STRUCTURED_NOTE)
+    "pip install 'nvidia-sdfm[explain]'. " + _STRUCTURED_NOTE)
 
 SUMMARY_UNAVAILABLE_MESSAGE = (
     "Natural-language explanation summary needs an API key. Set OPENAI_API_KEY "

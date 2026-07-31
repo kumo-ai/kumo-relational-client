@@ -600,3 +600,35 @@ def test_default_payload_row_limit_boundary() -> None:
 
     with pytest.raises(ValueError, match='10,001 rows'):
         validate_payload_table_rows(payload, batch_index=0)
+
+
+@pytest.mark.parametrize('entry_point', ['materialize_task', 'predict_task'])
+def test_explain_guard_is_identical_on_both_entry_points(
+    user_store_graph: Graph,
+    entry_point: str,
+) -> None:
+    # `materialize_task` and `predict_task` share one guard; this pins the two
+    # to the same behaviour so a change to one cannot drift from the other.
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = ExplanationRecordingAPI()  # type: ignore
+    call = getattr(model, entry_point)
+
+    with pytest.warns(UserWarning, match='only supported for run mode'):
+        call(_task().narrow_prediction(0, 1), explain=True, run_mode='best',
+             verbose=False)
+
+    with pytest.raises(ValueError, match='more than a single entity'):
+        call(_task(), explain=True, verbose=False)
+
+
+def test_explain_guard_warning_points_at_the_caller(
+    user_store_graph: Graph,
+) -> None:
+    model = KumoRFM(user_store_graph, verbose=False)
+    model._client = ExplanationRecordingAPI()  # type: ignore
+
+    with pytest.warns(UserWarning) as record:
+        model.predict_task(_task().narrow_prediction(0, 1), explain=True,
+                           run_mode='best', verbose=False)
+
+    assert record[0].filename == __file__

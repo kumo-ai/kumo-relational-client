@@ -7,17 +7,36 @@ import os
 
 _ENV_KUMO_LOG = "KUMO_LOG"
 
+_HANDLER_ATTR = '_kumorfm_handler'
+
+
+def _install_handler(logger: logging.Logger) -> None:
+    r"""Attaches our formatter to the ``kumorfm`` logger, and only to it.
+
+    A library must not call :func:`logging.basicConfig`: that attaches a
+    handler to the *root* logger and silently reconfigures the host
+    application's logging. Handling our own records here and not propagating
+    them keeps the previous console output without touching anyone else's.
+    """
+    if any(getattr(h, _HANDLER_ATTR, False) for h in logger.handlers):
+        return
+    handler = logging.StreamHandler()
+    handler.setFormatter(
+        logging.Formatter(
+            fmt=("[%(asctime)s - %(name)s:%(lineno)d - %(levelname)s] "
+                 "%(message)s"),
+            datefmt="%Y-%m-%d %H:%M:%S",
+        ))
+    setattr(handler, _HANDLER_ATTR, True)
+    logger.addHandler(handler)
+    logger.propagate = False
+
 
 def initialize_logging() -> None:
     r"""Initializes Kumo logging."""
     logger: logging.Logger = logging.getLogger('kumorfm')
 
-    # From openai-python/blob/main/src/openai/_utils/_logs.py#L4
-    logging.basicConfig(
-        format=(
-            "[%(asctime)s - %(name)s:%(lineno)d - %(levelname)s] %(message)s"),
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
+    _install_handler(logger)
 
     default_level = os.getenv(_ENV_KUMO_LOG, "INFO")
     try:

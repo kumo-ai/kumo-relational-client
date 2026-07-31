@@ -152,6 +152,11 @@ class Graph:
 
         >>> # Validate graph:
         >>> graph.validate()
+
+    A graph can also be built directly from a data source rather than from
+    :class:`Table` objects, via :meth:`from_data`, :meth:`from_snowflake`,
+    :meth:`from_snowflake_semantic_view`, :meth:`from_databricks`,
+    :meth:`from_databricks_metric_view` and :meth:`from_relbench`.
     """
 
     # Constructors ############################################################
@@ -1009,6 +1014,63 @@ class Graph:
         connection: Union['SnowflakeConnection', dict[str, Any], None] = None,
         verbose: bool = True,
     ) -> Self:
+        r"""Creates a :class:`Graph` from a Snowflake semantic view.
+
+        The semantic view's logical tables become graph tables backed by their
+        ``base_table``, and its ``relationships`` become edges. Dimensions,
+        time dimensions and facts become columns; an ``expr`` that is just the
+        column name (optionally qualified with its own table) is treated as a
+        plain column, any other ``expr`` becomes an expression column.
+
+        These elements cannot be represented in a graph and are dropped with a
+        warning listing each one:
+
+        - **Metrics.** They define aggregations rather than row-level values;
+          express aggregations with a predictive query instead.
+        - **Composite primary keys** and **composite relationship keys**.
+        - **Columns whose expression references another logical table.**
+        - **Relationships whose referencing (left) key is itself a primary
+          key**, i.e. one-to-one relationships. Note a view made only of such
+          relationships yields a graph with no edges at all.
+
+        The time column of each table is inferred, preferring the view's
+        ``time_dimensions``; correct it with
+        ``graph['table'].time_column = 'column'`` if the inference is wrong.
+
+        ``semantic_view_name`` is passed to Snowflake as written, so an
+        unqualified name resolves against the connection's current database and
+        schema. Qualify it (``'MY_DB.MY_SCHEMA.MY_VIEW'``) to reach another one.
+
+        .. code-block:: python
+
+            >>> # doctest: +SKIP
+            >>> import kumorfm.rfm as rfm
+
+            >>> graph = rfm.Graph.from_snowflake_semantic_view(
+            ...     'MY_DB.MY_SCHEMA.MY_SEMANTIC_VIEW',
+            ...     connection={
+            ...         'account': '<account>',
+            ...         'user': '<user>',
+            ...         'password': '<password>',
+            ...         'warehouse': '<warehouse>',
+            ...     },
+            ... )
+
+        Args:
+            semantic_view_name: The name of the semantic view, either fully
+                qualified or resolved against the connection's current database
+                and schema.
+            connection: An open connection from
+                :meth:`~kumorfm.rfm.backend.snow.connect` or the
+                :class:`snowflake.connector` keyword arguments to open a new
+                connection. If ``None``, will open a connection from
+                credentials stored in environment variables.
+            verbose: Whether to print verbose output.
+
+        Raises:
+            snowflake.connector.errors.ProgrammingError: If the semantic view
+                does not exist or the role cannot read it.
+        """
         import yaml
 
         from kumorfm.rfm.backend.snow import Connection, SnowTable, connect

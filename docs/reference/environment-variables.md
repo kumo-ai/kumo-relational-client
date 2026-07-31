@@ -32,8 +32,8 @@ the subgraph attribution, which includes the raw cell values of the explained
 entity's subgraph. Unless `KUMORFM_EXPLAIN_LLM_BASE_URL` is set, the destination
 is OpenAI's `https://api.openai.com/v1/`, a non-NVIDIA service.
 
-Nothing is sent when no API key is discoverable or the `kumorfm[explain]` extra
-is not installed. To disable the call while keeping the structured explanation,
+Nothing is sent when no API key is discoverable or the `nvidia-sdfm[explain]`
+extra is not installed. To disable the call while keeping the structured explanation,
 pass `explain=dict(skip_summary=True)`.
 
 | Variable | Required | Default | Description |
@@ -41,7 +41,7 @@ pass `explain=dict(skip_summary=True)`.
 | `KUMORFM_EXPLAIN_LLM_API_KEY` | No | None | API key for the summary endpoint. **Falls back to `OPENAI_API_KEY`**, so a key exported for another tool enables the call. |
 | `OPENAI_API_KEY` | No | None | Fallback API key, read when `KUMORFM_EXPLAIN_LLM_API_KEY` is unset. |
 | `KUMORFM_EXPLAIN_LLM_BASE_URL` | No | OpenAI (`https://api.openai.com/v1/`) | Base URL of any OpenAI-compatible endpoint, including a self-hosted one. Set this to keep the data inside your own network. |
-| `KUMORFM_EXPLAIN_LLM_MODEL` | Conditional | `gpt-4.1-mini` | Model name. Required when `KUMORFM_EXPLAIN_LLM_BASE_URL` is set. |
+| `KUMORFM_EXPLAIN_LLM_MODEL` | Conditional | `gpt-4.1-mini-2025-04-14` | Model name. Required when `KUMORFM_EXPLAIN_LLM_BASE_URL` is set. |
 | `KUMORFM_EXPLAIN_LLM_TIMEOUT` | No | `20` | Request timeout in seconds. |
 
 ## Databricks Connector

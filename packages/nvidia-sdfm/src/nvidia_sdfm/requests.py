@@ -17,9 +17,9 @@ if TYPE_CHECKING:
 class ModelRequest:
     r"""Base class for typed per-model prediction requests.
 
-    Every request declares the ``model`` id it targets, so ``SDFMClient.predict``
-    can dispatch and validate against the model's advertised capabilities
-    without a loose ``**kwargs`` bag.
+    Every request declares the ``model`` id it targets, so the model handles
+    (``client.kumorfm(...)`` / ``client.tabicl(...)``) can dispatch to the right
+    adapter without a loose ``**kwargs`` bag.
     """
     model: ClassVar[str] = ''
 
@@ -96,6 +96,12 @@ class KumoRFMTaskRequest(ModelRequest):
     overridable via ``entity_column`` / ``target_column`` / ``time_column``.
     ``time_column`` defaults to ``ANCHOR_TIMESTAMP`` when present, otherwise the
     entity table's own time column.
+
+    ``task_type='forecasting'`` additionally **requires** ``step_size`` -- the
+    spacing between forecast steps, as an integer number of **nanoseconds**
+    (e.g. ``int(pd.Timedelta(days=30).value)``) -- and uses ``num_forecasts``
+    for how many steps to produce. Omitting ``step_size`` is rejected by the
+    NIM, not client-side. Both are ignored for every other task type.
 
     This is the internal request built by the public handle
     ``client.kumorfm(graph).predict_task(...)``. ``run_mode``, ``explain``,

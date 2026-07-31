@@ -361,14 +361,19 @@ def _entity_values(context: Context, table_name: str) -> list[Any] | None:
     batch = np.asarray(table.batch)
     df = table.df.reset_index(drop=True)
     row = np.asarray(table.row) if table.row is not None else None
+    # One pass for every instance's first occurrence, rather than a full scan
+    # of `batch` per instance (`np.unique` returns the first index per value
+    # whether or not `batch` is sorted).
+    first_occurrence: dict[int, int] = {}
+    if batch.size > 0:
+        unique, first = np.unique(batch, return_index=True)
+        first_occurrence = dict(zip(unique.tolist(), first.tolist()))
     for instance_id in range(context.subgraph.batch_size):
-        rows = np.flatnonzero(batch == instance_id)
-        if len(rows) == 0:
+        position = first_occurrence.get(instance_id)
+        if position is None:
             values.append(None)
             continue
-        row_index = int(rows[0])
-        if row is not None:
-            row_index = int(row[row_index])
+        row_index = position if row is None else int(row[position])
         if row_index >= len(df):
             values.append(None)
             continue
@@ -459,12 +464,19 @@ def _populate_relationship_columns(
         if not edge_pairs:
             continue
 
+        # Gather from the key column in one take: `dst_df.iloc[i][dst_key]`
+        # materializes a whole row Series per edge, which dominates request
+        # assembly on any non-trivial subgraph. Later pairs still overwrite
+        # earlier ones, as the equivalent loop did.
         fkey_values: list[Any] = [None] * len(src_df)
-        for src_index, dst_index in edge_pairs:
-            if src_index >= len(src_df) or dst_index >= len(dst_df):
-                continue
-            fkey_values[src_index] = _json_value(
-                dst_df.iloc[dst_index][dst_key])
+        pairs = np.asarray(edge_pairs, dtype=np.int64).reshape(-1, 2)
+        in_range = (pairs[:, 0] < len(src_df)) & (pairs[:, 1] < len(dst_df))
+        src_positions = pairs[in_range, 0].tolist()
+        if not src_positions:
+            continue
+        gathered = dst_df[dst_key].iloc[pairs[in_range, 1]]
+        for position, value in zip(src_positions, gathered):
+            fkey_values[position] = _json_value(value)
         if all(value is None for value in fkey_values):
             continue
 

@@ -42,6 +42,29 @@ _NULLABLE_INTEGER_DTYPES = {
 
 
 def read(source: str, **kwargs: Any) -> pd.DataFrame:
+    r"""Reads one flat table from any supported source.
+
+    Args:
+        source: ``'local'`` (``data=`` a DataFrame/dict, or ``path=`` a CSV or
+            Parquet file), ``'s3'`` (``path='s3://...'``, optional
+            ``storage_options=``), or a SQL backend -- ``'sqlite'``,
+            ``'duckdb'``, ``'snowflake'``, ``'databricks'``.
+        **kwargs: For a SQL source, exactly one of ``table=`` / ``query=`` plus
+            the connection arguments :func:`connect` takes for that backend
+            (``sqlite`` / ``duckdb`` also accept the database path as
+            ``database=`` or ``uri=``). Connections opened here are closed
+            again before returning.
+
+    Returns:
+        The rows as a ``pd.DataFrame``.
+
+    Raises:
+        ConnectorError: With a stable ``code`` -- ``UNKNOWN_CONNECTOR``,
+            ``INVALID_CONNECTOR_ARGS``, ``CONNECT_FAILED``, ``QUERY_FAILED``,
+            ``READ_FAILED`` or ``NOT_FOUND`` -- and the driver exception
+            chained as ``__cause__``.
+        MissingBackendError: If the source's optional driver is not installed.
+    """
     if source == 'local':
         return _read_local(**kwargs)
     if source == 's3':
@@ -100,6 +123,23 @@ def read_table(
     table: str | None = None,
     query: str | None = None,
 ) -> pd.DataFrame:
+    r"""Fetches one flat table over an already-open connection.
+
+    Driver-agnostic: uses whichever of Arrow, pandas or plain cursor fetch the
+    connection offers. The connection stays open and owned by the caller.
+
+    Args:
+        connection: An open connection, e.g. from :func:`connect`.
+        table: A table identifier; see :func:`resolve_sql` for what is allowed.
+        query: A complete SQL statement. Exactly one of ``table`` / ``query``.
+
+    Returns:
+        The rows as a ``pd.DataFrame``.
+
+    Raises:
+        ConnectorError: ``INVALID_CONNECTOR_ARGS`` for a bad argument pair,
+            ``QUERY_FAILED`` if the statement does not execute.
+    """
     sql = resolve_sql(table=table, query=query)
     with driver_guard('QUERY_FAILED', 'query execution failed', sql=sql):
         cursor, owned = _query_handle(connection)

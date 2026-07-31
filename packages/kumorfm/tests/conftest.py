@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Generator
+from typing import TYPE_CHECKING, Generator
 
 import pandas as pd
 import pytest
@@ -27,6 +27,9 @@ from kumorfm.api.typing import (
 )
 
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
+
+if TYPE_CHECKING:
+    import kumorfm.rfm as rfm
 
 # Not mock:// due to https://stackoverflow.com/a/76056002
 MOCK_URL = "https://nim.test"

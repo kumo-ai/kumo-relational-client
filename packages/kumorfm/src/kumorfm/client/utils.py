@@ -51,10 +51,12 @@ def _parse_dataclass_list(
     assert isinstance(json_response, list)
 
     def _parse_elem(v: Any) -> _DataclassT:
+        # `bool` first: it is a subclass of `int`, so the cast below would
+        # otherwise claim it and turn the string 'false' into True.
+        if data_class is bool:
+            return cast(_DataclassT, str(v).lower() == 'true')
         if issubclass(data_class, (str, int)):
             return cast(_DataclassT, data_class(v))
-        if data_class == bool:
-            return cast(_DataclassT, str(v).lower() == 'true')
         return from_json(v, data_class)
 
     return [_parse_elem(item) for item in json_response]
@@ -87,13 +89,13 @@ def parse_response(response_type: Union[Type[ResponseT],
         The parsed response.
     """
     # Case 0: no parsing needed
-    if response_type == str:
+    if response_type is str:
         return cast(ResponseT, response.text)
-    if response_type == bool:
+    if response_type is bool:
         return cast(ResponseT, response.text.lower() == 'true')
 
     # Case 1: dict[str, V] type
-    if response_type == dict:
+    if response_type is dict:
         k_type, v_type = get_args(response_type)
         assert issubclass(k_type, str)
         data = response.json()

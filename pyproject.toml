@@ -6,7 +6,9 @@
 #   packages/sdfm-connectors - shared data-source connectors (pure-python)
 #   packages/kumorfm         - the KumoRFM driver (native build)
 #
-# This file carries only shared tooling configuration.
+# This file carries only shared tooling configuration. Each package's
+# [tool.ruff] extends this file, so the lint baseline below applies to every
+# first-party tree and a package cannot drop rules by shadowing the block.
 
 [tool.ruff]
 line-length = 80

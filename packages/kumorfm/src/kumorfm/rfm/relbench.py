@@ -6,6 +6,8 @@ import difflib
 import json
 from functools import lru_cache
 from importlib import import_module
+from pathlib import Path
+from typing import Any
 from urllib.request import urlopen
 
 import pyarrow as pa
@@ -15,10 +17,7 @@ from kumorfm.api.typing import Stype
 from kumorfm.rfm import Graph
 from kumorfm.rfm.backend.local import LocalTable
 
-pooch = import_module('pooch')
-
 PREFIX = 'rel-'
-CACHE_DIR = pooch.os_cache('relbench')
 HASH_URL = ('https://raw.githubusercontent.com/snap-stanford/relbench/main/'
             'relbench/datasets/hashes.json')
 
@@ -46,19 +45,58 @@ EXCLUDE = {
 }
 
 
+def _pooch() -> Any:
+    r"""Import ``pooch``, naming the extra that provides it when it is absent.
+
+    Kept lazy: ``pooch`` is only needed by this module, so importing
+    :mod:`kumorfm.rfm` must not require the ``relbench`` extra.
+    """
+    try:
+        return import_module('pooch')
+    except ModuleNotFoundError as error:
+        if error.name != 'pooch':
+            raise
+        raise ModuleNotFoundError(
+            "Loading a RelBench dataset requires 'pooch'. Install it via the "
+            "'relbench' extra, e.g. `pip install 'nvidia-sdfm[relbench]'` "
+            "(or `pip install 'kumorfm[relbench]'`).",
+            name='pooch',
+        ) from error
+
+
+def cache_dir() -> Path:
+    r"""The directory RelBench archives are downloaded to and extracted in."""
+    return Path(_pooch().os_cache('relbench'))
+
+
 @lru_cache
-def get_registry() -> pooch.Pooch:
+def get_registry() -> Any:
+    r"""The ``pooch`` registry of RelBench archives and their SHA-256 digests.
+
+    The digests are fetched at call time from ``HASH_URL``, a file in the
+    upstream ``snap-stanford/relbench`` repository, so the set of accepted
+    archives is whatever that repository publishes today.
+    """
     with urlopen(HASH_URL) as r:
         hashes = json.load(r)
 
-    return pooch.create(
-        path=CACHE_DIR,
+    return _pooch().create(
+        path=cache_dir(),
         base_url='https://relbench.stanford.edu/download/',
         registry=hashes,
     )
 
 
 def from_relbench(dataset: str, verbose: bool = True) -> Graph:
+    r"""Load a RelBench dataset into a :class:`Graph`.
+
+    On first use this downloads the dataset archive (hundreds of MB for the
+    larger datasets) from ``relbench.stanford.edu`` and extracts it into a
+    per-user cache directory (:func:`cache_dir`). Digests come from the
+    upstream RelBench repository; see :func:`get_registry`.
+
+    Requires the ``relbench`` extra (``pip install 'nvidia-sdfm[relbench]'``).
+    """
     dataset = dataset.lower()
     if dataset.startswith(PREFIX):
         dataset = dataset[len(PREFIX):]
@@ -74,13 +112,13 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
 
     registry.fetch(
         f'{PREFIX}{dataset}/db.zip',
-        processor=pooch.Unzip(extract_dir='.'),
+        processor=_pooch().Unzip(extract_dir='.'),
         progressbar=verbose,
     )
 
     graph = Graph(tables=[])
     edges: list[tuple[str, str, str]] = []
-    for path in (CACHE_DIR / f'{PREFIX}{dataset}' / 'db').glob('*.parquet'):
+    for path in (cache_dir() / f'{PREFIX}{dataset}' / 'db').glob('*.parquet'):
         schema = pa.parquet.read_schema(path)
         exclude = EXCLUDE.get(dataset, {}).get(path.stem, [])
         columns = [name for name in schema.names if name not in exclude]

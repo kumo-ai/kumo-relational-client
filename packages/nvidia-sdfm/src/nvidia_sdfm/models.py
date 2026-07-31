@@ -18,7 +18,19 @@ if TYPE_CHECKING:
     from nvidia_sdfm.base import PredictResult
     from nvidia_sdfm.kumorfm import ExplainConfig
 
-_UNSET: Any = object()
+class _Unset:
+    r"""Sentinel for "argument not supplied".
+
+    A plain ``object()`` renders as ``<object object at 0x...>`` in ``help()``,
+    IDE hovers and generated docs, for most of ``RFMModel.predict``'s
+    parameters. This one has a readable ``repr``.
+    """
+
+    def __repr__(self) -> str:
+        return '<unset>'
+
+
+_UNSET: Any = _Unset()
 
 
 class RFMModel:
@@ -58,6 +70,54 @@ class RFMModel:
         random_seed: Any = _UNSET,
         max_pq_iterations: Any = _UNSET,
     ) -> PredictResult:
+        r"""Runs ``query`` against the bound graph.
+
+        Args:
+            query: The predictive query (PQL).
+            indices: The entity primary keys to predict for. Overrides the
+                indices given in the query. Predictions are generated for every
+                index, whether or not it satisfies the query's entity filters.
+            run_mode: ``'fast'``, ``'normal'`` or ``'best'`` -- how much
+                context the model is given. Explanations require ``'fast'``.
+            explain: ``True``, a ``kumorfm.ExplainConfig`` or its dict form.
+                Limits the request to a single entity and makes this call
+                return an ``Explanation`` instead of a DataFrame. Filling in
+                ``Explanation.summary`` sends the query, predictions and raw
+                subgraph cell values to an external LLM endpoint; pass
+                ``explain=dict(skip_summary=True)`` to keep them local.
+            batch_size: Entities per request, or ``'max'``. ``None`` sends
+                every index in one request.
+            num_retries: Retries the driver performs when the NIM rejects a
+                request as too large.
+            anchor_time: The anchor timestamp for the prediction. ``None`` uses
+                the maximum timestamp in the data; ``'entity'`` uses each
+                entity's own timestamp.
+            context_anchor_time: The maximum anchor timestamp for context
+                (in-context train) examples. ``None`` derives it from
+                ``anchor_time``.
+            use_prediction_time: Whether to use the anchor timestamp as an
+                additional feature at prediction time.
+            lag_timesteps: The number of past timesteps included as lagged
+                features.
+            num_neighbors: The number of neighbors to sample per hop. Takes
+                precedence over ``num_hops``.
+            num_hops: The number of hops to sample when generating the context.
+            inference_config: Inference-time model configuration, e.g.
+                ``dict(num_estimators=4, output_type='quantiles')``. See
+                ``kumorfm.rfm.KumoRFM.predict`` for the supported keys; keys
+                outside that set are dropped silently.
+            return_embeddings: Whether to also return an embedding per
+                prediction example.
+            random_seed: A manual seed for pseudo-random sampling. The
+                ``sqlite`` and ``snowflake`` backends cannot seed their random
+                row sampling and warn once when a seed is given.
+            max_pq_iterations: The maximum number of label-collection
+                iterations. Raise it when the query has strict entity filters.
+
+        Returns:
+            The predictions as a ``pd.DataFrame``, or a ``kumorfm``
+            ``Explanation`` when ``explain`` is set.
+        """
         options = {
             name: value
             for name, value in (
@@ -117,14 +177,47 @@ class RFMModel:
         default to ``ENTITY`` / ``TARGET`` / ``ANCHOR_TIMESTAMP`` (the
         prediction-output convention) and are overridable.
 
-        ``task_type`` is one of ``binary_classification``,
-        ``multiclass_classification``, ``regression``, ``forecasting`` or
-        ``temporal_link_prediction`` (also on ``capabilities("kumo-rfm").tasks``).
-
         >>> model = client.kumorfm(graph)  # doctest: +SKIP
         >>> model.predict_task(
         ...     context=train_df, predict=predict_df,
         ...     task_type="multiclass_classification", entity_table="users")
+
+        Args:
+            context: The labelled (train) rows.
+            predict: The rows to score.
+            task_type: One of ``'binary_classification'``,
+                ``'multiclass_classification'``, ``'regression'``,
+                ``'forecasting'`` or ``'temporal_link_prediction'`` (also on
+                ``capabilities('kumo-rfm').tasks``).
+            entity_table: The graph table the ``entity_column`` values refer
+                to, or a ``(source, target)`` pair for temporal link
+                prediction.
+            run_mode: As in :meth:`predict`.
+            explain: As in :meth:`predict`.
+            batch_size: As in :meth:`predict`.
+            num_retries: As in :meth:`predict`.
+            entity_column: The entity-id column in ``context`` / ``predict``.
+            target_column: The label column in ``context``.
+            time_column: The anchor-timestamp column. ``None`` uses
+                ``ANCHOR_TIMESTAMP`` when either frame carries it, otherwise
+                the entity table's own time column.
+            num_forecasts: For ``task_type='forecasting'``, how many steps to
+                forecast. Ignored otherwise.
+            step_size: **Required for** ``task_type='forecasting'``: the
+                spacing between forecast steps, as an integer number of
+                **nanoseconds** -- e.g. ``int(pd.Timedelta(days=30).value)``
+                for monthly steps. Omitting it is rejected by the NIM, not
+                client-side. Ignored for every other task type.
+            num_neighbors: As in :meth:`predict`.
+            num_hops: As in :meth:`predict`.
+            inference_config: As in :meth:`predict`.
+            use_prediction_time: As in :meth:`predict`.
+            return_embeddings: As in :meth:`predict`.
+            random_seed: As in :meth:`predict`.
+
+        Returns:
+            The predictions as a ``pd.DataFrame``, or a ``kumorfm``
+            ``Explanation`` when ``explain`` is set.
         """
         options = {
             name: value

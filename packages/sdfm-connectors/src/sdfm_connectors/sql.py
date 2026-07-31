@@ -160,10 +160,48 @@ def merge_driver_options(
 
 
 def quote_ident(ident: str, char: str = '"') -> str:
+    r"""Quotes a SQL identifier, doubling any embedded quote character.
+
+    Args:
+        ident: The identifier to quote. A single component -- a dotted name
+            must be split and quoted per part.
+        char: The quote character, e.g. ``'"'`` (default) or ``"'"`` for a
+            string literal.
+
+    Returns:
+        The quoted identifier, e.g. ``'"my table"'``.
+    """
     return char + ident.replace(char, char + char) + char
 
 
 def resolve_sql(*, table: str | None, query: str | None) -> str:
+    r"""Turns a ``table=`` or ``query=`` argument pair into one SQL statement.
+
+    Exactly one must be given. ``query`` is returned verbatim -- the caller owns
+    its safety. ``table`` is checked against a strict identifier pattern and
+    interpolated unquoted, which also means it is subject to each backend's
+    default case folding (Snowflake upper-cases, Databricks lower-cases). Names
+    that need quoting -- spaces, non-ASCII characters, a leading digit -- are
+    rejected; reach them with a hand-written ``query`` using
+    :func:`quote_ident`.
+
+    A reserved word such as ``select`` is a plain identifier by this pattern, so
+    it is *not* rejected here; it reaches the driver unquoted and fails at
+    execution as ``QUERY_FAILED``. Quoting is dialect-specific, so this
+    layer -- which has no backend context -- does not attempt it.
+
+    Args:
+        table: A dot-separated identifier matching
+            ``[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*``.
+        query: A complete SQL statement.
+
+    Returns:
+        The SQL to execute.
+
+    Raises:
+        ConnectorError: ``INVALID_CONNECTOR_ARGS`` if both or neither argument
+            is given, or if ``table`` is not a plain identifier.
+    """
     if (table is None) == (query is None):
         raise ConnectorError(
             "exactly one of 'table' or 'query' must be provided",
@@ -173,7 +211,12 @@ def resolve_sql(*, table: str | None, query: str | None) -> str:
         return query
     if not _TABLE_IDENTIFIER_RE.fullmatch(table):
         raise ConnectorError(
-            f'invalid table identifier {table!r}',
+            f'invalid table identifier {table!r}: only plain, unquoted, '
+            f'dot-separated identifiers are accepted here. A name that needs '
+            f'quoting (spaces, non-ASCII characters, a leading digit) has to '
+            f'go through query=, e.g. '
+            f'query=f"SELECT * FROM {{quote_ident(name)}}" -- quoting it '
+            f'also changes how the backend folds its case.',
             code='INVALID_CONNECTOR_ARGS',
             details={'table': table},
         )

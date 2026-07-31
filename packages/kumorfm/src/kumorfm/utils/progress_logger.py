@@ -26,6 +26,24 @@ from rich.text import Text
 from typing_extensions import Self
 
 
+def _in_terminal() -> bool:
+    r"""Whether stdout is an interactive terminal outside a notebook.
+
+    Guards the taskbar-progress OSC sequences: ``in_notebook()`` alone does not
+    cover a plain script whose stdout is a pipe or a file, where the escape
+    codes end up in the captured output as literal bytes.
+    """
+    from kumorfm import in_notebook
+
+    if in_notebook():
+        return False
+    try:
+        return bool(sys.stdout.isatty())
+    except (AttributeError, ValueError):
+        # A replaced or already-closed stdout.
+        return False
+
+
 class ProgressLogger(ABC):
     r"""An abstract base class for logging progress updates."""
     def __init__(self, msg: str, verbose: bool = True) -> None:
@@ -68,12 +86,12 @@ class ProgressLogger(ABC):
         return time.perf_counter() - self.start_time
 
     def __enter__(self) -> Self:
-        from kumorfm import in_notebook
-
         self._depth += 1
         if self._depth == 1:
             self.start_time = time.perf_counter()
-        if self._depth == 1 and not in_notebook():  # Show progress bar in TUI.
+        # TUI only: piped into a file, a CI log or a subprocess these escape
+        # codes are literal garbage bytes in the captured output.
+        if self._depth == 1 and _in_terminal():
             sys.stdout.write("\x1b]9;4;3\x07")
             sys.stdout.flush()
         if self._depth == 1 and self.verbose:
@@ -81,14 +99,12 @@ class ProgressLogger(ABC):
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        from kumorfm import in_notebook
-
         self._depth -= 1
         if self._depth == 0:
             self.end_time = time.perf_counter()
         if self._depth == 0 and self.verbose:
             self.on_exit(error=exc_val is not None)
-        if self._depth == 0 and not in_notebook():  # Stop progress bar in TUI.
+        if self._depth == 0 and _in_terminal():
             sys.stdout.write("\x1b]9;4;0\x07")
             sys.stdout.flush()
 

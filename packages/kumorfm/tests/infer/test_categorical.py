@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
+import pytest
 from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.infer import contains_categorical
@@ -26,3 +27,15 @@ def test_contains_categorical() -> None:
         column_name='test',
         dtype=Dtype.int,
     )
+
+
+@pytest.mark.parametrize('column_name', ['flag', 'total', 'price', 'is_high'])
+@pytest.mark.parametrize('ser', [
+    pd.Series([True, False, True]),
+    pd.Series([], dtype='boolean'),
+    pd.Series([pd.NA, pd.NA], dtype='boolean'),
+])
+def test_bool_is_always_categorical(ser: pd.Series, column_name: str) -> None:
+    # A boolean column is categorical unconditionally: not via the sampling and
+    # `nunique()` path below it, and not subject to the numeric name blocklist.
+    assert contains_categorical(ser, column_name, Dtype.bool)

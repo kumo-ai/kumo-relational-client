@@ -17,17 +17,36 @@ from nvidia_sdfm.errors import SdfmError
 from nvidia_sdfm.models import RFMModel, TabICLModel
 
 __all__ = [
-    'SDFMClient',
-    'RFMModel',
-    'TabICLModel',
     'ModelCapabilities',
-    'read',
-    'kumorfm',
+    'RFMModel',
+    'SDFMClient',
     'SdfmError',
+    'TabICLModel',
     '__version__',
+    'kumorfm',
+    'read',
 ]
 
 
 def read(source: str, **kwargs: Any) -> pd.DataFrame:
-    r"""Read a table into a DataFrame. Endpoint-independent; needs no SDFMClient."""
+    r"""Read a table into a DataFrame. Endpoint-independent; needs no SDFMClient.
+
+    Args:
+        source: ``'local'`` (``data=`` a DataFrame/dict, or ``path=`` a CSV or
+            Parquet file), ``'s3'`` (``path='s3://...'``, optional
+            ``storage_options=``), or a SQL backend -- ``'sqlite'``,
+            ``'duckdb'``, ``'snowflake'``, ``'databricks'``. Each SQL backend
+            needs its extra, e.g. ``pip install 'nvidia-sdfm[duckdb]'``.
+        **kwargs: For a SQL source, exactly one of ``table=`` / ``query=`` plus
+            that backend's connection arguments.
+
+    Returns:
+        The rows as a ``pd.DataFrame``.
+
+    Raises:
+        MissingExtraError: If the source's optional driver is not installed.
+        SdfmError: With a ``code`` of ``UNKNOWN_CONNECTOR``,
+            ``INVALID_CONNECTOR_ARGS``, ``CONNECT_FAILED``, ``QUERY_FAILED``,
+            ``READ_FAILED``, ``NOT_FOUND`` or ``DRIVER_LOAD_FAILED``.
+    """
     return _read(source, **kwargs)
