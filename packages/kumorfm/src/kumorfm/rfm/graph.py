@@ -102,6 +102,59 @@ def _unsafe_expr_reason(expr: str) -> str | None:
     return None
 
 
+class ViewConversionWarning(UserWarning):
+    r"""Warns that parts of a metric or semantic view could not be represented
+    in a :class:`Graph`.
+
+    A partial conversion is the normal outcome for these views -- measures,
+    filters and cross-table expressions have no graph equivalent -- so this has
+    its own category, letting a project silence it without silencing every
+    other warning the SDK raises. The same diagnostics are on the returned
+    graph as :attr:`Graph.conversion_messages`, which is the way to react to
+    them in code.
+    """
+
+
+def _warn_view_conversion(message: str, owned_connection: Any) -> None:
+    r"""Reports what a view conversion dropped, without leaking a connection.
+
+    Under a warnings-as-errors policy ``warnings.warn`` raises, so the caller
+    never receives the graph -- and therefore never receives the connection the
+    graph would have owned. Closing it here keeps the same contract the rest of
+    these constructors follow: a connection the SDK opened is closed on every
+    path that does not hand the graph back.
+
+    Args:
+        message: The aggregated conversion diagnostics.
+        owned_connection: The connection this constructor opened itself, or
+            ``None`` when the caller supplied one (theirs stays open).
+    """
+    try:
+        warnings.warn(message, ViewConversionWarning, stacklevel=3)
+    except BaseException:
+        if owned_connection is not None:
+            owned_connection.close()
+        raise
+
+
+def _require_discovered_tables(tables: Sequence[Any], where: str) -> None:
+    r"""Rejects a discovery query that found nothing.
+
+    Naming a table that does not exist raises on every backend, but a mistyped
+    database path or schema name is the more common slip and used to return a
+    valid-looking empty graph -- which only fails much later, as "At least one
+    table needs to be added to the graph", pointing at the table list rather
+    than at the typo.
+
+    Args:
+        tables: The table names the discovery query returned.
+        where: What was searched, for the message.
+    """
+    if len(tables) == 0:
+        raise ValueError(f"No tables found in {where}. Check the name, or "
+                         f"pass `tables=[...]` explicitly.")
+
+
 class Graph:
     r"""A graph of :class:`Table` objects, akin to relationships between
     tables in a relational database.
@@ -169,6 +222,7 @@ class Graph:
 
         self._tables: dict[str, Table] = {}
         self._edges: list[Edge] = []
+        self._conversion_messages: tuple[str, ...] = ()
         self._connection: (AdbcSqliteConnection | AdbcDuckDBConnection
                            | SnowflakeConnection | DatabricksConnection
                            | None) = None
@@ -238,8 +292,11 @@ class Graph:
             df_dict: A dictionary of data frames, where the keys are the names
                 of the tables and the values hold table data.
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
-                add to the graph. If not provided, edges will be automatically
-                inferred from the data in case ``infer_metadata=True``.
+                add to the graph. If not provided (:obj:`None`), edges will be
+                automatically inferred from the data in case
+                ``infer_metadata=True``. An empty sequence is not the same
+                thing: it means "these edges and no others", and suppresses
+                inference.
             infer_metadata: Whether to infer metadata for all tables in the
                 graph.
             verbose: Whether to print verbose output.
@@ -321,9 +378,11 @@ class Graph:
                 tables present in the database.
             edges: Optional edge-like objects to add to the graph. Each item
                 may be a :class:`~kumorfm.graph.Edge`, a dictionary, or a tuple
-                such as ``(src_table, fkey, dst_table)``. If not provided,
-                edges will be automatically inferred from the data in case
-                ``infer_metadata=True``.
+                such as ``(src_table, fkey, dst_table)``. If not provided
+                (:obj:`None`), edges will be automatically inferred from the
+                data in case ``infer_metadata=True``. An empty sequence is not
+                the same thing: it means "these edges and no others", and
+                suppresses inference.
             infer_metadata: Whether to infer missing metadata for all tables in
                 the graph.
             verbose: Whether to print verbose output.
@@ -343,6 +402,7 @@ class Graph:
                 cursor.execute("SELECT name FROM sqlite_master "
                                "WHERE type='table'")
                 tables = [row[0] for row in cursor.fetchall()]
+            _require_discovered_tables(tables, 'the SQLite database')
 
         table_kwargs: list[dict[str, Any]] = []
         for table in tables:
@@ -401,8 +461,11 @@ class Graph:
                 arguments to include. If ``None``, will add all non-temporary
                 tables present in the database.
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
-                add to the graph. If not provided, edges will be automatically
-                inferred from the data in case ``infer_metadata=True``.
+                add to the graph. If not provided (:obj:`None`), edges will be
+                automatically inferred from the data in case
+                ``infer_metadata=True``. An empty sequence is not the same
+                thing: it means "these edges and no others", and suppresses
+                inference.
             infer_metadata: Whether to infer missing metadata for all tables in
                 the graph.
             verbose: Whether to print verbose output.
@@ -520,8 +583,11 @@ class Graph:
             database: The database.
             schema: The schema.
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
-                add to the graph. If not provided, edges will be automatically
-                inferred from the data in case ``infer_metadata=True``.
+                add to the graph. If not provided (:obj:`None`), edges will be
+                automatically inferred from the data in case
+                ``infer_metadata=True``. An empty sequence is not the same
+                thing: it means "these edges and no others", and suppresses
+                inference.
             infer_metadata: Whether to infer metadata for all tables in the
                 graph.
             verbose: Whether to print verbose output.
@@ -557,6 +623,8 @@ class Graph:
                     WHERE TABLE_SCHEMA = {quote_ident(schema, char="'")}
                     """)
                     tables = [row[0] for row in cursor.fetchall()]
+                _require_discovered_tables(
+                    tables, f"schema '{schema}' of database '{database}'")
 
             table_kwargs: list[dict[str, Any]] = []
             for table in tables:
@@ -650,8 +718,11 @@ class Graph:
             catalog: The Unity Catalog catalog.
             schema: The schema.
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
-                add to the graph. If not provided, edges will be automatically
-                inferred from the data in case ``infer_metadata=True``.
+                add to the graph. If not provided (:obj:`None`), edges will be
+                automatically inferred from the data in case
+                ``infer_metadata=True``. An empty sequence is not the same
+                thing: it means "these edges and no others", and suppresses
+                inference.
             infer_metadata: Whether to infer metadata for all tables in the
                 graph.
             verbose: Whether to print verbose output.
@@ -693,6 +764,8 @@ class Graph:
                       AND table_type != 'METRIC_VIEW'
                     """)
                     tables = [row[0] for row in cursor.fetchall()]
+                _require_discovered_tables(
+                    tables, f"schema '{schema}' of catalog '{catalog}'")
 
             table_kwargs: list[dict[str, Any]] = []
             for table in tables:
@@ -1000,10 +1073,13 @@ class Graph:
             graph.print_metadata()
             graph.print_links()
 
+        graph._conversion_messages = tuple(msgs)
         if len(msgs) > 0:
             title = (f"Could not fully convert the metric view definition "
                      f"'{metric_view_name}' into a graph:\n")
-            warnings.warn(title + '\n'.join(f'- {msg}' for msg in msgs))
+            _warn_view_conversion(
+                title + '\n'.join(f'- {msg}' for msg in msgs),
+                connection if internal_connection else None)
 
         return graph
 
@@ -1241,10 +1317,13 @@ class Graph:
             graph.print_metadata()
             graph.print_links()
 
+        graph._conversion_messages = tuple(msgs)
         if len(msgs) > 0:
             title = (f"Could not fully convert the semantic view definition "
                      f"'{semantic_view_name}' into a graph:\n")
-            warnings.warn(title + '\n'.join(f'- {msg}' for msg in msgs))
+            _warn_view_conversion(
+                title + '\n'.join(f'- {msg}' for msg in msgs),
+                connection if internal_connection else None)
 
         return graph
 
@@ -1621,6 +1700,19 @@ class Graph:
         r"""Returns the edges of the graph."""
         return self._edges
 
+    @property
+    def conversion_messages(self) -> tuple[str, ...]:
+        r"""What :meth:`from_databricks_metric_view` or
+        :meth:`from_snowflake_semantic_view` could not represent in this graph.
+
+        Empty for every other constructor, and empty when a view converted
+        cleanly. The same messages are also raised as a
+        :class:`ViewConversionWarning`; this is the form to assert on, e.g.
+        before running predictions that depend on a relationship the view
+        declared.
+        """
+        return self._conversion_messages
+
     def print_links(self) -> None:
         r"""Prints the :meth:`~Graph.edges` of the graph."""
         edges = sorted([(
@@ -1893,10 +1985,48 @@ class Graph:
             dst_table_name = scores[0][0]
             self.link(src_table_name, src_key_name, dst_table_name)
 
+        self._warn_unlinkable_tables()
+
         if verbose:
             self.print_links()
 
         return self
+
+    def _warn_unlinkable_tables(self) -> None:
+        r"""Reports a table that ended up with no primary key even though one
+        of its columns looks like one.
+
+        Primary-key inference weighs the column name far more heavily than the
+        data, so a key whose name does not echo its table -- ``sales_orders.
+        order_id``, ``order_lines.line_id`` -- is declined however unique it
+        is. Nothing else says so, and the cost is silent: no other table can
+        link to a table without a primary key, so the graph quietly loses the
+        edge and predictions merely come out worse.
+
+        Deliberately deferred until link inference has run. Before that a
+        genuine key is indistinguishable from a foreign key that happens to be
+        unique -- one row per order in a returns table, say -- and warning
+        there fires on every junction table. A candidate that link inference
+        has since claimed as a foreign key is explained, so only the rest are
+        reported.
+        """
+        fkeys: set[tuple[str, str]] = {(edge.src_table, edge.fkey)
+                                       for edge in self.edges}
+        for table in self.tables.values():
+            if table.has_primary_key():
+                continue
+            declined = [
+                name for name in table._declined_primary_keys
+                if table.has_column(name)
+                and (table.name, name) not in fkeys
+            ]
+            if len(declined) == 0:
+                continue
+            warnings.warn(
+                f"No primary key was inferred for table '{table.name}', so no "
+                f"other table can link to it. Column(s) {declined} hold a "
+                f"unique value per row; pass `primary_key=` explicitly to use "
+                f"one of them.", stacklevel=2)
 
     # Metadata ################################################################
 
@@ -1922,6 +2052,16 @@ class Graph:
 
         for edge in self.edges:
             src_table, fkey, dst_table = edge
+
+            # `Table.remove_column` knows nothing about the graph's edges, so
+            # dropping a linked foreign key leaves the edge behind. Caught
+            # here rather than as a `KeyError` out of the lookup below, which
+            # names neither the edge nor the fix.
+            if not self[src_table].has_column(fkey):
+                raise ValueError(f"Edge {edge} is invalid since table "
+                                 f"'{src_table}' no longer has a column "
+                                 f"'{fkey}'. Remove the link with `unlink()` "
+                                 f"before removing the column.")
 
             src_key = self[src_table][fkey]
             dst_key = self[dst_table].primary_key

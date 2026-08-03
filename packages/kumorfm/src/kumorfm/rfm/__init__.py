@@ -18,7 +18,7 @@ from .diagnostics import (
     TableSanitizationReport,
     TaskReferenceError,
 )
-from .graph import Graph
+from .graph import Graph, ViewConversionWarning
 from .task_table import TaskTable
 from .rfm import (
     ExplainConfig,
@@ -96,6 +96,7 @@ __all__ = [
     'LocalTable',
     'Graph',
     'GraphSanitizationReport',
+    'ViewConversionWarning',
     'SanitizationStatus',
     'TableSanitizationReport',
     'TaskReferenceError',

@@ -36,6 +36,15 @@ from kumorfm.rfm.infer import (
 from kumorfm.utils import display, quote_ident
 
 
+def _is_key_like(ser: pd.Series) -> bool:
+    r"""Whether ``ser`` could serve as a primary key: fully populated and
+    without a repeated value.
+    """
+    if len(ser) == 0:
+        return False
+    return bool(ser.notna().all()) and ser.nunique() == len(ser)
+
+
 class Table(ABC):
     r"""A :class:`Table` fully specifies the relevant metadata of a single
     table, *i.e.* its selected columns, data types, semantic types, primary
@@ -69,6 +78,7 @@ class Table(ABC):
         self._primary_key: str | None = None
         self._time_column: str | None = None
         self._end_time_column: str | None = None
+        self._declined_primary_keys: tuple[str, ...] = ()
         self._expr_sample_df = pd.DataFrame(index=range(self._NUM_SAMPLE_ROWS))
 
         if columns is None:
@@ -242,6 +252,13 @@ class Table(ABC):
 
     def remove_column(self, name: str) -> Self:
         r"""Removes a column from this table.
+
+        A :class:`~kumorfm.rfm.Table` does not know which graph holds it, so
+        this clears the table's own primary-key/time-column pointers but
+        leaves any graph edge that uses ``name`` as its foreign key in place.
+        Call :meth:`~kumorfm.rfm.Graph.unlink` first when removing a linked
+        foreign key; otherwise :meth:`~kumorfm.rfm.Graph.validate` rejects the
+        graph.
 
         Args:
             name: The name of the column.
@@ -501,13 +518,22 @@ class Table(ABC):
                       and self.name.lower()[:-1] == column.name.lower()):
                     candidates.append(column.name)
 
+        df = self._get_sample_df()
         if primary_key := infer_primary_key(
                 table_name=self.name,
-                df=self._get_sample_df(),
+                df=df,
                 candidates=candidates,
         ):
             _set_primary_key(primary_key)
             return self
+
+        # Nothing scored high enough. Record the candidates that would have
+        # served as a key so `Graph.infer_links` can report the ones link
+        # inference does not go on to explain -- at this point a viable key and
+        # a coincidentally unique foreign key look identical, and only the
+        # edges tell them apart.
+        self._declined_primary_keys = tuple(
+            name for name in candidates if _is_key_like(df[name]))
 
         return self
 

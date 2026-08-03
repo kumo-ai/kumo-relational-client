@@ -55,12 +55,15 @@ class _Connection(SnowflakeConnection):
 def test_from_snowflake_quotes_database_and_schema() -> None:
     connection = _Connection()
 
-    rfm.Graph.from_snowflake(
-        connection,
-        database='MY_DB',
-        schema='MY_SCHEMA',
-        verbose=False,
-    )
+    # The fake connection discovers no tables, which the constructor now
+    # rejects; the statement under test has already been issued at that point:
+    with pytest.raises(ValueError, match='No tables found'):
+        rfm.Graph.from_snowflake(
+            connection,
+            database='MY_DB',
+            schema='MY_SCHEMA',
+            verbose=False,
+        )
 
     sql, _ = connection.calls[0]
     assert 'FROM "MY_DB".INFORMATION_SCHEMA.TABLES' in sql
@@ -70,12 +73,13 @@ def test_from_snowflake_quotes_database_and_schema() -> None:
 def test_from_snowflake_neutralises_an_injected_schema() -> None:
     connection = _Connection()
 
-    rfm.Graph.from_snowflake(
-        connection,
-        database='MY_DB',
-        schema=_INJECTION,
-        verbose=False,
-    )
+    with pytest.raises(ValueError, match='No tables found'):
+        rfm.Graph.from_snowflake(
+            connection,
+            database='MY_DB',
+            schema=_INJECTION,
+            verbose=False,
+        )
 
     sql, _ = connection.calls[0]
     assert "WHERE TABLE_SCHEMA = 'X'' OR 1=1 --'" in sql
@@ -85,12 +89,13 @@ def test_from_snowflake_neutralises_an_injected_schema() -> None:
 def test_from_snowflake_neutralises_an_injected_database() -> None:
     connection = _Connection()
 
-    rfm.Graph.from_snowflake(
-        connection,
-        database='MY_DB". INFORMATION_SCHEMA.TABLES; DROP TABLE T; --',
-        schema='MY_SCHEMA',
-        verbose=False,
-    )
+    with pytest.raises(ValueError, match='No tables found'):
+        rfm.Graph.from_snowflake(
+            connection,
+            database='MY_DB". INFORMATION_SCHEMA.TABLES; DROP TABLE T; --',
+            schema='MY_SCHEMA',
+            verbose=False,
+        )
 
     sql, _ = connection.calls[0]
     assert ('FROM "MY_DB"". INFORMATION_SCHEMA.TABLES; DROP TABLE T; --"'

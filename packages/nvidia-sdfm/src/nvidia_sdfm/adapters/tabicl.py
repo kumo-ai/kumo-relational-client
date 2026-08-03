@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import uuid
 from typing import Any
 
@@ -17,8 +19,8 @@ from nvidia_sdfm.core.dtypes import (
 )
 from nvidia_sdfm.core.response import parse_prediction_response
 from nvidia_sdfm.core.transport import Transport
-from nvidia_sdfm.errors import SdfmError
-from nvidia_sdfm.requests import TabICLRequest
+from nvidia_sdfm.errors import NimRequestError, SdfmError
+from nvidia_sdfm.requests import TabICLRequest, TabICLSession
 
 _CLASSIFICATION_KINDS = frozenset({
     'classification',
@@ -45,6 +47,17 @@ _OUTPUT_FIELDS = {
     'classification': ('prediction', 'probabilities'),
     'regression': ('prediction', 'quantiles'),
 }
+
+# A session pins `model` + `task` + `schema` + `context`; only the remaining
+# sections travel with each scoring call. `metadata` rides along on both halves
+# because its request id correlates that call with the server's logs.
+_SESSION_PINNED_SECTIONS = ('model', 'task', 'schema', 'context')
+_SESSION_CREATE_SECTIONS = (*_SESSION_PINNED_SECTIONS, 'metadata')
+_SESSION_PREDICT_SECTIONS = ('predict', 'output', 'metadata')
+
+# A NIM that does not serve the session routes at all, as opposed to one that
+# has merely forgotten this session.
+_SESSION_UNSUPPORTED_STATUS = frozenset({404, 405, 501})
 
 
 def _new_request_id() -> str:
@@ -224,6 +237,100 @@ def build_request(
     }
 
 
+def _sections(payload: dict[str, Any], keys: tuple[str, ...]) -> dict[str, Any]:
+    return {key: payload[key] for key in keys if key in payload}
+
+
+def _pinned_digest(payload: dict[str, Any]) -> str:
+    r"""A fingerprint of the half of ``payload`` a session pins.
+
+    Held instead of the sections themselves so a handle does not keep a second
+    copy of the context alive for its lifetime. Covers ``model`` / ``task`` /
+    ``schema`` / ``context`` in full, so a widened dtype, a changed target
+    class list or a different positive class all change the digest -- which is
+    what makes reusing a pinned context safe.
+    """
+    serialized = json.dumps(
+        _sections(payload, _SESSION_PINNED_SECTIONS),
+        sort_keys=True,
+        separators=(',', ':'),
+        default=str,
+    )
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
+
+def _create_session(transport: Transport, payload: dict[str, Any]) -> str:
+    body = transport.create_session(
+        _sections(payload, _SESSION_CREATE_SECTIONS))
+    session_id = body.get('session_id')
+    if not isinstance(session_id, str) or not session_id:
+        raise SdfmError(
+            f'Create-session response from {transport.url} did not include a '
+            f'session_id',
+            code='INVALID_RESPONSE',
+        )
+    return session_id
+
+
+def delete_session_quietly(transport: Transport, session_id: str) -> None:
+    r"""Best-effort session release; the NIM also reaps a session on its TTL."""
+    try:
+        transport.delete_session(session_id)
+    except SdfmError:
+        pass
+
+
+def _predict_with_session(
+    transport: Transport,
+    payload: dict[str, Any],
+    session: TabICLSession,
+) -> dict[str, Any]:
+    r"""Scores ``payload`` against ``session``'s pinned context when that is
+    cheaper than sending the context again, and stateless otherwise.
+
+    The result is the same either way -- the payload is built in full first,
+    and the session holds exactly the sections that would otherwise be re-sent.
+
+    A session is opened on the *second* call that pins the same context rather
+    than the first: opening one costs an extra round trip and pins server
+    memory, which a caller who scores a single table would pay for nothing. By
+    the second call the handle is demonstrably being reused, and every call
+    from then on sends the rows alone.
+    """
+    if not session.supported:
+        return transport.predict(payload)
+
+    pinned = _pinned_digest(payload)
+    if session.pinned != pinned:
+        # First call, or a call whose context half differs (a widened dtype, a
+        # different positive_class): the old session cannot answer it.
+        if session.id is not None:
+            delete_session_quietly(transport, session.id)
+            session.id = None
+        session.pinned = pinned
+        return transport.predict(payload)
+
+    if session.id is None:
+        try:
+            session.id = _create_session(transport, payload)
+        except NimRequestError as error:
+            if error.status_code not in _SESSION_UNSUPPORTED_STATUS:
+                raise
+            session.supported = False
+            return transport.predict(payload)
+
+    predict_payload = _sections(payload, _SESSION_PREDICT_SECTIONS)
+    try:
+        return transport.session_predict(session.id, predict_payload)
+    except NimRequestError as error:
+        # The session expired or was evicted: pin the context again and retry
+        # once, so a long-lived handle never fails on a TTL boundary.
+        if error.status_code != 404:
+            raise
+        session.id = _create_session(transport, payload)
+        return transport.session_predict(session.id, predict_payload)
+
+
 class TabICLAdapter(ModelAdapter):
     name = 'tabicl'
     request_type = TabICLRequest
@@ -255,6 +362,10 @@ class TabICLAdapter(ModelAdapter):
             max_results=request.max_results,
             request_id=request.request_id,
         )
-        response = transport.predict(payload)
+        if request.session is None:
+            response = transport.predict(payload)
+        else:
+            response = _predict_with_session(transport, payload,
+                                             request.session)
         return parse_prediction_response(
             response, requested_fields=request.outputs)

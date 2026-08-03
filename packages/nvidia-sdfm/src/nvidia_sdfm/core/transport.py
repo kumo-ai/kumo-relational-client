@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -15,6 +15,7 @@ from urllib3.util.retry import Retry
 from nvidia_sdfm.errors import NimRequestError, SdfmError
 
 _PREDICTIONS_PATH = '/v1/predictions'
+_SESSIONS_PATH = '/v1/sessions'
 _HEALTH_READY_PATH = '/v1/health/ready'
 _DEFAULT_TIMEOUT_SECONDS = 60.0
 _DEFAULT_MAX_RETRIES = 3
@@ -28,6 +29,10 @@ _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 # hostile body can inflate to.
 _MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 _RESPONSE_CHUNK_BYTES = 1024 * 1024
+# Deleting a session is a bookkeeping call the server answers immediately, and
+# it runs on cleanup paths where the caller is no longer waiting on a result.
+# The full request timeout would let an unreachable endpoint stall a teardown.
+_DELETE_TIMEOUT_SECONDS = 10.0
 
 
 def _validate_url(url: str, api_key: str | None) -> None:
@@ -147,6 +152,14 @@ def _read_capped(response: requests.Response, url: str) -> bytes:
     return bytes(body)
 
 
+def _path_segment(value: str) -> str:
+    r"""Escapes a server-chosen id before it is spliced into a URL path, so a
+    hostile or malformed ``session_id`` cannot redirect the call to another
+    route.
+    """
+    return quote(value, safe='')
+
+
 def _build_session(
     api_key: str | None,
     max_retries: int,
@@ -242,23 +255,44 @@ class Transport:
         return self._post(_PREDICTIONS_PATH, payload)
 
     def create_session(self, payload: dict[str, Any]) -> dict[str, Any]:
-        raise NotImplementedError(
-            'Session endpoints are not wired yet; see the README',
-        )
+        r"""Pins a context server-side; ``payload`` carries the context-only
+        sections of a prediction request.
+        """
+        return self._post(_SESSIONS_PATH, payload)
 
     def session_predict(
         self,
         session_id: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        raise NotImplementedError(
-            'Session endpoints are not wired yet; see the README',
-        )
+        r"""Scores rows against a pinned context; ``payload`` carries only the
+        per-call sections.
+        """
+        return self._post(f'{_SESSIONS_PATH}/{_path_segment(session_id)}'
+                          f'/predictions', payload)
 
     def delete_session(self, session_id: str) -> None:
-        raise NotImplementedError(
-            'Session endpoints are not wired yet; see the README',
-        )
+        r"""Releases a pinned context. Idempotent server-side: the NIM answers
+        204 whether or not the session is still there.
+        """
+        self._require_open()
+        url = f'{self._url}{_SESSIONS_PATH}/{_path_segment(session_id)}'
+        try:
+            with self._session.delete(
+                    url,
+                    timeout=min(self._timeout, _DELETE_TIMEOUT_SECONDS),
+                    verify=self._verify_ssl,
+                    stream=True,
+            ) as response:
+                status_code = response.status_code
+                content = _read_capped(response, url)
+        except requests.RequestException as error:
+            raise SdfmError(
+                f'Request to {url} failed: {error}',
+                code='TRANSPORT_ERROR',
+            ) from error
+        if status_code >= 400:
+            raise _to_nim_error(status_code, content)
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._require_open()

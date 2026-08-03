@@ -12,6 +12,7 @@ from nvidia_sdfm.requests import (
     KumoRFMRequest,
     KumoRFMTaskRequest,
     TabICLRequest,
+    TabICLSession,
 )
 
 if TYPE_CHECKING:
@@ -69,6 +70,8 @@ class RFMModel:
         return_embeddings: Any = _UNSET,
         random_seed: Any = _UNSET,
         max_pq_iterations: Any = _UNSET,
+        verbose: Any = _UNSET,
+        **engine_options: Any,
     ) -> PredictResult:
         r"""Runs ``query`` against the bound graph.
 
@@ -110,9 +113,17 @@ class RFMModel:
                 prediction example.
             random_seed: A manual seed for pseudo-random sampling. The
                 ``sqlite`` and ``snowflake`` backends cannot seed their random
-                row sampling and warn once when a seed is given.
+                row sampling and warn once when a seed is given. Passing
+                ``None`` re-samples neighborhoods per batch, which rules out
+                the shared-context session a multi-batch prediction otherwise
+                opens, so each batch re-uploads the full context.
             max_pq_iterations: The maximum number of label-collection
                 iterations. Raise it when the query has strict entity filters.
+            verbose: Whether to print progress. Pass ``False`` in a service, a
+                pipeline or anything else parsing stdout.
+            engine_options: Any further keyword argument the engine's
+                ``predict`` accepts, forwarded unchanged. An argument it does
+                not accept raises ``SdfmError('INVALID_REQUEST')``.
 
         Returns:
             The predictions as a ``pd.DataFrame``, or a ``kumorfm``
@@ -131,9 +142,11 @@ class RFMModel:
                 ('return_embeddings', return_embeddings),
                 ('random_seed', random_seed),
                 ('max_pq_iterations', max_pq_iterations),
+                ('verbose', verbose),
             )
             if value is not _UNSET
         }
+        options.update(engine_options)
         request = KumoRFMRequest(
             graph=self._graph,
             query=query,
@@ -168,6 +181,10 @@ class RFMModel:
         use_prediction_time: Any = _UNSET,
         return_embeddings: Any = _UNSET,
         random_seed: Any = _UNSET,
+        top_k: Any = _UNSET,
+        exclude_cols_dict: Any = _UNSET,
+        verbose: Any = _UNSET,
+        **engine_options: Any,
     ) -> PredictResult:
         r"""Predict from a caller-supplied train table instead of a PQL query.
 
@@ -214,6 +231,14 @@ class RFMModel:
             use_prediction_time: As in :meth:`predict`.
             return_embeddings: As in :meth:`predict`.
             random_seed: As in :meth:`predict`.
+            top_k: For ``task_type='temporal_link_prediction'``, how many
+                ranked items to return per entity. The PQL path spells this
+                ``RANK TOP k``. Ignored for every other task type.
+            exclude_cols_dict: Columns to withhold from the model input, as
+                ``{table_name: [column, ...]}``.
+            verbose: As in :meth:`predict`.
+            engine_options: As in :meth:`predict`, for the engine's
+                ``predict_task``.
 
         Returns:
             The predictions as a ``pd.DataFrame``, or a ``kumorfm``
@@ -228,9 +253,13 @@ class RFMModel:
                 ('use_prediction_time', use_prediction_time),
                 ('return_embeddings', return_embeddings),
                 ('random_seed', random_seed),
+                ('top_k', top_k),
+                ('exclude_cols_dict', exclude_cols_dict),
+                ('verbose', verbose),
             )
             if value is not _UNSET
         }
+        options.update(engine_options)
         request = KumoRFMTaskRequest(
             graph=self._graph,
             context=context,
@@ -261,6 +290,11 @@ class TabICLModel:
     supplied once; each :meth:`predict` scores a new table of unlabelled rows,
     building a :class:`TabICLRequest` under the owning client.
 
+    Reusing one handle for many scoring calls is the cheap path: the NIM pins
+    the context after the first call, so later calls send only the rows to
+    score. Against a NIM without session routes every call carries the context,
+    as it always did; either way the predictions are the same.
+
     >>> model = client.tabicl(context_df, target="y", task="classification")  # doctest: +SKIP
     >>> model.predict(new_rows)
     """
@@ -276,6 +310,7 @@ class TabICLModel:
         self._context = context
         self._task = task
         self._target = target
+        self._session = TabICLSession()
 
     def predict(
         self,
@@ -337,9 +372,25 @@ class TabICLModel:
             predict=predict,
             task=self._task,
             target=self._target,
+            session=self._session,
             **extra,
         )
         return self._client._predict(request)
+
+    def __del__(self) -> None:
+        # Releases the pinned context when the handle goes away. Best effort:
+        # this runs on the garbage collector's schedule, possibly at
+        # interpreter shutdown and possibly after the client was closed, and
+        # the NIM reaps the session on its own TTL regardless.
+        session = getattr(self, '_session', None)
+        if session is None or session.id is None:
+            return
+        try:
+            from nvidia_sdfm.adapters.tabicl import delete_session_quietly
+
+            delete_session_quietly(self._client._transport, session.id)
+        except Exception:
+            pass
 
     def __repr__(self) -> str:
         return 'TabICLModel()'

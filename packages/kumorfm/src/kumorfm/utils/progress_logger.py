@@ -90,8 +90,10 @@ class ProgressLogger(ABC):
         if self._depth == 1:
             self.start_time = time.perf_counter()
         # TUI only: piped into a file, a CI log or a subprocess these escape
-        # codes are literal garbage bytes in the captured output.
-        if self._depth == 1 and _in_terminal():
+        # codes are literal garbage bytes in the captured output. Silenced by
+        # `verbose=False` too, which otherwise leaves the taskbar sequences as
+        # the one thing a caller cannot turn off.
+        if self._depth == 1 and self.verbose and _in_terminal():
             sys.stdout.write("\x1b]9;4;3\x07")
             sys.stdout.flush()
         if self._depth == 1 and self.verbose:
@@ -104,7 +106,7 @@ class ProgressLogger(ABC):
             self.end_time = time.perf_counter()
         if self._depth == 0 and self.verbose:
             self.on_exit(error=exc_val is not None)
-        if self._depth == 0 and _in_terminal():
+        if self._depth == 0 and self.verbose and _in_terminal():
             sys.stdout.write("\x1b]9;4;0\x07")
             sys.stdout.flush()
 

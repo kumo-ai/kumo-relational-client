@@ -509,3 +509,42 @@ def test_validate_non_key_foreign_key_dtype_message(
     message = str(err.value)
     assert "(got 'date')" in message
     assert message.count('(') == message.count(')')
+
+
+def test_validate_names_the_edge_left_behind_by_remove_column(
+        sample_dfs: dict[str, pd.DataFrame],  #
+) -> None:
+    r"""graph-dangling-edge-after-remove-column.md
+
+    ``Table.remove_column`` has no back-reference to the graph, so dropping a
+    linked foreign key leaves the edge behind. The column lookup in
+    ``validate`` then raised ``KeyError`` -- the wrong type for a graph
+    consistency failure, and uncatchable by the ``except ValueError`` the
+    documented failure mode implies.
+    """
+    users_table = LocalTable(sample_dfs['users'], 'users',
+                             primary_key='user_id')
+    orders_table = LocalTable(sample_dfs['orders'], 'orders',
+                              primary_key='order_id')
+
+    graph = Graph(tables=[users_table, orders_table])
+    graph.link('orders', 'user_id', 'users')
+    graph['orders'].remove_column('user_id')
+
+    with pytest.raises(ValueError) as err:
+        graph.validate()
+
+    message = str(err.value)
+    assert "'orders'" in message
+    assert "'user_id'" in message
+    assert 'unlink()' in message
+
+
+def test_empty_edges_suppress_inference_unlike_none(
+        sample_dfs: dict[str, pd.DataFrame],  #
+) -> None:
+    r"""The documented divergence between ``edges=None`` and ``edges=[]``."""
+    inferred = Graph.from_data(sample_dfs, verbose=False)
+    assert len(inferred.edges) > 0
+
+    assert Graph.from_data(sample_dfs, edges=[], verbose=False).edges == []

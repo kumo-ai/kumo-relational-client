@@ -16,6 +16,7 @@ from kumorfm.rfm.payload import (
     session_create_payload,
     session_predict_payload,
 )
+from kumorfm.utils.progress_logger import PlainProgressLogger
 
 from conftest import MOCK_URL
 
@@ -164,6 +165,46 @@ def test_random_seed_none_disables_sessions(
     kinds = _kinds(api)
     assert 'create' not in kinds
     assert kinds.count('predict') == 2
+
+
+def test_random_seed_none_says_the_context_is_re_uploaded(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+) -> None:
+    api = RecordingAPI()
+    model = _model(user_store_graph, api)
+    logger = PlainProgressLogger('Predicting', verbose=False)
+    with model.batch_mode(batch_size=2):
+        model.predict(ltv, indices=[0, 1, 2, 3], random_seed=None,
+                      verbose=logger)
+    assert any('random_seed=None' in msg and 're-uploads' in msg
+               for msg in logger.logs)
+
+
+def test_env_kill_switch_says_the_context_is_re_uploaded(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+    monkeypatch: Any,
+) -> None:
+    monkeypatch.setenv('KUMORFM_DISABLE_SESSIONS', '1')
+    api = RecordingAPI()
+    model = _model(user_store_graph, api)
+    logger = PlainProgressLogger('Predicting', verbose=False)
+    with model.batch_mode(batch_size=2):
+        model.predict(ltv, indices=[0, 1, 2, 3], verbose=logger)
+    assert any('KUMORFM_DISABLE_SESSIONS' in msg for msg in logger.logs)
+
+
+def test_a_session_backed_run_says_nothing_about_sessions(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+) -> None:
+    api = RecordingAPI()
+    model = _model(user_store_graph, api)
+    logger = PlainProgressLogger('Predicting', verbose=False)
+    with model.batch_mode(batch_size=2):
+        model.predict(ltv, indices=[0, 1, 2, 3], verbose=logger)
+    assert not any('Sessions disabled' in msg for msg in logger.logs)
 
 
 def test_env_kill_switch_disables_sessions(

@@ -25,6 +25,23 @@ class ModelRequest:
 
 
 @dataclass
+class TabICLSession:
+    r"""The server-side context a ``TabICLModel`` handle reuses across calls.
+
+    One of these lives on each handle so repeated ``predict`` calls against the
+    same bound context upload it once instead of once per call. ``pinned`` is a
+    digest of the context half of the payload the session was opened for -- a
+    digest rather than the sections themselves so a handle does not hold a
+    second copy of the context; a request whose context half differs cannot use
+    the session. ``supported`` latches to ``False`` against a NIM without
+    session routes, so the handle stops asking.
+    """
+    id: str | None = None
+    pinned: str | None = None
+    supported: bool = True
+
+
+@dataclass
 class TabICLRequest(ModelRequest):
     r"""A single-table TabICL prediction request.
 
@@ -45,6 +62,8 @@ class TabICLRequest(ModelRequest):
     embedding_dtype: str | None = None
     max_results: int | None = None
     request_id: str | None = None
+    session: TabICLSession | None = field(default=None, repr=False,
+                                          compare=False)
 
 
 @dataclass

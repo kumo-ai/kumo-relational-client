@@ -99,6 +99,49 @@ def test_rfm_handle_only_forwards_set_options():
     }
 
 
+def test_rfm_handle_can_silence_progress_output():
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict('PREDICT x', verbose=False)
+
+    assert adapter.captured.options == {'verbose': False}
+
+
+def test_rfm_handle_forwards_engine_arguments_it_does_not_name():
+    r"""The wrapper enumerates the engine's keywords, so anything it has not
+    listed -- including whatever the engine gains next -- would otherwise be a
+    ``TypeError`` with no way through.
+    """
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict('PREDICT x', some_new_engine_knob=7)
+
+    assert adapter.captured.options == {'some_new_engine_knob': 7}
+
+
+def test_rfm_task_handle_exposes_link_prediction_and_column_exclusion():
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMTaskRequest, pd.DataFrame())
+    client = _client_with(adapter)
+
+    client.kumorfm('g').predict_task(
+        pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+        pd.DataFrame({'ENTITY': [1]}),
+        task_type='temporal_link_prediction',
+        entity_table=('users', 'items'),
+        top_k=5,
+        exclude_cols_dict={'users': ['ssn']},
+        verbose=False,
+    )
+
+    assert adapter.captured.options == {
+        'top_k': 5,
+        'exclude_cols_dict': {'users': ['ssn']},
+        'verbose': False,
+    }
+
+
 def test_rfm_handle_matches_typed_request():
     adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
     client = _client_with(adapter)

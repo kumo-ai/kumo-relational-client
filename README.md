@@ -130,8 +130,18 @@ return type regardless of adapter.
 
 ## Sessions
 
-Not wired yet. `core/transport.py` implements `predict()` only; `create_session` /
-`session_predict` / `delete_session` are deferred until the NIM session path is exercised.
+A session pins `model` / `task` / `schema` / `context` on the NIM so later calls send only the
+rows to score. Both model paths use them, and neither exposes them: they are an internal
+transport optimisation and never change a prediction.
+
+- **TabICL** — `client.tabicl(context, ...)` reuses one session for the life of the handle.
+  It is opened on the second `predict()` against the same context, so scoring a single table
+  costs exactly one request as before, and every call after that carries the rows alone.
+- **KumoRFM** — a multi-batch `predict()` opens one session for the run and deletes it at the
+  end. Set `KUMORFM_DISABLE_SESSIONS=1` to force the stateless path.
+
+Both fall back to `POST /v1/predictions` when the NIM answers 404/405/501 on session creation,
+and both re-pin the context transparently if a session expires.
 
 ## License & Contributing
 

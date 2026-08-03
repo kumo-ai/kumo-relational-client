@@ -18,12 +18,16 @@ class _FakeTTY(io.StringIO):
         return True
 
 
-@pytest.mark.parametrize('stdout_factory, expected', [
-    (io.StringIO, False),
-    (_FakeTTY, True),
+@pytest.mark.parametrize('stdout_factory, verbose, expected', [
+    (io.StringIO, True, False),
+    (_FakeTTY, True, True),
+    # `verbose=False` is the only control a caller has over this output, so it
+    # has to reach the taskbar sequences as well -- they are written outside
+    # `on_enter`/`on_exit` and were previously unconditional on a TTY.
+    (_FakeTTY, False, False),
 ])
-def test_taskbar_escapes_only_reach_a_tty(
-    monkeypatch, stdout_factory, expected,
+def test_taskbar_escapes_only_reach_a_verbose_tty(
+    monkeypatch, stdout_factory, verbose, expected,
 ) -> None:
     import kumorfm
 
@@ -34,7 +38,7 @@ def test_taskbar_escapes_only_reach_a_tty(
     stdout = stdout_factory()
     monkeypatch.setattr(sys, 'stdout', stdout)
 
-    with PlainProgressLogger('msg', verbose=False):
+    with PlainProgressLogger('msg', verbose=verbose):
         pass
 
     written = stdout.getvalue()

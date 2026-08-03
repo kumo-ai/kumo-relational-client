@@ -1129,11 +1129,22 @@ def test_from_databricks_metric_view_closes_internal_connection_on_error(
 
 @pytest.fixture(scope='session')
 def metric_view_graph(connection: 'Connection') -> Graph:
-    return Graph.from_databricks_metric_view(
-        'nvidia_erp_mv',
-        connection=connection,
-        verbose=False,
-    )
+    # A live view that converts only partly is the normal case, not a failure,
+    # and `error::UserWarning` would turn it into one -- failing these tests
+    # for a reason that has nothing to do with what they assert. Suppressed
+    # here rather than in `filterwarnings`, which cannot name a warning class
+    # without importing it before the session starts.
+    import warnings
+
+    from kumorfm.rfm import ViewConversionWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', ViewConversionWarning)
+        return Graph.from_databricks_metric_view(
+            'nvidia_erp_mv',
+            connection=connection,
+            verbose=False,
+        )
 
 
 def test_live_metric_view_graph(metric_view_graph: Graph) -> None:
@@ -1177,3 +1188,127 @@ def test_live_metric_view_qualified_name(connection: 'Connection',
     assert set(graph.tables) == {
         'order_lines', 'customers', 'products', 'orders'
     }
+
+
+def test_conversion_messages_survive_a_warnings_as_errors_policy() -> None:
+    r"""graph-view-conversion-diagnostics-only-as-warnings.md
+
+    Partial conversion is the normal outcome for a metric view, and the
+    diagnostics used to exist only as one aggregated ``UserWarning``: under
+    ``-W error`` the constructor raised instead of returning, and the fully
+    built graph was unrecoverable. They are now on the graph as well, and the
+    warning has its own category so a project can silence just this one.
+    """
+    import warnings
+
+    from kumorfm.rfm import ViewConversionWarning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', ViewConversionWarning)
+        with pytest.raises(ViewConversionWarning):
+            Graph.from_databricks_metric_view(
+                'sales_mv', connection=_FakeConnection(), verbose=False)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', ViewConversionWarning)
+        graph = Graph.from_databricks_metric_view(
+            'sales_mv', connection=_FakeConnection(), verbose=False)
+
+    assert issubclass(ViewConversionWarning, UserWarning)
+    assert len(graph.conversion_messages) > 0
+    assert any('Ignored the' in message
+               for message in graph.conversion_messages)
+
+
+def test_conversion_messages_are_empty_for_a_plain_graph() -> None:
+    graph = Graph.from_data(
+        {'users': pd.DataFrame({'user_id': [1, 2]})}, verbose=False)
+
+    assert graph.conversion_messages == ()
+
+
+def test_from_databricks_rejects_a_schema_with_no_tables() -> None:
+    r"""graph-empty-graph-on-bad-path-or-schema.md
+
+    A mistyped schema name discovers nothing, and used to yield a
+    valid-looking empty graph that fails much later without naming the schema.
+    """
+    with pytest.raises(ValueError, match='No tables found'):
+        Graph.from_databricks(
+            _FakeConnection(),
+            catalog=_CATALOG,
+            schema='no_such_schema',
+            verbose=False,
+        )
+
+
+def test_escalated_conversion_warning_closes_an_owned_connection(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    r"""Under warnings-as-errors the warning leaves the constructor, so the
+    caller never receives the graph that would have owned this connection.
+    Same contract as every other failure path here.
+
+    ``Graph.__del__`` does close it eventually, so this is a matter of *when*:
+    a caller that holds the exception -- which any ``except ... as error`` does
+    -- keeps the constructor's frame, and therefore the unreachable graph,
+    alive with it. The connection then stays open for as long as the exception
+    is held rather than being released where it was opened.
+    """
+    import warnings
+
+    from kumorfm.rfm import ViewConversionWarning
+
+    connection = _FakeConnection()
+    monkeypatch.setattr(
+        'kumorfm.rfm.backend.databricks.connect',
+        lambda **kwargs: connection,
+    )
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', ViewConversionWarning)
+        with pytest.raises(ViewConversionWarning) as raised:
+            Graph.from_databricks_metric_view(
+                'sales_mv',
+                connection=dict(server_hostname='localhost'),
+                verbose=False,
+            )
+
+        # `raised` pins the traceback, so nothing here has been collected.
+        assert raised.traceback is not None
+        assert connection.closed
+
+
+def test_escalated_conversion_warning_keeps_a_borrowed_connection_open(
+) -> None:
+    import warnings
+
+    from kumorfm.rfm import ViewConversionWarning
+
+    connection = _FakeConnection()
+
+    with warnings.catch_warnings():
+        warnings.simplefilter('error', ViewConversionWarning)
+        with pytest.raises(ViewConversionWarning):
+            Graph.from_databricks_metric_view(
+                'sales_mv', connection=connection, verbose=False)
+
+    assert not connection.closed
+
+
+def test_conversion_warning_is_attributed_to_the_caller() -> None:
+    r"""The message is about the caller's view, so the traceback has to point
+    at their call and not at this module's own `warnings.warn` line.
+    """
+    import warnings
+
+    from kumorfm.rfm import ViewConversionWarning
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        Graph.from_databricks_metric_view(
+            'sales_mv', connection=_FakeConnection(), verbose=False)
+
+    escalated = [w for w in caught
+                 if issubclass(w.category, ViewConversionWarning)]
+    assert len(escalated) == 1
+    assert escalated[0].filename == __file__

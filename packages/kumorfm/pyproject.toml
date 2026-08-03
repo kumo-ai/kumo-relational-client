@@ -107,6 +107,11 @@ addopts = [
     "-vv",
 ]
 filterwarnings=[
+    # NOTE Entries here must not name a warning class by import path: pytest
+    # resolves those while parsing this file, which imports the module before
+    # any test runs. `kumorfm.rfm` is not importable without the compiled
+    # sampler, so such an entry breaks the whole session under WITH_KUMOLIB=0.
+    # Scope class-based filters to the tests that need them instead.
     "error::UserWarning",
     "error::DeprecationWarning",
     "ignore:.*pkg_resources.*:DeprecationWarning",

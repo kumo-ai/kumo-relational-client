@@ -98,3 +98,20 @@ def test_random_seed_does_not_warn_without_seed(tmp_path: Path) -> None:
         sampler._sample_entity_table('users', {'user_id'}, 5)
         sampler._sample_entity_table('users', {'user_id'}, 5, random_seed=42,
                                      entity_ids=[1, 2, 3])
+
+
+def test_discovery_on_an_empty_database_names_what_it_searched(
+        tmp_path: Path,  #
+) -> None:
+    r"""graph-empty-graph-on-bad-path-or-schema.md
+
+    A database with nothing in it -- what a mistyped path used to produce,
+    since sqlite creates on connect -- returned a valid-looking empty graph
+    that failed much later as "At least one table needs to be added to the
+    graph", pointing at the caller's table list rather than the path.
+    """
+    path = tmp_path / 'empty.db'
+    sqlite3.connect(path).close()
+
+    with pytest.raises(ValueError, match='No tables found'):
+        Graph.from_sqlite(str(path), verbose=False)

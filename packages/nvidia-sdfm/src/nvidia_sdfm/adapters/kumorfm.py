@@ -113,7 +113,10 @@ def _translate_engine_error(error: Exception, url: str) -> SdfmError:
     The driver cannot depend on ``nvidia_sdfm``, so its NIM failures arrive as
     ``NimFailureError`` (a ``RuntimeError``) carrying the status and the
     problem document's ``invalid_params``. Translating here means ``except
-    SdfmError`` is a complete catch on this path, as it already is for TabICL.
+    SdfmError`` catches every failure of the prediction call itself, as it
+    already does for TabICL. It does not cover graph construction: the engine
+    validates the graph in its own constructor, outside this call, so a graph
+    that fails validation still surfaces the engine's ``ValueError``.
 
     Caller-input failures the engine validates itself (an anchor time before
     the context window, an unknown option) arrive as ``ValueError``/
@@ -293,7 +296,13 @@ class KumoRFMAdapter(ModelAdapter):
                     verify_ssl=transport.verify_ssl,
                     timeout=transport.timeout,
                     _token=engine._SDFM_CLIENT_TOKEN)
-        model = engine.KumoRFM(request.graph)
+        # `verbose` has to reach the constructor as well as the call: it owns
+        # the graph-materialization output, and a handle builds a fresh engine
+        # model per prediction, so that banner is printed on every predict.
+        # Only overridden when the caller actually asked, so the engine keeps
+        # its own default otherwise.
+        model = (engine.KumoRFM(request.graph, verbose=options['verbose'])
+                 if 'verbose' in options else engine.KumoRFM(request.graph))
         if request.batch_size is not None:
             batch_ctx = model.batch_mode(request.batch_size,
                                          num_retries=request.num_retries)

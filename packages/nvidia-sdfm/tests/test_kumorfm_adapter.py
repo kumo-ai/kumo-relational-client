@@ -928,3 +928,54 @@ def test_task_types_match_engine_task_type_enum():
     from nvidia_sdfm.adapters.kumorfm import RFM_TASK_TYPES
     for name in RFM_TASK_TYPES:
         assert task_module.TaskType(name).value == name
+
+
+@requires_engine
+def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
+    r"""rfm-no-way-to-silence-progress-output.md
+
+    The graph-materialization banner is owned by ``KumoRFM.__init__``, and a
+    handle builds a fresh engine model per prediction -- so forwarding
+    ``verbose`` only to ``predict`` still left that banner on stdout on every
+    single call, which live verification caught.
+    """
+    captured = {}
+
+    class FakeKumoRFM(_FakeEngineModel):
+        def __init__(self, graph, verbose=True):
+            captured['init_verbose'] = verbose
+
+        def predict(self, query, **kwargs):
+            captured['predict_verbose'] = kwargs.get('verbose')
+            return pd.DataFrame({'entity': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    KumoRFMAdapter().predict(client, KumoRFMRequest(
+        graph='g', query='PREDICT x', options={'verbose': False}))
+
+    assert captured['init_verbose'] is False
+    assert captured['predict_verbose'] is False
+
+
+@requires_engine
+def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
+    captured = {}
+
+    class FakeKumoRFM(_FakeEngineModel):
+        def __init__(self, graph, verbose=True):
+            captured['init_verbose'] = verbose
+
+        def predict(self, query, **kwargs):
+            captured['predict_verbose'] = 'verbose' in kwargs
+            return pd.DataFrame({'entity': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    KumoRFMAdapter().predict(client, KumoRFMRequest(graph='g',
+                                                    query='PREDICT x'))
+
+    assert captured['init_verbose'] is True
+    assert captured['predict_verbose'] is False

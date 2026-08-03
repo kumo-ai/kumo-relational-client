@@ -106,6 +106,19 @@ def _sessions_disabled_by_env() -> bool:
         '1', 'true', 'yes', 'on')
 
 
+def _no_session_reason(random_seed: int | None) -> str:
+    r"""Why a multi-batch run is re-uploading its context per batch.
+
+    Both causes are invisible otherwise: the run still succeeds, and the only
+    symptom is that every batch carries the full context instead of the
+    prediction rows alone.
+    """
+    cause = ('KUMORFM_DISABLE_SESSIONS is set' if random_seed is not None else
+             'random_seed=None re-samples neighborhoods per batch')
+    return (f"Sessions disabled ({cause}); each batch re-uploads the "
+            f"context")
+
+
 @dataclass(frozen=True)
 class MaterializedPredictionRequest:
     r"""A frozen request record with source-row provenance.
@@ -640,6 +653,12 @@ class KumoRFM:
                 maximum applicable batch size for the given task.
             num_retries: The maximum number of retries for failed queries due
                 to unexpected server issues.
+
+        Note:
+            A multi-batch prediction uploads its context once, into a session
+            the batches share, unless ``random_seed=None`` or
+            ``KUMORFM_DISABLE_SESSIONS`` rules that out -- in which case every
+            batch re-uploads the context and says so in the progress output.
         """
         if batch_size != 'max' and (not isinstance(batch_size, int)
                                     or isinstance(batch_size, bool)
@@ -776,6 +795,12 @@ class KumoRFM:
           values are ``"median"``, ``"mean"`` and ``"quantiles"``. Defaults to
           ``"median"``. ``"quantiles"`` returns the full distribution as
           additional ``Q_<level>`` columns alongside the point prediction.
+          ``"mean"`` is unreliable on **zero-inflated regression targets**:
+          once roughly 40% of the predicted quantile grid sits at zero, the
+          NIM returns exactly ``0.0`` for every entity, with no error --
+          which is precisely the data shape a mean is chosen for. Prefer
+          ``"median"`` or ``"quantiles"`` there. Tracked as
+          ``structured-data-nims#5``.
 
         .. warning::
 
@@ -854,7 +879,10 @@ class KumoRFM:
             random_seed: A manual seed for generating pseudo-random numbers.
                 The :obj:`"sqlite"` and :obj:`"snowflake"` backends cannot
                 seed their random row sampling and warn once when a seed is
-                given.
+                given. Passing :obj:`None` re-samples neighborhoods for every
+                batch, which rules out the shared-context session a
+                multi-batch prediction otherwise opens, so each batch
+                re-uploads the full context.
             verbose: Whether to print verbose output.
 
         Returns:
@@ -1429,6 +1457,10 @@ class KumoRFM:
                 same graph, ordered task rows, batching, and options. The
                 :obj:`"sqlite"` and :obj:`"snowflake"` backends cannot seed
                 their random row sampling and warn once when a seed is given.
+                Passing :obj:`None` re-samples neighborhoods for every batch,
+                which rules out the shared-context session a multi-batch
+                prediction otherwise opens, so each batch re-uploads the full
+                context.
 
         Returns:
             The predictions as a :class:`pandas.DataFrame`.
@@ -1489,6 +1521,9 @@ class KumoRFM:
                 and not _sessions_disabled_by_env()
                 and self._resolve_num_batches(task) > 1
             )
+            if (not use_sessions and explain_config is None
+                    and self._resolve_num_batches(task) > 1):
+                logger.log(_no_session_reason(random_seed))
             session = _SessionHandle() if use_sessions else None
             try:
                 predictions, summary, details, warning = self._predict_batches(

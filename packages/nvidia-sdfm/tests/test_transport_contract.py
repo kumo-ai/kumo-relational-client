@@ -170,14 +170,41 @@ def test_non_object_json_error_body_is_handled(requests_mock):
     assert excinfo.value.status_code == 500
 
 
-def test_session_endpoints_not_implemented():
-    client = Transport(_URL)
-    with pytest.raises(NotImplementedError):
-        client.create_session({})
-    with pytest.raises(NotImplementedError):
-        client.session_predict('sess-1', {})
-    with pytest.raises(NotImplementedError):
-        client.delete_session('sess-1')
+def test_session_endpoints_use_the_contract_routes(requests_mock):
+    requests_mock.post(_URL + '/v1/sessions', json={'session_id': 'sess-1'},
+                       status_code=201)
+    requests_mock.post(_URL + '/v1/sessions/sess-1/predictions',
+                       json={'predictions': []})
+    requests_mock.delete(_URL + '/v1/sessions/sess-1', status_code=204)
+
+    transport = Transport(_URL)
+    assert transport.create_session({'context': {}})['session_id'] == 'sess-1'
+    assert transport.session_predict('sess-1', {'predict': {}}) == {
+        'predictions': []}
+    assert transport.delete_session('sess-1') is None
+
+
+def test_session_id_cannot_escape_its_path_segment(requests_mock):
+    r"""A server-chosen id is spliced into a URL; without escaping, one holding
+    ``../`` would send the next call to a different route entirely.
+    """
+    requests_mock.delete(
+        _URL + '/v1/sessions/..%2F..%2Fv1%2Fpredictions', status_code=204)
+
+    Transport(_URL).delete_session('../../v1/predictions')
+
+    assert requests_mock.last_request.path.lower() == (
+        '/v1/sessions/..%2f..%2fv1%2fpredictions')
+
+
+def test_delete_session_reports_a_server_error(requests_mock):
+    requests_mock.delete(_URL + '/v1/sessions/sess-1', status_code=500,
+                         json={'code': 'INTERNAL_ERROR', 'detail': 'boom'})
+
+    with pytest.raises(NimRequestError) as excinfo:
+        Transport(_URL).delete_session('sess-1')
+
+    assert excinfo.value.status_code == 500
 
 
 def test_transport_mounts_retry_policy():
