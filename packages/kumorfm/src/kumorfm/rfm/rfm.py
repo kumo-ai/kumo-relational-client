@@ -5,6 +5,7 @@
 import json
 import math
 import os
+import re
 import time
 import warnings
 from collections import defaultdict
@@ -50,6 +51,7 @@ from kumorfm.rfm.diagnostics import GraphSanitizationReport
 from kumorfm.rfm.payload import (
     INSTANCE_ID,
     context_size_stats,
+    high_cardinality_columns,
     payload_size_bytes,
     predict_request_to_json,
     session_create_payload,
@@ -314,7 +316,9 @@ class Explanation:
         self.print()
 
 
-_NIM_UNAVAILABLE_STATUS = frozenset({500, 502, 503, 504})
+_NIM_UNAVAILABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+_CARDINALITY_RE = re.compile(
+    r'categorical cardinality \d+ exceeds limit (\d+)')
 
 _OPTIMIZABLE_BACKENDS = frozenset({DataBackend.SQLITE, DataBackend.DUCKDB})
 
@@ -395,7 +399,38 @@ def _invalid_params_summary(document: dict[str, Any]) -> str:
     return ' ' + '; '.join(entries) + more
 
 
-def _nim_failure_error(error: Exception, explain: bool) -> NimFailureError:
+def _cardinality_guidance(
+    detail: str,
+    payload: dict[str, Any] | None,
+) -> str:
+    r"""Explain how to resolve a categorical-cardinality rejection.
+
+    The NIM reports the offending count and limit but not the column, so the
+    columns are recovered from the request that was just refused and the fix is
+    spelled out against the worst offender.
+    """
+    match = _CARDINALITY_RE.search(detail)
+    if match is None:
+        return ''
+    limit = int(match.group(1))
+    columns = high_cardinality_columns(payload, limit) if payload else []
+    if not columns:
+        return (" Set the offending column's stype to Stype.ID and retry "
+                "('text' does not lift the limit, its tokens are counted too).")
+    listed = ', '.join(
+        f"'{table}.{column}' holds {count:,}"
+        for table, column, count in columns[:3])
+    table, column, _ = columns[0]
+    return (f" {listed}; set graph['{table}']['{column}'].stype = Stype.ID and "
+            f"retry ('text' does not lift the limit, its tokens are counted "
+            f"too).")
+
+
+def _nim_failure_error(
+    error: Exception,
+    explain: bool,
+    payload: dict[str, Any] | None = None,
+) -> NimFailureError:
     r"""Build a clear, actionable error for a failed NIM prediction call.
 
     A 5xx response or a dropped connection almost always means the NIM is
@@ -416,7 +451,7 @@ def _nim_failure_error(error: Exception, explain: bool) -> NimFailureError:
     subject = 'this explanation' if explain else 'this prediction'
     if isinstance(error, Timeout):
         return NimFailureError(
-            f'The Kumo RFM NIM did not answer {subject} within the configured '
+            f'The KumoRFM NIM did not answer {subject} within the configured '
             'timeout. Raise it with SDFMClient(url, timeout=...), or retry '
             f'when the NIM is less busy. Original error: {error}',
             transient=True)
@@ -433,7 +468,7 @@ def _nim_failure_error(error: Exception, explain: bool) -> NimFailureError:
                   'them one at a time.') if explain else ''
         server = f' (server said: {detail})' if detail else ''
         return NimFailureError(
-            f'The Kumo RFM NIM could not complete {subject}: it is temporarily '
+            f'The KumoRFM NIM could not complete {subject}: it is temporarily '
             f'unavailable, likely at capacity or recovering from GPU memory '
             f'pressure. Wait a few moments and retry.{pacing}{server}',
             status_code=status, detail=detail,
@@ -442,8 +477,8 @@ def _nim_failure_error(error: Exception, explain: bool) -> NimFailureError:
     if isinstance(status, int) and 400 <= status < 500:
         reason = str(detail or error).rstrip('.')
         return NimFailureError(
-            f'The Kumo RFM NIM rejected {subject} (HTTP {status}): '
-            f'{reason}.{fields}',
+            f'The KumoRFM NIM rejected {subject} (HTTP {status}): '
+            f'{reason}.{fields}{_cardinality_guidance(reason, payload)}',
             status_code=status, detail=detail, invalid_params=invalid_params)
 
     return NimFailureError(
@@ -1216,9 +1251,10 @@ class KumoRFM:
 
                     break
                 except (HTTPException, RequestException) as e:
-                    if attempt == self._num_retries:
-                        raise _nim_failure_error(
-                            e, explain_config is not None) from None
+                    failure = _nim_failure_error(
+                        e, explain_config is not None, request_payload)
+                    if attempt == self._num_retries or not failure.transient:
+                        raise failure from None
                     time.sleep(2**attempt)
         return predictions, summary, details, warning
 

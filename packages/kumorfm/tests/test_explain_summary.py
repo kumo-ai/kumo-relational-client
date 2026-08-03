@@ -505,3 +505,133 @@ def test_nim_failure_error_is_a_runtime_error() -> None:
     assert isinstance(error, RuntimeError)
     assert error.transient is True
     assert error.status_code == 503
+
+
+def _cardinality_error(status: int = 422) -> Any:
+    from kumorfm.exceptions import HTTPException
+    return HTTPException(
+        status,
+        '{"detail": "categorical cardinality 15001 exceeds limit 10000."}')
+
+
+def _cardinality_payload() -> dict[str, Any]:
+    return {
+        'task': {'entity_table_names': ['USERS']},
+        'context': {
+            'instance_table': {
+                'columns': ['USER_ID', 'EMAIL'],
+                'rows': [[index, f'u{index}@example.com']
+                         for index in range(15001)]},
+            'related_tables': {
+                'ORDERS': {'columns': ['SKU'],
+                           'rows': [[f'sku-{index}'] for index in range(12000)]}
+            }},
+        'predict': {
+            'instance_table': {'columns': ['USER_ID'], 'rows': [[1]]},
+            'related_tables': {}},
+    }
+
+
+def test_cardinality_rejection_names_column_and_remedy() -> None:
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    msg = str(_nim_failure_error(_cardinality_error(), explain=False,
+                                 payload=_cardinality_payload()))
+    assert 'categorical cardinality 15001 exceeds limit 10000' in msg
+    assert "'USERS.EMAIL' holds 15,001" in msg
+    assert "'ORDERS.SKU' holds 12,000" in msg
+    assert "graph['USERS']['EMAIL'].stype = Stype.ID" in msg
+    assert 'create an issue' not in msg
+    assert 'instance_table' not in msg
+
+
+def test_cardinality_rejection_without_payload_still_states_the_fix() -> None:
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    msg = str(_nim_failure_error(_cardinality_error(), explain=False))
+    assert 'Stype.ID' in msg
+    assert 'does not lift the limit' in msg
+    assert 'create an issue' not in msg
+
+
+def test_non_cardinality_rejection_has_no_cardinality_hint() -> None:
+    from kumorfm.exceptions import HTTPException
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    msg = str(_nim_failure_error(
+        HTTPException(422, '{"detail": "N_cols 7 exceeds limit 5."}'),
+        explain=False, payload=_cardinality_payload()))
+    assert 'N_cols 7 exceeds limit 5' in msg
+    assert 'stype' not in msg
+
+
+@pytest.mark.parametrize('status', [408, 429])
+def test_come_back_later_statuses_are_transient(status: int) -> None:
+    from kumorfm.exceptions import HTTPException
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    error = _nim_failure_error(HTTPException(status, 'later'), explain=False)
+    assert error.transient is True
+
+
+@pytest.mark.parametrize('status', [400, 404, 413, 422])
+def test_rejections_are_not_transient(status: int) -> None:
+    from kumorfm.exceptions import HTTPException
+    from kumorfm.rfm.rfm import _nim_failure_error
+
+    error = _nim_failure_error(HTTPException(status, 'nope'), explain=False)
+    assert error.transient is False
+
+
+def test_high_cardinality_columns_reports_worst_first_and_dedupes() -> None:
+    from kumorfm.rfm.payload import high_cardinality_columns
+
+    payload = {
+        'task': {'entity_table_names': ['USERS']},
+        'context': {
+            'instance_table': {'columns': ['EMAIL'],
+                               'rows': [[f'{i}'] for i in range(30)]},
+            'related_tables': {'ORDERS': {
+                'columns': ['SKU', 'QTY'],
+                'rows': [[f's{i}', i] for i in range(25)]}}},
+        'predict': {
+            'instance_table': {'columns': ['EMAIL'],
+                               'rows': [[f'{i}'] for i in range(12)]},
+            'related_tables': {}},
+    }
+    found = high_cardinality_columns(payload, limit=10)
+    assert found == [('USERS', 'EMAIL', 30), ('ORDERS', 'SKU', 25)]
+
+
+def test_high_cardinality_columns_counts_tokenized_text_cells() -> None:
+    r"""A 'text' column travels as one-element token lists, and the NIM counts
+    those tokens, so the column has to be named there too.
+    """
+    from kumorfm.rfm.payload import high_cardinality_columns
+
+    payload = {
+        'task': {'entity_table_names': ['USERS']},
+        'context': {
+            'instance_table': {'columns': ['ID'], 'rows': [[1]]},
+            'related_tables': {'ORDERS': {
+                'columns': ['SKU'],
+                'rows': [[[f'sku-{i}']] for i in range(25)]}}},
+        'predict': {'instance_table': {'columns': ['ID'], 'rows': [[1]]},
+                    'related_tables': {}},
+    }
+    assert high_cardinality_columns(payload, limit=10) == [('ORDERS', 'SKU', 25)]
+
+
+def test_high_cardinality_columns_ignores_non_string_and_within_limit() -> None:
+    from kumorfm.rfm.payload import high_cardinality_columns
+
+    payload = {
+        'task': {'entity_table_names': ['USERS']},
+        'context': {
+            'instance_table': {'columns': ['ID', 'TAG'],
+                               'rows': [[i, 'same'] for i in range(50)]},
+            'related_tables': {}},
+        'predict': {'instance_table': {'columns': ['ID'], 'rows': [[1]]},
+                    'related_tables': {}},
+    }
+    assert high_cardinality_columns(payload, limit=10) == []

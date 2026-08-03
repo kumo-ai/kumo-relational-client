@@ -538,7 +538,7 @@ def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
     params = [{'name': 'context.related_tables.users.rows[0][big]',
                'reason': 'exceeds the JSON safe integer range'}]
     _failing_engine(monkeypatch, NimFailureError(
-        'The Kumo RFM NIM rejected this prediction (HTTP 422): bad data.',
+        'The KumoRFM NIM rejected this prediction (HTTP 422): bad data.',
         status_code=422, detail='bad data', invalid_params=params))
 
     with pytest.raises(NimRequestError) as excinfo:
@@ -586,7 +586,7 @@ def test_malformed_response_becomes_invalid_response(monkeypatch, client):
     from kumorfm.exceptions import InvalidResponseError
 
     _failing_engine(monkeypatch, InvalidResponseError(
-        'The Kumo RFM NIM returned a prediction response that does not match '
+        'The KumoRFM NIM returned a prediction response that does not match '
         'the contract (KeyError: id)'))
 
     with pytest.raises(SdfmError) as excinfo:

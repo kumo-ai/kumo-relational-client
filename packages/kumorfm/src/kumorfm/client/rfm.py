@@ -20,7 +20,7 @@ from kumorfm.exceptions import InvalidResponseError
 
 
 class RFMAPI:
-    r"""Typed API definition for Kumo RFM (Relational Foundation Model)."""
+    r"""Typed API definition for KumoRFM (Relational Foundation Model)."""
     def __init__(self, client: KumoClient) -> None:
         self._client = client
 
@@ -149,7 +149,7 @@ class RFMAPI:
             raise
         except (ValueError, KeyError, TypeError, AttributeError) as error:
             raise InvalidResponseError(
-                f'The Kumo RFM NIM returned a prediction response that does '
+                f'The KumoRFM NIM returned a prediction response that does '
                 f'not match the contract '
                 f'({type(error).__name__}: {error or "no detail"})') from error
 
@@ -215,29 +215,29 @@ def _prediction_item_to_ranking_rows(
     anchor_time: Any = None,
 ) -> list[dict[str, Any]]:
     if item.rankings is None:
-        raise ValueError('Kumo RFM ranking response is missing rankings.')
+        raise ValueError('KumoRFM ranking response is missing rankings.')
     if item.prediction is not None:
         raise ValueError(
-            'Kumo RFM ranking response must not include prediction.')
+            'KumoRFM ranking response must not include prediction.')
 
     rows: list[dict[str, Any]] = []
     for ranking in item.rankings:
         if 'id' not in ranking:
-            raise ValueError('Kumo RFM ranking item is missing id.')
+            raise ValueError('KumoRFM ranking item is missing id.')
         if 'score' not in ranking:
-            raise ValueError('Kumo RFM ranking item is missing score.')
+            raise ValueError('KumoRFM ranking item is missing score.')
         extra_fields = set(ranking) - {'id', 'score'}
         if extra_fields:
             unexpected = ', '.join(sorted(extra_fields))
             raise ValueError(
-                'Kumo RFM ranking item includes unexpected fields: '
+                'KumoRFM ranking item includes unexpected fields: '
                 f'{unexpected}.')
         ranking_id = ranking['id']
         if not isinstance(ranking_id, str):
-            raise ValueError('Kumo RFM ranking item id must be a string.')
+            raise ValueError('KumoRFM ranking item id must be a string.')
         score = float(ranking['score'])
         if not math.isfinite(score):
-            raise ValueError('Kumo RFM ranking item score must be finite.')
+            raise ValueError('KumoRFM ranking item score must be finite.')
 
         row: dict[str, Any] = {'ENTITY': entity_id}
         if anchor_time is not None:
@@ -263,11 +263,11 @@ def _validate_identity_mappings(
     expected_count = len(entity_ids)
     if len(instance_ids) != expected_count:
         raise ValueError(
-            'Kumo RFM request identity mappings have different lengths: '
+            'KumoRFM request identity mappings have different lengths: '
             f'{expected_count} entities and {len(instance_ids)} instances.')
     if anchor_times is not None and len(anchor_times) != expected_count:
         raise ValueError(
-            'Kumo RFM request identity mappings have different lengths: '
+            'KumoRFM request identity mappings have different lengths: '
             f'{expected_count} entities and {len(anchor_times)} anchor times.')
 
 
@@ -287,7 +287,7 @@ def _correlated_prediction_rows(
     forecast_steps_by_index: dict[int, set[int]] = {}
     if not is_forecast and len(response.predictions) != expected_count:
         raise ValueError(
-            'Kumo RFM prediction response count does not match the request: '
+            'KumoRFM prediction response count does not match the request: '
             f'expected {expected_count}, got {len(response.predictions)}.')
 
     rows_by_index: dict[int, list[dict[str, Any]]] = {}
@@ -295,33 +295,33 @@ def _correlated_prediction_rows(
         row_index = item.row_index
         if row_index is None:
             raise ValueError(
-                'Kumo RFM prediction response is missing row_index.')
+                'KumoRFM prediction response is missing row_index.')
         if row_index < 0 or row_index >= expected_count:
             raise ValueError(
-                'Kumo RFM prediction response row_index is out of range: '
+                'KumoRFM prediction response row_index is out of range: '
                 f'{row_index}.')
         if is_forecast:
             if item.forecast_step is None:
                 raise ValueError(
-                    'Kumo RFM forecasting response is missing forecast_step.')
+                    'KumoRFM forecasting response is missing forecast_step.')
             if item.forecast_step <= 0:
                 raise ValueError(
-                    'Kumo RFM forecasting response forecast_step must be positive.')
+                    'KumoRFM forecasting response forecast_step must be positive.')
             forecast_steps = forecast_steps_by_index.setdefault(row_index, set())
             if item.forecast_step in forecast_steps:
                 raise ValueError(
-                    'Kumo RFM forecasting response contains duplicate '
+                    'KumoRFM forecasting response contains duplicate '
                     f'forecast_step {item.forecast_step} for row_index {row_index}.')
             forecast_steps.add(item.forecast_step)
         elif row_index in rows_by_index:
             raise ValueError(
-                'Kumo RFM prediction response contains duplicate row_index: '
+                'KumoRFM prediction response contains duplicate row_index: '
                 f'{row_index}.')
 
         expected_id = str(instances[row_index])
         if item.id != expected_id:
             raise ValueError(
-                'Kumo RFM prediction response id does not match request '
+                'KumoRFM prediction response id does not match request '
                 f'instance_id at row_index {row_index}: expected '
                 f'{expected_id!r}, got {item.id!r}.')
         rows = _prediction_item_rows_for_response(
@@ -336,7 +336,7 @@ def _correlated_prediction_rows(
                if index not in rows_by_index]
     if missing:
         raise ValueError(
-            'Kumo RFM prediction response is missing row_index values: '
+            'KumoRFM prediction response is missing row_index values: '
             f'{missing}.')
 
     return [row for index in range(expected_count)

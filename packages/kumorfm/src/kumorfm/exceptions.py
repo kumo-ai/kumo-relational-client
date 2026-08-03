@@ -43,7 +43,7 @@ class InvalidResponseError(ValueError):
 
 
 class NimFailureError(RuntimeError):
-    r"""A failed Kumo RFM NIM prediction, classified and ready to re-wrap.
+    r"""A failed KumoRFM NIM prediction, classified and ready to re-wrap.
 
     Subclasses :class:`RuntimeError` so existing callers keep working, and
     carries the structured facts a caller (or the ``nvidia-sdfm`` adapter) needs

@@ -121,7 +121,7 @@ filterwarnings=[
 ]
 markers = [
     "integration: integration tests",
-    "live_nim: opt-in live Kumo RFM NIM tests using RFM_NIM_BASE_URL",
+    "live_nim: opt-in live KumoRFM NIM tests using RFM_NIM_BASE_URL",
     "live_nim_smoke: fast public SDK and NIM boundary validation",
     "live_nim_full: extended task, validation, recovery, and session coverage",
 ]

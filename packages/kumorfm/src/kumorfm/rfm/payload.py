@@ -7,7 +7,7 @@ import math
 from dataclasses import dataclass
 from decimal import Decimal
 from numbers import Real
-from typing import Any
+from typing import Any, Iterator
 
 import numpy as np
 import pandas as pd
@@ -130,7 +130,7 @@ def validate_payload_table_rows(
 ) -> None:
     r"""Validate instance-table row limits in serialized requests.
 
-    The Kumo RFM NIM row-caps only context/predict instance tables. Related
+    The KumoRFM NIM row-caps only context/predict instance tables. Related
     tables are bounded by the overall payload-size limit instead.
     """
     for section_name in ('context', 'predict'):
@@ -141,6 +141,83 @@ def validate_payload_table_rows(
             raise ValueError(
                 f"Request batch {batch_index} table '{path}' contains "
                 f"{num_rows:,} rows, exceeding the {limit:,}-row limit")
+
+
+def _payload_tables_with_names(
+    payload: dict[str, Any],
+) -> Iterator[tuple[str, dict[str, Any]]]:
+    r"""Yield ``(table_name, table)`` for every serialized table in a request.
+
+    Related tables are keyed by the name the caller gave them; the entity rows
+    travel as ``instance_table``, which is resolved back to the entity table so
+    every name reported is one the caller can look up on their graph.
+    """
+    task = payload.get('task')
+    entity_names = task.get('entity_table_names') if isinstance(task,
+                                                               dict) else None
+    instance_name = (entity_names[0] if isinstance(entity_names, list)
+                     and entity_names else 'instance_table')
+    for section_name in ('context', 'predict'):
+        section = payload.get(section_name)
+        if not isinstance(section, dict):
+            continue
+        instance = section.get('instance_table')
+        if isinstance(instance, dict):
+            yield str(instance_name), instance
+        related = section.get('related_tables')
+        if isinstance(related, dict):
+            for table_name, table in related.items():
+                if isinstance(table, dict):
+                    yield table_name, table
+
+
+def _string_values(cell: Any) -> tuple[str, ...]:
+    r"""The string values a serialized cell contributes to a column's
+    cardinality.
+
+    A text or multicategorical cell travels as a list of tokens rather than a
+    bare string, and the NIM counts those tokens too, so both shapes have to be
+    unwrapped to arrive at the count it reports.
+    """
+    if isinstance(cell, str):
+        return (cell, )
+    if isinstance(cell, (list, tuple)):
+        return tuple(value for value in cell if isinstance(value, str))
+    return ()
+
+
+def high_cardinality_columns(
+    payload: dict[str, Any],
+    limit: int,
+) -> list[tuple[str, str, int]]:
+    r"""Return ``(table, column, cardinality)`` for string columns holding more
+    than ``limit`` distinct values, most offending first.
+
+    Mirrors the NIM's own cardinality guard, which counts string cells only, so
+    a rejection the server reports as a bare number can be traced back to the
+    columns that caused it. The same table appears in both the context and the
+    predict section, so counts are reduced to the larger of the two.
+    """
+    counts: dict[tuple[str, str], int] = {}
+    for table_name, table in _payload_tables_with_names(payload):
+        columns = table.get('columns')
+        rows = table.get('rows')
+        if not isinstance(columns, list) or not isinstance(rows, list):
+            continue
+        for index, column in enumerate(columns):
+            distinct: set[str] = set()
+            for row in rows:
+                if not isinstance(row, list) or index >= len(row):
+                    continue
+                distinct.update(_string_values(row[index]))
+            if len(distinct) > limit:
+                key = (table_name, str(column))
+                counts[key] = max(counts.get(key, 0), len(distinct))
+    return sorted(
+        ((table, column, count) for (table, column), count in counts.items()),
+        key=lambda entry: entry[2],
+        reverse=True,
+    )
 
 
 def context_size_stats(context: Context) -> str:

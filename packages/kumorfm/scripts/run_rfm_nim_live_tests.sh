@@ -10,13 +10,13 @@ REBUILD_ENV=0
 
 usage() {
   cat <<'USAGE'
-Run URL-driven Kumo RFM NIM live validation.
+Run URL-driven KumoRFM NIM live validation.
 
 Usage:
   scripts/run_rfm_nim_live_tests.sh --url <base-url> [--full] [pytest args...]
 
 Options:
-  --url URL       Kumo RFM NIM service root. RFM_NIM_BASE_URL is also accepted.
+  --url URL       KumoRFM NIM service root. RFM_NIM_BASE_URL is also accepted.
   --full          Run smoke and extended live validation. Default: smoke only.
   --rebuild-env   Recreate the script-owned virtualenv before running.
   -h, --help      Show this help.

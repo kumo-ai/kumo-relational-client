@@ -3,7 +3,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Demo the Kumo RFM SDK against a local Universal TFM NIM.
+"""Demo the KumoRFM SDK against a local Universal TFM NIM.
 
 This example intentionally does not hand-build the Universal TFM prediction
 payload. The user-facing prediction flow is:
@@ -163,7 +163,7 @@ def _truncate(text: str, max_chars: int) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Demo the Kumo RFM SDK against a Universal TFM NIM.',
+        description='Demo the KumoRFM SDK against a Universal TFM NIM.',
     )
     parser.add_argument(
         '--base-url',

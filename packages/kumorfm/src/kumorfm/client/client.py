@@ -159,7 +159,7 @@ class KumoClient:
             raise ValueError(
                 f"Endpoint {self._url!r} did not advertise the 'kumo-rfm' "
                 "model at '/v1/models'. Point the SDK at a Universal TFM NIM "
-                "serving Kumo RFM.")
+                "serving KumoRFM.")
 
     def _probe(self, path: str) -> requests.Response:
         try:

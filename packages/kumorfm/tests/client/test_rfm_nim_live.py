@@ -51,7 +51,7 @@ pytestmark = [
     pytest.mark.live_nim,
     pytest.mark.skipif(
         not os.environ.get(_ENV_VAR),
-        reason=f'set {_ENV_VAR} to run live Kumo RFM NIM tests',
+        reason=f'set {_ENV_VAR} to run live KumoRFM NIM tests',
     ),
 ]
 
