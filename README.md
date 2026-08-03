@@ -147,5 +147,21 @@ and both re-pin the context transparently if a session expires.
 
 This project is released under the [Apache License 2.0](./LICENSE); third-party
 components are listed in [`NOTICE`](./NOTICE). External contributions are
-welcome under the Developer Certificate of Origin — see
+welcome under the Developer Certificate of Origin, see
 [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+### Licensing
+
+Each package under `packages/` carries its own `LICENSE` file so that its
+`pyproject.toml` can reference it via `license-files`. Those copies are the same
+Apache-2.0 terms as the root [`LICENSE`](./LICENSE); they are not separate or
+additional terms.
+
+The one third-party exception is `mermaid.js`, which is vendored into this
+repository as source at
+`packages/kumorfm/src/kumorfm/rfm/assets/mermaid.min.js` for offline graph
+visualization. It is MIT-licensed and is itself a bundle: the components
+embedded inside it, including DOMPurify (Apache-2.0 and Mozilla Public License
+2.0), are enumerated with their copyrights in the third-party section at the end
+of the root [`LICENSE`](./LICENSE). Every other dependency is resolved by the
+package manager at install time rather than shipped here.

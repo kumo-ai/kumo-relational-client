@@ -15,7 +15,11 @@ This product includes the following third-party components:
   dependency used to compile the kumorfm native extension (kumolib).
 - mermaid.js (MIT, https://github.com/mermaid-js/mermaid): bundled at
   packages/kumorfm/src/kumorfm/rfm/assets/mermaid.min.js for offline graph
-  visualization; see the accompanying MERMAID_LICENSE file.
+  visualization; see the accompanying MERMAID_LICENSE file. That file is itself
+  a bundle, and the components embedded inside it, including DOMPurify
+  (Apache-2.0 and Mozilla Public License 2.0), js-yaml, Lodash and Cytoscape,
+  are enumerated with their copyrights and license texts in the third-party
+  section at the end of the LICENSE file.
 
 All other third-party dependencies are declared in each package's
 pyproject.toml / setup.py and are installed from PyPI under their respective
