@@ -220,8 +220,39 @@ def _read_local(
             "local connector requires either 'data' or 'path'",
             code='INVALID_CONNECTOR_ARGS',
         )
+    path = _as_path_str('local', path)
     _require_local_path(path)
     return _read_file(path, format=format)
+
+
+def _as_path_str(backend: str, path: Any) -> str:
+    r"""Coerce a filesystem path argument to :class:`str`.
+
+    A :class:`pathlib.Path` is the idiomatic way to name a file, and the
+    ``sqlite`` and ``duckdb`` connectors already accept one. Everything the
+    file readers do to a path first -- parsing its scheme, testing its prefix,
+    taking its suffix -- is a string operation, so an un-coerced ``Path``
+    raises :exc:`AttributeError` from inside ``urllib``, which is not a
+    :class:`ConnectorError` and so escapes the error contract the public
+    boundary promises. Coercing once, before any of those checks, both keeps
+    that contract and makes the valid input work.
+
+    Args:
+        backend: The connector name, for the error message.
+        path: The caller-supplied path.
+    """
+    if isinstance(path, bytes):
+        return path.decode()
+    try:
+        coerced = os.fspath(path)
+    except TypeError as error:
+        raise ConnectorError(
+            f'{backend} connector requires a filesystem path as a string or '
+            f'os.PathLike, got {type(path).__name__}',
+            code='INVALID_CONNECTOR_ARGS',
+            details={'path': repr(path)},
+        ) from error
+    return coerced.decode() if isinstance(coerced, bytes) else coerced
 
 
 def _require_local_path(path: str) -> None:
@@ -272,6 +303,7 @@ def _read_s3(
             "s3 connector requires 'path' (an s3:// object URI)",
             code='INVALID_CONNECTOR_ARGS',
         )
+    path = _as_path_str('s3', path)
     if not path.startswith('s3://'):
         raise ConnectorError(
             f's3 connector requires an s3:// URI, got {path!r}',

@@ -5,6 +5,7 @@
 import warnings
 from abc import abstractmethod
 from collections import defaultdict
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Literal
 
 import numpy as np
@@ -79,6 +80,73 @@ class SQLSampler(Sampler):
                     column_proj_dict[column.name] = ident
             self._table_column_ref_dict[table.name] = column_ref_dict
             self._table_column_proj_dict[table.name] = column_proj_dict
+
+    def _ordered_columns(
+        self,
+        table_name: str,
+        columns: Iterable[str],
+    ) -> list[str]:
+        r"""Orders a set of column names by their position in the table
+        schema.
+
+        Callers pass ``columns`` as a :class:`set`, whose iteration order
+        depends on the per-process string hash seed. Projecting a ``SELECT``
+        straight from that set makes the column order of every sampled frame
+        -- and therefore the serialised request and the prediction derived
+        from it -- differ between interpreters, which defeats ``random_seed``.
+        Ordering by schema position instead is stable across processes and
+        matches the column order the in-memory backend produces from a
+        dataframe. Names absent from the schema sort last, by name, so an
+        unexpected column can never reintroduce the instability.
+
+        Args:
+            table_name: The table whose schema defines the order.
+            columns: The column names to order.
+        """
+        order = {
+            column: position
+            for position, column in enumerate(
+                self.table_column_proj_dict[table_name])
+        }
+        return sorted(
+            columns,
+            key=lambda column: (order.get(column, len(order)), column),
+        )
+
+    def _neighbor_order_by(
+        self,
+        table_name: str,
+        time_ref: str | None,
+        key_ref: str,
+    ) -> str:
+        r"""Builds the ``ORDER BY`` that picks which neighbours to keep.
+
+        ``_by_fkey`` keeps the first ``num_neighbors`` rows of each partition,
+        so the ordering decides which rows reach the model. Ordering on the
+        time column alone leaves repeated timestamps -- common in fact tables
+        recorded at day granularity -- to be broken arbitrarily by the engine,
+        which changes the sampled rows between runs of an otherwise identical
+        request. Appending the primary key makes the choice total and stable.
+
+        Ordering on ``key_ref`` alone cannot serve as that tie-break: it is the
+        foreign key the partition is keyed by, so it holds one value per
+        partition. It is kept only as the last resort for a keyless table,
+        where no stable ordering is available.
+
+        Args:
+            table_name: The table being sampled from.
+            time_ref: The reference to its time column, if it has one.
+            key_ref: The reference to the foreign key being traversed.
+        """
+        terms = [] if time_ref is None else [f'{time_ref} DESC']
+
+        primary_key = self.primary_key_dict.get(table_name)
+        if primary_key is not None:
+            terms.append(self.table_column_ref_dict[table_name][primary_key])
+        elif not terms:
+            terms.append(key_ref)
+
+        return ', '.join(terms)
 
     def _warn_random_seed_unsupported(self, random_seed: int | None) -> None:
         r"""Warns once that this backend cannot draw a reproducible random

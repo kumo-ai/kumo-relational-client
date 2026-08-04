@@ -17,7 +17,7 @@ from kumorfm.rfm.backend.databricks.table import BACKTICK
 from kumorfm.rfm.base import DataBackend, SQLSampler, Table
 from kumorfm.rfm.base.utils import Timestamp
 from kumorfm.rfm.pquery import PQueryPandasExecutor
-from kumorfm.utils import ProgressLogger, quote_ident
+from kumorfm.utils import ProgressLogger
 
 if TYPE_CHECKING:
     from kumorfm.rfm import Graph
@@ -169,12 +169,11 @@ class DatabricksSampler(SQLSampler):
         table_names: list[str],
     ) -> dict[str, tuple[pd.Timestamp, pd.Timestamp]]:
         selects: list[str] = []
-        for table_name in table_names:
+        for index, table_name in enumerate(table_names):
             column = self.time_column_dict[table_name]
             column_ref = self.table_column_ref_dict[table_name][column]
-            ident = quote_ident(table_name, char="'")
             select = (f"SELECT\n"
-                      f"  {ident} as table_name,\n"
+                      f"  {index} as table_index,\n"
                       f"  MIN({column_ref}) as min_date,\n"
                       f"  MAX({column_ref}) as max_date\n"
                       f"FROM {self.source_name_dict[table_name]}")
@@ -184,8 +183,8 @@ class DatabricksSampler(SQLSampler):
         out_dict: dict[str, tuple[pd.Timestamp, pd.Timestamp]] = {}
         with self._connection.cursor() as cursor:
             cursor.execute(sql)
-            for table_name, _min, _max in cursor.fetchall():
-                out_dict[table_name] = (
+            for index, _min, _max in cursor.fetchall():
+                out_dict[table_names[int(index)]] = (
                     pd.Timestamp.max if _min is None else Timestamp(_min),
                     pd.Timestamp.min if _max is None else Timestamp(_max),
                 )
@@ -367,7 +366,7 @@ class DatabricksSampler(SQLSampler):
         table = table.remove_column(batch_index)
 
         return Table._sanitize(
-            df=table.to_pandas(),
+            df=table.to_pandas(types_mapper=pd.ArrowDtype),
             dtype_dict=self.table_dtype_dict[table_name],
             stype_dict=self.table_stype_dict[table_name],
         ), batch
@@ -450,11 +449,10 @@ class DatabricksSampler(SQLSampler):
                     f"  AND {time_ref} > '{start_time.min()}'\n")
         sql += ("QUALIFY ROW_NUMBER() OVER (\n"
                 "  PARTITION BY TMP.__KUMO_BATCH__\n")
-        if time_column is not None:
-            time_ref = self.table_column_ref_dict[table_name][time_column]
-            sql += f"  ORDER BY {time_ref} DESC\n"
-        else:
-            sql += f"  ORDER BY {key_ref}\n"
+        time_ref = (None if time_column is None else
+                    self.table_column_ref_dict[table_name][time_column])
+        order_by = self._neighbor_order_by(table_name, time_ref, key_ref)
+        sql += f"  ORDER BY {order_by}\n"
         sql += f") <= {num_neighbors}"
 
         table = self._flatten(sql, rows)
@@ -464,7 +462,7 @@ class DatabricksSampler(SQLSampler):
         table = table.remove_column(batch_index)
 
         return Table._sanitize(
-            df=table.to_pandas(),
+            df=table.to_pandas(types_mapper=pd.ArrowDtype),
             dtype_dict=self.table_dtype_dict[table_name],
             stype_dict=self.table_stype_dict[table_name],
         ), batch

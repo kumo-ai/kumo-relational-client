@@ -51,12 +51,12 @@ class _FakeEngineModel:
 def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
     captured = {}
     monkeypatch.setattr(
-        rfm_engine, 'init',
+        rfm_engine, 'init_client',
         lambda **kwargs: captured.update(init=kwargs),
     )
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             captured['graph'] = graph
 
         def predict(self, query, **kwargs):
@@ -87,13 +87,13 @@ def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
     captured = {}
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(rfm_engine, 'init',
+    monkeypatch.setattr(rfm_engine, 'init_client',
                         lambda **kwargs: captured.update(kwargs))
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
@@ -109,14 +109,14 @@ def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
     captured = {}
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             captured.update(kwargs)
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     KumoRFMAdapter().predict(client, KumoRFMRequest(
@@ -130,7 +130,7 @@ def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
 @requires_engine
 def test_predict_rejects_reserved_option_keys(monkeypatch, client):
     called = {}
-    monkeypatch.setattr(rfm_engine, 'init',
+    monkeypatch.setattr(rfm_engine, 'init_client',
                         lambda **kwargs: called.setdefault('init', True))
     with pytest.raises(SdfmError) as excinfo:
         KumoRFMAdapter().predict(client, KumoRFMRequest(
@@ -142,13 +142,13 @@ def test_predict_rejects_reserved_option_keys(monkeypatch, client):
 @requires_engine
 def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             return object()
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     with pytest.raises(TypeError):
@@ -159,11 +159,11 @@ def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
 @requires_engine
 def test_adapter_authorizes_engine_init(monkeypatch, client):
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init',
+    monkeypatch.setattr(rfm_engine, 'init_client',
                         lambda **kwargs: captured.update(kwargs))
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -268,10 +268,10 @@ def test_predict_explain_field_returns_explanation(monkeypatch, client):
     from kumorfm.rfm.rfm import Explanation
 
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -299,10 +299,10 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
     from kumorfm.rfm.rfm import Explanation
 
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -325,10 +325,10 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
 
 @requires_engine
 def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -343,10 +343,10 @@ def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
 
 @requires_engine
 def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -366,7 +366,7 @@ def test_capabilities_advertise_explanation():
 @requires_engine
 @pytest.mark.parametrize('field_value', [True, {}, {'skip_summary': True}])
 def test_predict_rejects_explain_specified_twice(monkeypatch, client, field_value):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as err:
@@ -379,7 +379,7 @@ def test_predict_rejects_explain_specified_twice(monkeypatch, client, field_valu
 @requires_engine
 @pytest.mark.parametrize('bad', [0, '', 'yes', 1.0])
 def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as err:
@@ -395,10 +395,10 @@ def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
     from kumorfm.rfm.rfm import Explanation
     from nvidia_sdfm import SDFMClient
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -427,11 +427,11 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
     as INVALID_REQUEST (the driver's predict accepts bool|ExplainConfig|dict)."""
     from kumorfm.rfm.rfm import ExplainConfig, Explanation
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     captured = {}
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
@@ -453,10 +453,10 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
 @requires_engine
 def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
     calls = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def batch_mode(self, batch_size, num_retries=1):
@@ -479,10 +479,10 @@ def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
 @requires_engine
 def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
     calls = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def batch_mode(self, *args, **kwargs):
@@ -501,7 +501,7 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
 
 @requires_engine
 def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as err:
@@ -512,13 +512,13 @@ def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
 
 def _failing_engine(monkeypatch, error: BaseException) -> None:
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             raise error
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
 
@@ -623,10 +623,10 @@ def test_adapter_sdfm_error_is_not_rewrapped(monkeypatch, client):
 def test_num_retries_applies_without_batch_size(monkeypatch, client):
     r"""rfm-num-retries-silent-noop.md"""
     calls = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def retry(self, num_retries=1):
@@ -647,10 +647,10 @@ def test_num_retries_applies_without_batch_size(monkeypatch, client):
 def test_zero_num_retries_enters_no_context(monkeypatch, client):
     r"""rfm-num-retries-silent-noop.md"""
     calls = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def retry(self, num_retries=1):
@@ -670,7 +670,7 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
 @requires_engine
 def test_adapter_rejects_negative_num_retries(monkeypatch, client):
     r"""rfm-num-retries-silent-noop.md: rejected on both paths, not just batch."""
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as excinfo:
@@ -682,7 +682,7 @@ def test_adapter_rejects_negative_num_retries(monkeypatch, client):
 @requires_engine
 def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeTaskTable:
         ENTITY_TIME = '__entity_time__'
@@ -691,7 +691,7 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
             captured['task_table'] = kwargs
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             captured['graph'] = graph
 
         def predict_task(self, task, **kwargs):
@@ -730,7 +730,7 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
 def test_predict_task_uses_anchor_timestamp_from_predict_only(
         monkeypatch, client):
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeTaskTable:
         ENTITY_TIME = '__entity_time__'
@@ -739,7 +739,7 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
             captured['task_table'] = kwargs
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict_task(self, task, **kwargs):
@@ -763,7 +763,7 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
 @requires_engine
 def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeTaskTable:
         ENTITY_TIME = '__entity_time__'
@@ -772,7 +772,7 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
             captured['task_table'] = kwargs
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict_task(self, task, **kwargs):
@@ -796,7 +796,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
     from kumorfm.rfm.rfm import Explanation
 
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     class FakeTaskTable:
         ENTITY_TIME = '__entity_time__'
@@ -809,7 +809,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
     explanation = Explanation.__new__(Explanation)
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph):
+        def __init__(self, graph, **kwargs):
             pass
 
         def predict_task(self, task, **kwargs):
@@ -833,7 +833,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
 @requires_engine
 def test_predict_task_rejects_reserved_option_keys(monkeypatch, client):
     called = {}
-    monkeypatch.setattr(rfm_engine, 'init',
+    monkeypatch.setattr(rfm_engine, 'init_client',
                         lambda **kwargs: called.setdefault('init', True))
 
     with pytest.raises(SdfmError) as err:
@@ -855,7 +855,7 @@ def test_capabilities_list_both_request_types():
 @requires_engine
 def test_predict_task_rejects_unknown_task_type(monkeypatch, client):
     called = {}
-    monkeypatch.setattr(rfm_engine, 'init',
+    monkeypatch.setattr(rfm_engine, 'init_client',
                         lambda **kwargs: called.setdefault('init', True))
 
     with pytest.raises(SdfmError) as err:
@@ -872,7 +872,7 @@ def test_predict_task_rejects_unknown_task_type(monkeypatch, client):
 @requires_engine
 def test_predict_task_rejects_entity_table_absent_from_graph(
         monkeypatch, client):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(SdfmError) as err:
         KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
@@ -886,7 +886,7 @@ def test_predict_task_rejects_entity_table_absent_from_graph(
 
 @requires_engine
 def test_predict_task_rejects_missing_target_column(monkeypatch, client):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(SdfmError) as err:
         KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
@@ -902,7 +902,7 @@ def test_predict_task_rejects_missing_target_column(monkeypatch, client):
 @requires_engine
 def test_predict_task_rejects_missing_entity_column_in_predict(
         monkeypatch, client):
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(SdfmError) as err:
         KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
@@ -968,14 +968,14 @@ def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
     captured = {}
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph, verbose=True):
+        def __init__(self, graph, verbose=True, **kwargs):
             captured['init_verbose'] = verbose
 
         def predict(self, query, **kwargs):
             captured['predict_verbose'] = kwargs.get('verbose')
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     KumoRFMAdapter().predict(client, KumoRFMRequest(
@@ -990,14 +990,14 @@ def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
     captured = {}
 
     class FakeKumoRFM(_FakeEngineModel):
-        def __init__(self, graph, verbose=True):
+        def __init__(self, graph, verbose=True, **kwargs):
             captured['init_verbose'] = verbose
 
         def predict(self, query, **kwargs):
             captured['predict_verbose'] = 'verbose' in kwargs
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     KumoRFMAdapter().predict(client, KumoRFMRequest(graph='g',
@@ -1005,3 +1005,71 @@ def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
 
     assert captured['init_verbose'] is True
     assert captured['predict_verbose'] is False
+
+
+@requires_engine
+def test_concurrent_clients_predict_against_their_own_endpoint(
+        monkeypatch) -> None:
+    r"""Regression test for `quality-clients-share-process-global-engine-state`.
+
+    The engine's endpoint and credential are process-global, and the adapter
+    used to configure them and then let ``KumoRFM`` read them back lazily --
+    at the first HTTP call, after graph sampling. A second client configuring
+    a different endpoint inside that window silently redirected the first
+    client's prediction, uploading one tenant's relational context to another
+    tenant's NIM under that tenant's API key.
+
+    The recorder resolves its endpoint exactly the way ``_api_client`` does:
+    the client bound at construction if there is one, the process global
+    otherwise. The barrier only forces an interleaving that is otherwise
+    timing-dependent.
+    """
+    import threading
+
+    import kumorfm
+    from kumorfm.client.client import KumoClient
+
+    from nvidia_sdfm import SDFMClient
+
+    monkeypatch.setattr(KumoClient, 'authenticate', lambda self: None)
+
+    barrier = threading.Barrier(2)
+    seen: dict[str, tuple[str, str]] = {}
+
+    class RecordingKumoRFM(_FakeEngineModel):
+        def __init__(self, graph, **kwargs):
+            barrier.wait()
+            bound = kwargs.get('_client')
+            self._resolved = (bound if bound is not None
+                              else kumorfm.global_state.client)
+
+        def predict(self, query, **kwargs):
+            seen[threading.current_thread().name] = (self._resolved._url,
+                                                     self._resolved._api_key)
+            return pd.DataFrame({'entity': []})
+
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', RecordingKumoRFM)
+
+    clients = {
+        'A': SDFMClient(url='https://tenant-a.example', api_key='key-A'),
+        'B': SDFMClient(url='https://tenant-b.example', api_key='key-B'),
+    }
+
+    def run(name: str) -> None:
+        clients[name].kumorfm(_FakeGraph('users')).predict(
+            'PREDICT COUNT(o.*, 0, 30) FOR u.id=1', indices=[1])
+
+    try:
+        threads = [threading.Thread(target=run, args=(name, ), name=name)
+                   for name in ('A', 'B')]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+    finally:
+        rfm_engine.global_state.reset()
+
+    assert seen == {
+        'A': ('https://tenant-a.example', 'key-A'),
+        'B': ('https://tenant-b.example', 'key-B'),
+    }

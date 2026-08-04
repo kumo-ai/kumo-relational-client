@@ -7,7 +7,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from sdfm_connectors.sql import ConnectorError, require_driver
+from sdfm_connectors.sql import (
+    ConnectorError,
+    require_driver,
+    require_existing_database,
+)
 
 duckdb = require_driver('duckdb', 'duckdb', 'duckdb')
 
@@ -20,7 +24,13 @@ def connect(
     database: str | Path | None = None,
     **kwargs: Any,
 ) -> Connection:
-    r"""Open a DuckDB database. ``database`` is an alias for ``uri``."""
+    r"""Open a DuckDB database. ``database`` is an alias for ``uri``.
+
+    DuckDB opens a missing path in create-if-missing mode, so a mistyped path
+    is reported as ``NOT_FOUND`` before the driver can write an empty database
+    into the caller's working tree — the same contract the sibling ``sqlite``
+    connector enforces for the identical mistake.
+    """
     if uri is not None and database is not None:
         raise ConnectorError(
             "duckdb connector accepts exactly one of 'database' or 'uri', "
@@ -28,4 +38,8 @@ def connect(
             code='INVALID_CONNECTOR_ARGS',
         )
     uri = uri if uri is not None else database
-    return duckdb.connect(str(uri) if uri is not None else ':memory:', **kwargs)
+    if uri is None:
+        return duckdb.connect(':memory:', **kwargs)
+    uri = str(uri)
+    require_existing_database('duckdb', uri)
+    return duckdb.connect(uri, **kwargs)

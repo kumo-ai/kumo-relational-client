@@ -64,11 +64,18 @@ def _qualifier_pattern(table_name: str) -> re.Pattern[str]:
 
 
 _UNSAFE_EXPR_TOKENS = (';', '--', '/*', '*/')
-_QUOTED_EXPR_TEXT = re.compile(
-    r"""'(?:''|[^'])*'|"(?:""|[^"])*"|`(?:``|[^`])*`""")
+_EXPR_QUOTE_DELIMITERS = ('$$', "'", '"', '`')
+_QUOTED_EXPR_TEXT = re.compile('|'.join([
+    r'\$\$[\s\S]*?\$\$',
+    r"'(?:''|\\[\s\S]|[^'\\])*'",
+    r'"(?:""|\\[\s\S]|[^"\\])*"',
+    r'`(?:``|[^`])*`',
+]))
 _UNSAFE_EXPR_KEYWORDS = re.compile(
-    r'\b(?:select|insert|update|delete|merge|create|alter|drop|truncate'
-    r'|grant|revoke|execute)\b',
+    r'(?<![\w.])'
+    r'(?:(?:select|update|delete|merge|create|alter|drop|grant|revoke'
+    r'|execute)\b'
+    r'|(?:insert|truncate)\b(?!\s*\())',
     flags=re.IGNORECASE,
 )
 
@@ -90,6 +97,26 @@ def _unsafe_expr_reason(expr: str) -> str | None:
     expression: quoting rules vary by dialect, so a separator or comment must
     not become invisible just because this function believes it is quoted.
 
+    Deciding what counts as quoted is itself dialect-specific, and getting it
+    wrong hands an attacker the whole guard. Snowflake also has ``$$...$$``,
+    and both Snowflake and Databricks honour backslash escapes inside a
+    literal, so a payload that writes its quotes as ``$$`` or ``\'`` shifts
+    where a doubling-only reader believes the literal ends and smuggles a
+    sub-query through the gap. Both forms are therefore recognised. Anything
+    left over that still looks like a delimiter means this function's model of
+    the string boundaries disagrees with the warehouse's, so it fails closed
+    rather than scanning a string it cannot account for -- which also refuses
+    a quoted name ending in a lone backslash (invalid on Databricks, exotic on
+    Snowflake). See the ``$$``/backslash guard-bypass report under ``bugs/``.
+
+    ``INSERT`` and ``TRUNCATE`` are also ordinary Snowflake scalar functions,
+    and as statements are always followed by ``INTO``/``TABLE`` rather than by
+    ``(``, so a call cannot be one. A keyword directly behind a ``.`` is the
+    trailing part of a qualified name (``ORDERS.MERGE``), which likewise
+    cannot begin a statement -- unlike ``SELECT``, which may legally be
+    followed by ``(``, so it stays refused either way. See
+    ``bugs/graph-view-expr-guard-rejects-scalar-functions.md``.
+
     Args:
         expr: The expression as written in the view definition.
     """
@@ -97,6 +124,10 @@ def _unsafe_expr_reason(expr: str) -> str | None:
         if token in expr:
             return f"it contains {token!r}"
     unquoted = _QUOTED_EXPR_TEXT.sub(' ', expr)
+    for delimiter in _EXPR_QUOTE_DELIMITERS:
+        if delimiter in unquoted:
+            return (f"it leaves {delimiter!r} unpaired, so which part of it "
+                    f"is quoted text cannot be established")
     if match := _UNSAFE_EXPR_KEYWORDS.search(unquoted):
         return f"it contains the SQL keyword '{match.group()}'"
     return None
@@ -488,6 +519,7 @@ class Graph:
                 cursor.execute("SELECT table_name FROM duckdb_tables() "
                                "WHERE NOT temporary AND NOT internal")
                 tables = [row[0] for row in cursor.fetchall()]
+            _require_discovered_tables(tables, 'the DuckDB database')
 
         table_kwargs: list[dict[str, Any]] = []
         for table in tables:
@@ -592,7 +624,12 @@ class Graph:
                 graph.
             verbose: Whether to print verbose output.
         """
-        from kumorfm.rfm.backend.snow import Connection, SnowTable, connect
+        from kumorfm.rfm.backend.snow import (
+            Connection,
+            SnowTable,
+            connect,
+            paramstyle,
+        )
 
         internal_connection = False
         if not isinstance(connection, Connection):
@@ -616,12 +653,13 @@ class Graph:
                     raise ValueError("No current 'schema' set. Please specify "
                                      "the Snowflake schema manually")
 
-                with connection.cursor() as cursor:
-                    cursor.execute(f"""
+                with paramstyle(connection), connection.cursor() as cursor:
+                    cursor.execute(
+                        f"""
                     SELECT TABLE_NAME
                     FROM {quote_ident(database)}.INFORMATION_SCHEMA.TABLES
-                    WHERE TABLE_SCHEMA = {quote_ident(schema, char="'")}
-                    """)
+                    WHERE TABLE_SCHEMA = ?
+                    """, (schema, ))
                     tables = [row[0] for row in cursor.fetchall()]
                 _require_discovered_tables(
                     tables, f"schema '{schema}' of database '{database}'")
@@ -757,12 +795,13 @@ class Graph:
 
                 quoted_catalog = quote_ident(catalog, char='`')
                 with connection.cursor() as cursor:
-                    cursor.execute(f"""
+                    cursor.execute(
+                        f"""
                     SELECT table_name
                     FROM {quoted_catalog}.information_schema.tables
-                    WHERE table_schema = {quote_ident(schema, char="'")}
+                    WHERE table_schema = ?
                       AND table_type != 'METRIC_VIEW'
-                    """)
+                    """, parameters=[schema])
                     tables = [row[0] for row in cursor.fetchall()]
                 _require_discovered_tables(
                     tables, f"schema '{schema}' of catalog '{catalog}'")
@@ -1067,6 +1106,7 @@ class Graph:
             ):
                 table.time_column = time_column
 
+        msgs.extend(graph._drop_invalid_edges())
         graph.validate()
 
         if verbose:
@@ -1149,7 +1189,12 @@ class Graph:
         """
         import yaml
 
-        from kumorfm.rfm.backend.snow import Connection, SnowTable, connect
+        from kumorfm.rfm.backend.snow import (
+            Connection,
+            SnowTable,
+            connect,
+            paramstyle,
+        )
 
         internal_connection = False
         if not isinstance(connection, Connection):
@@ -1158,10 +1203,9 @@ class Graph:
         assert isinstance(connection, Connection)
 
         try:
-            with connection.cursor() as cursor:
-                name = quote_ident(semantic_view_name, char="'")
-                sql = f"SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW({name})"
-                cursor.execute(sql)
+            with paramstyle(connection), connection.cursor() as cursor:
+                sql = "SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW(?)"
+                cursor.execute(sql, (semantic_view_name, ))
                 result = cursor.fetchone()
                 assert result is not None
                 cfg = yaml.safe_load(result[0])
@@ -1293,24 +1337,32 @@ class Graph:
             right_table = relation_cfg['right_table']
             right_key = relation_cfg['relationship_columns'][0]['right_column']
 
-            if graph[right_table]._primary_key != right_key:
-                # Semantic view error - this should never be triggered:
-                msgs.append(f"Failed to add relationship '{name}' since the "
-                            f"referenced key '{right_key}' of table "
-                            f"'{right_table}' is not a primary key")
-                continue
+            added_column = False
+            try:
+                if graph[right_table]._primary_key != right_key:
+                    msgs.append(f"Failed to add relationship '{name}' since "
+                                f"the referenced key '{right_key}' of table "
+                                f"'{right_table}' is not a primary key")
+                    continue
 
-            if graph[left_table]._primary_key == left_key:
-                msgs.append(f"Failed to add relationship '{name}' since the "
-                            f"referencing key '{left_key}' of table "
-                            f"'{left_table}' is a primary key")
-                continue
+                if graph[left_table]._primary_key == left_key:
+                    msgs.append(f"Failed to add relationship '{name}' since "
+                                f"the referencing key '{left_key}' of table "
+                                f"'{left_table}' is a primary key")
+                    continue
 
-            if left_key not in graph[left_table]:
-                graph[left_table].add_column(left_key)
+                if left_key not in graph[left_table]:
+                    graph[left_table].add_column(left_key)
+                    added_column = True
 
-            graph.link(left_table, left_key, right_table)
+                graph.link(left_table, left_key, right_table)
+            except (ValueError, KeyError) as error:
+                if added_column:
+                    graph[left_table].remove_column(left_key)
+                msgs.append(f"Failed to add relationship '{name}' since its "
+                            f"keys could not be linked: {error}")
 
+        msgs.extend(graph._drop_invalid_edges())
         graph.validate()
 
         if verbose:
@@ -2051,59 +2103,87 @@ class Graph:
             raise ValueError("Found multiple table backends in the graph")
 
         for edge in self.edges:
-            src_table, fkey, dst_table = edge
-
-            # `Table.remove_column` knows nothing about the graph's edges, so
-            # dropping a linked foreign key leaves the edge behind. Caught
-            # here rather than as a `KeyError` out of the lookup below, which
-            # names neither the edge nor the fix.
-            if not self[src_table].has_column(fkey):
-                raise ValueError(f"Edge {edge} is invalid since table "
-                                 f"'{src_table}' no longer has a column "
-                                 f"'{fkey}'. Remove the link with `unlink()` "
-                                 f"before removing the column.")
-
-            src_key = self[src_table][fkey]
-            dst_key = self[dst_table].primary_key
-
-            # Check that the destination table defines a primary key:
-            if dst_key is None:
-                raise ValueError(f"Edge {edge} is invalid since table "
-                                 f"'{dst_table}' does not have a primary key. "
-                                 f"Add either a primary key or remove the "
-                                 f"link before proceeding.")
-
-            # Ensure that foreign key is not a primary key:
-            src_pkey = self[src_table].primary_key
-            if src_pkey is not None and src_pkey.name == fkey:
-                raise ValueError(f"Cannot treat the primary key of table "
-                                 f"'{src_table}' as a foreign key. Remove "
-                                 f"either the primary key or the link before "
-                                 f"proceeding.")
-
-            # Check that fkey/pkey have valid and consistent data types. Every
-            # backend populates data types from its own catalog, so this check
-            # applies to remote tables just as much as to local ones:
-            assert src_key.dtype is not None
-            src_number = src_key.dtype.is_int() or src_key.dtype.is_float()
-            src_string = src_key.dtype.is_string()
-            assert dst_key.dtype is not None
-            dst_number = dst_key.dtype.is_int() or dst_key.dtype.is_float()
-            dst_string = dst_key.dtype.is_string()
-
-            if not src_number and not src_string:
-                raise ValueError(
-                    f"{edge} is invalid as foreign key must be a number "
-                    f"or string (got '{src_key.dtype}')")
-
-            if src_number != dst_number or src_string != dst_string:
-                raise ValueError(
-                    f"{edge} is invalid as foreign key '{fkey}' and "
-                    f"primary key '{dst_key.name}' have incompatible data "
-                    f"types (got foreign key data type '{src_key.dtype}' "
-                    f"and primary key data type '{dst_key.dtype}')")
+            if (reason := self._edge_error(edge)) is not None:
+                raise ValueError(reason)
 
         return self
+
+    def _edge_error(self, edge: Edge) -> str | None:
+        r"""Returns why ``edge`` is unusable, or ``None`` if it is valid.
+
+        Split out of :meth:`validate` so that a caller converting a warehouse
+        view -- which is a best-effort, partial conversion by contract -- can
+        drop the offending relationship and report it through
+        :attr:`conversion_messages` rather than lose the whole graph to one bad
+        edge. :meth:`validate` keeps raising on the first failure.
+        """
+        src_table, fkey, dst_table = edge
+
+        # `Table.remove_column` knows nothing about the graph's edges, so
+        # dropping a linked foreign key leaves the edge behind. Caught
+        # here rather than as a `KeyError` out of the lookup below, which
+        # names neither the edge nor the fix.
+        if not self[src_table].has_column(fkey):
+            return (f"Edge {edge} is invalid since table '{src_table}' no "
+                    f"longer has a column '{fkey}'. Remove the link with "
+                    f"`unlink()` before removing the column.")
+
+        src_key = self[src_table][fkey]
+        dst_key = self[dst_table].primary_key
+
+        # Check that the destination table defines a primary key:
+        if dst_key is None:
+            return (f"Edge {edge} is invalid since table '{dst_table}' does "
+                    f"not have a primary key. Add either a primary key or "
+                    f"remove the link before proceeding.")
+
+        # Ensure that foreign key is not a primary key:
+        src_pkey = self[src_table].primary_key
+        if src_pkey is not None and src_pkey.name == fkey:
+            return (f"Cannot treat the primary key of table '{src_table}' as "
+                    f"a foreign key. Remove either the primary key or the "
+                    f"link before proceeding.")
+
+        # Check that fkey/pkey have valid and consistent data types. Every
+        # backend populates data types from its own catalog, so this check
+        # applies to remote tables just as much as to local ones:
+        assert src_key.dtype is not None
+        src_number = src_key.dtype.is_int() or src_key.dtype.is_float()
+        src_string = src_key.dtype.is_string()
+        assert dst_key.dtype is not None
+        dst_number = dst_key.dtype.is_int() or dst_key.dtype.is_float()
+        dst_string = dst_key.dtype.is_string()
+
+        if not src_number and not src_string:
+            return (f"{edge} is invalid as foreign key must be a number or "
+                    f"string (got '{src_key.dtype}')")
+
+        if src_number != dst_number or src_string != dst_string:
+            return (f"{edge} is invalid as foreign key '{fkey}' and primary "
+                    f"key '{dst_key.name}' have incompatible data types (got "
+                    f"foreign key data type '{src_key.dtype}' and primary key "
+                    f"data type '{dst_key.dtype}')")
+
+        return None
+
+    def _drop_invalid_edges(self) -> list[str]:
+        r"""Removes every edge :meth:`_edge_error` rejects, describing each.
+
+        The view constructors convert partially by contract: an element with no
+        graph equivalent is dropped and reported, not raised. A relationship
+        whose keys do not line up -- most often a foreign key and primary key
+        with incompatible data types, which the caller cannot fix in a view
+        they do not own -- belongs in that same channel, so that one bad
+        relationship costs one edge instead of every table the view declares.
+        """
+        msgs = []
+        for edge in list(self.edges):
+            if (reason := self._edge_error(edge)) is not None:
+                self.unlink(*edge)
+                msgs.append(f"Failed to add the relationship between "
+                            f"'{edge.src_table}' and '{edge.dst_table}' "
+                            f"since {reason}")
+        return msgs
 
     # Visualization ###########################################################
 

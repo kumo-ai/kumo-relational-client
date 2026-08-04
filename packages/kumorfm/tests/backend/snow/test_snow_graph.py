@@ -108,7 +108,7 @@ class _FakeCursor:
     def __exit__(self, *args: object) -> None:
         pass
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, parameters: object = None) -> None:
         if self._error is not None:
             raise self._error
 
@@ -164,6 +164,7 @@ class _FakeConnection(Connection):
     def __init__(self, error: Exception | None = None) -> None:
         self.error = error
         self.closed = False
+        self._paramstyle = 'pyformat'
 
     def cursor(self) -> _FakeCursor:  # type: ignore[override]
         return _FakeCursor(self.error)
@@ -354,3 +355,41 @@ def test_from_snowflake_semantic_view_closes_internal_connection_on_error(
             verbose=False,
         )
     assert connection.closed
+
+
+def test_semantic_view_drops_a_type_mismatched_relationship(
+        monkeypatch) -> None:
+    r"""Regression test for
+    `graph-view-conversion-aborts-on-one-bad-relationship.md`.
+
+    A production semantic view declared a relationship between a NUMBER
+    foreign key and a TEXT primary key. Detecting that is right; aborting on it
+    threw away 9 tables and 21 well-formed edges, in a view the caller does not
+    own and cannot repair. The relationship is dropped and reported instead,
+    like every other unconvertible element.
+    """
+    from kumorfm.graph import Edge
+    from kumorfm.rfm import ViewConversionWarning
+
+    datacenters = _DATA['DATACENTERS'].copy()
+    datacenters['DATACENTER_ID'] = range(len(datacenters))
+    monkeypatch.setitem(_DATA, 'DATACENTERS', datacenters)
+    monkeypatch.setitem(
+        _COLUMN_TYPES, 'DATACENTERS',
+        {**_COLUMN_TYPES['DATACENTERS'], 'DATACENTER_ID': 'NUMBER(38,0)'})
+
+    with pytest.warns(ViewConversionWarning):
+        graph = Graph.from_snowflake_semantic_view(
+            'GPU_FLEET_SV',
+            connection=_FakeConnection(),
+            verbose=False,
+        )
+
+    assert set(graph.tables) == {'DATACENTERS', 'RACKS'}
+    assert Edge('RACKS', 'DATACENTER_ID', 'DATACENTERS') not in graph.edges
+
+    dropped = [msg for msg in graph.conversion_messages
+               if 'incompatible data types' in msg]
+    assert len(dropped) == 1
+    assert "'RACKS'" in dropped[0] and "'DATACENTERS'" in dropped[0]
+    assert graph.validate() is graph

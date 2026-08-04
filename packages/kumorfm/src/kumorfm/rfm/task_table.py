@@ -11,6 +11,7 @@ from kumorfm.api.typing import Stype
 from typing_extensions import Self
 
 from kumorfm.rfm.base import Column
+from kumorfm.rfm.base.utils import to_naive_utc
 from kumorfm.rfm.infer import infer_dtype, infer_stype
 
 
@@ -212,6 +213,13 @@ class TaskTable:
             return
 
         self._column_dict[name].stype = Stype.timestamp
+        # Normalized per frame, before the two are concatenated into one anchor
+        # series: a timezone-aware column and a timezone-naive one cannot be
+        # concatenated, and `predict` hands back a timezone-aware
+        # `ANCHOR_TIMESTAMP` that callers feed straight back in here.
+        for df in (self._context_df, self._pred_df):
+            if name in df.columns:
+                df[name] = to_naive_utc(df[name])
         self._time_column = name
 
     # Metadata ################################################################

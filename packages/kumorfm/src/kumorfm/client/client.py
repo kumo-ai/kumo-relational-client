@@ -11,12 +11,18 @@ from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
+from kumorfm.exceptions import InvalidResponseError
 
 logger = logging.getLogger('kumorfm')
 
 _AUTH_STATUS_CODES = frozenset({401, 403})
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 _MAX_BODY_SNIPPET = 512
+# Mirrors ``nvidia_sdfm.core.transport``: well above any real prediction
+# response -- a full-precision float64 column for a million rows is ~25 MB of
+# JSON -- but far below what a compressed hostile body can inflate to.
+_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
+_RESPONSE_CHUNK_BYTES = 1024 * 1024
 
 
 def _validate_url(url: str, api_key: Optional[str]) -> None:
@@ -38,6 +44,70 @@ def _validate_url(url: str, api_key: Optional[str]) -> None:
         raise ValueError(
             f"refusing to send an API key over plaintext HTTP; use an "
             f"https:// URL (or a localhost endpoint), got {url!r}")
+
+
+class _Session(requests.Session):
+    r"""Mirrors ``nvidia_sdfm.core.transport._Session``.
+
+    ``requests`` strips only the standard ``Authorization`` header when a
+    redirect changes origin; a custom header set on the session is re-sent
+    verbatim. Without this the configured endpoint could hand the API key --
+    and, on a 307/308, the request body -- to any host it names, defeating
+    ``_validate_url``.
+
+    The two clients keep their own copy rather than sharing one: the only
+    package both depend on is ``sdfm-connectors``, which is a SQL-connector
+    package with no HTTP surface and no ``requests`` dependency, and
+    ``kumorfm`` cannot import ``nvidia_sdfm`` because the dependency runs the
+    other way. This is the same arrangement as ``_validate_url`` above. See
+    ``bugs/security-kumoclient-api-key-follows-cross-origin-redirect.md``.
+    """
+
+    def rebuild_auth(
+        self,
+        prepared_request: requests.PreparedRequest,
+        response: requests.Response,
+    ) -> None:
+        super().rebuild_auth(prepared_request, response)
+        previous_url = response.request.url
+        if previous_url and prepared_request.url and self.should_strip_auth(
+                previous_url, prepared_request.url):
+            prepared_request.headers.pop('X-API-Key', None)
+
+
+def _read_capped(response: requests.Response, url: str) -> requests.Response:
+    r"""Reads a streamed response body under a cap, then re-attaches it.
+
+    Mirrors ``nvidia_sdfm.core.transport._read_capped``. ``requests`` inflates
+    ``Content-Encoding: gzip`` with no ratio limit, so an unbounded read lets a
+    small compressed body expand into hundreds of megabytes of client memory
+    before anything is parsed.
+
+    The bytes are put back on the response rather than returned, because this
+    client hands the ``requests.Response`` itself to its callers, who read it
+    with ``.json()``/``.text``/``.content``. Filling ``_content`` is exactly
+    what ``Response.content`` does on first access, so a capped response is
+    indistinguishable from an eagerly read one -- including for a second pass
+    through ``iter_content``, which replays the stored bytes. See
+    ``bugs/quality-kumoclient-missing-transport-hardening.md``.
+
+    Args:
+        response: The streamed response.
+        url: The requested URL, named in the error.
+    """
+    body = bytearray()
+    try:
+        for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
+            if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
+                raise InvalidResponseError(
+                    f'Response body from {url!r} exceeds the '
+                    f'{_MAX_RESPONSE_BYTES} byte limit')
+            body.extend(chunk)
+    finally:
+        response.close()
+    response._content = bytes(body)
+    response._content_consumed = True  # type: ignore[attr-defined]
+    return response
 
 
 def _json_or_none(response: requests.Response) -> Any:
@@ -120,7 +190,7 @@ class KumoClient:
             backoff_factor=2.0,
         )
         http_adapter = HTTPAdapter(max_retries=retry_strategy)
-        session = requests.Session()
+        session = _Session()
         session.mount('http://', http_adapter)
         session.mount('https://', http_adapter)
         self._session = session
@@ -163,8 +233,7 @@ class KumoClient:
 
     def _probe(self, path: str) -> requests.Response:
         try:
-            response = self._session.get(self._url + path,
-                                         verify=self._verify_ssl, timeout=10)
+            response = self._send('GET', self._url + path, timeout=10)
             response.raise_for_status()
             return response
         except requests.RequestException as e:
@@ -183,25 +252,34 @@ class KumoClient:
             return self._delete(endpoint_str, **kwargs)
         raise ValueError(f"Unsupported HTTP method: {endpoint.method}")
 
-    def _get(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        url = self._format_endpoint_url(endpoint)
+    def _send(self, method: str, url: str,
+              **kwargs: Any) -> requests.Response:
+        r"""Issues one request and reads its body under a size cap.
+
+        Every request this client makes goes through here, so the cap cannot be
+        missed by a route that was added later. ``stream=True`` is an internal
+        detail: :func:`_read_capped` re-attaches the body, so the response
+        handed back behaves exactly like an eagerly read one.
+        """
         kwargs.setdefault('timeout', self._timeout)
-        return self._session.get(url, verify=self._verify_ssl, **kwargs)
+        response = self._session.request(method, url, verify=self._verify_ssl,
+                                         stream=True, **kwargs)
+        return _read_capped(response, url)
+
+    def _get(self, endpoint: str, **kwargs: Any) -> requests.Response:
+        return self._send('GET', self._format_endpoint_url(endpoint), **kwargs)
 
     def _post(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        url = self._format_endpoint_url(endpoint)
-        kwargs.setdefault('timeout', self._timeout)
-        return self._session.post(url, verify=self._verify_ssl, **kwargs)
+        return self._send('POST', self._format_endpoint_url(endpoint),
+                          **kwargs)
 
     def _patch(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        url = self._format_endpoint_url(endpoint)
-        kwargs.setdefault('timeout', self._timeout)
-        return self._session.patch(url, verify=self._verify_ssl, **kwargs)
+        return self._send('PATCH', self._format_endpoint_url(endpoint),
+                          **kwargs)
 
     def _delete(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        url = self._format_endpoint_url(endpoint)
-        kwargs.setdefault('timeout', self._timeout)
-        return self._session.delete(url, verify=self._verify_ssl, **kwargs)
+        return self._send('DELETE', self._format_endpoint_url(endpoint),
+                          **kwargs)
 
     def _format_endpoint_url(self, endpoint: str) -> str:
         if not endpoint.startswith("/"):

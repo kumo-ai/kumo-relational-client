@@ -162,11 +162,15 @@ class _SnowCursor:
             'ts': pa.array([], type=pa.string()),
         })
 
+    def fetchall(self) -> list:
+        return self._connection.rows
+
 
 class _SnowConnection:
     def __init__(self) -> None:
         self._paramstyle = 'pyformat'
         self.calls: list[tuple[str, Any, str]] = []
+        self.rows: list = []
 
     def cursor(self) -> _SnowCursor:
         return _SnowCursor(self)
@@ -243,3 +247,27 @@ def test_snow_random_sample_still_binds_nothing(snow_sampler: Any) -> None:
     sql, parameters, _ = snow_sampler._connection.calls[-1]
     assert 'SAMPLE ROW (10 ROWS)' in sql
     assert parameters is None
+
+
+def test_snow_min_max_probe_keeps_table_names_out_of_the_sql(
+    snow_sampler: Any,
+) -> None:
+    r"""The per-branch label used to be the graph table name in a string
+    literal. Discovery adopts whatever names the schema holds, so that name is
+    not necessarily one the caller chose, and quote-doubling does not
+    neutralise ``\'`` on Snowflake. The branch is identified by position now.
+    """
+    hostile = "users\\' UNION ALL SELECT 'pwned', NULL, NULL --"
+    for attribute in ('_time_column_dict', '_source_name_dict',
+                      '_table_column_ref_dict'):
+        mapping = getattr(snow_sampler, attribute)
+        mapping[hostile] = mapping['users']
+    snow_sampler._connection.rows = [(0, None, None)]
+
+    out = snow_sampler._get_min_max_time_dict([hostile])
+
+    sql, _, _ = snow_sampler._connection.calls[-1]
+    assert '0 as table_index' in sql
+    assert hostile not in sql
+    assert "'" not in sql
+    assert set(out) == {hostile}

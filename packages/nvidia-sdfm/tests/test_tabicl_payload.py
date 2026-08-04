@@ -461,3 +461,67 @@ def test_build_request_rejects_non_finite_values(predict_df):
         )
     assert err.value.code == 'INVALID_REQUEST'
     assert 'not JSON-representable' in str(err.value)
+
+
+def _context_frame():
+    values = np.arange(-12, 12)
+    return pd.DataFrame({
+        'a': values,
+        'b': np.arange(len(values)),
+        'y': (values > 0).astype(int),
+    })
+
+
+@pytest.mark.parametrize('predict_column', [
+    pd.Series([-4, 4], dtype=object),
+    pd.Series([None, None], dtype=object),
+])
+def test_an_object_predict_column_does_not_retype_the_context(predict_column):
+    # Regression: bugs/tabicl-widening-degrades-numeric-columns-to-string.md --
+    # the union was taken over both frames, so an ``object`` or all-null
+    # predict column re-typed the context's real ``int64`` feature as strings
+    # and TabICL answered as though it were categorical. Nothing was logged.
+    context = _context_frame()
+    predict = pd.DataFrame({'a': predict_column,
+                            'b': pd.Series([1, 2], dtype='int64')})
+    payload = build_request(context=context, predict=predict,
+                            task='classification', target='y',
+                            outputs=['prediction'])
+
+    assert payload['schema']['instance_table']['columns']['a']['dtype'] == \
+        'int64'
+    assert payload['context']['instance_table']['rows'][0][0] == -12
+
+
+def test_widening_still_promotes_a_genuine_int_float_column():
+    # The guard above must not stop a legitimate widening: a column that is
+    # `int64` in one frame and `float64` in the other still travels as float.
+    context = _context_frame()
+    predict = pd.DataFrame({'a': [1.5, 2.5], 'b': [1, 2]})
+    payload = build_request(context=context, predict=predict,
+                            task='classification', target='y',
+                            outputs=['prediction'])
+
+    assert payload['schema']['instance_table']['columns']['a']['dtype'] == \
+        'float64'
+    assert payload['context']['instance_table']['rows'][0][0] == -12.0
+
+
+def test_widening_refuses_to_round_ids_past_the_float64_mantissa():
+    # Regression: bugs/tabicl-widening-degrades-numeric-columns-to-string.md --
+    # four distinct ids past 2**53 arrived at the model as three values.
+    ids = [9007199254740993, 9007199254740995, 9007199254740997,
+           9007199254740999]
+    context = pd.DataFrame({'uid': ids, 'y': [0, 1, 0, 1]})
+    with pytest.raises(SdfmError) as err:
+        build_request(context=context, predict=pd.DataFrame({'uid': [1.5]}),
+                      task='classification', target='y',
+                      outputs=['prediction'])
+    assert err.value.code == 'INVALID_REQUEST'
+
+    payload = build_request(
+        context=context,
+        predict=pd.DataFrame({'uid': np.array(ids[:1], dtype='int64')}),
+        task='classification', target='y', outputs=['prediction'])
+    rows = payload['context']['instance_table']['rows']
+    assert [row[0] for row in rows] == [str(value) for value in ids]

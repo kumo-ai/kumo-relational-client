@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, TypeAlias
 
 from sdfm_connectors.backends import mark_owned
@@ -23,14 +24,34 @@ snowflake_connector = require_driver(
 
 Connection: TypeAlias = snowflake_connector.SnowflakeConnection
 
-# The driver's own parameter table, so the allow-list tracks driver upgrades.
-_CONNECT_ARGS = frozenset(snowflake_connector.connection.DEFAULT_CONFIGURATION)
-
 _AUTH_ARGS = frozenset({
     'account', 'user', 'password', 'passcode', 'private_key',
     'private_key_file', 'private_key_path', 'token', 'authenticator',
     'auth_class', 'connection_name', 'oauth_client_id', 'oauth_client_secret',
 })
+
+
+def _declared_connect_args() -> frozenset[str]:
+    r"""The connection keywords the Snowflake driver genuinely honours.
+
+    ``DEFAULT_CONFIGURATION`` is the driver's *config-parameter* table, which
+    omits the constructor-only parameters ``connection_name`` and
+    ``connections_file_path`` -- the named-connection auth path, and the one
+    way to authenticate without inlining credentials. Taking the union with
+    ``SnowflakeConnection.__init__`` restores them, and folding in
+    ``_AUTH_ARGS`` keeps the allow-list from ever contradicting the
+    borrow logic that runs after it.
+    """
+    declared = set(snowflake_connector.connection.DEFAULT_CONFIGURATION)
+    signature = inspect.signature(Connection.__init__)
+    declared.update(
+        name for name, parameter in signature.parameters.items()
+        if parameter.kind not in (parameter.VAR_POSITIONAL,
+                                  parameter.VAR_KEYWORD) and name != 'self')
+    return frozenset(declared | _AUTH_ARGS)
+
+
+_CONNECT_ARGS = _declared_connect_args()
 
 
 def _active_snowpark_connection() -> Connection | None:

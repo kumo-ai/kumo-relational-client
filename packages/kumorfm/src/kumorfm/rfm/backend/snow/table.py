@@ -12,6 +12,7 @@ from kumorfm.api.model_plan import MissingType
 from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.backend.snow import Connection
+from kumorfm.rfm.backend.snow.binding import paramstyle
 from kumorfm.rfm.base import (
     Column,
     ColumnSpec,
@@ -194,12 +195,11 @@ class SnowTable(Table):
         )
 
     def _get_num_rows(self) -> int | None:
-        with self._connection.cursor() as cursor:
-            quoted_source_name = quote_ident(self._source_name, char="'")
-            sql = (f"SHOW TABLES LIKE {quoted_source_name} "
+        with paramstyle(self._connection), self._connection.cursor() as cursor:
+            sql = (f"SHOW TABLES LIKE ? "
                    f"IN SCHEMA {quote_ident(self._database)}."
                    f"{quote_ident(self._schema)}")
-            cursor.execute(sql)
+            cursor.execute(sql, (self._source_name, ))
             result = cursor.fetchone()
             assert result is not None
             num_rows = result[7]

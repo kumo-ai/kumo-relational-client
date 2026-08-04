@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import difflib
 import importlib
+import pathlib
 import re
 from contextlib import contextmanager
 from typing import Any, Collection, Iterator
@@ -101,6 +102,33 @@ def driver_guard(
         ) from error
 
 
+def require_existing_database(backend: str, uri: str) -> None:
+    r"""Reject a database path that does not exist yet.
+
+    The file-backed drivers open a missing path in create-if-missing mode, so
+    a mistyped path leaves a new empty database on disk and the failure then
+    surfaces as a missing *table* -- sending the caller to debug the wrong
+    problem, having silently written to their working tree. A read must not
+    write. ``:memory:`` and URI forms that carry their own open mode are
+    passed through untouched.
+
+    Shared by every file-backed backend so the two cannot drift apart on what
+    the same mistake does.
+
+    Args:
+        backend: The connector name, for the error message.
+        uri: The database path supplied by the caller.
+    """
+    if uri == ':memory:' or uri.startswith(('file:', ':')):
+        return
+    if not pathlib.Path(uri).exists():
+        raise ConnectorError(
+            f'{backend} database file {uri!r} does not exist',
+            code='NOT_FOUND',
+            details={'database': uri},
+        )
+
+
 def check_connect_args(
     backend: str,
     kwargs: dict[str, Any],
@@ -162,11 +190,22 @@ def merge_driver_options(
 def quote_ident(ident: str, char: str = '"') -> str:
     r"""Quotes a SQL identifier, doubling any embedded quote character.
 
+    Doubling is sufficient for an *identifier* -- no supported backend lets a
+    backslash escape out of ``"``, ``` ` ``` or ``[]`` quoting. It is **not**
+    sufficient for a string literal on a backend that also honours backslash
+    escapes: Snowflake and Databricks both read ``\'`` as an escaped quote, so
+    ``char="'"`` leaves a value containing ``\'`` able to close the literal and
+    run the rest as SQL. Bind such a value as a query parameter instead; see
+    ``bugs/security-discovery-sql-quote-ident-backslash-injection.md``. The
+    literal mode remains only for backends whose single-quoted strings are
+    standard-conforming (DuckDB, SQLite), where a backslash is an ordinary
+    character.
+
     Args:
         ident: The identifier to quote. A single component -- a dotted name
             must be split and quoted per part.
         char: The quote character, e.g. ``'"'`` (default) or ``"'"`` for a
-            string literal.
+            string literal on a standard-conforming backend.
 
     Returns:
         The quoted identifier, e.g. ``'"my table"'``.

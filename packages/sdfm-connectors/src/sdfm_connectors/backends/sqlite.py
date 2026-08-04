@@ -7,7 +7,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from sdfm_connectors.sql import ConnectorError, require_driver
+from sdfm_connectors.sql import (
+    ConnectorError,
+    require_driver,
+    require_existing_database,
+)
 
 adbc = require_driver(
     'sqlite', 'adbc-driver-sqlite', 'adbc_driver_sqlite.dbapi',
@@ -39,11 +43,5 @@ def connect(
     uri = uri if uri is not None else database
     if uri is not None:
         uri = str(uri)
-        if uri != ':memory:' and not uri.startswith('file:'):
-            if not Path(uri).exists():
-                raise ConnectorError(
-                    f'sqlite database file {uri!r} does not exist',
-                    code='NOT_FOUND',
-                    details={'database': uri},
-                )
+        require_existing_database('sqlite', uri)
     return adbc.connect(uri, **kwargs)

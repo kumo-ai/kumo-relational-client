@@ -2,13 +2,17 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 r"""``KumoClient`` carries every KumoRFM prediction, so it must enforce the
-credential guard the other client documents, and importing the package must
+credential guards the other client documents, and importing the package must
 not reach the network. See
-``bugs/security-kumoclient-import-side-effect-and-missing-plaintext-guard.md``.
+``bugs/security-kumoclient-import-side-effect-and-missing-plaintext-guard.md``,
+``bugs/security-kumoclient-api-key-follows-cross-origin-redirect.md`` and
+``bugs/quality-kumoclient-missing-transport-hardening.md``.
 """
 
 from __future__ import annotations
 
+import gzip
+import json
 import os
 import subprocess
 import sys
@@ -20,7 +24,12 @@ from typing import Iterator
 import pytest
 import requests
 
-from kumorfm.client.client import KumoClient, _raise_init_error
+from kumorfm.client.client import (
+    _MAX_RESPONSE_BYTES,
+    KumoClient,
+    _raise_init_error,
+)
+from kumorfm.exceptions import InvalidResponseError
 
 _READY = b'{"status": "ready"}'
 _MODELS = b'{"object": "list", "data": [{"id": "kumo-rfm"}]}'
@@ -174,6 +183,182 @@ def test_explicit_init_with_a_blank_endpoint_names_the_env_var() -> None:
     stderr = result.stderr.decode()
     assert result.returncode != 0
     assert 'no endpoint URL was provided' in stderr, stderr
+
+
+# The API key must not follow a redirect to another origin. ``requests_mock``
+# short-circuits the adapter that resolves redirects, so these run over real
+# sockets against two independent servers.
+
+
+def _make_redirect_handler(state: dict) -> type[BaseHTTPRequestHandler]:
+    class _RedirectHandler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def _respond(self) -> None:
+            state['headers'].append(dict(self.headers))
+            self.rfile.read(int(self.headers.get('Content-Length') or 0))
+            location = state.get('redirect_to')
+            if location and not state['redirected']:
+                state['redirected'] = True
+                self.send_response(307)
+                self.send_header('Location', location)
+                self.send_header('Content-Length', '0')
+                self.end_headers()
+                return
+            body = _MODELS if self.path.endswith('/v1/models') else _READY
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        do_GET = _respond
+        do_POST = _respond
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    return _RedirectHandler
+
+
+@pytest.fixture
+def redirect_servers() -> Iterator[tuple[dict, dict]]:
+    states: list[dict] = []
+    running: list[ThreadingHTTPServer] = []
+    for _ in range(2):
+        state: dict = {'headers': [], 'redirected': False}
+        server = ThreadingHTTPServer(('127.0.0.1', 0),
+                                     _make_redirect_handler(state))
+        state['url'] = f'http://localhost:{server.server_address[1]}'
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        states.append(state)
+        running.append(server)
+    try:
+        yield states[0], states[1]
+    finally:
+        for server in running:
+            server.shutdown()
+            server.server_close()
+
+
+def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(
+    redirect_servers: tuple[dict, dict],
+) -> None:
+    origin, target = redirect_servers
+    origin['redirect_to'] = target['url'] + '/v1/health/ready'
+
+    KumoClient(origin['url'], api_key='SECRET-KUMO-KEY').authenticate()
+
+    assert origin['headers'][0]['X-API-Key'] == 'SECRET-KUMO-KEY'
+    assert target['headers']
+    assert all(
+        headers.get('X-API-Key') is None for headers in target['headers'])
+
+
+def test_api_key_is_kept_on_a_same_origin_redirect(
+    redirect_servers: tuple[dict, dict],
+) -> None:
+    origin, _ = redirect_servers
+    origin['redirect_to'] = origin['url'] + '/v1/health/ready/'
+
+    KumoClient(origin['url'], api_key='SECRET-KUMO-KEY').authenticate()
+
+    assert len(origin['headers']) >= 2
+    assert all(headers['X-API-Key'] == 'SECRET-KUMO-KEY'
+               for headers in origin['headers'])
+
+
+def test_redirects_are_still_followed(
+    redirect_servers: tuple[dict, dict],
+) -> None:
+    r"""``allow_redirects=False`` would be the wrong fix: a legitimate 307/308
+    still has to be followed, just without the credential. Readiness is proven
+    from the redirect target's body, so a dropped chain would raise here.
+    """
+    origin, target = redirect_servers
+    origin['redirect_to'] = target['url'] + '/v1/health/ready'
+
+    KumoClient(origin['url']).authenticate()
+
+    assert len(target['headers']) == 1
+    assert len(origin['headers']) == 2
+
+
+# A hostile server must not be able to inflate a small compressed body into
+# unbounded client memory. `requests_mock` never reaches the decompression
+# path, so this runs over a real socket.
+
+
+def _make_body_handler(state: dict) -> type[BaseHTTPRequestHandler]:
+    class _BodyHandler(BaseHTTPRequestHandler):
+        protocol_version = 'HTTP/1.1'
+
+        def _respond(self) -> None:
+            self.rfile.read(int(self.headers.get('Content-Length') or 0))
+            body = state['body']
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json')
+            if state.get('gzip'):
+                self.send_header('Content-Encoding', 'gzip')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            try:
+                self.wfile.write(body)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+        do_GET = _respond
+        do_POST = _respond
+
+        def log_message(self, *args: object) -> None:
+            pass
+
+    return _BodyHandler
+
+
+@contextmanager
+def _serve_body(body: bytes, gzip_encoded: bool = False) -> Iterator[str]:
+    state = {'body': body, 'gzip': gzip_encoded}
+    server = ThreadingHTTPServer(('127.0.0.1', 0), _make_body_handler(state))
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f'http://127.0.0.1:{server.server_address[1]}'
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_compressed_body_cannot_inflate_past_the_cap() -> None:
+    inflated = b'{"x": "' + b'0' * (_MAX_RESPONSE_BYTES + 4096) + b'"}'
+    compressed = gzip.compress(inflated, compresslevel=1)
+    assert len(compressed) < _MAX_RESPONSE_BYTES // 100
+
+    with _serve_body(compressed, gzip_encoded=True) as url:
+        client = KumoClient(url)
+        with pytest.raises(InvalidResponseError, match='byte limit'):
+            client._post('/v1/predictions', json={'model': 'kumo-rfm'})
+
+
+def test_a_large_legal_body_is_still_delivered_in_full() -> None:
+    r"""The cap must not truncate or reject a real prediction response, and the
+    capped read must leave a response the existing callers can still use.
+    """
+    payload = {'predictions': [{'id': str(i), 'row_index': i}
+                               for i in range(300_000)]}
+    body = json.dumps(payload).encode()
+    assert 8_000_000 < len(body) < _MAX_RESPONSE_BYTES
+
+    with _serve_body(body) as url:
+        client = KumoClient(url)
+        response = client._post('/v1/predictions', json={'model': 'kumo-rfm'})
+
+    assert response.status_code == 200
+    assert len(response.content) == len(body)
+    assert response.json() == payload
+    assert response.text.startswith('{"predictions"')
+    assert b''.join(response.iter_content(1 << 20)) == body
 
 
 def test_ambient_endpoint_does_not_connect_under_pytest(

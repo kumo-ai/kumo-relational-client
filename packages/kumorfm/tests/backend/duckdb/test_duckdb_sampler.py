@@ -57,3 +57,35 @@ def test_unseeded_sample_is_random(graph: Graph) -> None:
 
     samples = {tuple(_sample(sampler, None)) for _ in range(5)}
     assert len(samples) > 1
+
+
+def test_discovery_on_an_empty_database_names_what_it_searched(
+        tmp_path: Path,  #
+) -> None:
+    r"""graph-duckdb-empty-discovery-not-rejected.md
+
+    ``_require_discovered_tables`` was wired into three of the four discovery
+    constructors. DuckDB, which needs it most because it creates a database
+    rather than failing on a mistyped path, was the one left out.
+    """
+    path = tmp_path / 'empty.duckdb'
+    duckdb.connect(str(path)).close()
+
+    with pytest.raises(ValueError, match='No tables found in the DuckDB'):
+        Graph.from_duckdb(str(path), verbose=False)
+
+
+def test_missing_database_is_reported_rather_than_created(
+        tmp_path: Path,  #
+) -> None:
+    r"""graph-duckdb-empty-discovery-not-rejected.md
+
+    ``Graph.from_duckdb`` reaches DuckDB through its own ``adbc``-backed shim
+    rather than the ``sdfm_connectors`` backend, so the existence guard has to
+    be applied there too. A read must not write.
+    """
+    path = tmp_path / 'typo.duckdb'
+
+    with pytest.raises(Exception, match='does not exist'):
+        Graph.from_duckdb(str(path), verbose=False)
+    assert not path.exists()

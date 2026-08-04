@@ -202,3 +202,58 @@ def test_snowflake_no_arguments_and_no_session_explains_requirements(
     assert excinfo.value.code == 'CONNECT_FAILED'
     assert 'Snowpark session' in excinfo.value.message
     assert "'account'" in excinfo.value.message
+
+
+@pytest.mark.parametrize('argument', ['connection_name',
+                                      'connections_file_path'])
+def test_snowflake_allows_named_connection_arguments(argument):
+    r"""connectors-connect-allowlist-rejects-valid-driver-args.md
+
+    ``DEFAULT_CONFIGURATION`` is the driver's config-parameter table and omits
+    the two constructor-only parameters that select a named connection from a
+    TOML file -- the secrets-file-free auth path. The guard rejected them as
+    typos, and ``connection_name`` was already listed in the connector's own
+    ``_AUTH_ARGS``, so the allow-list contradicted the auth logic behind it.
+    """
+    snowflake = pytest.importorskip('sdfm_connectors.backends.snowflake')
+    check_connect_args('snowflake', {argument: 'x'}, snowflake._CONNECT_ARGS)
+
+
+def test_snowflake_allow_list_covers_every_auth_argument():
+    r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
+    snowflake = pytest.importorskip('sdfm_connectors.backends.snowflake')
+    assert snowflake._AUTH_ARGS <= snowflake._CONNECT_ARGS
+
+
+def test_snowflake_still_rejects_a_misspelled_argument():
+    r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
+    snowflake = pytest.importorskip('sdfm_connectors.backends.snowflake')
+    with pytest.raises(ConnectorError) as excinfo:
+        check_connect_args('snowflake', {'accont': 'x'},
+                           snowflake._CONNECT_ARGS)
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert 'account' in str(excinfo.value)
+
+
+@pytest.mark.parametrize('argument', ['auth_type', 'credentials_provider',
+                                      'use_cloud_fetch', 'user_agent_entry'])
+def test_databricks_allows_kwargs_routed_arguments(argument):
+    r"""connectors-connect-allowlist-rejects-valid-driver-args.md
+
+    The driver routes its documented OAuth parameters through ``**kwargs``,
+    where ``inspect.signature`` cannot see them, so a signature-only
+    allow-list rejected the whole non-PAT auth path.
+    """
+    databricks = pytest.importorskip('sdfm_connectors.backends.databricks')
+    check_connect_args('databricks', {argument: 'x'},
+                       databricks._CONNECT_ARGS)
+
+
+def test_databricks_still_rejects_a_misspelled_argument():
+    r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
+    databricks = pytest.importorskip('sdfm_connectors.backends.databricks')
+    with pytest.raises(ConnectorError) as excinfo:
+        check_connect_args('databricks', {'cattalog': 'x'},
+                           databricks._CONNECT_ARGS)
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert 'catalog' in str(excinfo.value)

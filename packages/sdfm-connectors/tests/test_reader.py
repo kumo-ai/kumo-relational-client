@@ -236,3 +236,64 @@ def test_read_table_falls_back_to_pandas_fetch_without_arrow_result():
 
     assert cursor.pandas_calls == 1
     assert frame.empty
+
+
+def test_read_local_accepts_a_path_object(tmp_path):
+    r"""connectors-local-path-object-raw-crash.md
+
+    ``_require_local_path`` ran ``urlparse`` on the raw argument, so a
+    ``pathlib.Path`` -- which the sibling ``sqlite``/``duckdb`` connectors
+    accept, and which ``pandas`` reads -- raised ``AttributeError`` from
+    inside ``urllib``, escaping the connector's error contract entirely.
+    """
+    path = tmp_path / 'rows.csv'
+    pd.DataFrame({'a': [1, 2]}).to_csv(path, index=False)
+
+    frame = read('local', path=path)
+    assert frame.shape == (2, 1)
+    assert read('local', path=str(path)).equals(frame)
+
+
+def test_read_local_rejects_a_non_path_argument():
+    r"""connectors-local-path-object-raw-crash.md
+
+    Coercion must not turn the contract break into a different one: an
+    argument that is neither ``str`` nor ``os.PathLike`` still raises the
+    SDK's own error with a stable code.
+    """
+    with pytest.raises(ConnectorError) as excinfo:
+        read('local', path=object())
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+def test_read_local_still_rejects_a_remote_uri_given_as_a_path(tmp_path):
+    r"""connectors-local-path-object-raw-crash.md
+
+    The coercion runs before the scheme guard, so the guard must still see a
+    URI as a URI. See security-local-connector-fetches-arbitrary-urls.md.
+    """
+    with pytest.raises(ConnectorError) as excinfo:
+        read('local', path='https://example.com/rows.csv')
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+
+
+def test_read_duckdb_missing_database_is_not_found(tmp_path):
+    r"""connectors-duckdb-missing-file-silently-created.md
+
+    The "a read must not write" guard landed on sqlite only; duckdb
+    still created an empty database for a mistyped path and then blamed the
+    table.
+    """
+    pytest.importorskip('duckdb')
+    database = tmp_path / 'typo.duckdb'
+    with pytest.raises(ConnectorError) as excinfo:
+        read('duckdb', database=str(database), table='items')
+    assert excinfo.value.code == 'NOT_FOUND'
+    assert not database.exists()
+
+
+def test_duckdb_in_memory_database_is_unaffected():
+    r"""connectors-duckdb-missing-file-silently-created.md"""
+    pytest.importorskip('duckdb')
+    frame = read('duckdb', database=':memory:', query='SELECT 1 AS a')
+    assert frame.shape == (1, 1)

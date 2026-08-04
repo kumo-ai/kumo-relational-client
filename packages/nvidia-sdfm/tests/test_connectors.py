@@ -79,12 +79,10 @@ def test_query_failure_maps_to_sdfm_error_with_code(tmp_path):
 
 
 def test_connect_failure_maps_to_sdfm_error_with_code(tmp_path):
+    database = tmp_path / 'not-a-database.duckdb'
+    database.write_text('this is not a duckdb database')
     with pytest.raises(SdfmError) as excinfo:
-        read(
-            'duckdb',
-            database=str(tmp_path / 'missing-dir' / 'db.duckdb'),
-            table='items',
-        )
+        read('duckdb', database=str(database), table='items')
     assert excinfo.value.code == 'CONNECT_FAILED'
 
 

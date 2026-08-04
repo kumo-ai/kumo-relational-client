@@ -60,3 +60,46 @@ def test_client_access_without_init_redirects_to_sdfmclient():
     rfm_engine.global_state.reset()
     with pytest.raises(RuntimeError, match='SDFMClient'):
         _ = rfm_engine.global_state.client
+
+
+@requires_engine
+def test_client_cache_follows_the_current_endpoint(monkeypatch):
+    r"""Regression test for `quality-clients-share-process-global-engine-state`.
+
+    The per-thread client cache is only evicted by `clear()`, which reaches
+    just the thread that called it, and `init()` returns early when the
+    settings it is given already match the globals. A thread that had resolved
+    a client for one endpoint therefore kept using it once another thread had
+    pointed the process at a second endpoint -- deterministically, with no
+    race, which is exactly what a thread pool serving one client per tenant
+    does.
+    """
+    import threading
+
+    from kumorfm.client.client import KumoClient
+
+    monkeypatch.setattr(KumoClient, 'authenticate', lambda self: None)
+
+    a = ('https://tenant-a.example', 'key-A')
+    b = ('https://tenant-b.example', 'key-B')
+
+    def resolve(config):
+        rfm_engine.init(url=config[0], api_key=config[1],
+                        _token=rfm_engine._SDFM_CLIENT_TOKEN)
+        client = kumorfm.global_state.client
+        return (client._url, client._api_key)
+
+    try:
+        assert resolve(a) == a
+
+        worker: dict[str, tuple[str, str]] = {}
+        thread = threading.Thread(
+            target=lambda: worker.update(resolved=resolve(b)))
+        thread.start()
+        thread.join()
+        assert worker['resolved'] == b
+
+        assert resolve(b) == b
+    finally:
+        rfm_engine.global_state.reset()
+        kumorfm.global_state.clear()

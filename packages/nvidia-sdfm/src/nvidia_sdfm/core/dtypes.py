@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Iterable
+from numbers import Integral
 from typing import Any
 
 import numpy as np
@@ -26,8 +27,39 @@ _NUMERIC_WIDTH = {
     'float64': 4,
 }
 
+# `infer_tfm_dtype`'s answer for a column that carries no type information at
+# all, so that it contributes nothing to a widening. Distinct from every real
+# wire dtype, and never emitted into a payload.
+UNTYPED = ''
+
+# What `pandas.api.types.infer_dtype` reports for the contents of an `object`
+# column, mapped to the wire dtype that represents those values. `object` is a
+# container, not a type: classifying it by the container alone declares numbers
+# as strings, which changes what the model is asked to predict on.
+_OBJECT_CONTENT_DTYPES = {
+    'integer': 'int64',
+    'floating': 'float64',
+    'mixed-integer-float': 'float64',
+    'decimal': 'float64',
+    'boolean': 'bool',
+    'date': 'timestamp[us]',
+    'datetime': 'timestamp[us]',
+    'datetime64': 'timestamp[us]',
+}
+
 
 def infer_tfm_dtype(series: pd.Series) -> str:
+    r"""The wire dtype that represents ``series``' values.
+
+    An ``object`` column is classified by what it holds, not by the fact that
+    it is ``object``: ``pd.read_sql`` over an all-null integer column, a frame
+    built from records, and a column that has been through ``fillna`` are all
+    ``object`` while holding perfectly ordinary numbers.
+
+    An ``object`` column with no non-null values is reported as
+    :data:`UNTYPED` rather than guessed at, so that a frame which happens to be
+    missing a feature entirely cannot re-type the same column in another frame.
+    """
     dtype = series.dtype
     if pd.api.types.is_bool_dtype(dtype):
         return 'bool'
@@ -37,6 +69,11 @@ def infer_tfm_dtype(series: pd.Series) -> str:
         return 'int64' if dtype.itemsize > 4 else 'int32'
     if pd.api.types.is_float_dtype(dtype):
         return 'float64' if dtype.itemsize > 4 else 'float32'
+    if pd.api.types.is_object_dtype(dtype):
+        content = pd.api.types.infer_dtype(series, skipna=True)
+        if content == 'empty':
+            return UNTYPED
+        return _OBJECT_CONTENT_DTYPES.get(content, 'string')
     return 'string'
 
 
@@ -46,8 +83,14 @@ def widen_tfm_dtype(dtypes: Iterable[str]) -> str:
     A column typed differently in two frames must travel under a dtype that
     represents both, otherwise the values of one frame are coerced to the other
     frame's dtype and silently corrupted.
+
+    :data:`UNTYPED` candidates are dropped: a column that carries no type
+    information cannot make the union any wider, and letting it widen the union
+    to ``'string'`` would re-type the other frame's real values.
     """
-    candidates = list(dict.fromkeys(dtypes))
+    candidates = [dtype for dtype in dict.fromkeys(dtypes) if dtype]
+    if not candidates:
+        return 'string'
     if len(candidates) == 1:
         return candidates[0]
     if any(dtype not in _NUMERIC_WIDTH for dtype in candidates):
@@ -104,7 +147,16 @@ def serialize_cell(value: Any, dtype: str) -> Any:
         return integer_value
     if dtype in ('float64', 'float32'):
         _require_finite(value)
-        return float(value)
+        number = float(value)
+        if isinstance(value, Integral) and number != value:
+            raise SdfmError(
+                f'value {value!r} cannot be sent as {dtype} without losing '
+                f'precision, because it is outside the range a {dtype} '
+                'represents exactly; give the column the same integer dtype '
+                'in every frame, or convert it to strings',
+                code='INVALID_REQUEST',
+            )
+        return number
     if dtype == 'bool':
         return bool(value)
     return str(value)

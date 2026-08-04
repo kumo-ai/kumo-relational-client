@@ -42,7 +42,7 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     calls: dict[str, Any] = {}
 
     class _KumoRFM:
-        def __init__(self, graph: Any) -> None:
+        def __init__(self, graph: Any, **kwargs: Any) -> None:
             calls["graph"] = graph
 
         def predict(self, query: str, **kwargs: Any) -> pd.DataFrame:
@@ -82,6 +82,7 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
 
     module = types.ModuleType("kumorfm.rfm")
     module.init = lambda **kw: calls.setdefault("init", kw)
+    module.init_client = lambda **kw: calls.setdefault("init", kw)
     module.init_databricks_serving = lambda endpoint, **kw: calls.setdefault(
         "init_databricks_serving", {"endpoint": endpoint, **kw}
     )
@@ -342,7 +343,7 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
     SDK reported as a configuration problem.
     """
     class _Failing:
-        def __init__(self, graph: Any) -> None:
+        def __init__(self, graph: Any, **kwargs: Any) -> None:
             pass
 
         def retry(self, *args: Any, **kwargs: Any) -> Any:

@@ -66,6 +66,23 @@ class RfmGlobalState:
 global_state = RfmGlobalState()
 
 
+def _configure(
+    url: str | None,
+    api_key: str | None,
+    verify_ssl: bool,
+    log_level: str,
+    timeout: float | None,
+) -> None:
+    resolved_url = (url or os.getenv("RFM_API_URL")
+                    or os.getenv("KUMO_API_ENDPOINT"))
+
+    kumorfm.init(url=resolved_url, api_key=api_key, verify_ssl=verify_ssl,
+                 log_level=log_level, timeout=timeout)
+
+    global_state._url = kumorfm.global_state._url
+    global_state._initialized = True
+
+
 def init(
     url: str | None = None,
     api_key: str | None = None,
@@ -78,14 +95,39 @@ def init(
     if _token is not _SDFM_CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
-        resolved_url = (url or os.getenv("RFM_API_URL")
-                        or os.getenv("KUMO_API_ENDPOINT"))
+        _configure(url, api_key, verify_ssl, log_level, timeout)
 
-        kumorfm.init(url=resolved_url, api_key=api_key, verify_ssl=verify_ssl,
-                     log_level=log_level, timeout=timeout)
 
-        global_state._url = kumorfm.global_state._url
-        global_state._initialized = True
+def init_client(
+    url: str | None = None,
+    api_key: str | None = None,
+    verify_ssl: bool = True,
+    log_level: str = "INFO",
+    *,
+    timeout: float | None = None,
+    _token: object | None = None,
+) -> RFMTransport:
+    r"""Configures the engine and returns the client that configuration
+    resolves to, as one atomic step.
+
+    The engine's endpoint and credential live in a process-wide singleton, so
+    configuring it and then reading back the resulting client as two steps is a
+    race: a second caller configuring a different endpoint in between makes the
+    first caller read the second's client. Because
+    :attr:`~kumorfm.rfm.KumoRFM._api_client` resolves lazily -- at the first
+    HTTP call, after graph materialization and subgraph sampling -- that window
+    is wide enough to matter in practice.
+
+    Resolving under the same lock that guards configuration closes it, provided
+    the caller binds the returned client to its prediction rather than reading
+    the global again later. Pass it to :class:`~kumorfm.rfm.KumoRFM` as
+    ``_client``.
+    """
+    if _token is not _SDFM_CLIENT_TOKEN:
+        raise RuntimeError(_DIRECT_USE_MESSAGE)
+    with global_state._lock:
+        _configure(url, api_key, verify_ssl, log_level, timeout)
+        return kumorfm.global_state.client
 
 
 def init_databricks_serving(
@@ -124,6 +166,7 @@ LocalGraph = Graph  # NOTE Backward compatibility - do not use anymore.
 
 __all__ = [
     'init',
+    'init_client',
     'init_databricks_serving',
     'Table',
     'LocalTable',

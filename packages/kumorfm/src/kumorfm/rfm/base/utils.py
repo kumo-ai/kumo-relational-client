@@ -39,6 +39,27 @@ def is_datetime(ser: pd.Series) -> bool:
     return pd.api.types.is_datetime64_any_dtype(ser)
 
 
+def to_naive_utc(value: Any) -> Any:
+    r"""Strips a timezone by converting to UTC first, never by discarding it.
+
+    Anchor timestamps are compared against, and joined to, the graph's own
+    timezone-naive UTC timestamps, so a timezone-aware one has to be converted
+    rather than refused. ``predict`` returns ``ANCHOR_TIMESTAMP`` timezone-aware,
+    which makes this the difference between a prediction output being usable as
+    the next call's context and not.
+
+    Anything that is not a timezone-aware timestamp or series is returned
+    unchanged.
+    """
+    if isinstance(value, pd.Series):
+        if isinstance(value.dtype, pd.DatetimeTZDtype):
+            return value.dt.tz_convert('UTC').dt.tz_localize(None)
+        return value
+    if isinstance(value, pd.Timestamp) and value.tzinfo is not None:
+        return value.tz_convert('UTC').tz_localize(None)
+    return value
+
+
 def to_datetime(ser: pd.Series, column_name: str | None = None) -> pd.Series:
     """Converts a :class:`pandas.Series` to ``datetime64[ns]`` format.
 

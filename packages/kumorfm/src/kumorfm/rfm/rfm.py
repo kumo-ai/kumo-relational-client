@@ -41,12 +41,14 @@ from kumorfm.api.rfm import (
 from kumorfm.api.rfm.context import Context, Table
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import AggregationType, ProblemType, Stype
+
+from kumorfm.client.client import KumoClient
 from kumorfm.client.rfm import RFMAPI
 from kumorfm.exceptions import HTTPException, NimFailureError
 from kumorfm.mixin import CastMixin
 from kumorfm.rfm import Graph, TaskTable
 from kumorfm.rfm.base import DataBackend, Sampler
-from kumorfm.rfm.base.utils import Timestamp
+from kumorfm.rfm.base.utils import Timestamp, to_naive_utc
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
 from kumorfm.rfm.explain_summary import generate_summary
 from kumorfm.rfm.payload import (
@@ -488,17 +490,19 @@ def _nim_failure_error(
         status_code=status, detail=detail, invalid_params=invalid_params)
 
 
-def _check_anchor_time(value: Any, name: str) -> None:
-    r"""Reject an anchor time that is neither a ``Timestamp`` nor ``'entity'``.
+def _check_anchor_time(value: Any, name: str) -> Any:
+    r"""Reject an anchor time that is neither a ``Timestamp`` nor ``'entity'``,
+    and return it converted to the timezone-naive UTC the graph is held in.
 
     A date *string* is what most pandas users reach for first, and it used to
     land on a bare ``assert`` with an empty message — and, under ``python -O``,
-    on no check at all.
+    on no check at all. A timezone-*aware* ``Timestamp`` is what the SDK's own
+    ``predict`` output carries, so it is converted rather than refused.
     """
     if value is None or isinstance(value, pd.Timestamp):
-        return
+        return to_naive_utc(value)
     if isinstance(value, str) and value == 'entity':
-        return
+        return value
     hint = f'; try pd.Timestamp({value!r})' if isinstance(value, str) else ''
     raise TypeError(
         f"'{name}' must be a pandas.Timestamp or the literal 'entity' (got "
@@ -587,12 +591,20 @@ class KumoRFM:
             backends, will create any missing indices. Requires write-access to
             the data backend. Only the :obj:`"sqlite"` and :obj:`"duckdb"`
             backends implement this; passing it on any other backend warns.
+        _client: Internal. The already-resolved endpoint this instance predicts
+            against, from :func:`kumorfm.rfm.init_client`. Binding it here
+            pins the instance to one deployment for its whole lifetime;
+            leaving it ``None`` falls back to resolving the process-wide
+            engine configuration lazily, which is last-writer-wins across
+            threads.
     """
     def __init__(
         self,
         graph: Graph,
         verbose: bool | ProgressLogger = True,
         optimize: bool = False,
+        *,
+        _client: KumoClient | None = None,
     ) -> None:
         graph = graph.validate()
         self._graph_def = graph._to_api_graph_definition()
@@ -621,13 +633,20 @@ class KumoRFM:
         else:
             raise NotImplementedError
 
-        self._client: RFMAPI | None = None
+        self._client: RFMAPI | None = (RFMAPI(_client)
+                                       if _client is not None else None)
 
         self._batch_size: int | Literal['max'] | None = None
         self._num_retries: int = 0
 
     @property
     def _api_client(self) -> RFMAPI:
+        r"""The endpoint this instance predicts against.
+
+        Bound at construction when the caller resolved one; otherwise read
+        from the process-wide engine configuration on first use, which is the
+        legacy path and reflects whichever configuration was applied last.
+        """
         if self._client is not None:
             return self._client
 
@@ -1645,7 +1664,7 @@ class KumoRFM:
         Returns:
             The labels as a :class:`pandas.DataFrame`.
         """
-        _check_anchor_time(anchor_time, 'anchor_time')
+        anchor_time = _check_anchor_time(anchor_time, 'anchor_time')
         query_def = self._parse_query(query)
 
         if anchor_time is None:
@@ -1933,8 +1952,9 @@ class KumoRFM:
         logger: ProgressLogger | None = None,
     ) -> TaskTable:
 
-        _check_anchor_time(anchor_time, 'anchor_time')
-        _check_anchor_time(context_anchor_time, 'context_anchor_time')
+        anchor_time = _check_anchor_time(anchor_time, 'anchor_time')
+        context_anchor_time = _check_anchor_time(context_anchor_time,
+                                                 'context_anchor_time')
         if max_pq_iterations < 1:
             raise ValueError(f"'max_pq_iterations' must be greater than zero "
                              f"(got {max_pq_iterations})")

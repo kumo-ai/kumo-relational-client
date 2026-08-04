@@ -18,7 +18,7 @@ from kumorfm.api.rfm.context import EdgeLayout, Link, Subgraph, Table
 from kumorfm.api.typing import ProblemType, Stype
 
 from kumorfm.rfm.base import DataBackend
-from kumorfm.rfm.base.utils import Timestamp
+from kumorfm.rfm.base.utils import Timestamp, to_naive_utc
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
 from kumorfm.rfm.pquery import PQueryPandasExecutor
 from kumorfm.utils import ProgressLogger
@@ -240,9 +240,10 @@ class Sampler(ABC):
         for table_name in entity_table_names:
             columns_dict[table_name].add(self.primary_key_dict[table_name])
 
-        if (isinstance(anchor_time, pd.Series)
-                and anchor_time.dtype != 'datetime64[ns]'):
-            anchor_time = anchor_time.astype('datetime64[ns]')
+        if isinstance(anchor_time, pd.Series):
+            anchor_time = to_naive_utc(anchor_time)
+            if anchor_time.dtype != 'datetime64[ns]':
+                anchor_time = anchor_time.astype('datetime64[ns]')
 
         out = self._sample_subgraph(
             entity_table_name=entity_table_names[0],

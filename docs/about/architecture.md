@@ -34,7 +34,16 @@ flowchart TD
 `SDFMClient` owns one connection to a NIM. It holds a `Transport` (a pooled HTTP
 session with retry and backoff) and an `AdapterRegistry`. Because each client
 owns its own transport and registry, several clients can target different
-endpoints or tenants in the same process without sharing global state.
+endpoints or tenants in the same process, concurrently: every prediction is
+issued against the endpoint and credential of the client that started it.
+
+The KumoRFM driver underneath does keep a process-wide configuration, which
+each prediction reconfigures. The adapter applies that configuration and
+resolves the resulting client as one atomic step, then binds it to that
+prediction, so a concurrent prediction from a differently configured client
+cannot re-point it. What remains shared is the driver global itself: direct
+`kumorfm.init()` callers, and anything else reading it, see whichever client
+configured it last. Drive the driver through `SDFMClient` only.
 
 ### Adapter Layer
 

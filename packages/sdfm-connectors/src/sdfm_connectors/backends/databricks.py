@@ -41,6 +41,14 @@ _ENV_BY_ARG = {
 
 
 
+_DOCUMENTED_KWARGS = frozenset({
+    'auth_type', 'credentials_provider', 'experimental_oauth_persistence',
+    'oauth_client_id', 'oauth_client_secret', 'oauth_redirect_port_range',
+    'oauth_scopes', 'password', 'session_configuration', 'tls_verify',
+    'use_cloud_fetch', 'user_agent_entry', 'username',
+})
+
+
 def _declared_connect_args() -> frozenset[str]:
     r"""The driver's own named connection parameters.
 
@@ -48,6 +56,12 @@ def _declared_connect_args() -> frozenset[str]:
     also takes ``**kwargs`` and silently ignores anything it does not know, so
     without this a typo'd ``catalog=`` reads from the environment default
     instead — the wrong catalog, with no error.
+
+    A signature-only allow-list can never be complete here, because the
+    driver routes its documented OAuth parameters -- ``auth_type`` and
+    ``credentials_provider``, the non-PAT auth path -- through ``**kwargs``,
+    where they are invisible to :func:`inspect.signature`. Those are folded in
+    explicitly so the guard rejects only what the driver would really ignore.
     """
     parameters = inspect.signature(Connection.__init__).parameters.values()
     return frozenset(
@@ -56,7 +70,8 @@ def _declared_connect_args() -> frozenset[str]:
         and parameter.name != 'self')
 
 
-_CONNECT_ARGS = _declared_connect_args() | frozenset(_ENV_BY_ARG)
+_CONNECT_ARGS = (_declared_connect_args() | frozenset(_ENV_BY_ARG)
+                 | _DOCUMENTED_KWARGS)
 
 
 def connect(

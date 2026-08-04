@@ -352,20 +352,29 @@ class KumoRFMAdapter(ModelAdapter):
         if isinstance(request, KumoRFMTaskRequest):
             _validate_task_request(request)
 
+        # The engine's endpoint is process-global, so configuring it and
+        # resolving the resulting client has to be one atomic step, and the
+        # result has to be bound to this prediction. Reading the global back
+        # later instead would let a concurrent prediction from a differently
+        # configured client re-point this one -- see `init_client`.
         if isinstance(transport, ServingTarget):
             _init_serving(engine, transport)
+            api_client = None
         else:
-            engine.init(url=transport.url, api_key=transport.api_key,
-                        verify_ssl=transport.verify_ssl,
-                        timeout=transport.timeout,
-                        _token=engine._SDFM_CLIENT_TOKEN)
+            api_client = engine.init_client(
+                url=transport.url,
+                api_key=transport.api_key,
+                verify_ssl=transport.verify_ssl,
+                timeout=transport.timeout,
+                _token=engine._SDFM_CLIENT_TOKEN)
         # `verbose` has to reach the constructor as well as the call: it owns
         # the graph-materialization output, and a handle builds a fresh engine
         # model per prediction, so that banner is printed on every predict.
         # Only overridden when the caller actually asked, so the engine keeps
         # its own default otherwise.
-        model = (engine.KumoRFM(request.graph, verbose=options['verbose'])
-                 if 'verbose' in options else engine.KumoRFM(request.graph))
+        model = (engine.KumoRFM(request.graph, verbose=options['verbose'],
+                                _client=api_client) if 'verbose' in options
+                 else engine.KumoRFM(request.graph, _client=api_client))
         if request.batch_size is not None:
             batch_ctx = model.batch_mode(request.batch_size,
                                          num_retries=request.num_retries)

@@ -9,6 +9,22 @@ from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.base.utils import is_datetime
 
+# What `pandas.api.types.infer_dtype` reports for the contents of an `object`
+# column, mapped to the data type those values actually are. `object` is a
+# container rather than a type: `pd.read_sql` returns `object` for a
+# `NUMERIC`/`DECIMAL` column on Postgres, Oracle, MySQL and most ODBC drivers,
+# and calling that a string demotes a quantity to a category (or, once it is
+# high-cardinality enough to be inferred as text, to a bag of word tokens split
+# on the decimal point).
+OBJECT_CONTENT_TO_DTYPE: dict[str, Dtype] = {
+    'integer': Dtype.int,
+    'floating': Dtype.float,
+    'mixed-integer-float': Dtype.float,
+    'decimal': Dtype.float,
+    'boolean': Dtype.bool,
+    'timedelta': Dtype.timedelta,
+}
+
 PANDAS_TO_DTYPE: dict[str, Dtype] = {
     'bool': Dtype.bool,
     'boolean': Dtype.bool,
@@ -58,6 +74,10 @@ def infer_dtype(ser: pd.Series) -> Dtype:
             ser = ser.iloc[pos:pos + 1000].dropna()
             arr = pa.array(ser.tolist())
             ser = pd.Series(arr, dtype=pd.ArrowDtype(arr.type))
+        else:
+            content = pd.api.types.infer_dtype(ser.iloc[:1000], skipna=True)
+            if content in OBJECT_CONTENT_TO_DTYPE:
+                return OBJECT_CONTENT_TO_DTYPE[content]
 
     if isinstance(ser.dtype, pd.ArrowDtype):
         if (pa.types.is_list(ser.dtype.pyarrow_dtype)

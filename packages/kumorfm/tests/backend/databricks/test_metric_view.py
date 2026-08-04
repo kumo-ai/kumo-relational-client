@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -661,10 +662,12 @@ _DESCRIBE_ROWS = [
 
 
 class _FakeCursor:
-    def __init__(self, describe_rows: list) -> None:
+    def __init__(self, describe_rows: list,
+                 sql_log: list[str] | None = None) -> None:
         self._describe_rows = describe_rows
         self._rows: list = []
         self._arrow: 'pa.Table | None' = None
+        self._sql_log = sql_log if sql_log is not None else []
 
     def __enter__(self) -> '_FakeCursor':
         return self
@@ -673,29 +676,38 @@ class _FakeCursor:
         pass
 
     @staticmethod
-    def _literal(sql: str, column: str) -> str | None:
+    def _bound(sql: str, parameters: Any, column: str) -> str | None:
         r"""Returns the value ``column`` is compared against, mimicking
         `information_schema`, which holds canonical (lower-case) names and
         compares them as case-sensitive string literals.
-        """
-        match = re.search(rf"lower\({column}\) = lower\('([^']+)'\)", sql)
-        if match is not None:
-            return match.group(1).lower()
-        match = re.search(rf"{column} = '([^']+)'", sql)
-        return match.group(1) if match is not None else None
 
-    def execute(self, sql: str) -> None:
+        Names are bound rather than interpolated, so they are read off the
+        parameter list in the order their placeholders appear.
+        """
+        markers = re.findall(
+            r'lower\((?:\w+\.)?(\w+)\) = lower\(\?\)'
+            r'|(?:\w+\.)?(\w+) = lower\(\?\)'
+            r'|(?:\w+\.)?(\w+) = \?', sql)
+        names = [folded or sargable or plain
+                 for folded, sargable, plain in markers]
+        if column not in names or parameters is None:
+            return None
+        value = parameters[names.index(column)]
+        return str(value).lower()
+
+    def execute(self, sql: str, parameters: Any = None) -> None:
         self._rows = []
         self._arrow = None
         sql = sql.strip()
+        self._sql_log.append(sql)
 
         if sql.upper().startswith('DESCRIBE TABLE EXTENDED'):
             self._rows = list(self._describe_rows)
             return
 
         if 'information_schema.columns' in sql:
-            schema = self._literal(sql, 'table_schema')
-            table = self._literal(sql, 'table_name')
+            schema = self._bound(sql, parameters, 'table_schema')
+            table = self._bound(sql, parameters, 'table_name')
             column_types = (_COLUMN_TYPES.get(table, {})
                             if schema == _SCHEMA else {})
             self._rows = [(name, dtype, 'YES', _CATALOG, _SCHEMA, table)
@@ -750,9 +762,10 @@ class _FakeConnection(Connection):
     def __init__(self, describe_rows: list = _DESCRIBE_ROWS) -> None:
         self._describe_rows = describe_rows
         self.closed = False
+        self.sql_log: list[str] = []
 
     def cursor(self) -> _FakeCursor:  # type: ignore[override]
-        return _FakeCursor(self._describe_rows)
+        return _FakeCursor(self._describe_rows, self.sql_log)
 
     def close(self) -> None:
         self.closed = True
@@ -1312,3 +1325,77 @@ def test_conversion_warning_is_attributed_to_the_caller() -> None:
                  if issubclass(w.category, ViewConversionWarning)]
     assert len(escalated) == 1
     assert escalated[0].filename == __file__
+
+
+def test_information_schema_lookups_stay_pushdown_friendly() -> None:
+    r"""Regression test for
+    `graph-databricks-lower-predicate-defeats-pushdown.md`.
+
+    Folding the *column* is case-insensitive but not sargable: Unity Catalog
+    cannot push the predicate down, so a metadata point look-up degrades into a
+    scan of every column of every table in the catalog -- measured live at 31s
+    per table against 0.5s, growing with catalog size. Fold the literal
+    instead; identifiers are stored lower-cased.
+    """
+    connection = _FakeConnection()
+    Graph.from_databricks(
+        connection=connection,
+        catalog=_CATALOG,
+        schema=_SCHEMA,
+        tables=[dict(name='customers', columns=['customer_id', 'segment'],
+                     primary_key='customer_id')],
+        infer_metadata=False,
+        verbose=False,
+    )
+
+    lookups = [sql for sql in connection.sql_log
+               if 'information_schema' in sql]
+    assert lookups
+
+    for sql in lookups:
+        assert re.search(r'lower\(\s*(?:\w+\.)?table_(?:schema|name)\s*\)',
+                         sql) is None, f'unsargable predicate in SQL: {sql}'
+
+    columns = next(sql for sql in lookups
+                   if 'information_schema.columns' in sql)
+    assert 'table_schema = lower(?)' in columns
+    assert 'table_name = lower(?)' in columns
+    assert f"'{_SCHEMA}'" not in columns
+    assert "'customers'" not in columns
+
+
+def test_metric_view_drops_a_type_mismatched_relationship(monkeypatch) -> None:
+    r"""Regression test for
+    `graph-view-conversion-aborts-on-one-bad-relationship.md`.
+
+    A view constructor converts partially by contract. A relationship whose
+    keys have incompatible data types is one more unconvertible element: it is
+    dropped and reported, not raised, so the tables and the well-formed edges
+    of the view survive.
+    """
+    from kumorfm.rfm import ViewConversionWarning
+
+    products = _DATA['products'].copy()
+    products['product_id'] = range(len(products))
+    monkeypatch.setitem(_DATA, 'products', products)
+    monkeypatch.setitem(_COLUMN_TYPES, 'products',
+                        {**_COLUMN_TYPES['products'], 'product_id': 'bigint'})
+
+    with pytest.warns(ViewConversionWarning):
+        graph = Graph.from_databricks_metric_view(
+            'sales_mv',
+            connection=_FakeConnection(),
+            verbose=False,
+        )
+
+    assert set(graph.tables) == {
+        'order_lines', 'customers', 'regions', 'products', 'refunds'
+    }
+    assert Edge('order_lines', 'product_id', 'products') not in graph.edges
+    assert graph.edges
+
+    dropped = [msg for msg in graph.conversion_messages
+               if 'incompatible data types' in msg]
+    assert len(dropped) == 1
+    assert "'order_lines'" in dropped[0] and "'products'" in dropped[0]
+    assert graph.validate() is graph

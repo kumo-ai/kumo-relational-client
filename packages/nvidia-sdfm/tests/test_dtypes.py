@@ -4,12 +4,16 @@
 
 from __future__ import annotations
 
+import datetime
+from decimal import Decimal
+
 import numpy as np
 import pandas as pd
 import pytest
 
 from nvidia_sdfm.core.dtypes import (
     JSON_SAFE_INT_MAX,
+    UNTYPED,
     infer_tfm_dtype,
     serialize_cell,
     serialize_column,
@@ -120,3 +124,58 @@ def test_serialize_cell_rejects_non_finite_numbers():
         assert err.value.code == 'INVALID_REQUEST'
     with pytest.raises(SdfmError):
         serialize_cell(float('-inf'), 'float64')
+
+
+@pytest.mark.parametrize(('values', 'expected'), [
+    (pd.Series([1, 2, 3], dtype=object), 'int64'),
+    (pd.Series([1, None, 3], dtype=object), 'int64'),
+    (pd.Series([1.5, 2.5], dtype=object), 'float64'),
+    (pd.Series([True, False], dtype=object), 'bool'),
+    (pd.Series([Decimal('1.5')], dtype=object), 'float64'),
+    (pd.Series([datetime.date(2025, 1, 1)], dtype=object), 'timestamp[us]'),
+    (pd.Series(['a', 'b'], dtype=object), 'string'),
+    (pd.Series([1, 'a'], dtype=object), 'string'),
+])
+def test_infer_tfm_dtype_classifies_object_columns_by_content(values, expected):
+    # Regression: bugs/tabicl-widening-degrades-numeric-columns-to-string.md --
+    # every ``object`` column was reported as ``'string'`` regardless of what
+    # it held, so a numeric column in the other frame was re-typed as strings.
+    assert infer_tfm_dtype(values) == expected
+
+
+@pytest.mark.parametrize('values', [
+    pd.Series([None, None], dtype=object),
+    pd.Series([np.nan, np.nan], dtype=object),
+    pd.Series([], dtype=object),
+])
+def test_infer_tfm_dtype_reports_an_all_null_object_column_as_untyped(values):
+    # Regression: bugs/tabicl-widening-degrades-numeric-columns-to-string.md --
+    # ``[None, None]`` carries no type information, and used to widen the other
+    # frame's real values to strings.
+    assert infer_tfm_dtype(values) == UNTYPED
+
+
+@pytest.mark.parametrize(('candidates', 'expected'), [
+    ([UNTYPED, 'int64'], 'int64'),
+    (['int64', UNTYPED], 'int64'),
+    ([UNTYPED, 'float64'], 'float64'),
+    ([UNTYPED, 'string'], 'string'),
+    ([UNTYPED, UNTYPED], 'string'),
+])
+def test_widen_tfm_dtype_ignores_untyped_candidates(candidates, expected):
+    # Regression: bugs/tabicl-widening-degrades-numeric-columns-to-string.md
+    assert widen_tfm_dtype(candidates) == expected
+
+
+def test_serialize_cell_refuses_an_integer_a_float_cannot_hold_exactly():
+    # Regression: bugs/tabicl-widening-degrades-numeric-columns-to-string.md --
+    # ``widen(['int64', 'float64']) == 'float64'`` had no equivalent of the
+    # JS-safe-int guard its ``int64`` branch applies, so past 2**53 distinct
+    # ids merged into one value with nothing logged.
+    with pytest.raises(SdfmError) as err:
+        serialize_cell(9007199254740993, 'float64')
+    assert err.value.code == 'INVALID_REQUEST'
+    assert serialize_cell(9007199254740992, 'float64') == 9007199254740992.0
+    assert serialize_cell(2**53 - 1, 'float64') == float(2**53 - 1)
+    assert serialize_cell(1.5, 'float64') == 1.5
+    assert serialize_cell(1e300, 'float64') == 1e300

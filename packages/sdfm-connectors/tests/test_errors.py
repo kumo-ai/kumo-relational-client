@@ -34,12 +34,10 @@ def test_connect_unknown_backend_raises_connector_error():
 
 
 def test_connect_failure_maps_to_connect_failed(tmp_path):
+    database = tmp_path / 'not-a-database.duckdb'
+    database.write_text('this is not a duckdb database')
     with pytest.raises(ConnectorError) as excinfo:
-        read(
-            'duckdb',
-            database=str(tmp_path / 'missing-dir' / 'db.duckdb'),
-            table='items',
-        )
+        read('duckdb', database=str(database), table='items')
     assert excinfo.value.code == 'CONNECT_FAILED'
     assert excinfo.value.details['driver_error']
     assert excinfo.value.__cause__ is not None
@@ -151,10 +149,14 @@ def test_driver_guard_propagates_import_error():
 
 
 def test_unexpected_connect_kwarg_maps_to_invalid_args(tmp_path):
+    import duckdb as duckdb_driver
+
+    database = tmp_path / 'db.duckdb'
+    duckdb_driver.connect(str(database)).close()
     with pytest.raises(ConnectorError) as excinfo:
         read(
             'duckdb',
-            database=str(tmp_path / 'db.duckdb'),
+            database=str(database),
             table='items',
             bogus_option=1,
         )

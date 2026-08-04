@@ -60,7 +60,11 @@ with SDFMClient(url="http://localhost:8000") as client:
 ```
 
 Each `SDFMClient` holds its own transport and registry, so multiple clients can target
-different endpoints or tenants at once. Discover what a NIM serves with
+different endpoints or tenants at once, including concurrently from several threads:
+a prediction always goes to the endpoint and credential of the client that started it.
+The KumoRFM driver underneath still keeps a process-wide configuration that each
+prediction reconfigures, so drive it through `SDFMClient` rather than mixing in direct
+`kumorfm.init()` calls. Discover what a NIM serves with
 `client.models()` and `client.capabilities("tabicl")`. The transport pools connections
 and retries transient failures (429/5xx) with backoff; tune it per client with
 `SDFMClient(url, timeout=30, max_retries=3)`.

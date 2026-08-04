@@ -57,10 +57,17 @@ class GlobalState(metaclass=Singleton):
             except Exception:
                 pass
             del self.thread_local._client
+        if hasattr(self.thread_local, '_client_config'):
+            del self.thread_local._client_config
         self._url = None
         self._api_key = None
         self._verify_ssl = True
         self._timeout = None
+
+    @property
+    def _config(self) -> tuple[Optional[str], Optional[str], bool,
+                               Optional[float]]:
+        return (self._url, self._api_key, self._verify_ssl, self._timeout)
 
     @property
     def initialized(self) -> bool:
@@ -71,8 +78,17 @@ class GlobalState(metaclass=Singleton):
         """The request client for this thread.
 
         A :class:`KumoClient` for the raw-NIM deployment, or whatever
-        ``_client_factory`` builds otherwise. Cached per thread, so an
-        existing :class:`KumoRFM` instance keeps the client it was built with.
+        ``_client_factory`` builds otherwise.
+
+        Cached per thread and keyed by the configuration it was built from.
+        ``init()`` returns early when re-initialized with identical settings
+        and only ``clear()`` evicts, and ``clear()`` reaches just the thread
+        that called it -- so without the key a thread that had cached a client
+        for one endpoint would keep using it after another thread pointed the
+        process at a second endpoint, sending that thread's requests, and its
+        API key, to the wrong deployment. A superseded client is dropped
+        rather than closed: another thread's :class:`~kumorfm.rfm.KumoRFM` may
+        still hold it for an in-flight prediction.
 
         Auto-init from an ambient ``KUMO_API_ENDPOINT`` is gated on
         ``initialized`` rather than on ``_url``, because a serving deployment
@@ -88,7 +104,10 @@ class GlobalState(metaclass=Singleton):
             raise ValueError("Client creation or authentication failed. "
                              "Please re-create your client before proceeding.")
 
-        if hasattr(self.thread_local, '_client'):
+        config = self._config
+        if (hasattr(self.thread_local, '_client')
+                and getattr(self.thread_local, '_client_config',
+                            None) == config):
             return self.thread_local._client
 
         if self._client_factory is not None:
@@ -98,6 +117,7 @@ class GlobalState(metaclass=Singleton):
                                 verify_ssl=self._verify_ssl,
                                 timeout=self._timeout)
         self.thread_local._client = client
+        self.thread_local._client_config = config
         return client
 
 

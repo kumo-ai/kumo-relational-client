@@ -30,8 +30,17 @@ class SDFMClient:
     r"""A connection to one Universal TFM NIM.
 
     Each ``SDFMClient`` owns its own transport and adapter registry, so several
-    clients can target different endpoints (or tenants) at once without sharing
-    process-global state. Use it as a context manager, or call ``close()``.
+    clients can target different endpoints (or tenants) at once: a prediction
+    is always issued against the endpoint and credential of the client that
+    started it, including when clients are used concurrently from several
+    threads. Use it as a context manager, or call ``close()``.
+
+    One caveat on the KumoRFM path: the driver underneath keeps a process-wide
+    configuration, which each prediction reconfigures. Predictions are pinned
+    to their own client and are unaffected, but the driver's own
+    ``kumorfm.init()`` and anything else reading that global observe whichever
+    client configured it last. Do not mix ``SDFMClient`` with direct driver
+    initialization in one process.
 
     Run inference through a model handle:
 

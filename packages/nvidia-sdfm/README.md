@@ -117,7 +117,11 @@ transient failures (429/5xx) with backoff; tune it per client with
 `SDFMClient(url, timeout=30, max_retries=3)`. `timeout` bounds each attempt
 rather than the call as a whole, so a retried call can take up to
 `(max_retries + 1) * timeout` plus backoff. Each client holds its own transport
-and registry, so multiple clients can target different endpoints at once.
+and registry, so multiple clients can target different endpoints at once,
+including concurrently: a prediction always goes to the endpoint and credential
+of the client that started it. The KumoRFM driver underneath still keeps a
+process-wide configuration that each prediction reconfigures, so drive it
+through `SDFMClient` rather than mixing in direct `kumorfm.init()` calls.
 `close()` (or leaving the `with` block) releases the pooled connections and
 retires the client; use a new `SDFMClient` afterwards.
 

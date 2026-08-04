@@ -102,21 +102,30 @@ class DatabricksTable(Table):
         return cast(DataBackend, DataBackend.DATABRICKS)
 
     def _get_source_columns(self) -> list[SourceColumn]:
-        schema = quote_ident(self._schema, char="'")
-        source_name = quote_ident(self._source_name, char="'")
+        r"""Reads this table's columns and key constraints from Unity Catalog.
 
+        Databricks resolves identifiers case-insensitively, while
+        ``information_schema`` compares them as case-sensitive string literals.
+        Unity Catalog stores ``table_schema`` and ``table_name`` folded to
+        lower case, so folding the *literal* matches whatever spelling the
+        caller used, and the canonical names read back here are adopted for
+        every subsequent look-up.
+
+        Folding the column instead -- ``lower(table_schema) = lower(:schema)``
+        -- is logically equivalent but not a sargable predicate: it cannot be
+        pushed down, so the point look-up degrades into a scan of every column
+        of every table in the catalog. Measured on a 27k-column catalog that is
+        31s per table against 0.5s, and it grows with catalog size.
+        """
         with self._connection.cursor() as cursor:
-            # NOTE Databricks resolves identifiers case-insensitively, while
-            # `information_schema` holds their canonical spelling and compares
-            # them as case-sensitive string literals. Match case-insensitively
-            # and adopt the canonical names for all subsequent look-ups:
             sql = (f"SELECT column_name, full_data_type, is_nullable,\n"
                    f"       table_catalog, table_schema, table_name\n"
                    f"FROM {self._quoted_catalog}.information_schema.columns\n"
-                   f"WHERE lower(table_schema) = lower({schema})\n"
-                   f"  AND lower(table_name) = lower({source_name})\n"
+                   f"WHERE table_schema = lower(?)\n"
+                   f"  AND table_name = lower(?)\n"
                    f"ORDER BY ordinal_position")
-            cursor.execute(sql)
+            cursor.execute(sql,
+                           parameters=[self._schema, self._source_name])
             rows = cursor.fetchall()
 
             if len(rows) == 0:
@@ -124,8 +133,6 @@ class DatabricksTable(Table):
                                  f"in the remote data backend")
 
             self._catalog, self._schema, self._source_name = rows[0][3:6]
-            schema = quote_ident(self._schema, char="'")
-            source_name = quote_ident(self._source_name, char="'")
 
             # Primary key and unique key constraints are informational only and
             # exposed via the Unity Catalog `information_schema`. They may be
@@ -144,10 +151,11 @@ class DatabricksTable(Table):
                     f"  ON tc.constraint_catalog = kcu.constraint_catalog\n"
                     f" AND tc.constraint_schema = kcu.constraint_schema\n"
                     f" AND tc.constraint_name = kcu.constraint_name\n"
-                    f"WHERE lower(tc.table_schema) = lower({schema})\n"
-                    f"  AND lower(tc.table_name) = lower({source_name})\n"
+                    f"WHERE tc.table_schema = lower(?)\n"
+                    f"  AND tc.table_name = lower(?)\n"
                     f"  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')")
-                cursor.execute(sql)
+                cursor.execute(sql,
+                               parameters=[self._schema, self._source_name])
                 constraint_rows = cursor.fetchall()
                 # Only consider single-column keys (no composite support yet).
                 # Count columns per constraint (by name), so that two distinct
@@ -177,9 +185,6 @@ class DatabricksTable(Table):
         return source_columns
 
     def _get_source_foreign_keys(self) -> list[SourceForeignKey]:
-        schema = quote_ident(self._schema, char="'")
-        source_name = quote_ident(self._source_name, char="'")
-
         source_foreign_keys: list[SourceForeignKey] = []
         with self._connection.cursor() as cursor:
             try:
@@ -207,9 +212,10 @@ class DatabricksTable(Table):
                     f"ccu.constraint_schema\n"
                     f" AND rc.unique_constraint_name = ccu.constraint_name\n"
                     f"WHERE tc.constraint_type = 'FOREIGN KEY'\n"
-                    f"  AND lower(tc.table_schema) = lower({schema})\n"
-                    f"  AND lower(tc.table_name) = lower({source_name})")
-                cursor.execute(sql)
+                    f"  AND tc.table_schema = lower(?)\n"
+                    f"  AND tc.table_name = lower(?)")
+                cursor.execute(sql,
+                               parameters=[self._schema, self._source_name])
                 rows = cursor.fetchall()
             except Exception:
                 return []

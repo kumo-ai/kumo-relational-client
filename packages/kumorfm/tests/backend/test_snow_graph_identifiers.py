@@ -1,9 +1,16 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-r"""Warehouse identifiers passed to the Snowflake graph constructors must be
-quoted, not interpolated. See
-``bugs/security-sql-injection-interpolated-identifiers.md``.
+r"""Warehouse names passed to the Snowflake constructors must reach the driver
+as data, not as SQL text.
+
+Doubling the quote character is not sufficient escaping on Snowflake, which
+also honours backslash escapes inside a single-quoted literal, so a name
+containing ``\'`` closes the literal early and the rest executes. Names in a
+value position are therefore bound; a name in an identifier position, which no
+bind can stand in for, is double-quoted -- a form a backslash cannot escape out
+of. See ``bugs/security-sql-injection-interpolated-identifiers.md`` and
+``bugs/security-discovery-sql-quote-ident-backslash-injection.md``.
 """
 
 from __future__ import annotations
@@ -18,8 +25,11 @@ pytest.importorskip('yaml')
 from snowflake.connector import SnowflakeConnection  # noqa: E402
 
 import kumorfm.rfm as rfm  # noqa: E402
+from kumorfm.rfm.backend.snow.table import SnowTable  # noqa: E402
 
 _INJECTION = "X' OR 1=1 --"
+_BACKSLASH_INJECTION = (
+    "x\\' UNION ALL SELECT CURRENT_USER() FROM INFORMATION_SCHEMA.TABLES --")
 _SEMANTIC_VIEW_YAML = 'tables: []\n'
 
 
@@ -34,87 +44,137 @@ class _Cursor:
         return False
 
     def execute(self, sql: str, parameters: Any = None) -> None:
-        self._connection.calls.append((sql, parameters))
+        self._connection.calls.append(
+            (sql, parameters, self._connection._paramstyle))
 
     def fetchone(self) -> tuple:
-        return (self._connection.scalar, )
+        return self._connection.row
 
     def fetchall(self) -> list:
         return []
 
 
 class _Connection(SnowflakeConnection):
-    def __init__(self, scalar: Any = None) -> None:
-        self.calls: list[tuple[str, Any]] = []
-        self.scalar = scalar
+    def __init__(self, scalar: Any = None, row: tuple | None = None) -> None:
+        self.calls: list[tuple[str, Any, str]] = []
+        self.row = row if row is not None else (scalar, )
+        self._paramstyle = 'pyformat'
 
     def cursor(self) -> _Cursor:  # type: ignore[override]
         return _Cursor(self)
 
 
-def test_from_snowflake_quotes_database_and_schema() -> None:
+def _discover(
+    schema: str,
+    database: str = 'MY_DB',
+) -> tuple[str, Any, str]:
     connection = _Connection()
 
-    # The fake connection discovers no tables, which the constructor now
-    # rejects; the statement under test has already been issued at that point:
+    # The fake connection discovers no tables, which the constructor rejects;
+    # the statement under test has already been issued at that point:
     with pytest.raises(ValueError, match='No tables found'):
         rfm.Graph.from_snowflake(
             connection,
-            database='MY_DB',
-            schema='MY_SCHEMA',
+            database=database,
+            schema=schema,
             verbose=False,
         )
 
-    sql, _ = connection.calls[0]
+    return connection.calls[0]
+
+
+def test_from_snowflake_quotes_the_database_identifier() -> None:
+    sql, _, _ = _discover('MY_SCHEMA')
     assert 'FROM "MY_DB".INFORMATION_SCHEMA.TABLES' in sql
-    assert "WHERE TABLE_SCHEMA = 'MY_SCHEMA'" in sql
 
 
-def test_from_snowflake_neutralises_an_injected_schema() -> None:
-    connection = _Connection()
-
-    with pytest.raises(ValueError, match='No tables found'):
-        rfm.Graph.from_snowflake(
-            connection,
-            database='MY_DB',
-            schema=_INJECTION,
-            verbose=False,
-        )
-
-    sql, _ = connection.calls[0]
-    assert "WHERE TABLE_SCHEMA = 'X'' OR 1=1 --'" in sql
-    assert "'X' OR 1=1 --'" not in sql
+def test_from_snowflake_binds_the_schema() -> None:
+    sql, parameters, style = _discover('MY_SCHEMA')
+    assert 'WHERE TABLE_SCHEMA = ?' in sql
+    assert parameters == ('MY_SCHEMA', )
+    assert style == 'qmark'
+    assert 'MY_SCHEMA' not in sql
 
 
-def test_from_snowflake_neutralises_an_injected_database() -> None:
-    connection = _Connection()
+@pytest.mark.parametrize('schema', [
+    _INJECTION,
+    _BACKSLASH_INJECTION,
+    "x\\\\' UNION ALL SELECT 1 --",
+    "x'' UNION ALL SELECT 1 --",
+    "$$' UNION ALL SELECT 1 --",
+])
+def test_from_snowflake_never_writes_the_schema_into_the_sql(
+        schema: str) -> None:
+    sql, parameters, _ = _discover(schema)
+    assert parameters == (schema, )
+    assert 'UNION' not in sql.upper()
+    assert "'" not in sql
+    assert '\\' not in sql
 
-    with pytest.raises(ValueError, match='No tables found'):
-        rfm.Graph.from_snowflake(
-            connection,
-            database='MY_DB". INFORMATION_SCHEMA.TABLES; DROP TABLE T; --',
-            schema='MY_SCHEMA',
-            verbose=False,
-        )
 
-    sql, _ = connection.calls[0]
+def test_from_snowflake_quotes_an_injected_database() -> None:
+    sql, _, _ = _discover(
+        'MY_SCHEMA',
+        database='MY_DB". INFORMATION_SCHEMA.TABLES; DROP TABLE T; --',
+    )
     assert ('FROM "MY_DB"". INFORMATION_SCHEMA.TABLES; DROP TABLE T; --"'
             '.INFORMATION_SCHEMA.TABLES') in sql
 
 
-def test_from_snowflake_semantic_view_quotes_the_view_name() -> None:
+def test_from_snowflake_restores_the_drivers_paramstyle() -> None:
+    connection = _Connection()
+
+    with pytest.raises(ValueError, match='No tables found'):
+        rfm.Graph.from_snowflake(connection, database='MY_DB',
+                                 schema='MY_SCHEMA', verbose=False)
+
+    assert connection._paramstyle == 'pyformat'
+
+
+@pytest.mark.parametrize('name', [
+    'MY_VIEW',
+    "MY_VIEW' OR 1=1 --",
+    "MY_VIEW\\' OR 1=1 --",
+])
+def test_from_snowflake_semantic_view_binds_the_view_name(name: str) -> None:
     connection = _Connection(scalar=_SEMANTIC_VIEW_YAML)
 
     # The view definition is empty, so the graph fails validation afterwards;
     # the statement under test has already been issued at that point:
     with pytest.raises(ValueError, match='At least one table'):
         rfm.Graph.from_snowflake_semantic_view(
-            "MY_VIEW' OR 1=1 --",
+            name,
             connection=connection,
             verbose=False,
         )
 
-    sql, _ = connection.calls[0]
-    assert ("SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW('MY_VIEW'' OR 1=1 --')"
-            in sql)
-    assert "'MY_VIEW' OR 1=1 --'" not in sql
+    sql, parameters, style = connection.calls[0]
+    assert sql == 'SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW(?)'
+    assert parameters == (name, )
+    assert style == 'qmark'
+    assert connection._paramstyle == 'pyformat'
+
+
+class _NumRowsTable:
+    def __init__(self, source_name: str) -> None:
+        self._connection = _Connection(row=('', ) * 7 + (7, ))
+        self._source_name = source_name
+        self._database = 'DB'
+        self._schema = 'PUBLIC'
+        self.source_name = f'DB.PUBLIC.{source_name}'
+
+
+@pytest.mark.parametrize('source_name', [
+    'ORDERS',
+    "ORDERS\\' IN SCHEMA X.Y; DROP TABLE T; --",
+])
+def test_snow_table_binds_the_source_name(source_name: str) -> None:
+    table = _NumRowsTable(source_name)
+
+    assert SnowTable._get_num_rows(table) == 7  # type: ignore[arg-type]
+
+    sql, parameters, style = table._connection.calls[0]
+    assert sql.startswith('SHOW TABLES LIKE ? IN SCHEMA "DB"."PUBLIC"')
+    assert parameters == (source_name, )
+    assert style == 'qmark'
+    assert source_name not in sql

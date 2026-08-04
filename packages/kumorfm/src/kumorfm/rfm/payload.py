@@ -2,6 +2,8 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
+import datetime
 import json
 import math
 from dataclasses import dataclass
@@ -44,9 +46,35 @@ JSON_SAFE_INT_MIN = -9007199254740991
 _NON_FINITE_MSG = ("encountered a non-finite value ({value}); NIM requests "
                    "must contain finite numbers or nulls")
 
+# What `pandas.api.types.infer_dtype` reports for the contents of an `object`
+# column, mapped to the wire dtype that represents those values. A content kind
+# that is absent here (strings, bytes, mixed types, an empty column) travels as
+# `string`, whose cells are stringified to match.
+_OBJECT_CONTENT_DTYPES = {
+    'integer': 'int64',
+    'floating': 'float64',
+    'mixed-integer-float': 'float64',
+    'decimal': 'float64',
+    'boolean': 'bool',
+    'date': 'timestamp[us]',
+    'datetime': 'timestamp[us]',
+    'datetime64': 'timestamp[us]',
+    'timedelta': 'int64',
+    'timedelta64': 'int64',
+}
+
 
 @dataclass(frozen=True)
 class PayloadTables:
+    r"""The frames a request is built from, plus the wire dtype of every column.
+
+    ``instance_column_dtypes`` and ``related_table_column_dtypes`` are the
+    single authority for how a column travels: the schema declares them and the
+    cells are serialized under them, so the two halves of a request cannot
+    disagree. They are derived from the *whole* of each logical table, not from
+    the context or predict half alone, so that the two splits of one table
+    always declare the same dtype.
+    """
     context_instance_table: pd.DataFrame
     predict_instance_table: pd.DataFrame
     related_table_frames: dict[str, pd.DataFrame]
@@ -54,10 +82,11 @@ class PayloadTables:
     predict_related_tables: dict[str, pd.DataFrame]
     related_table_primary_keys: dict[str, str | list[str]]
     related_table_stype_overrides: dict[str, dict[str, Stype]]
-    related_table_key_columns: dict[str, str]
     entity_reference_columns: dict[str, str]
     anchor_time_column: str | None
     relationships: list[dict[str, Any]]
+    instance_column_dtypes: dict[str, str]
+    related_table_column_dtypes: dict[str, dict[str, str]]
 
 
 def predict_request_to_json(
@@ -258,6 +287,7 @@ def _base_payload(
     metadata['num_context_examples'] = context.num_train
     metadata['num_prediction_examples'] = context.num_test
 
+    instance_dtypes = tables.instance_column_dtypes
     return {
         'model': TFM_MODEL_KUMO_RFM,
         'task': _task_spec(context, tables),
@@ -268,9 +298,11 @@ def _base_payload(
                 _instance_payload_dataframe(
                     tables.context_instance_table,
                     context,
-                ), 'instance_table'),
+                ), instance_dtypes, 'instance_table'),
             'related_tables': {
-                table_name: _dataframe_table(df, table_name)
+                table_name: _dataframe_table(
+                    df, tables.related_table_column_dtypes[table_name],
+                    table_name)
                 for table_name, df in tables.context_related_tables.items()
             },
         },
@@ -280,9 +312,11 @@ def _base_payload(
                 _instance_payload_dataframe(
                     tables.predict_instance_table,
                     context,
-                ), 'instance_table'),
+                ), instance_dtypes, 'instance_table'),
             'related_tables': {
-                table_name: _dataframe_table(df, table_name)
+                table_name: _dataframe_table(
+                    df, tables.related_table_column_dtypes[table_name],
+                    table_name)
                 for table_name, df in tables.predict_related_tables.items()
             },
         },
@@ -338,6 +372,12 @@ def _payload_tables(context: Context) -> PayloadTables:
         predict_related_tables[table_name] = df.loc[predict_mask].reset_index(
             drop=True)
 
+    instance_column_dtypes = _column_dtypes(instance_df)
+    instance_column_dtypes[context.y_train.name or 'TARGET'] = _target_dtype(
+        context.task_type,
+        context.y_train,
+    )
+
     return PayloadTables(
         context_instance_table=instance_df.iloc[:context.num_train].
         reset_index(drop=True),
@@ -351,11 +391,22 @@ def _payload_tables(context: Context) -> PayloadTables:
         predict_related_tables=predict_related_tables,
         related_table_primary_keys=related_table_primary_keys,
         related_table_stype_overrides=related_table_stype_overrides,
-        related_table_key_columns=related_table_key_columns,
         entity_reference_columns=entity_reference_columns,
         anchor_time_column=anchor_time_column,
         relationships=relationships,
+        instance_column_dtypes=instance_column_dtypes,
+        related_table_column_dtypes={
+            table_name: _column_dtypes(df)
+            for table_name, df in related_table_frames.items()
+        },
     )
+
+
+def _column_dtypes(df: pd.DataFrame) -> dict[str, str]:
+    return {
+        str(column_name): _dtype_name(df[column_name])
+        for column_name in df.columns
+    }
 
 
 def _instance_dataframe(
@@ -634,11 +685,12 @@ def _edge_pairs(
 
 def _task_spec(context: Context, tables: PayloadTables) -> dict[str, Any]:
     target_name = context.y_train.name or 'TARGET'
+    target_dtype = tables.instance_column_dtypes[target_name]
     spec: dict[str, Any] = {
         'kind': TaskType(context.task_type).value,
         'target': {
             'column_name': target_name,
-            'dtype': _target_dtype(context.task_type, context.y_train),
+            'dtype': target_dtype,
         },
         'entity_table_names': list(context.entity_table_names),
     }
@@ -649,7 +701,8 @@ def _task_spec(context: Context, tables: PayloadTables) -> dict[str, Any]:
         spec['target']['positive_class'] = 'true'
     elif TaskType(context.task_type) == TaskType.MULTICLASS_CLASSIFICATION:
         spec['target']['classes'] = [
-            str(value) for value in pd.unique(context.y_train)
+            _class_label(value, target_dtype)
+            for value in pd.unique(context.y_train)
         ]
     if context.top_k is not None:
         spec['top_k'] = context.top_k
@@ -667,17 +720,7 @@ def _schema_spec(
     spec = {
         'instance_table':
         _schema_for_dataframe(
-            pd.concat([
-                _instance_payload_dataframe(
-                    tables.context_instance_table,
-                    context,
-                ),
-                _instance_payload_dataframe(
-                    tables.predict_instance_table,
-                    context,
-                ),
-            ],
-                      ignore_index=True),
+            tables.instance_column_dtypes,
             stype_overrides={
                 INSTANCE_ID: Stype.ID,
                 **{
@@ -695,20 +738,16 @@ def _schema_spec(
         'related_tables': {
             table_name:
             _schema_for_dataframe(
-                df,
+                dtypes,
                 stype_overrides=tables.related_table_stype_overrides[
                     table_name],
                 primary_key=tables.related_table_primary_keys[table_name],
             )
-            for table_name, df in tables.related_table_frames.items()
+            for table_name, dtypes in
+            tables.related_table_column_dtypes.items()
         },
         'relationships': tables.relationships,
     }
-    target_name = context.y_train.name or 'TARGET'
-    spec['instance_table']['columns'][target_name]['dtype'] = _target_dtype(
-        context.task_type,
-        context.y_train,
-    )
     if tables.anchor_time_column is not None:
         anchor_schema = spec['instance_table']['columns'][
             tables.anchor_time_column
@@ -718,18 +757,22 @@ def _schema_spec(
 
 
 def _schema_for_dataframe(
-    df: pd.DataFrame,
+    dtypes: dict[str, str],
     *,
     stype_overrides: dict[str, Stype],
     primary_key: str | list[str],
 ) -> dict[str, Any]:
+    r"""Declares one table's columns from the wire dtypes its cells are written
+    under, so the schema cannot describe a different encoding than the one the
+    rows carry.
+    """
     primary_keys = (
         {primary_key} if isinstance(primary_key, str) else set(primary_key)
     )
     return {
         'columns': {
             column_name: {
-                'dtype': _dtype_name(df[column_name]),
+                'dtype': dtype,
                 **({
                     'stype': _stype_name(stype_overrides[column_name])
                 } if column_name in stype_overrides else {}),
@@ -737,7 +780,7 @@ def _schema_for_dataframe(
                     'nullable': False
                 } if column_name in primary_keys else {}),
             }
-            for column_name in df.columns
+            for column_name, dtype in dtypes.items()
         },
         'primary_key': primary_key,
     }
@@ -763,15 +806,23 @@ def _unique_internal_column(occupied: set[str], prefix: str) -> str:
 
 def _dataframe_table(
     df: pd.DataFrame,
+    dtypes: dict[str, str],
     table_name: str | None = None,
 ) -> dict[str, Any]:
+    r"""Serializes ``df`` under the wire dtypes its schema declares.
+
+    ``dtypes`` is the same mapping :func:`_schema_for_dataframe` declares from,
+    which is what keeps a cell from contradicting the dtype written next to it.
+    """
     columns = df.columns.tolist()
+    cell_dtypes = [dtypes[str(column)] for column in columns]
     rows = []
     for row_index, row in enumerate(df.itertuples(index=False, name=None)):
         cells = []
         for column_index, value in enumerate(row):
             try:
-                cells.append(_cell_json_value(value))
+                cells.append(
+                    _cell_json_value(value, cell_dtypes[column_index]))
             except ValueError as error:
                 column = columns[column_index]
                 qualified = (f"'{table_name}.{column}'"
@@ -837,11 +888,24 @@ def _target_stype(task_type: TaskType) -> Stype:
 
 
 def _target_dtype(task_type: TaskType, target: pd.Series) -> str:
-    if TaskType(task_type).is_link_pred:
+    r"""The wire dtype the target column travels under.
+
+    A *boolean* multiclass target travels as a string. ``bool`` is the binary
+    task's target dtype, where the contract fixes the two classes as ``false``
+    and ``true``; a multiclass target's classes are free-form strings, and the
+    NIM has no way to map a boolean class label back onto the ones declared.
+    Encoding the column as its two string labels is what a caller gets today by
+    writing ``column.astype(str)`` themselves.
+    """
+    task_type = TaskType(task_type)
+    if task_type.is_link_pred:
         return 'stringlist'
-    if TaskType(task_type) == TaskType.BINARY_CLASSIFICATION:
+    if task_type == TaskType.BINARY_CLASSIFICATION:
         return 'bool'
-    return _dtype_name(target)
+    dtype = _dtype_name(target)
+    if task_type == TaskType.MULTICLASS_CLASSIFICATION and dtype == 'bool':
+        return 'string'
+    return dtype
 
 
 def _target_json_value(task_type: TaskType, value: Any) -> Any:
@@ -882,6 +946,19 @@ def _target_json_value(task_type: TaskType, value: Any) -> Any:
 
 
 def _dtype_name(data: pd.Series) -> str:
+    r"""The wire dtype a column travels under.
+
+    Decided from what the column *holds*, because ``object`` is a container
+    rather than a type: a ``DECIMAL`` read through a warehouse driver, a column
+    that has been through ``fillna``, and a frame built from records are all
+    ``object`` while holding numbers, and declaring those as ``string`` either
+    contradicts the cells that are sent or asks the model to treat a quantity
+    as a category.
+
+    Every value :func:`_cell_json_value` can produce for the dtype returned
+    here is one the contract accepts for it, so the declaration and the cells
+    are always consistent.
+    """
     list_dtype = _list_dtype_name(data)
     if list_dtype is not None:
         return list_dtype
@@ -899,6 +976,13 @@ def _dtype_name(data: pd.Series) -> str:
         return 'float32' if dtype.itemsize <= 4 else 'float64'
     if pd.api.types.is_datetime64_any_dtype(dtype):
         return 'timestamp[us]'
+    if pd.api.types.is_timedelta64_dtype(dtype):
+        # A duration is a quantity, and `Dtype.timedelta` carries
+        # `Stype.numerical`; nanoseconds are how pandas already holds it.
+        return 'int64'
+    if pd.api.types.is_object_dtype(dtype):
+        content = pd.api.types.infer_dtype(data, skipna=True)
+        return _OBJECT_CONTENT_DTYPES.get(content, 'string')
     return 'string'
 
 
@@ -1022,6 +1106,12 @@ def _json_value(value: Any) -> Any:
         return _timestamp_json_value(value)
     if isinstance(value, np.datetime64):
         return _timestamp_json_value(pd.Timestamp(value))
+    if isinstance(value, (pd.Timedelta, datetime.timedelta)):
+        # Nanoseconds: the unit pandas stores durations in, and the one wire
+        # dtype `_dtype_name` gives a `timedelta` column.
+        return pd.Timedelta(value).value
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return base64.b64encode(bytes(value)).decode('ascii')
     if isinstance(value, np.ndarray):
         return [_json_value(v) for v in value.tolist()]
     if isinstance(value, (list, tuple)):
@@ -1037,7 +1127,11 @@ def _json_value(value: Any) -> Any:
             return None
         if not value.is_finite():
             raise ValueError(_NON_FINITE_MSG.format(value=value))
-        return str(value)  # The wire dtype of a `Decimal` column is `string`.
+        # Exact base-10 text, which `_cell_json_value` then converts to the
+        # column's declared wire dtype -- normally `float64`, and `string` for
+        # a column that mixes decimals with values that are not numbers, where
+        # the text is the lossless form.
+        return str(value)
     try:
         if pd.isna(value):
             return None
@@ -1046,17 +1140,61 @@ def _json_value(value: Any) -> Any:
     return value
 
 
-def _cell_json_value(value: Any) -> Any:
-    r"""Serializes a table cell, honoring the JSON safe-integer rule.
+def _class_label(value: Any, dtype: str) -> str:
+    r"""The class label spelling the declared target ``dtype`` gives ``value``.
 
-    ``int64`` values outside the JavaScript safe-integer range must travel as
-    base-10 strings; sending them as JSON numbers is rejected by the NIM.
+    A boolean target's classes are the contract's ``'false'`` / ``'true'``, the
+    same spelling the binary-classification branch uses; ``str(np.True_)``
+    would contradict both the declared dtype and the ``true`` / ``false`` row
+    values travelling beside it.
+    """
+    if dtype == 'bool':
+        return 'true' if bool(value) else 'false'
+    return str(_json_value(value))
+
+
+def _cell_json_value(value: Any, dtype: str) -> Any:
+    r"""Serializes a table cell under the wire ``dtype`` its column declares.
+
+    The dtype is the authority: a cell is converted into the JSON type the
+    contract defines for that dtype rather than into whatever its Python type
+    happens to map to, so a column can never declare one encoding and send
+    another. ``int64`` values outside the JavaScript safe-integer range travel
+    as base-10 strings, which is how the contract preserves their precision.
     """
     value = _json_value(value)
-    if isinstance(value, int) and not isinstance(value, bool):
-        if value > JSON_SAFE_INT_MAX or value < JSON_SAFE_INT_MIN:
-            return str(value)
+    if value is None:
+        return None
+    if dtype == 'stringlist':
+        if not isinstance(value, list):
+            raise ValueError(
+                f"expected an array of values for a 'stringlist' column, but "
+                f"got {value!r}")
+        return [None if item is None else _wire_string(item) for item in value]
+    if dtype == 'string':
+        return _wire_string(value)
+    if dtype == 'bool':
+        return bool(value)
+    if dtype in ('int64', 'int32'):
+        integer = int(value)
+        if integer > JSON_SAFE_INT_MAX or integer < JSON_SAFE_INT_MIN:
+            return str(integer)
+        return integer
+    if dtype in ('float64', 'float32'):
+        return float(value)
+    if dtype == 'timestamp[us]':
+        if isinstance(value, str):
+            return value
+        return _timestamp_json_value(pd.Timestamp(value))
+    if not isinstance(value, (str, int, float, bool, list)):
+        raise ValueError(
+            f"cannot serialize a value of type {type(value).__name__} under "
+            f"wire dtype '{dtype}'; convert the column to a supported dtype")
     return value
+
+
+def _wire_string(value: Any) -> str:
+    return value if isinstance(value, str) else str(value)
 
 
 def _timestamp_json_value(value: pd.Timestamp) -> str | None:

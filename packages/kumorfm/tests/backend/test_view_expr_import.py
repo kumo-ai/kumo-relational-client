@@ -79,6 +79,71 @@ def test_keywords_inside_quoted_text_are_accepted(expr):
     assert _unsafe_expr_reason(expr) is None
 
 
+@pytest.mark.parametrize('expr', [
+    f"$$'$$ || {_EXFILTRATION}::VARCHAR || $$'$$",
+    f"'\\'' || {_EXFILTRATION}::VARCHAR || '\\''",
+    f"'\\' || {_EXFILTRATION} || '\\'",
+    f'"\\" || {_EXFILTRATION} || "\\"',
+    f'"\\"" || {_EXFILTRATION} || "b"',
+    f"$$x$$ || {_EXFILTRATION}",
+    f"'''' || {_EXFILTRATION} || ''''",
+    f"'\\\\' || {_EXFILTRATION} || '\\\\'",
+    f'`a` || {_EXFILTRATION} || `b`',
+    f"'a\\' || {_EXFILTRATION} || 'b\\'",
+    f'$$ {_EXFILTRATION}',
+])
+def test_dialect_escaping_cannot_hide_a_sub_query(expr):
+    r"""Snowflake dollar-quoting and the backslash escapes both warehouses
+    honour must not be able to shift where the guard believes a literal ends.
+    Verified live: none of these evaluates its sub-query on Snowflake or
+    Databricks once refused here. See the ``$$``/backslash guard-bypass report
+    under ``bugs/``.
+    """
+    assert _unsafe_expr_reason(expr) is not None
+
+
+@pytest.mark.parametrize('expr', [
+    'TRUNCATE(AMOUNT, 2)',
+    'TRUNCATE (AMOUNT, 2)',
+    'truncate(amount)',
+    "INSERT(NAME, 1, 2, '**')",
+    "INSERT(name, 1, 0, 'Dr. ')",
+    'ORDERS.MERGE',
+    'ORDERS.CREATE',
+    'orders.update',
+    '"ORDERS".DELETE',
+    "REGEXP_REPLACE(NAME, '\\\\s+', ' ')",
+    "SPLIT_PART(PATH, '\\\\', 1)",
+    "CONCAT(NAME, '\\'')",
+    '$$plain text$$',
+    "$$it's$$",
+    'AMOUNT$USD * 2',
+    'T$1.COL',
+])
+def test_scalar_functions_and_qualified_names_are_accepted(expr):
+    r"""``TRUNCATE`` and ``INSERT`` are also Snowflake scalar functions, and a
+    keyword behind a ``.`` is the tail of a qualified name; neither can begin a
+    statement, so refusing them only drops legitimate columns. See
+    ``bugs/graph-view-expr-guard-rejects-scalar-functions.md``.
+    """
+    assert _unsafe_expr_reason(expr) is None
+
+
+@pytest.mark.parametrize('expr', [
+    'INSERT INTO T VALUES (1)',
+    'TRUNCATE TABLE T',
+    'TRUNCATE  TABLE  T',
+    'SELECT(SECRET)FROM PAYROLL',
+    '(SELECT(1))',
+])
+def test_statements_that_look_like_calls_are_still_reported(expr):
+    r"""``SELECT`` may legally be followed by ``(``, so only ``INSERT`` and
+    ``TRUNCATE`` -- which as statements are always followed by a keyword --
+    are exempt when they are called.
+    """
+    assert _unsafe_expr_reason(expr) is not None
+
+
 # Snowflake semantic views ####################################################
 
 snowflake_connector = pytest.importorskip('snowflake.connector')
@@ -105,10 +170,14 @@ tables:
         data_type: VARCHAR
 {extra}"""
 
-_LEAKED_DIMENSION = f"""      - name: LEAKED
-        expr: {_EXFILTRATION}
-        data_type: NUMBER
-"""
+def _leaked_dimension(expr: str = _EXFILTRATION) -> str:
+    quoted = expr.replace("'", "''")
+    return (f"      - name: LEAKED\n"
+            f"        expr: '{quoted}'\n"
+            f"        data_type: NUMBER\n")
+
+
+_LEAKED_DIMENSION = _leaked_dimension()
 
 _SOURCE_COLUMNS = [
     SourceColumn(name='USER_ID', dtype=Dtype.int64, is_primary_key=True,
@@ -142,6 +211,7 @@ class _Connection(SnowflakeConnection):
     def __init__(self, scalar: Any = None) -> None:
         self.calls: list[str] = []
         self.scalar = scalar
+        self._paramstyle = 'pyformat'
 
     def cursor(self) -> _Cursor:  # type: ignore[override]
         return _Cursor(self)
@@ -208,7 +278,44 @@ def test_semantic_view_expression_is_not_executed(snow_graph):
     ] == ['UPPER(NAME)']
 
 
+@pytest.mark.parametrize('expr', [
+    f"$$'$$ || {_EXFILTRATION}::VARCHAR || $$'$$",
+    f"'\\'' || {_EXFILTRATION}::VARCHAR || '\\''",
+])
+def test_dialect_escaped_expression_is_not_executed(snow_graph, expr):
+    r"""End-to-end through the public constructor: a dimension that hides its
+    quotes in ``$$`` or ``\'`` is dropped rather than spliced into the sampler
+    query.
+    """
+    with pytest.warns(UserWarning, match='LEAKED'):
+        graph = snow_graph(_leaked_dimension(expr))
+
+    table = graph['USERS']
+    assert not table.has_column('LEAKED')
+    assert [
+        str(column.expr) for column in table.columns
+        if column.expr is not None
+    ] == ['UPPER(NAME)']
+
+
 def test_semantic_view_keeps_ordinary_expression_columns(snow_graph):
     graph = snow_graph()
 
     assert str(graph['USERS']['NAME_UPPER'].expr) == 'UPPER(NAME)'
+
+
+def test_semantic_view_keeps_a_scalar_function_column(snow_graph):
+    r"""The guard must not drop a ``TRUNCATE``/``INSERT`` dimension; see
+    ``bugs/graph-view-expr-guard-rejects-scalar-functions.md``.
+    """
+    extra = ("      - name: NAME_MASKED\n"
+             "        expr: \"INSERT(NAME, 1, 2, '**')\"\n"
+             "        data_type: VARCHAR\n"
+             "      - name: NAME_TRUNC\n"
+             "        expr: 'TRUNCATE(USER_ID, 2)'\n"
+             "        data_type: NUMBER\n")
+    graph = snow_graph(extra)
+
+    table = graph['USERS']
+    assert table.has_column('NAME_MASKED')
+    assert table.has_column('NAME_TRUNC')

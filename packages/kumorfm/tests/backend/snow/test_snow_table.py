@@ -24,7 +24,7 @@ class _FakeCursor:
     def __exit__(self, *args: Any) -> None:
         pass
 
-    def execute(self, sql: str) -> None:
+    def execute(self, sql: str, parameters: Any = None) -> None:
         pass
 
     def fetchone(self) -> tuple[Any, ...]:
@@ -34,6 +34,7 @@ class _FakeCursor:
 class _FakeConnection:
     def __init__(self, num_rows: int) -> None:
         self._num_rows = num_rows
+        self._paramstyle = 'pyformat'
 
     def cursor(self) -> _FakeCursor:
         return _FakeCursor(('', ) * 7 + (self._num_rows, ))
