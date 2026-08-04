@@ -42,7 +42,7 @@ Issues = "https://github.com/NVIDIA/nvidia-sdfm-sdk/issues"
 
 [project.optional-dependencies]
 kumorfm = [
-    "kumorfm>=2.23,<3",
+    "kumorfm>=2.24,<3",
 ]
 sqlite = [
     "sdfm-connectors[sqlite]",
@@ -62,10 +62,10 @@ s3 = [
 # Deliberately not part of `all`: the explanation summary POSTs row data to a
 # third-party LLM endpoint, so installing it stays an explicit opt-in.
 explain = [
-    "kumorfm[explain]>=2.23,<3",
+    "kumorfm[explain]>=2.24,<3",
 ]
 relbench = [
-    "kumorfm[relbench]>=2.23,<3",
+    "kumorfm[relbench]>=2.24,<3",
 ]
 all = [
     "nvidia-sdfm[kumorfm,sqlite,duckdb,snowflake,databricks,s3]",
