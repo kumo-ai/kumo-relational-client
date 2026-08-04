@@ -16,6 +16,11 @@ from typing import Any, Literal, overload
 
 import numpy as np
 import pandas as pd
+from requests.exceptions import RequestException, Timeout
+from rich.console import Console
+from rich.markdown import Markdown
+
+from kumorfm import in_notebook
 from kumorfm.api.explain import GraphGradientScore
 from kumorfm.api.model_plan import RunMode
 from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
@@ -36,11 +41,6 @@ from kumorfm.api.rfm import (
 from kumorfm.api.rfm.context import Context, Table
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import AggregationType, ProblemType, Stype
-from requests.exceptions import RequestException, Timeout
-from rich.console import Console
-from rich.markdown import Markdown
-
-from kumorfm import in_notebook
 from kumorfm.client.rfm import RFMAPI
 from kumorfm.exceptions import HTTPException, NimFailureError
 from kumorfm.mixin import CastMixin
@@ -48,6 +48,7 @@ from kumorfm.rfm import Graph, TaskTable
 from kumorfm.rfm.base import DataBackend, Sampler
 from kumorfm.rfm.base.utils import Timestamp
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
+from kumorfm.rfm.explain_summary import generate_summary
 from kumorfm.rfm.payload import (
     INSTANCE_ID,
     context_size_stats,
@@ -58,7 +59,6 @@ from kumorfm.rfm.payload import (
     session_predict_payload,
     validate_payload_table_rows,
 )
-from kumorfm.rfm.explain_summary import generate_summary
 from kumorfm.rfm.query_parser import parse_query_locally
 from kumorfm.utils import ProgressLogger, display
 
@@ -1251,6 +1251,17 @@ class KumoRFM:
 
                     break
                 except (HTTPException, RequestException) as e:
+                    if getattr(e, 'status_code', None) == 413:
+                        num_entities = (materialized.prediction_stop
+                                        - materialized.prediction_start)
+                        detail = getattr(e, 'detail', e)
+                        raise ValueError(
+                            f"The request is too large for the endpoint "
+                            f"({detail}). It carries {num_entities:,} "
+                            f"entities; retry with a smaller 'batch_size' "
+                            f"(e.g. {max(1, num_entities // 2):,}), or "
+                            f"sample fewer related rows per entity with "
+                            f"'num_neighbors'.") from None
                     failure = _nim_failure_error(
                         e, explain_config is not None, request_payload)
                     if attempt == self._num_retries or not failure.transient:

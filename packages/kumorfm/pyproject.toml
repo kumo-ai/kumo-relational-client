@@ -8,9 +8,8 @@ license = "Apache-2.0"
 license-files=["LICENSE", "NOTICE"]
 description="RFM engine (graph, samplers, PQL, native neighbor-sampler) for the nvidia-sdfm SDK"
 readme="README.md"
-# Upper bound matches the cibuildwheel matrix in .gitlab-ci.yml: this package
-# ships binary wheels only (no sdist), so a version with no wheel must fail
-# resolution rather than fail to find a distribution.
+# Binary wheels only, so the upper bound must match the cibuildwheel matrix in
+# .gitlab-ci.yml.
 requires-python=">=3.10,<3.13"
 keywords=[
     "deep-learning",
@@ -38,6 +37,11 @@ Source = "https://github.com/NVIDIA/nvidia-sdfm-sdk"
 Issues = "https://github.com/NVIDIA/nvidia-sdfm-sdk/issues"
 
 [project.optional-dependencies]
+# Invoking a served model. Separate from the `databricks` extra below, which
+# reads Unity Catalog over SQL; either is useful without the other.
+databricks-serving=[
+    "databricks-sdk>=0.68.0,<1.0",
+]
 test=[
     "packaging",
     "pytest",
@@ -138,8 +142,7 @@ include_trailing_comma=true
 skip=[".gitignore", "__init__.py"]
 
 [tool.ruff]  # https://docs.astral.sh/ruff/rules
-# Inherit the workspace lint baseline so this package cannot silently opt out of
-# it; see the root pyproject.toml for the shared rule set.
+# Inherit the workspace rule set; this package only adds to it.
 extend="../../pyproject.toml"
 src=["src/kumorfm", "setup.py"]
 line-length=80
@@ -163,6 +166,11 @@ ignore = [
     "D205",  # Ignore "blank line required between summary line and description"
     "D415",  # First line should end with a period
 ]
+
+[tool.ruff.lint.per-file-ignores]
+# Databricks injects `dbutils`/`spark`/`display` into notebooks (F821), and
+# each cell repeats its own imports so it stays runnable on its own (E402).
+"**/examples/**/notebooks/*.ipynb" = ["F821", "E402"]
 
 [tool.ruff.format]
 quote-style="single"

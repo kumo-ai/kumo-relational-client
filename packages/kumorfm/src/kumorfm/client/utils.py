@@ -19,8 +19,9 @@ from typing import (
 )
 
 import requests
-from kumorfm.api.json_serde import from_json
 
+from kumorfm.api.json_serde import from_json
+from kumorfm.client.transport import TransportResponse
 from kumorfm.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ def parse_patch_response(response: requests.Response) -> bool:
     return parse_response(Dict[str, bool], response)['resource_updated']
 
 
-def raise_on_error(response: requests.Response) -> None:
+def raise_on_error(response: TransportResponse) -> None:
     r"""Raises an :class:`~kumorfm.exceptions.HTTPException` if a response does
     not return with an OK status code.
     """

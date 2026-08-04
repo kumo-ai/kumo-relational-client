@@ -20,20 +20,12 @@ __all__ = [
     'TaskTable',
 ]
 
-# Names exported from the driver package root rather than from ``kumorfm.rfm``.
 _ROOT_NAMES = frozenset({'Dtype', 'Stype'})
 
 if TYPE_CHECKING:
     from kumorfm import Dtype, Stype
-    from kumorfm.rfm import (
-        ExplainConfig,
-        Explanation,
-        Graph,
-        LocalTable,
-        MaterializedPredictionRequest,
-        Table,
-        TaskTable,
-    )
+    from kumorfm.rfm import (ExplainConfig, Explanation, Graph, LocalTable,
+                             MaterializedPredictionRequest, Table, TaskTable)
 
 
 def _import(module_name: str) -> Any:

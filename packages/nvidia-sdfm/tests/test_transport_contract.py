@@ -396,3 +396,54 @@ def test_predict_after_close_is_rejected(requests_mock, context_df,
         ))
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
     assert requests_mock.call_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Both transports must satisfy the same internal contract.
+#
+# These exist because a merge once left ServingTarget without _require_open
+# while SDFMClient._predict had started calling it. Nothing conflicted
+# textually and the whole suite stayed green -- the break only surfaced as an
+# AttributeError against a live serving endpoint. Anything _predict calls on
+# self._transport belongs here, parametrised over both, so the next divergence
+# fails locally instead.
+# ---------------------------------------------------------------------------
+
+def _serving_target():
+    from nvidia_sdfm.core.serving import ServingTarget
+    return ServingTarget('an-endpoint', object())
+
+
+def _http_transport():
+    return Transport(url=_URL)
+
+
+_TRANSPORTS = [
+    pytest.param(_http_transport, id='http'),
+    pytest.param(_serving_target, id='serving'),
+]
+
+
+@pytest.mark.parametrize('build', _TRANSPORTS)
+def test_transport_exposes_what_predict_calls(build):
+    # Named explicitly rather than derived from Transport: the point is to pin
+    # the surface _predict depends on, not to mirror whatever Transport grows.
+    target = build()
+    for name in ('_require_open', 'close', 'health_ready', 'predict'):
+        assert callable(getattr(target, name, None)), (
+            f'{type(target).__name__} is missing {name}()')
+
+
+@pytest.mark.parametrize('build', _TRANSPORTS)
+def test_require_open_passes_while_open(build):
+    build()._require_open()
+
+
+@pytest.mark.parametrize('build', _TRANSPORTS)
+def test_require_open_refuses_after_close(build):
+    target = build()
+    target.close()
+    with pytest.raises(SdfmError) as excinfo:
+        target._require_open()
+    assert excinfo.value.code == 'INVALID_CONFIGURATION'
+    assert 'closed' in str(excinfo.value)

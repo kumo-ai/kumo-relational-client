@@ -56,6 +56,11 @@ snowflake = [
 databricks = [
     "sdfm-connectors[databricks]",
 ]
+# Invoking a served model, as opposed to `databricks` above, which is SQL data
+# access. Kept distinct so neither drags in the other.
+databricks-serving = [
+    "kumorfm[databricks-serving]>=2.23,<3",
+]
 s3 = [
     "sdfm-connectors[s3]",
 ]
@@ -68,7 +73,7 @@ relbench = [
     "kumorfm[relbench]>=2.24,<3",
 ]
 all = [
-    "nvidia-sdfm[kumorfm,sqlite,duckdb,snowflake,databricks,s3]",
+    "nvidia-sdfm[kumorfm,sqlite,duckdb,snowflake,databricks,databricks-serving,s3]",
 ]
 test = [
     "pytest",

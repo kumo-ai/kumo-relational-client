@@ -13,11 +13,12 @@ import numpy as np
 import pandas as pd
 import pytest
 import requests
+from conftest import MOCK_URL
+
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.rfm.context import Table
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import Stype
-
 from kumorfm.client import KumoClient
 from kumorfm.client.rfm import RFMAPI
 from kumorfm.rfm import Graph, KumoRFM, TaskTable
@@ -31,8 +32,6 @@ from kumorfm.rfm.payload import (
     _target_json_value,
 )
 from kumorfm.rfm.rfm import Explanation
-
-from conftest import MOCK_URL
 
 CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
 
@@ -793,17 +792,50 @@ def test_non_finite_cell_names_its_table_column_and_row(value: float) -> None:
         _feature_payload([1.0, 1.0, 1.0, value] + [1.0] * 4)
 
 
-def test_decimal_cells_serialize_as_their_declared_string_dtype() -> None:
+def test_decimal_cells_are_named_by_what_they_hold() -> None:
     # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
     # -- every DB-API driver returns Decimal for NUMERIC columns, which used to
     # raise 'Object of type Decimal is not JSON serializable'.
+    #
+    # Serializing them is not enough on its own. A DECIMAL column announced as
+    # `string` reaches the model as text, so a numeric feature stops being
+    # numeric and an id stops being an id. The dtype follows the values, and
+    # falls back to `string` only where precision demands it.
+
+    # Fractional: float64, and the cells are numbers rather than strings.
     payload = _feature_payload([Decimal(f'-{index}.50') for index in range(8)])
     table = payload['context']['related_tables']['USERS']
     schema = payload['schema']['related_tables']['USERS']['columns']
     index = table['columns'].index('FEATURE')
-    assert schema['FEATURE']['dtype'] == 'string'
+    assert schema['FEATURE']['dtype'] == 'float64'
     assert {row[index] for row in table['rows']} <= {
-        f'-{position}.50' for position in range(8)
+        -position - 0.5 for position in range(8)
     }
-    assert '-0.50' in {row[index] for row in table['rows']}
+    assert -0.5 in {row[index] for row in table['rows']}
+    json.dumps(payload)
+
+    # Integral and within int64: int64, so an id stays an id.
+    payload = _feature_payload([Decimal(index) for index in range(8)])
+    schema = payload['schema']['related_tables']['USERS']['columns']
+    assert schema['FEATURE']['dtype'] == 'int64'
+    json.dumps(payload)
+
+    # Integral but wider than int64 -- decimal(38, 0) permits 38 digits where
+    # int64 holds 19. Named `string`, which keeps every digit, rather than
+    # int64, which would declare a width the value does not have.
+    # Built from digits rather than by arithmetic: Decimal addition applies the
+    # context precision, which is 28 significant digits by default and would
+    # round these before they ever reached the payload.
+    wide = [Decimal(f'1234567890123456789012345678{index:02d}')
+            for index in range(8)]
+    payload = _feature_payload(wide)
+    table = payload['context']['related_tables']['USERS']
+    schema = payload['schema']['related_tables']['USERS']['columns']
+    index = table['columns'].index('FEATURE')
+    assert schema['FEATURE']['dtype'] == 'string'
+    # Subset, not equality: the context/predict split does not carry every row.
+    # Every digit survives, and none of them arrive in scientific notation.
+    emitted = {row[index] for row in table['rows']}
+    assert emitted <= {str(value) for value in wide}
+    assert '123456789012345678901234567800' in emitted
     json.dumps(payload)

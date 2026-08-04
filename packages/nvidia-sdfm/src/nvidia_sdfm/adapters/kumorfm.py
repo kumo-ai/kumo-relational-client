@@ -8,8 +8,9 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-
-from nvidia_sdfm.base import ModelAdapter, ModelCapabilities, request_type_names
+from nvidia_sdfm.base import (ModelAdapter, ModelCapabilities,
+                              request_type_names)
+from nvidia_sdfm.core.serving import ServingTarget
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import MissingExtraError, NimRequestError, SdfmError
 from nvidia_sdfm.requests import KumoRFMRequest, KumoRFMTaskRequest
@@ -52,6 +53,51 @@ def _is_explain_config(value: Any) -> bool:
     except Exception:
         return False
     return isinstance(value, ExplainConfig)
+
+
+def _engine_http_error_types() -> tuple[type[BaseException], ...]:
+    r"""kumorfm's ``HTTPException``, or an empty tuple if it cannot be imported.
+
+    Looked up lazily for the same reason the engine itself is: this adapter
+    must import without the optional ``kumorfm`` engine installed. ``except ()``
+    matches nothing, which is the right behaviour when there is no engine to
+    have raised.
+    """
+    try:
+        from kumorfm.exceptions import HTTPException
+    except Exception:
+        return ()
+    return (HTTPException,)
+
+
+def _init_serving(rfm_engine: Any, target: ServingTarget) -> None:
+    r"""Initialize the engine against a serving endpoint.
+
+    Every failure is translated at this boundary, the way
+    :mod:`nvidia_sdfm.core.connectors` translates the connector layer's. The
+    ``ImportError`` case is the reason this exists: kumorfm names *its own*
+    extra (``pip install 'kumorfm[databricks-serving]'``), which a user who
+    installed ``nvidia-sdfm[databricks-serving]`` never asked for and cannot
+    act on.
+    """
+    try:
+        rfm_engine.init_databricks_serving(
+            target.endpoint,
+            workspace_client=target.workspace_client,
+            _token=rfm_engine._SDFM_CLIENT_TOKEN,
+        )
+    except ImportError as error:
+        raise MissingExtraError(
+            'databricks-serving', 'databricks-sdk') from error
+    except ValueError as error:
+        raise SdfmError(str(error), code='INVALID_CONFIGURATION') from error
+    except _engine_http_error_types() as error:
+        raise SdfmError(
+            f'could not reach the serving endpoint '
+            f'{target.endpoint!r}: {getattr(error, "detail", error)}',
+            code='SERVING_INIT_FAILED',
+            details={'status_code': getattr(error, 'status_code', None)},
+        ) from error
 
 
 def _resolve_explain(field_value: Any, options: dict[str, Any]) -> Any:
@@ -105,6 +151,20 @@ def _driver_error_types() -> tuple[Any, Any]:
     except Exception:
         return None, None
     return NimFailureError, InvalidResponseError
+
+
+def _describe(transport: Transport | ServingTarget) -> str:
+    r"""Name the deployment for an error message, whichever transport it is.
+
+    Reading ``transport.url`` is not safe here: a ``ServingTarget`` raises from
+    that property by design, and this is called from an ``except`` block, so
+    the raise replaced the failure being reported. Every engine error on the
+    serving path surfaced as 'the serving endpoint has no URL' with the real
+    cause discarded.
+    """
+    if isinstance(transport, ServingTarget):
+        return f'serving endpoint {transport.endpoint!r}'
+    return transport.url
 
 
 def _translate_engine_error(error: Exception, url: str) -> SdfmError:
@@ -279,7 +339,7 @@ class KumoRFMAdapter(ModelAdapter):
 
     def predict(
         self,
-        transport: Transport,
+        transport: Transport | ServingTarget,
         request: 'KumoRFMRequest | KumoRFMTaskRequest',
     ) -> 'pd.DataFrame | Explanation':
         engine = _load_engine()
@@ -292,10 +352,13 @@ class KumoRFMAdapter(ModelAdapter):
         if isinstance(request, KumoRFMTaskRequest):
             _validate_task_request(request)
 
-        engine.init(url=transport.url, api_key=transport.api_key,
-                    verify_ssl=transport.verify_ssl,
-                    timeout=transport.timeout,
-                    _token=engine._SDFM_CLIENT_TOKEN)
+        if isinstance(transport, ServingTarget):
+            _init_serving(engine, transport)
+        else:
+            engine.init(url=transport.url, api_key=transport.api_key,
+                        verify_ssl=transport.verify_ssl,
+                        timeout=transport.timeout,
+                        _token=engine._SDFM_CLIENT_TOKEN)
         # `verbose` has to reach the constructor as well as the call: it owns
         # the graph-materialization output, and a handle builds a fresh engine
         # model per prediction, so that banner is printed on every predict.
@@ -332,5 +395,6 @@ class KumoRFMAdapter(ModelAdapter):
         except SdfmError:
             raise
         except Exception as error:
-            raise _translate_engine_error(error, transport.url) from error
+            raise _translate_engine_error(
+                error, _describe(transport)) from error
         return _coerce_result(result, explain is not False)

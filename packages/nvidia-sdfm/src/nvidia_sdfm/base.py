@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, ClassVar, Union
 
 import pandas as pd
-
+from nvidia_sdfm.core.serving import ServingTarget
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import UnknownModelError
 from nvidia_sdfm.requests import ModelRequest
@@ -68,14 +68,23 @@ class ModelAdapter(ABC):
     @abstractmethod
     def predict(
         self,
-        transport: Transport,
+        transport: Transport | ServingTarget,
         request: ModelRequest,
     ) -> PredictResult:
         r"""Serializes ``request``, posts it over ``transport`` and parses the
         response.
 
+        ``transport`` is a :class:`Transport` for a NIM addressed by URL, or a
+        :class:`ServingTarget` for a model served by name on a managed
+        platform. An adapter that supports only one need not check: a
+        ``ServingTarget`` raises an ``SdfmError`` naming the reason from
+        ``url``, ``health_ready`` and ``predict`` alike, so reaching for the
+        wrong one fails with an error a caller can read. An adapter that
+        supports both must branch on the type, as
+        :class:`~nvidia_sdfm.adapters.kumorfm.KumoRFMAdapter` does.
+
         Args:
-            transport: The owning client's HTTP layer.
+            transport: The owning client's HTTP layer, or its serving target.
             request: An instance of this adapter's ``request_type``; the client
                 checks that before dispatching.
         """

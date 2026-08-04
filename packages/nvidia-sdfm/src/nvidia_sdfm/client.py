@@ -8,14 +8,9 @@ from types import TracebackType
 from typing import Any
 
 import pandas as pd
-
-from nvidia_sdfm.base import (
-    AdapterRegistry,
-    ModelAdapter,
-    ModelCapabilities,
-    PredictResult,
-    request_type_names,
-)
+from nvidia_sdfm.base import (AdapterRegistry, ModelAdapter, ModelCapabilities,
+                              PredictResult, request_type_names)
+from nvidia_sdfm.core.serving import ServingTarget
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import SdfmError
 from nvidia_sdfm.models import RFMModel, TabICLModel
@@ -58,7 +53,9 @@ class SDFMClient:
         r"""Opens a client against one NIM.
 
         No request is made here: the endpoint is first contacted by
-        :meth:`health_ready` or by a prediction.
+        :meth:`health_ready` or by a prediction. To address a model served by
+        name on a managed platform instead, use
+        :meth:`for_databricks_serving`.
 
         Args:
             url: Base URL of the NIM, e.g. ``'http://localhost:8000'``. Must be
@@ -75,14 +72,84 @@ class SDFMClient:
             registry: The adapter registry to dispatch with. Defaults to the
                 built-in TabICL and KumoRFM adapters.
         """
-        self._transport = Transport(
-            url,
-            api_key,
-            verify_ssl=verify_ssl,
-            timeout=timeout,
-            max_retries=max_retries,
+        self._configure(
+            Transport(
+                url,
+                api_key,
+                verify_ssl=verify_ssl,
+                timeout=timeout,
+                max_retries=max_retries,
+            ),
+            registry,
         )
+
+    def _configure(
+        self,
+        transport: Transport | ServingTarget,
+        registry: AdapterRegistry | None,
+    ) -> None:
+        r"""The one place an ``SDFMClient``'s fields are populated.
+
+        Both construction paths route through here, so a field added to a
+        client cannot be missing from clients built the other way.
+        """
+        self._transport = transport
         self._registry = registry if registry is not None else _default_registry()
+
+    @classmethod
+    def for_databricks_serving(
+        cls,
+        endpoint: str,
+        *,
+        workspace_client: Any | None = None,
+        registry: AdapterRegistry | None = None,
+    ) -> "SDFMClient":
+        r"""A client for a model served by Databricks Model Serving.
+
+        The counterpart to the constructor, which addresses a NIM by base URL.
+        A serving endpoint is addressed by name through a workspace client, so
+        there is no url, api_key, verify_ssl, timeout or retry policy to give --
+        the platform owns those.
+
+        >>> client = SDFMClient.for_databricks_serving("kumo-rfm")
+        >>> df = client.kumorfm(graph).predict("PREDICT ... FOR ...", [1, 2])
+
+        Args:
+            endpoint: The serving endpoint name.
+            workspace_client: An existing ``WorkspaceClient``. When omitted one
+                is built from the ambient Databricks configuration, which is
+                how a notebook authenticates without handling a token.
+            registry: As for the constructor.
+
+        Raises:
+            SdfmError: with ``code='INVALID_CONFIGURATION'`` if ``endpoint`` is
+                empty, is not a string, carries surrounding whitespace, or
+                looks like a URL rather than a name.
+
+        Nothing here contacts Databricks, so nothing here can fail on
+        authentication. A missing ``databricks-sdk`` surfaces at the first
+        ``predict`` as ``MissingExtraError``, and a workspace that refuses the
+        ambient configuration as ``SdfmError``.
+        """
+        return cls._from_transport(
+            ServingTarget(endpoint, workspace_client), registry,
+        )
+
+    @classmethod
+    def _from_transport(
+        cls,
+        transport: Transport | ServingTarget,
+        registry: AdapterRegistry | None = None,
+    ) -> 'SDFMClient':
+        r"""Build a client around an already-constructed target.
+
+        ``__init__`` takes the arguments a NIM needs and builds a
+        ``Transport``; a serving target is built from different arguments
+        entirely. Both then land in ``_configure``.
+        """
+        client = cls.__new__(cls)
+        client._configure(transport, registry)
+        return client
 
     @property
     def url(self) -> str:
@@ -174,7 +241,10 @@ class SDFMClient:
         self.close()
 
     def __repr__(self) -> str:
-        return f'SDFMClient(url={self.url!r}, models={self.models()})'
+        target = getattr(self._transport, 'endpoint', None)
+        where = (f'endpoint={target!r}' if target is not None
+                 else f'url={self._transport.url!r}')
+        return f'SDFMClient({where}, models={self.models()})'
 
     def _register(self, adapter: ModelAdapter) -> None:
         r"""Add a model adapter to this client's registry."""

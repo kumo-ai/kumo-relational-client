@@ -8,7 +8,7 @@ import threading
 from dataclasses import dataclass
 
 import kumorfm
-from kumorfm.client.client import KumoClient
+from kumorfm.client.transport import RFMTransport
 
 from .base import Table
 from .backend.local import LocalTable
@@ -51,7 +51,7 @@ class RfmGlobalState:
     _lock: threading.Lock = threading.Lock()
 
     @property
-    def client(self) -> KumoClient:
+    def client(self) -> RFMTransport:
         if not self._initialized:
             raise RuntimeError(_DIRECT_USE_MESSAGE)
         return kumorfm.global_state.client
@@ -88,10 +88,43 @@ def init(
         global_state._initialized = True
 
 
+def init_databricks_serving(
+    endpoint: str,
+    *,
+    workspace_client: object | None = None,
+    max_request_bytes: int | None = None,
+    timeout: float | None = None,
+    log_level: str = "INFO",
+    _token: object | None = None,
+) -> None:
+    """Initialize against a Databricks Model Serving endpoint.
+
+    The counterpart to :func:`init`, which resolves a NIM base URL from its
+    argument or the environment; there is no URL to resolve here.
+
+    Gated like :func:`init`: the engine is reachable only through
+    ``SDFMClient``, so both entry points must refuse a direct call rather than
+    leaving one of them as a way around the boundary.
+    """
+    if _token is not _SDFM_CLIENT_TOKEN:
+        raise RuntimeError(_DIRECT_USE_MESSAGE)
+    with global_state._lock:
+        kumorfm.init_databricks_serving(
+            endpoint,
+            workspace_client=workspace_client,
+            max_request_bytes=max_request_bytes,
+            timeout=timeout,
+            log_level=log_level,
+        )
+        global_state._url = f"databricks-serving:{endpoint}"
+        global_state._initialized = True
+
+
 LocalGraph = Graph  # NOTE Backward compatibility - do not use anymore.
 
 __all__ = [
     'init',
+    'init_databricks_serving',
     'Table',
     'LocalTable',
     'Graph',

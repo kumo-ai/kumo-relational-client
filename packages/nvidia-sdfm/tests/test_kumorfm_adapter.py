@@ -8,7 +8,6 @@ import contextlib
 
 import pandas as pd
 import pytest
-
 from nvidia_sdfm.adapters.kumorfm import KumoRFMAdapter
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import MissingExtraError, NimRequestError, SdfmError
@@ -394,7 +393,6 @@ def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
 def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
     """Exercise issue #19: client.kumorfm(graph).predict(explain=True)."""
     from kumorfm.rfm.rfm import Explanation
-
     from nvidia_sdfm import SDFMClient
 
     monkeypatch.setattr(rfm_engine, 'init', lambda **kwargs: None)
@@ -928,6 +926,34 @@ def test_task_types_match_engine_task_type_enum():
     from nvidia_sdfm.adapters.kumorfm import RFM_TASK_TYPES
     for name in RFM_TASK_TYPES:
         assert task_module.TaskType(name).value == name
+
+
+def test_stype_and_dtype_belong_to_the_supported_namespace():
+    # The documented way to correct an inferred semantic type is
+    # graph[table][column].stype = kumorfm.Stype.categorical, and the SDK
+    # presents nvidia_sdfm.kumorfm as the supported namespace. Membership is
+    # asserted separately from resolution because it holds with or without the
+    # engine installed -- this runs in the job that has neither.
+    from nvidia_sdfm import kumorfm
+
+    assert {'Stype', 'Dtype'} <= set(dir(kumorfm))
+
+
+@requires_engine
+def test_stype_and_dtype_resolve_when_the_engine_is_present():
+    # These live on the top-level kumorfm package rather than kumorfm.rfm, so
+    # they need their own resolution path and used to raise AttributeError.
+    from nvidia_sdfm import kumorfm
+
+    assert kumorfm.Stype.categorical is not None
+    assert kumorfm.Dtype.string is not None
+
+
+def test_unknown_attribute_still_raises():
+    from nvidia_sdfm import kumorfm
+
+    with pytest.raises(AttributeError, match='no attribute'):
+        kumorfm.DefinitelyNotExported
 
 
 @requires_engine

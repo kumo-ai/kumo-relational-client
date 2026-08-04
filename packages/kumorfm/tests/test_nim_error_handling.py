@@ -5,6 +5,7 @@
 from typing import Any
 
 import pytest
+
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.exceptions import HTTPException
 from kumorfm.rfm import Graph, KumoRFM
@@ -71,6 +72,32 @@ def test_rate_limit_is_retried(
     api = FailingAPI(429)
     _predict(_model(user_store_graph, api), ltv, num_retries=1)
     assert api.n_predict == 2
+
+
+def test_oversized_request_is_not_retried_and_carries_the_remedy(
+    user_store_graph: Graph,
+    ltv: ValidatedPredictiveQuery,
+) -> None:
+    r"""413 is the caller's to fix, so it is raised as ValueError rather than
+    dressed up as a defect to report.
+
+    Asserting the remedy and not merely the failure is the point: the retry
+    classifier already treats 413 as non-transient, so deleting this branch
+    would still raise -- just as a RuntimeError with no batch_size advice, and
+    nothing would fail.
+    """
+    api = FailingAPI(413, 'request entity too large')
+    model = _model(user_store_graph, api)
+    with model.retry(num_retries=2):
+        with pytest.raises(ValueError) as info:
+            model.predict(ltv, indices=[0, 1], verbose=False)
+
+    message = str(info.value)
+    assert api.n_predict == 1, 'a deterministic payload must not be retried'
+    assert 'request entity too large' in message
+    assert 'carries 2 entities' in message
+    assert "'batch_size'" in message
+    assert "'num_neighbors'" in message
 
 
 def test_cardinality_rejection_carries_the_remedy_end_to_end(

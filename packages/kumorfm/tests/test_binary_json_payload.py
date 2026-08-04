@@ -3,19 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+from decimal import Decimal
 from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
+
 from kumorfm.api.model_plan import RunMode
 from kumorfm.api.rfm import RFMPredictRequest
 from kumorfm.api.rfm.context import Context, Subgraph, Table
 from kumorfm.api.rfm.inference import ClassificationInferenceConfig
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import Stype
-
-from kumorfm.rfm.payload import _instance_dataframe, predict_request_to_json
+from kumorfm.rfm.payload import (
+    _dtype_name,
+    _instance_dataframe,
+    payload_size_bytes,
+    predict_request_to_json,
+)
 
 
 def _binary_context(
@@ -142,3 +149,91 @@ def test_binary_prediction_target_rejects_invalid_numeric_value() -> None:
         match=r'numeric 0/1 values, but got 2\.',
     ):
         _binary_payload(context)
+
+
+# -- DECIMAL columns ------------------------------------------------------
+#
+# Databricks returns DECIMAL as Python `Decimal`, which neither
+# `is_integer_dtype` nor `is_float_dtype` recognises. Before this was handled,
+# such a column was announced as `string` and then killed the request at
+# `json.dumps` with "Object of type Decimal is not JSON serializable" --
+# reproduced against a real warehouse on a `decimal(38,0)` id column, at every
+# batch size.
+#
+# `decimal(38, 0)` permits 38 digits where int64 holds 19, so naming such a
+# column `int64` is only honest once the values are known to fit.
+
+_WIDE_DECIMAL_ID = Decimal('12345678901234567890123456789012345678')
+
+
+@pytest.mark.parametrize(
+    'column, expected',
+    [
+        (pd.Series([Decimal('900100015'), Decimal('900200001')],
+                   dtype=object), 'int64'),
+        (pd.Series([Decimal('1.50'), Decimal('2.25')], dtype=object),
+         'float64'),
+        (pd.Series([Decimal('900100015')],
+                   dtype=pd.ArrowDtype(pa.decimal128(38, 0))), 'int64'),
+        (pd.Series([Decimal('1.50')],
+                   dtype=pd.ArrowDtype(pa.decimal128(10, 2))), 'float64'),
+        (pd.Series([Decimal('1'), 'x'], dtype=object), 'string'),
+        (pd.Series([Decimal('1'), _WIDE_DECIMAL_ID], dtype=object), 'string'),
+        (pd.Series([_WIDE_DECIMAL_ID],
+                   dtype=pd.ArrowDtype(pa.decimal128(38, 0))), 'string'),
+        (pd.Series([Decimal('1'), Decimal('NaN'), Decimal('Infinity')],
+                   dtype=object), 'int64'),
+    ],
+    ids=[
+        'integral-object-is-an-id-not-a-string',
+        'scaled-object-is-a-float',
+        'arrow-backed-is-named-by-its-scale',
+        'arrow-backed-scaled-is-a-float',
+        'partly-decimal-keeps-the-previous-behaviour',
+        'too-wide-for-int64-keeps-its-digits-as-a-string',
+        'too-wide-arrow-backed-keeps-its-digits-as-a-string',
+        'non-finite-values-do-not-decide-the-name',
+    ],
+)
+def test_decimal_columns_are_named_by_what_they_hold(
+    column: pd.Series,
+    expected: str,
+) -> None:
+    assert _dtype_name(column) == expected
+
+
+def test_a_decimal_column_survives_the_whole_request() -> None:
+    context = _binary_context(
+        y_train=pd.Series([0, 1, 0], name='TARGET', dtype='int64'),
+        y_test=pd.Series([1], name='TARGET', dtype='int64'),
+    )
+    table = context.subgraph.table_dict['ENTITY'].df
+    table['ITEM_ID'] = pd.Series(
+        [Decimal(f'90010001{i}') for i in range(4)], dtype=object)
+    table['PRICE'] = pd.Series(
+        [Decimal('0.05'),
+         Decimal('NaN'),
+         Decimal('Infinity'),
+         Decimal('2.25')], dtype=object)
+    table['WIDE_ID'] = pd.Series([_WIDE_DECIMAL_ID] * 4, dtype=object)
+
+    payload = _binary_payload(context)
+    # The original failure was here, measuring the payload rather than
+    # sending it: TypeError: Object of type Decimal is not JSON serializable.
+    assert payload_size_bytes(payload) > 0
+
+    columns = payload['schema']['related_tables']['ENTITY']['columns']
+    assert columns['ITEM_ID']['dtype'] == 'int64'
+    assert columns['PRICE']['dtype'] == 'float64'
+    assert columns['WIDE_ID']['dtype'] == 'string'
+
+    emitted = payload['context']['related_tables']['ENTITY']
+    rows = json.loads(json.dumps(emitted, allow_nan=False))['rows']
+    values = {
+        name: [row[emitted['columns'].index(name)] for row in rows]
+        for name in ('ITEM_ID', 'PRICE', 'WIDE_ID')
+    }
+    assert values['ITEM_ID'] == [900100010, 900100011, 900100012]
+    assert all(isinstance(value, int) for value in values['ITEM_ID'])
+    assert values['PRICE'] == [0.05, None, None]
+    assert values['WIDE_ID'] == [str(_WIDE_DECIMAL_ID)] * 3

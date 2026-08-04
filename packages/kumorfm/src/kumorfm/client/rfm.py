@@ -2,26 +2,25 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Mapping, Sequence
 import math
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from kumorfm.api.rfm import RFMPredictResponse
-
-from kumorfm.client import KumoClient
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
 from kumorfm.client.generated.tfm_api import (
     PredictionItem,
     PredictionResponse,
     TFMOperations,
 )
+from kumorfm.client.transport import RFMTransport
 from kumorfm.client.utils import raise_on_error
 from kumorfm.exceptions import InvalidResponseError
 
 
 class RFMAPI:
     r"""Typed API definition for KumoRFM (Relational Foundation Model)."""
-    def __init__(self, client: KumoClient) -> None:
+    def __init__(self, client: RFMTransport) -> None:
         self._client = client
 
     def predict(

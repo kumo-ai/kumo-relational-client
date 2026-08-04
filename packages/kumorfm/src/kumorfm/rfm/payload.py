@@ -11,9 +11,11 @@ from typing import Any, Iterator
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+
 from kumorfm.api.model_plan import RunMode
 from kumorfm.api.rfm import RFMPredictRequest
-from kumorfm.api.rfm.context import Context, EdgeLayout, REV_REL
+from kumorfm.api.rfm.context import REV_REL, Context, EdgeLayout
 from kumorfm.api.rfm.inference import (
     ClassificationInferenceConfig,
     InferenceConfig,
@@ -884,6 +886,10 @@ def _dtype_name(data: pd.Series) -> str:
     if list_dtype is not None:
         return list_dtype
 
+    decimal_dtype = _decimal_dtype_name(data)
+    if decimal_dtype is not None:
+        return decimal_dtype
+
     dtype = data.dtype
     if pd.api.types.is_bool_dtype(dtype):
         return 'bool'
@@ -894,6 +900,59 @@ def _dtype_name(data: pd.Series) -> str:
     if pd.api.types.is_datetime64_any_dtype(dtype):
         return 'timestamp[us]'
     return 'string'
+
+
+_INT64_MIN = -2**63
+_INT64_MAX = 2**63 - 1
+_INT64_SAFE_PRECISION = 18
+
+
+def _fits_int64(value: Decimal) -> bool:
+    return _INT64_MIN <= value <= _INT64_MAX
+
+
+def _decimal_dtype_name(data: pd.Series) -> str | None:
+    """Name a DECIMAL column by what it holds, not by how pandas stores it.
+
+    Neither an Arrow-backed ``decimal128`` nor an object column of
+    ``Decimal`` satisfies ``is_integer_dtype``/``is_float_dtype``, so without
+    this a decimal column is announced as ``string`` -- and an ID column
+    announced as a string stops being an ID to the model.
+
+    An integral decimal is only named ``int64`` when it fits: ``decimal(38,
+    0)`` allows 38 digits and ``int64`` holds 19, so anything wider is named
+    ``string``, which keeps every digit, rather than ``int64``, which would
+    declare a width the value does not have.
+    """
+    pyarrow_dtype = getattr(data.dtype, 'pyarrow_dtype', None)
+    if pyarrow_dtype is not None:
+        if not pa.types.is_decimal(pyarrow_dtype):
+            return None
+        if pyarrow_dtype.scale != 0:
+            return 'float64'
+        if pyarrow_dtype.precision <= _INT64_SAFE_PRECISION:
+            return 'int64'
+        fits = all(
+            _is_null_like(value) or _fits_int64(value) for value in data)
+        return 'int64' if fits else 'string'
+
+    if not pd.api.types.is_object_dtype(data.dtype):
+        return None
+
+    found = False
+    for value in data:
+        if _is_null_like(value):
+            continue
+        if not isinstance(value, Decimal):
+            return None  # mixed content; leave it to the caller's fallback
+        found = True
+        if not value.is_finite():
+            continue  # encodes as null, so it constrains nothing
+        if value != value.to_integral_value():
+            return 'float64'
+        if not _fits_int64(value):
+            return 'string'
+    return 'int64' if found else None
 
 
 def _list_dtype_name(data: pd.Series) -> str | None:
@@ -953,6 +1012,12 @@ def _json_value(value: Any) -> Any:
         return None
     if isinstance(value, np.generic):
         value = value.item()
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            return None
+        if value != value.to_integral_value():
+            return float(value)
+        return int(value) if _fits_int64(value) else str(value)
     if isinstance(value, pd.Timestamp):
         return _timestamp_json_value(value)
     if isinstance(value, np.datetime64):

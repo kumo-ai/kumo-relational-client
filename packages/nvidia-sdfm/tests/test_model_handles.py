@@ -272,6 +272,10 @@ def test_rfm_handle_forwards_batch_size():
 
 
 def test_rfm_handle_batch_defaults_off():
+    """batch_size defaults to None, not 'max': an unqualified predict must not
+    enter batch mode. The adapter branches on ``batch_size is not None``, so
+    flipping this default silently changes how every existing call executes --
+    this makes such a flip a visible, deliberate edit."""
     adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
     client = _client_with(adapter)
 

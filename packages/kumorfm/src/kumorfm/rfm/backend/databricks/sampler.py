@@ -9,9 +9,9 @@ from typing import TYPE_CHECKING, Any, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.typing import Dtype
-
 from kumorfm.rfm.backend.databricks import DatabricksTable
 from kumorfm.rfm.backend.databricks.table import BACKTICK
 from kumorfm.rfm.base import DataBackend, SQLSampler, Table
@@ -73,6 +73,23 @@ class DatabricksSampler(SQLSampler):
         return cast(DataBackend, DataBackend.DATABRICKS)
 
     # Helper Methods ##########################################################
+
+    def _projections(self, table_name: str, columns: Any) -> list[str]:
+        r"""The SELECT list for ``columns``, in the table's declared order.
+
+        Driven by the insertion-ordered projection dict, not by ``columns``,
+        which is a ``set``: iterating the set put column order at the mercy of
+        ``PYTHONHASHSEED``, and the model is order-sensitive, so one graph
+        predicted anywhere between 117 and 237 for a fixed ``random_seed``.
+        """
+        proj_dict = self.table_column_proj_dict[table_name]
+        wanted = set(columns)
+        missing = wanted.difference(proj_dict)
+        if missing:
+            raise KeyError(
+                f"Unknown columns requested for table {table_name!r}: "
+                f"{', '.join(sorted(missing))}")
+        return [proj for column, proj in proj_dict.items() if column in wanted]
 
     @staticmethod
     def _elem_type(dtype: Dtype) -> str:
@@ -198,10 +215,7 @@ class DatabricksSampler(SQLSampler):
             column_ref = self.table_column_ref_dict[table_name][column]
             filters.append(f" {column_ref} IS NOT NULL")
 
-        projections = [
-            self.table_column_proj_dict[table_name][column]
-            for column in columns
-        ]
+        projections = self._projections(table_name, columns)
 
         # A specific set of entities: filter by a bound JSON parameter joined
         # via `posexplode` rather than interpolating the ids into the SQL, so
@@ -324,10 +338,7 @@ class DatabricksSampler(SQLSampler):
         key = self.primary_key_dict[table_name]
         key_ref = self.table_column_ref_dict[table_name][key]
         dtype = self.table_dtype_dict[table_name][key]
-        projections = [
-            self.table_column_proj_dict[table_name][column]
-            for column in columns
-        ]
+        projections = self._projections(table_name, columns)
 
         sql = (
             f"WITH TMP AS (\n"
@@ -411,10 +422,7 @@ class DatabricksSampler(SQLSampler):
             schema = f'array<{elem}>'
 
         key_ref = self.table_column_ref_dict[table_name][foreign_key]
-        projections = [
-            self.table_column_proj_dict[table_name][column]
-            for column in columns
-        ]
+        projections = self._projections(table_name, columns)
 
         select = ["pos AS __KUMO_BATCH__"]
         if end_time is not None and start_time is not None:
@@ -496,10 +504,7 @@ class DatabricksSampler(SQLSampler):
 
         key_ref = self.table_column_ref_dict[table_name][foreign_key]
         time_ref = self.table_column_ref_dict[table_name][time_column]
-        projections = [
-            self.table_column_proj_dict[table_name][column]
-            for column in columns
-        ]
+        projections = self._projections(table_name, columns)
 
         select = [
             "pos AS __KUMO_BATCH__",

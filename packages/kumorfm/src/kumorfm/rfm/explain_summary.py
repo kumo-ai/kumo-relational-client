@@ -86,9 +86,9 @@ High scores on specific cells explain "why this prediction, not another".
 
 ```
 cells: {
-  "club_member_status": {value: "ACTIVE", score: 1.0},
+  "account_status": {value: "ACTIVE", score: 1.0},
   "age": {value: 49, score: 0.089},
-  "fashion_news_frequency": {value: "Regularly", score: 0.411}
+  "email_subscription": {value: "Weekly", score: 0.411}
 }
 links: {
   "user_id->orders": [1,2,3,...,32]
@@ -97,8 +97,8 @@ links: {
 
 **What this means:**
 
-Club membership status is the most important attribute (score=1.0)
-Fashion news subscription is moderately important (score=0.411).
+Account status is the most important attribute (score=1.0)
+Email subscription is moderately important (score=0.411).
 Age contributes but is less critical (score=0.089).
 User has 32 orders linked (indicates high activity).
 
