@@ -24,14 +24,59 @@ _MAX_BODY_SNIPPET = 512
 _MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 _RESPONSE_CHUNK_BYTES = 1024 * 1024
 
+_SESSIONS_PATH = '/v1/sessions'
+_RETRY_STATUS = [408, 429, 500, 502, 503, 504]
+_RETRY_BACKOFF_FACTOR = 2.0
+# Caps how long a server-chosen `Retry-After` may park the caller; urllib3's
+# own default is six hours.
+_RETRY_AFTER_MAX_SECONDS = 60
+
+
+def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
+    r"""The retry policy for one KumoRFM client.
+
+    ``retry_post=False`` drops ``POST`` from the retryable methods, switching
+    off the status retries for a route whose side effect the client cannot
+    reconcile. Connection failures stay retryable either way: urllib3 gates
+    status retries on the method but not connect ones, and a request that never
+    reached the server cannot have had an effect.
+
+    ``read=False`` switches off read retries entirely. A read timeout on a
+    prediction means the NIM may already be running it, and resending duplicates
+    the most expensive work in the system on a GPU that is by hypothesis
+    struggling; the request-level ``predict(num_retries=...)`` is the layer that
+    knows how to pace that, and it treats a timeout as transient. Passing
+    ``False`` rather than ``0`` also re-raises the underlying ``ReadTimeout``
+    instead of burying it in a ``MaxRetryError``, which is what lets the caller
+    be told to raise their timeout.
+
+    ``retry_after_max`` needs urllib3 >= 2.3; older versions fall back to
+    urllib3's own (six hour) cap.
+    """
+    methods = {'GET', 'POST'} if retry_post else {'GET'}
+    options: dict[str, Any] = {
+        'total': max_retries,
+        'connect': max_retries,
+        'read': False,
+        'status': max_retries,
+        'status_forcelist': _RETRY_STATUS,
+        'allowed_methods': frozenset(methods),
+        'backoff_factor': _RETRY_BACKOFF_FACTOR,
+        'respect_retry_after_header': True,
+        'raise_on_status': False,
+    }
+    try:
+        return Retry(retry_after_max=_RETRY_AFTER_MAX_SECONDS, **options)
+    except TypeError:
+        return Retry(**options)
+
 
 def _validate_url(url: str, api_key: Optional[str]) -> None:
     r"""Mirrors ``nvidia_sdfm.core.transport._validate_url``.
 
     This client carries every KumoRFM prediction, so the guard the SDK
     documents has to hold here too rather than only on the path that happens
-    to construct a ``Transport`` first. See the KumoClient plaintext-guard
-    report under ``bugs/``.
+    to construct a ``Transport`` first.
     """
     parsed = urlparse(url)
     if parsed.scheme not in ('http', 'https'):
@@ -59,8 +104,7 @@ class _Session(requests.Session):
     package both depend on is ``sdfm-connectors``, which is a SQL-connector
     package with no HTTP surface and no ``requests`` dependency, and
     ``kumorfm`` cannot import ``nvidia_sdfm`` because the dependency runs the
-    other way. This is the same arrangement as ``_validate_url`` above. See
-    ``bugs/security-kumoclient-api-key-follows-cross-origin-redirect.md``.
+    other way. This is the same arrangement as ``_validate_url`` above.
     """
 
     def rebuild_auth(
@@ -88,8 +132,7 @@ def _read_capped(response: requests.Response, url: str) -> requests.Response:
     with ``.json()``/``.text``/``.content``. Filling ``_content`` is exactly
     what ``Response.content`` does on first access, so a capped response is
     indistinguishable from an eagerly read one -- including for a second pass
-    through ``iter_content``, which replays the stored bytes. See
-    ``bugs/quality-kumoclient-missing-transport-hardening.md``.
+    through ``iter_content``, which replays the stored bytes.
 
     Args:
         response: The streamed response.
@@ -163,6 +206,7 @@ class KumoClient:
         api_key: Optional[str] = None,
         verify_ssl: bool = True,
         timeout: Optional[float] = None,
+        max_retries: int = 3,
     ) -> None:
         r"""Creates a client for KumoRFM requests against a Universal TFM NIM.
 
@@ -174,25 +218,39 @@ class KumoClient:
         ``timeout`` bounds each individual request attempt, in seconds.
         ``None`` (the default) leaves requests unbounded, so a hung NIM blocks
         the caller until the connection drops.
+
+        ``max_retries`` bounds the transport-level retries of a transient
+        failure (408/429/5xx, or a connection that never established); ``0``
+        disables them. It is what ``SDFMClient(max_retries=...)`` forwards, so
+        the knob reaches this path rather than being dropped for a fixed policy
+        of its own. It is separate from ``predict(num_retries=...)``, which
+        retries the prediction call itself at the application level and is what
+        covers a read timeout.
+
+        ``POST /v1/sessions`` is held out of the retries: creating a session
+        pins the context in the worker's memory before the response is written,
+        so a re-sent create leaves one orphaned pinned context per attempt that
+        no ``session_id`` can release. ``requests`` resolves an adapter by
+        longest matching URL prefix, so the ordinary policy is re-mounted on
+        the replayable routes below it.
         """
         _validate_url(url, api_key)
         self._url = url
         self._api_key = api_key
         self._verify_ssl = verify_ssl
         self._timeout = timeout
+        self._max_retries = max_retries
 
-        retry_strategy = Retry(
-            total=10,
-            connect=3,
-            read=3,
-            status=5,
-            status_forcelist=[408, 429, 500, 502, 503, 504],
-            backoff_factor=2.0,
-        )
-        http_adapter = HTTPAdapter(max_retries=retry_strategy)
+        http_adapter = HTTPAdapter(max_retries=_build_retry(max_retries))
         session = _Session()
         session.mount('http://', http_adapter)
         session.mount('https://', http_adapter)
+        session.mount(
+            url + _SESSIONS_PATH,
+            HTTPAdapter(max_retries=_build_retry(max_retries,
+                                                 retry_post=False)),
+        )
+        session.mount(url + _SESSIONS_PATH + '/', http_adapter)
         self._session = session
         if self._api_key:
             self._session.headers.update({"X-API-Key": self._api_key})

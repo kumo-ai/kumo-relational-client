@@ -2,8 +2,13 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import io
 import logging
-from contextlib import contextmanager
+from contextlib import (
+    contextmanager,
+    redirect_stderr,
+    redirect_stdout,
+)
 from dataclasses import dataclass
 from typing import Iterator
 from unittest.mock import patch
@@ -600,3 +605,54 @@ def test_importing_and_using_the_driver_leaves_the_root_logger_alone() -> None:
         count = len(logger.handlers)
         kumorfm._logging.initialize_logging()
         assert len(logger.handlers) == count
+
+
+@pytest.mark.parametrize('query', [
+    'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1)',
+    'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1,)',
+    'SELECT * FROM USERS',
+    'PREDICT COUNT(ORDERS.* 0, 7, days) FOR EACH USERS.USER_ID',
+    'PREDICT ((( USERS.STATUS FOR EACH USERS.USER_ID',
+])
+def test_a_rejected_query_writes_nothing_to_stdout(
+    user_store_graph: Graph,
+    query: str,
+) -> None:
+    r"""rfm-pql-parser-prints-to-stdout.md
+
+    Two grammar actions raise a bare ``RecognitionException``, which ANTLR's
+    default error strategy does not recognise and announces with a ``print``
+    before notifying the listeners. Removing the error *listeners*, as the
+    parser does, leaves that line in place, so ``IN (1)`` -- an easy mistake --
+    wrote ``unknown recognition error type: RecognitionException`` to stdout
+    even under ``verbose=False``.
+    """
+    stdout, stderr = io.StringIO(), io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        with pytest.raises(ValueError):
+            KumoRFM(user_store_graph, verbose=False)._parse_query(query)
+
+    assert stdout.getvalue() == ''
+    assert stderr.getvalue() == ''
+
+
+def test_the_rejection_still_explains_itself(user_store_graph: Graph) -> None:
+    r"""Silencing the strategy must not silence the diagnosis: the exception
+    carries the whole message, including the suggestion.
+    """
+    with pytest.raises(ValueError) as excinfo:
+        KumoRFM(user_store_graph, verbose=False)._parse_query(
+            'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1)')
+
+    message = str(excinfo.value)
+    assert 'Array with single element is not supported' in message
+    assert "'IS IN (const)'" in message
+
+
+def test_a_valid_query_still_parses(user_store_graph: Graph) -> None:
+    stdout = io.StringIO()
+    with redirect_stdout(stdout):
+        parsed = KumoRFM(user_store_graph, verbose=False)._parse_query(
+            'PREDICT COUNT(ORDERS.*, 0, 30, days) FOR EACH USERS.USER_ID')
+    assert parsed is not None
+    assert stdout.getvalue() == ''

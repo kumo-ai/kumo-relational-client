@@ -21,13 +21,22 @@ Full documentation lives under [`docs/`](docs/index.md):
 | `pip install nvidia-sdfm` | The client + every lightweight model (TabICL today). Works out of the box. |
 | `pip install nvidia-sdfm[kumorfm]` | Adds KumoRFM (pulls the native `kumorfm` driver). |
 | `pip install nvidia-sdfm[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
-| `pip install nvidia-sdfm[all]` | Everything. |
+| `pip install nvidia-sdfm[all]` | KumoRFM + every data-source backend. Not `[explain]` or `[relbench]` — see below. |
 
 The rule is dependency weight, not favoritism: a model that does no client-side work
 (like TabICL, which just shapes a request the NIM runs) ships in the base wheel; a model
 that does heavy client-side work (like KumoRFM: graph building, native neighbor-sampling,
 PQL) is an opt-in extra. Data-source drivers are opt-in the same way, via the shared
 `sdfm-connectors` package.
+
+Two extras stay outside `[all]` and have to be asked for by name. `[explain]` fills in
+`Explanation.summary`, which POSTs row data to a third-party LLM endpoint, so installing it
+is a deliberate act; `[relbench]` pulls the RelBench datasets in for `Graph.from_relbench()`.
+
+`[kumorfm]` is a native build. Prebuilt wheels are published for Linux x86-64
+(`manylinux_2_28`) on CPython 3.10-3.12 only, and no source distribution is published, so
+`pip install "nvidia-sdfm[kumorfm]"` resolves on that platform alone. The base client and
+the connectors are pure Python and install anywhere.
 
 ## Quickstart
 
@@ -64,9 +73,11 @@ different endpoints or tenants at once, including concurrently from several thre
 a prediction always goes to the endpoint and credential of the client that started it.
 The KumoRFM driver underneath still keeps a process-wide configuration that each
 prediction reconfigures, so drive it through `SDFMClient` rather than mixing in direct
-`kumorfm.init()` calls. Discover what a NIM serves with
-`client.models()` and `client.capabilities("tabicl")`. The transport pools connections
-and retries transient failures (429/5xx) with backoff; tune it per client with
+`kumorfm.init()` calls. `client.models()` and `client.capabilities("tabicl")` describe
+the client's own adapter registry, not the connected endpoint: a NIM serving only one of
+these models still reports both, and the mismatch surfaces as an error from the NIM on
+the first prediction. The transport pools connections and retries transient failures
+(408/429/5xx) with backoff; tune it per client with
 `SDFMClient(url, timeout=30, max_retries=3)`.
 
 `from nvidia_sdfm import kumorfm` is a neutral, explicitly-exported surface for the
@@ -100,8 +111,10 @@ Two orthogonal axes: the **adapter layer** is symmetric (every model is a peer m
 implementing `ModelAdapter`, registered in the `SDFMClient`'s `AdapterRegistry`); a **driver**
 package holds a model's heavy runtime, and a model wraps zero or one of them. Each model has
 an internal typed request that declares which model it targets; the client dispatches on
-that, validates it against the model's `capabilities()`, and calls the adapter. You reach
-this through the handles (`client.kumorfm(...)` / `client.tabicl(...)`).
+that, checks it is the type that model's adapter accepts, and calls the adapter. Nothing is
+checked against `capabilities()`, which is a discovery accessor for callers, not a gate on
+the dispatch path. You reach all of this through the handles (`client.kumorfm(...)` /
+`client.tabicl(...)`); the request types are not importable.
 
 Both the client (flat table reads) and the KumoRFM driver (warehouse connections for its
 graph samplers) sit on the shared **`sdfm-connectors`** package, so each warehouse is

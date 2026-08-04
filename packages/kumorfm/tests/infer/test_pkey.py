@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import warnings
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -112,3 +113,55 @@ def test_a_unique_foreign_key_is_not_reported_as_a_missing_primary_key() -> None
     assert graph['RETURNS'].primary_key is None
     assert ('RETURNS', 'ORDER_ID', 'ORDERS') in [
         tuple(edge) for edge in graph.edges]
+
+
+def test_a_local_declined_key_claims_uniqueness_outright() -> None:
+    r"""graph-declined-pk-warning-claims-uniqueness-from-sample.md
+
+    A ``LocalTable``'s sample is the whole frame, so the claim is exact and the
+    wording stays unqualified.
+    """
+    from kumorfm.rfm import Graph
+
+    with pytest.warns(UserWarning, match='No primary key was inferred') as rec:
+        Graph.from_data(_star_schema(), verbose=False)
+
+    reported = ' '.join(str(warning.message) for warning in rec)
+    assert 'hold a unique value per row' in reported
+    assert 'sampled' not in reported
+
+
+def test_a_sampled_declined_key_says_so(tmp_path: Any) -> None:
+    r"""graph-declined-pk-warning-claims-uniqueness-from-sample.md
+
+    Every SQL backend caps the sample at ``Table._NUM_SAMPLE_ROWS``, so a
+    foreign key that merely happens to be distinct in the rows read looks
+    exactly like a key candidate. ``basket_id`` here is unique across the first
+    1,000 rows and repeats afterwards -- 1,500 distinct values in 5,000 rows --
+    and the diagnostic must not state its uniqueness as a fact about the table.
+    """
+    pytest.importorskip('adbc_driver_sqlite')
+
+    import sqlite3
+
+    from kumorfm.rfm import Graph
+
+    path = tmp_path / 'events.db'
+    connection = sqlite3.connect(path)
+    n = 5_000
+    basket = (list(range(1_000))
+              + [1_000 + i // 8 for i in range(n - 1_000)])[:n]
+    frame = pd.DataFrame({'basket_id': basket, 'qty': [1] * n})
+    frame.to_sql('events', connection, index=False)
+    connection.commit()
+    connection.close()
+    assert frame['basket_id'].nunique() < n
+
+    with pytest.warns(UserWarning, match='No primary key was inferred') as rec:
+        graph = Graph.from_sqlite(str(path), verbose=False)
+
+    reported = ' '.join(str(warning.message) for warning in rec)
+    assert "['basket_id']" in reported
+    assert '1,000 rows sampled' in reported
+    assert 'may or may not be unique overall' in reported
+    assert graph['events'].primary_key is None

@@ -222,3 +222,52 @@ def test_closed_transport_stops_issuing_requests():
             transport.health_ready()
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
     assert server.received == ['/v1/predictions']
+
+
+def test_a_slow_session_create_is_not_retried():
+    r"""client-retried-session-create-orphans-sessions.md
+
+    Creating a session fits and pins the context before the response is
+    written, so a read timeout that hides the answer from the client leaves the
+    session behind on the NIM. Retrying makes one such orphan per attempt, and
+    the client keeps at most the last id, so the earlier ones can never be
+    released. The server-side request log is the ground truth here: the client
+    genuinely cannot see the sessions it stranded.
+    """
+    with _serve(_Reply(delay=2.0), _Reply(delay=2.0),
+                _Reply(body='{"session_id": "s2"}')) as (server, url):
+        transport = Transport(url, timeout=0.5, max_retries=2,
+                              backoff_factor=0.0)
+        with pytest.raises(SdfmError) as excinfo:
+            transport.create_session({'model': 'tabicl'})
+
+    assert excinfo.value.code == 'TRANSPORT_ERROR'
+    assert server.received == ['/v1/sessions']
+
+
+def test_the_replayable_session_routes_keep_the_retry_policy():
+    r"""Only the create is held out. Scoring against a pinned context is
+    replayable, and must not lose its resilience to the narrower policy mounted
+    on the prefix above it -- nor may the plain prediction route, which shares
+    no prefix with either.
+    """
+    with _serve(_Reply(status=503), _Reply()) as (server, url):
+        transport = Transport(url, max_retries=2, backoff_factor=0.0)
+        transport.session_predict('s1', {'predict': {}})
+    assert server.received == ['/v1/sessions/s1/predictions'] * 2
+
+    with _serve(_Reply(status=503), _Reply()) as (server, url):
+        transport = Transport(url, max_retries=2, backoff_factor=0.0)
+        transport.predict({'model': 'tabicl'})
+    assert server.received == ['/v1/predictions'] * 2
+
+
+def test_session_create_still_retries_a_connection_that_never_established():
+    r"""Holding ``POST`` out of the retryable methods switches off the read and
+    status retries but not the connect ones, which is the intent: a request
+    that never reached the server cannot have pinned anything.
+    """
+    policy = _build_retry(3, 0.0, retry_post=False)
+    assert policy.connect == 3
+    assert not policy._is_method_retryable('POST')
+    assert policy._is_method_retryable('GET')

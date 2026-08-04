@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import copy
+from typing import Any
 
 import pandas as pd
 import pytest
@@ -548,3 +549,49 @@ def test_empty_edges_suppress_inference_unlike_none(
     assert len(inferred.edges) > 0
 
     assert Graph.from_data(sample_dfs, edges=[], verbose=False).edges == []
+
+
+def test_empty_edges_suppress_catalog_foreign_keys_too(
+        tmp_path: Any,  #
+) -> None:
+    r"""graph-edges-empty-does-not-suppress-catalog-links.md
+
+    ``edges=[]`` is documented as "these edges and no others". It suppressed
+    the heuristic ``infer_links`` pass but not the one in ``Graph.__init__``
+    that reads foreign keys straight out of the source catalog, so on any
+    warehouse that declares them an explicit edge list still picked up edges
+    the caller did not ask for -- and edges change what the model sees.
+    """
+    pytest.importorskip('adbc_driver_sqlite')
+
+    import sqlite3
+
+    path = tmp_path / 'fk.db'
+    connection = sqlite3.connect(path)
+    connection.executescript("""
+    CREATE TABLE users  (user_id INTEGER PRIMARY KEY, age INTEGER);
+    CREATE TABLE orders (order_id INTEGER PRIMARY KEY, user_id INTEGER,
+                         price REAL,
+                         FOREIGN KEY(user_id) REFERENCES users(user_id));
+    """)
+    connection.executemany('INSERT INTO users VALUES (?,?)',
+                           [(i, 20 + i) for i in range(20)])
+    connection.executemany('INSERT INTO orders VALUES (?,?,?)',
+                           [(i, i % 20, float(i)) for i in range(60)])
+    connection.commit()
+    connection.close()
+
+    declared = [('orders', 'user_id', 'users')]
+
+    # `edges=None` still applies the catalog's foreign keys, as documented.
+    assert [tuple(edge) for edge in
+            Graph.from_sqlite(str(path), verbose=False).edges] == declared
+
+    for kwargs in ({'edges': []}, {'edges': [], 'infer_metadata': False}):
+        graph = Graph.from_sqlite(str(path), verbose=False, **kwargs)
+        assert list(graph.edges) == [], kwargs
+
+    # An explicit list is honoured exactly, and is not duplicated by the
+    # catalog pass naming the same edge.
+    pinned = Graph.from_sqlite(str(path), edges=declared, verbose=False)
+    assert [tuple(edge) for edge in pinned.edges] == declared

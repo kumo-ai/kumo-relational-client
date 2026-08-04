@@ -222,14 +222,35 @@ class Sampler(ABC):
             num_neighbors: The number of neighbors to sample for each hop.
             exclude_cols_dict: The columns to exclude from the subgraph.
             random_seed: A manual seed for neighborhood sampling.
+
+        Raises:
+            ValueError: If ``exclude_cols_dict`` names a table or a feature
+                column that does not exist. ``exclude_cols_dict`` is a public
+                ``predict_task`` argument, so a typo in it is a caller mistake
+                and has to read as one -- deleting straight out of the stype
+                map reported it as a bare ``KeyError``, which the SDK could
+                only classify as an internal failure.
         """
         # Exclude all columns that leak target information:
         table_stype_dict: dict[str, dict[str, Stype]] = self.table_stype_dict
         if exclude_cols_dict is not None:
             table_stype_dict = copy.deepcopy(table_stype_dict)
             for table_name, exclude_cols in exclude_cols_dict.items():
+                if table_name not in table_stype_dict:
+                    raise ValueError(
+                        f"'exclude_cols_dict' names table '{table_name}', "
+                        f"which is not in the graph. Available tables: "
+                        f"{sorted(table_stype_dict)}")
+                stype_dict = table_stype_dict[table_name]
                 for column_name in exclude_cols:
-                    del table_stype_dict[table_name][column_name]
+                    if column_name not in stype_dict:
+                        raise ValueError(
+                            f"'exclude_cols_dict' names column "
+                            f"'{column_name}' of table '{table_name}', which "
+                            f"is not one of its feature columns (primary and "
+                            f"foreign keys are never sent as features). "
+                            f"Excludable columns: {sorted(stype_dict)}")
+                    del stype_dict[column_name]
 
         # Collect all columns being used as features:
         columns_dict: dict[str, set[str]] = {

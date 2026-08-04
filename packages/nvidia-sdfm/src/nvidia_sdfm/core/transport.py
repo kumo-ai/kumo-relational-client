@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import math
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -61,9 +62,18 @@ class _Session(requests.Session):
 
     ``requests`` strips only the standard ``Authorization`` header when a
     redirect changes origin; a custom header set on the session is re-sent
-    verbatim. Without this the configured endpoint could hand the API key --
-    and, on a 307/308, the request body -- to any host it names, defeating
-    ``_validate_url``.
+    verbatim, so without this the configured endpoint could hand the API key
+    to any host it names, defeating ``_validate_url``.
+
+    Redirects are still followed, and this covers the credential only. A
+    ``307``/``308`` therefore re-sends the request *body* -- for TabICL, the
+    caller's whole labelled context table -- to the redirect target, including
+    across an ``https`` to ``http`` downgrade, which ``_validate_url`` never
+    sees because it runs at construction against the configured URL. That is
+    an accepted trade: refusing redirects outright breaks legitimate ``308``
+    normalisation, and the endpoint being redirected *from* was already trusted
+    with the same payload. A caller who cannot accept it should point the
+    client at a URL that does not redirect.
     """
 
     def rebuild_auth(
@@ -82,11 +92,18 @@ def _validate_limits(timeout: Any, max_retries: Any) -> None:
 
     Without this the offending value first surfaces as a raw ``ValueError``
     from urllib3, on the first request rather than at the call that set it.
+
+    ``inf`` and ``nan`` are rejected explicitly: both compare ``False`` against
+    ``<= 0`` and so pass an ordinary positivity test, then fail on the first
+    request with ``OverflowError``/``ValueError`` from the socket layer. ``inf``
+    is the natural way to reach for "no timeout" here, since this constructor
+    does not accept ``None``.
     """
     if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
-            or timeout <= 0):
+            or not math.isfinite(timeout) or timeout <= 0):
         raise SdfmError(
-            f'timeout must be a positive number of seconds, got {timeout!r}',
+            f'timeout must be a positive, finite number of seconds, got '
+            f'{timeout!r}',
             code='INVALID_CONFIGURATION',
         )
     if (isinstance(max_retries, bool) or not isinstance(max_retries, int)
@@ -97,13 +114,25 @@ def _validate_limits(timeout: Any, max_retries: Any) -> None:
         )
 
 
-def _build_retry(max_retries: int, backoff_factor: float) -> Retry:
-    r"""The retry policy shared by every request this transport makes.
+def _build_retry(
+    max_retries: int,
+    backoff_factor: float,
+    *,
+    retry_post: bool = True,
+) -> Retry:
+    r"""The retry policy this transport's requests run under.
 
     ``retry_after_max`` caps how long a server-chosen ``Retry-After`` header
     may park the caller; it needs urllib3 >= 2.3, and older versions fall back
     to urllib3's own (6 hour) cap.
+
+    ``retry_post=False`` drops ``POST`` from the retryable methods, which
+    switches off the read and status retries for a route whose side effect the
+    client cannot reconcile. Connection failures stay retryable either way:
+    urllib3 gates read and status retries on the method but not connect ones,
+    and a request that never reached the server cannot have had an effect.
     """
+    methods = {'GET', 'POST'} if retry_post else {'GET'}
     options: dict[str, Any] = {
         'total': max_retries,
         'connect': max_retries,
@@ -111,7 +140,7 @@ def _build_retry(max_retries: int, backoff_factor: float) -> Retry:
         'status': max_retries,
         'backoff_factor': backoff_factor,
         'status_forcelist': _RETRY_STATUS,
-        'allowed_methods': frozenset({'GET', 'POST'}),
+        'allowed_methods': frozenset(methods),
         'respect_retry_after_header': True,
         'raise_on_status': False,
     }
@@ -137,8 +166,7 @@ def _read_capped(response: requests.Response, url: str) -> bytes:
 
     ``requests`` inflates ``Content-Encoding: gzip`` with no ratio limit, so
     an unbounded read lets a small compressed body expand into hundreds of
-    megabytes of client memory before anything is parsed. See
-    ``bugs/security-hostile-server-response-unbounded.md``.
+    megabytes of client memory before anything is parsed.
     """
     body = bytearray()
     for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
@@ -161,10 +189,25 @@ def _path_segment(value: str) -> str:
 
 
 def _build_session(
+    url: str,
     api_key: str | None,
     max_retries: int,
     backoff_factor: float,
 ) -> requests.Session:
+    r"""The pooled session, with ``POST /v1/sessions`` held out of the retries.
+
+    Creating a session fits and pins the context in the worker's memory before
+    the response is written, so a re-sent ``POST`` leaves one orphaned pinned
+    context per attempt: the client keeps only the last ``session_id`` and can
+    never ``DELETE`` the earlier ones. That is a side effect the client cannot
+    reconcile, unlike ``/v1/predictions``, which the same policy may safely
+    replay.
+
+    ``requests`` resolves an adapter by longest matching URL prefix, so the
+    stricter policy is mounted on the exact create-session URL and the ordinary
+    one re-mounted on the routes below it: scoring against a pinned context and
+    releasing one are both replayable and keep the full policy.
+    """
     session = _Session()
     if api_key:
         session.headers['X-API-Key'] = api_key
@@ -172,6 +215,12 @@ def _build_session(
                                                    backoff_factor))
     session.mount('http://', adapter)
     session.mount('https://', adapter)
+    session.mount(
+        url + _SESSIONS_PATH,
+        HTTPAdapter(max_retries=_build_retry(max_retries, backoff_factor,
+                                             retry_post=False)),
+    )
+    session.mount(url + _SESSIONS_PATH + '/', adapter)
     return session
 
 
@@ -204,7 +253,9 @@ class Transport:
         self._verify_ssl = verify_ssl
         self._timeout = timeout
         self._closed = False
-        self._session = _build_session(api_key, max_retries, backoff_factor)
+        self._max_retries = max_retries
+        self._session = _build_session(self._url, api_key, max_retries,
+                                       backoff_factor)
 
     @property
     def url(self) -> str:
@@ -221,6 +272,10 @@ class Transport:
     @property
     def timeout(self) -> float:
         return self._timeout
+
+    @property
+    def max_retries(self) -> int:
+        return self._max_retries
 
     def close(self) -> None:
         self._closed = True

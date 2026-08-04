@@ -28,7 +28,14 @@ OBJECT_CONTENT_TO_DTYPE: dict[str, Dtype] = {
 PANDAS_TO_DTYPE: dict[str, Dtype] = {
     'bool': Dtype.bool,
     'boolean': Dtype.bool,
+    # Every unsigned width, not just `uint8`: `astype('uint32')` is a routine
+    # memory optimisation and what an unsigned Parquet or Arrow column arrives
+    # as, and the SQL backends already map `UINTEGER`/`UBIGINT` to `Dtype.int`
+    # from the catalog without consulting this table.
     'uint8': Dtype.int,
+    'uint16': Dtype.int,
+    'uint32': Dtype.int,
+    'uint64': Dtype.int,
     'int8': Dtype.int,
     'int16': Dtype.int,
     'int32': Dtype.int,

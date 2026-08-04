@@ -8,24 +8,40 @@ from typing import TYPE_CHECKING, Any
 
 from nvidia_sdfm.errors import MissingExtraError
 
+# The one surface onto the driver package, so "you never import the driver
+# directly" stays true: a name here is one the supported API hands back or takes.
+#
+# `ViewConversionWarning` earns its place because `Graph.from_snowflake_semantic_
+# view` / `from_databricks_metric_view` are reached through this shim and
+# routinely emit partial-conversion diagnostics; the driver gives them a
+# dedicated category precisely so a caller can filter or escalate just those.
+# `MaterializedPredictionRequest` and `TaskTable` do not: the first is produced
+# only by `KumoRFM.materialize_*` and the second built internally by the adapter,
+# and `KumoRFM` is deliberately absent, so nothing on the supported surface
+# returns or accepts either.
 __all__ = [
     'Dtype',
     'ExplainConfig',
     'Explanation',
     'Graph',
     'LocalTable',
-    'MaterializedPredictionRequest',
     'Stype',
     'Table',
-    'TaskTable',
+    'ViewConversionWarning',
 ]
 
 _ROOT_NAMES = frozenset({'Dtype', 'Stype'})
 
 if TYPE_CHECKING:
     from kumorfm import Dtype, Stype
-    from kumorfm.rfm import (ExplainConfig, Explanation, Graph, LocalTable,
-                             MaterializedPredictionRequest, Table, TaskTable)
+    from kumorfm.rfm import (
+        ExplainConfig,
+        Explanation,
+        Graph,
+        LocalTable,
+        Table,
+        ViewConversionWarning,
+    )
 
 
 def _import(module_name: str) -> Any:

@@ -525,3 +525,27 @@ def test_widening_refuses_to_round_ids_past_the_float64_mantissa():
         task='classification', target='y', outputs=['prediction'])
     rows = payload['context']['instance_table']['rows']
     assert [row[0] for row in rows] == [str(value) for value in ids]
+
+
+def test_outputs_given_as_a_bare_string_is_named(context_df, predict_df):
+    r"""client-non-dataframe-tables-raise-a-bare-attributeerror.md
+
+    ``outputs`` is documented as a list. A bare string is iterable, so it used
+    to be checked character by character and reported as
+    "TabICL does not produce ['p', 'r', 'e', ...]".
+    """
+    with pytest.raises(SdfmError) as excinfo:
+        build_request(context=context_df, predict=predict_df,
+                      task='classification', target='target_col',
+                      outputs='prediction')
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert "not a single string" in str(excinfo.value)
+    assert "['prediction']" in str(excinfo.value)
+
+
+def test_outputs_as_a_list_or_tuple_is_still_accepted(context_df, predict_df):
+    for outputs in (['prediction'], ('prediction', 'probabilities')):
+        payload = build_request(context=context_df, predict=predict_df,
+                                task='classification', target='target_col',
+                                outputs=outputs)
+        assert payload['output']['fields'] == outputs

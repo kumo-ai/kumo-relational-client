@@ -8,6 +8,13 @@ from typing import Any
 import antlr4
 from antlr4 import CommonTokenStream
 from antlr4.error.ErrorListener import ErrorListener
+from antlr4.error.Errors import (
+    FailedPredicateException,
+    InputMismatchException,
+    NoViableAltException,
+    RecognitionException,
+)
+from antlr4.error.ErrorStrategy import DefaultErrorStrategy
 from antlr4.InputStream import InputStream
 from kumorfm.api.common import ValidationResponse
 from kumorfm.api.pquery import ParsedPredictiveQuery
@@ -48,6 +55,32 @@ class QueryValidationType(Enum):
 
     def is_sdk_v2(self) -> bool:
         return self == QueryValidationType.RFM_SDK_V2
+
+
+class _QuietErrorStrategy(DefaultErrorStrategy):
+    r"""ANTLR's default strategy, minus its ``print`` to stdout.
+
+    Two grammar actions raise a bare ``RecognitionException`` rather than one
+    of ANTLR's concrete subclasses, which the default ``reportError`` does not
+    recognise and announces with ``print("unknown recognition error type: ...")``
+    before notifying the listeners. Removing the error *listeners*, as this
+    parser does, leaves that line in place, so an invalid query wrote ANTLR
+    internals to stdout even under ``verbose=False``. The error itself still
+    reaches the listener and the raised ``ValueError`` is unchanged.
+    """
+    def reportError(
+        self,
+        recognizer: Any,
+        e: RecognitionException,
+    ) -> None:
+        if isinstance(e, (NoViableAltException, InputMismatchException,
+                          FailedPredicateException)):
+            super().reportError(recognizer, e)
+            return
+        if self.inErrorRecoveryMode(recognizer):
+            return
+        self.beginErrorCondition(recognizer)
+        recognizer.notifyErrorListeners(e.message, e.offendingToken, e)
 
 
 def state_from_pql_ctx(ctxType: Any) -> int:
@@ -192,6 +225,7 @@ class PQLParser:
         parser = PQLGrammarParser(token_stream)
         parser.removeErrorListeners()
         parser.addErrorListener(error_listener)
+        parser._errHandler = _QuietErrorStrategy()
         tree = parser.prog()
         translator = ErrorTranslator()
         response = translator.translate_errors(error_listener.errors, query)

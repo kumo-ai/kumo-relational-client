@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import gc
 import json
+import threading
+import time
 
 import pandas as pd
-import pytest
 
 from nvidia_sdfm import SDFMClient
-from nvidia_sdfm.errors import NimRequestError
+from nvidia_sdfm.adapters.tabicl import _predict_with_session, build_request
+from nvidia_sdfm.requests import TabICLSession
 
 _URL = 'http://nim.example.com:8000'
 _SESSION_ID = 'sess_2c12f086caaa'
@@ -114,8 +116,16 @@ def test_nim_without_session_routes_stays_stateless(requests_mock, context_df,
     ]
 
 
-def test_create_session_failure_is_not_swallowed(requests_mock, context_df,
-                                                 predict_df):
+def test_create_session_failure_falls_back_to_the_stateless_path(
+        requests_mock, context_df, predict_df):
+    r"""client-retried-session-create-orphans-sessions.md
+
+    A session is an optimisation. Failing the caller's prediction because the
+    optimisation failed is the wrong trade, so any create failure -- not only
+    the 404/405/501 that mean "no session routes here" -- serves the call
+    statelessly. The 507 here is not a latching condition, so the next call
+    tries again.
+    """
     requests_mock.post(_URL + '/v1/predictions', json=_predictions())
     requests_mock.post(_URL + '/v1/sessions', status_code=507,
                        json={'code': 'INSUFFICIENT_STORAGE', 'detail': 'full'})
@@ -123,10 +133,33 @@ def test_create_session_failure_is_not_swallowed(requests_mock, context_df,
     with SDFMClient(url=_URL) as client:
         model = _handle(client, context_df)
         model.predict(predict_df)
-        with pytest.raises(NimRequestError) as info:
-            model.predict(predict_df)
+        result = model.predict(predict_df)
 
-    assert info.value.status_code == 507
+    assert list(result['prediction']) == ['yes', 'no']
+    assert _paths(requests_mock) == [
+        'POST /v1/predictions',
+        'POST /v1/sessions',
+        'POST /v1/predictions',
+    ]
+
+
+def test_transport_failure_on_create_falls_back_to_the_stateless_path(
+        requests_mock, context_df, predict_df):
+    r"""client-retried-session-create-orphans-sessions.md
+
+    A ``TRANSPORT_ERROR`` on create used to propagate and fail the prediction
+    outright, even though the stateless path would have answered it.
+    """
+    requests_mock.post(_URL + '/v1/predictions', json=_predictions())
+    requests_mock.post(_URL + '/v1/sessions', json={'ttl_seconds': 3600})
+
+    with SDFMClient(url=_URL) as client:
+        model = _handle(client, context_df)
+        model.predict(predict_df)
+        result = model.predict(predict_df)
+
+    assert list(result['prediction']) == ['yes', 'no']
+    assert _paths(requests_mock)[-1] == 'POST /v1/predictions'
 
 
 def test_expired_session_is_repinned_and_retried(requests_mock, context_df,
@@ -258,3 +291,100 @@ def test_pinned_digest_ignores_the_per_call_sections(context_df, predict_df):
         outputs=['prediction', 'probabilities'], request_id='req-2'))
 
     assert first == second
+
+
+class _CountingTransport:
+    r"""Stands in for a NIM whose session-create is slow enough to overlap."""
+
+    url = _URL
+
+    def __init__(self, create_delay: float = 0.2) -> None:
+        self.created: list[str] = []
+        self.deleted: list[str] = []
+        self.stateless = 0
+        self._create_delay = create_delay
+        self._lock = threading.Lock()
+
+    def predict(self, payload):
+        with self._lock:
+            self.stateless += 1
+        return _predictions()
+
+    def create_session(self, payload):
+        with self._lock:
+            session_id = f's{len(self.created)}'
+            self.created.append(session_id)
+        time.sleep(self._create_delay)
+        return {'session_id': session_id}
+
+    def session_predict(self, session_id, payload):
+        return _predictions()
+
+    def delete_session(self, session_id):
+        self.deleted.append(session_id)
+
+
+def test_concurrent_predicts_on_one_handle_open_one_session(context_df,
+                                                            predict_df):
+    r"""tabicl-concurrent-predicts-on-one-handle-leak-sessions.md
+
+    ``TabICLSession`` is mutable state on a handle the docstring recommends
+    reusing. Without a lock, every thread reads ``id is None`` at once, they all
+    create, the last writer wins, and the rest are pinned on the NIM with no id
+    left to release them by -- silently, and paid for by whoever calls next.
+    """
+    payload = build_request(context=context_df, predict=predict_df,
+                            task='classification', target='target_col',
+                            outputs=['prediction'])
+    transport = _CountingTransport()
+    session = TabICLSession()
+
+    _predict_with_session(transport, payload, session)
+
+    errors: list[BaseException] = []
+
+    def score() -> None:
+        try:
+            _predict_with_session(transport, payload, session)
+        except BaseException as error:  # noqa: BLE001
+            errors.append(error)
+
+    threads = [threading.Thread(target=score) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert transport.created == ['s0']
+    assert session.id == 's0'
+    assert transport.deleted == []
+
+
+def test_a_concurrent_context_change_releases_exactly_one_session(context_df,
+                                                                  predict_df):
+    r"""The lock must not turn a re-pin into a leak of its own: the superseded
+    id is handed back to be released once, outside the lock, and the next call
+    opens a single replacement.
+    """
+    payload = build_request(context=context_df, predict=predict_df,
+                            task='classification', target='target_col',
+                            outputs=['prediction'])
+    other = build_request(context=context_df,
+                          predict=predict_df.astype({'score': str}),
+                          task='classification', target='target_col',
+                          outputs=['prediction'])
+    transport = _CountingTransport(create_delay=0.0)
+    session = TabICLSession()
+
+    _predict_with_session(transport, payload, session)
+    _predict_with_session(transport, payload, session)
+    assert session.id == 's0'
+
+    _predict_with_session(transport, other, session)
+    assert transport.deleted == ['s0']
+    assert session.id is None
+
+    _predict_with_session(transport, other, session)
+    assert transport.created == ['s0', 's1']
+    assert session.id == 's1'

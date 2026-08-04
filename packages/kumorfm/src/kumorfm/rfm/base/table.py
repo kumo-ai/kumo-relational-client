@@ -79,6 +79,7 @@ class Table(ABC):
         self._time_column: str | None = None
         self._end_time_column: str | None = None
         self._declined_primary_keys: tuple[str, ...] = ()
+        self._declined_primary_key_rows: int | None = None
         self._expr_sample_df = pd.DataFrame(index=range(self._NUM_SAMPLE_ROWS))
 
         if columns is None:
@@ -212,8 +213,11 @@ class Table(ABC):
                     raise RuntimeError(
                         f"Encountered unsupported data type '{ser.dtype}' for "
                         f"column '{column_spec.name}' in table '{self.name}'. "
-                        f"Please either manually override the columns's data "
-                        f"type or remove the column from this table.") from e
+                        f"Please either cast the column to a supported type "
+                        f"before building the table (for example "
+                        f"df['{column_spec.name}'] = "
+                        f"df['{column_spec.name}'].astype('int64')) or remove "
+                        f"the column from this table.") from e
 
             if stype is None:
                 if column_spec.is_source:
@@ -532,8 +536,16 @@ class Table(ABC):
         # inference does not go on to explain -- at this point a viable key and
         # a coincidentally unique foreign key look identical, and only the
         # edges tell them apart.
+        #
+        # Record how far that evidence reaches too. `df` is capped at
+        # `_NUM_SAMPLE_ROWS` on every SQL backend, so a foreign key that merely
+        # happens to be distinct in the first rows read looks exactly like a
+        # key candidate, and the diagnostic must not state as fact something
+        # only the sample supports.
         self._declined_primary_keys = tuple(
             name for name in candidates if _is_key_like(df[name]))
+        self._declined_primary_key_rows = (
+            len(df) if len(df) == self._NUM_SAMPLE_ROWS else None)
 
         return self
 

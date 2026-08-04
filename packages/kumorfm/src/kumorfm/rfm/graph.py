@@ -48,6 +48,44 @@ class DuckDBConnectionConfig(CastMixin):
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
+_STRING_LITERAL = re.compile(r"'(?:''|[^'])*'")
+
+
+def _mask_literals(expr: str) -> str:
+    r"""Blanks out single-quoted literals so a pattern can be searched against
+    SQL text alone.
+
+    Only single quotes: a double-quoted or backticked span is a *quoted
+    identifier*, which a table qualifier legitimately uses (``"ORDERS".X``),
+    so those must stay in scope.
+
+    Used to decide whether a view expression references another table. Another
+    table's name inside a literal is data rather than a reference, and dropping
+    the column for it reports "references other tables" untruthfully.
+    """
+    return _STRING_LITERAL.sub(lambda match: ' ' * len(match.group()), expr)
+
+
+def _sub_outside_literals(pattern: re.Pattern[str], expr: str) -> str:
+    r"""Applies ``pattern.sub('', ...)`` to the SQL text of ``expr``, leaving
+    its single-quoted literals byte-for-byte intact.
+
+    A qualifier pattern is a piece of text like ``ORDERS.``, and a literal is
+    free to contain that text as data: stripping it out of
+    ``CASE WHEN CHANNEL = 'ORDERS.WEB' THEN ...`` rewrites the expression to
+    compare against ``'WEB'``, which is still valid SQL and so fails silently
+    with different values than the view declares.
+    """
+    out: list[str] = []
+    last = 0
+    for match in _STRING_LITERAL.finditer(expr):
+        out.append(pattern.sub('', expr[last:match.start()]))
+        out.append(match.group())
+        last = match.end()
+    out.append(pattern.sub('', expr[last:]))
+    return ''.join(out)
+
+
 def _qualifier_pattern(table_name: str) -> re.Pattern[str]:
     r"""Returns a pattern that matches a ``<table_name>.`` qualifier within a
     SQL expression, ignoring case just like SQL identifier resolution does.
@@ -88,8 +126,7 @@ def _unsafe_expr_reason(expr: str) -> str | None:
     expressions are spliced verbatim into sampler queries and run under the
     caller's warehouse role. A scalar expression never needs a statement
     separator, a comment or a sub-query, so those are refused while
-    arithmetic, casts, ``CASE`` and function calls are left alone. See
-    ``bugs/security-column-expr-executes-verbatim-warehouse-sql.md``.
+    arithmetic, casts, ``CASE`` and function calls are left alone.
 
     Keywords are matched only outside string literals and quoted identifiers,
     since a keyword inside one is data rather than SQL and rejecting it would
@@ -250,7 +287,15 @@ class Graph:
         tables: Sequence[Table],
         edges: Sequence[EdgeLike] | None = None,
     ) -> None:
+        r"""Builds a graph from ``tables``.
 
+        ``edges=None`` adds the foreign keys the source catalog declares, on
+        the backends that have one. Passing an explicit sequence -- including
+        an empty one -- makes it the complete edge set instead, so a caller who
+        pins the graph's shape gets that shape and nothing else. Edges change
+        what the model sees, so a catalog link the caller did not ask for
+        changes predictions.
+        """
         self._tables: dict[str, Table] = {}
         self._edges: list[Edge] = []
         self._conversion_messages: tuple[str, ...] = ()
@@ -261,7 +306,7 @@ class Graph:
         for table in tables:
             self.add_table(table)
 
-        for table in tables:  # Use links from source metadata:
+        for table in (tables if edges is None else ()):  # Source metadata:
             if not any(column.is_source for column in table.columns):
                 continue
             for fkey in table._source_foreign_key_dict.values():
@@ -336,7 +381,7 @@ class Graph:
 
         graph = cls(
             tables=[LocalTable(df, name) for name, df in df_dict.items()],
-            edges=edges or [],
+            edges=edges,
         )
 
         if infer_metadata:
@@ -411,9 +456,10 @@ class Graph:
                 may be a :class:`~kumorfm.graph.Edge`, a dictionary, or a tuple
                 such as ``(src_table, fkey, dst_table)``. If not provided
                 (:obj:`None`), edges will be automatically inferred from the
-                data in case ``infer_metadata=True``. An empty sequence is not
-                the same thing: it means "these edges and no others", and
-                suppresses inference.
+                data in case ``infer_metadata=True``, and the foreign keys
+                the source catalog declares are added as well. An empty
+                sequence is not the same thing: it means "these edges and no
+                others", suppressing both.
             infer_metadata: Whether to infer missing metadata for all tables in
                 the graph.
             verbose: Whether to print verbose output.
@@ -445,7 +491,7 @@ class Graph:
                 SQLiteTable(connection=connection, **kwargs)
                 for kwargs in table_kwargs
             ],
-            edges=edges or [],
+            edges=edges,
         )
 
         if internal_connection:
@@ -494,9 +540,10 @@ class Graph:
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
                 add to the graph. If not provided (:obj:`None`), edges will be
                 automatically inferred from the data in case
-                ``infer_metadata=True``. An empty sequence is not the same
-                thing: it means "these edges and no others", and suppresses
-                inference.
+                ``infer_metadata=True``, and the foreign keys the source
+                catalog declares are added as well. An empty sequence is not
+                the same thing: it means "these edges and no others",
+                suppressing both.
             infer_metadata: Whether to infer missing metadata for all tables in
                 the graph.
             verbose: Whether to print verbose output.
@@ -531,7 +578,7 @@ class Graph:
                 DuckDBTable(connection=connection, **kwargs)
                 for kwargs in table_kwargs
             ],
-            edges=edges or [],
+            edges=edges,
         )
 
         if internal_connection:
@@ -617,9 +664,10 @@ class Graph:
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
                 add to the graph. If not provided (:obj:`None`), edges will be
                 automatically inferred from the data in case
-                ``infer_metadata=True``. An empty sequence is not the same
-                thing: it means "these edges and no others", and suppresses
-                inference.
+                ``infer_metadata=True``, and the foreign keys the source
+                catalog declares are added as well. An empty sequence is not
+                the same thing: it means "these edges and no others",
+                suppressing both.
             infer_metadata: Whether to infer metadata for all tables in the
                 graph.
             verbose: Whether to print verbose output.
@@ -679,7 +727,7 @@ class Graph:
                     SnowTable(connection=connection, **kwargs)
                     for kwargs in table_kwargs
                 ],
-                edges=edges or [],
+                edges=edges,
             )
         except BaseException:
             if internal_connection:
@@ -758,9 +806,10 @@ class Graph:
             edges: An optional list of :class:`~kumorfm.graph.Edge` objects to
                 add to the graph. If not provided (:obj:`None`), edges will be
                 automatically inferred from the data in case
-                ``infer_metadata=True``. An empty sequence is not the same
-                thing: it means "these edges and no others", and suppresses
-                inference.
+                ``infer_metadata=True``, and the foreign keys the source
+                catalog declares are added as well. An empty sequence is not
+                the same thing: it means "these edges and no others",
+                suppressing both.
             infer_metadata: Whether to infer metadata for all tables in the
                 graph.
             verbose: Whether to print verbose output.
@@ -821,7 +870,7 @@ class Graph:
                     DatabricksTable(connection=connection, **kwargs)
                     for kwargs in table_kwargs
                 ],
-                edges=edges or [],
+                edges=edges,
             )
         except BaseException:
             if internal_connection:
@@ -1258,14 +1307,16 @@ class Graph:
                     columns.append(ColumnSpec(name=column_name))
                     continue
 
-                column_expr = self_pattern.sub('', column_expr).strip()
+                column_expr = _sub_outside_literals(self_pattern,
+                                                    column_expr).strip()
 
                 if column_expr == column_name:
                     columns.append(ColumnSpec(name=column_name))
                     continue
 
                 # Drop expressions that reference other tables (for now):
-                if any(pattern.search(column_expr)
+                masked_expr = _mask_literals(column_expr)
+                if any(pattern.search(masked_expr)
                        for pattern in other_patterns):
                     unsupported_columns.append(column_name)
                     continue
@@ -2074,11 +2125,16 @@ class Graph:
             ]
             if len(declined) == 0:
                 continue
+            sampled = table._declined_primary_key_rows
+            evidence = (
+                "hold a unique value per row" if sampled is None else
+                f"hold a unique value in each of the {sampled:,} rows sampled "
+                f"from it, and may or may not be unique overall")
             warnings.warn(
                 f"No primary key was inferred for table '{table.name}', so no "
-                f"other table can link to it. Column(s) {declined} hold a "
-                f"unique value per row; pass `primary_key=` explicitly to use "
-                f"one of them.", stacklevel=2)
+                f"other table can link to it. Column(s) {declined} {evidence}; "
+                f"pass `primary_key=` explicitly to use one of them.",
+                stacklevel=2)
 
     # Metadata ################################################################
 

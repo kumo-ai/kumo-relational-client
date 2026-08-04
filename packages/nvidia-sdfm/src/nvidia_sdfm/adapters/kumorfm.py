@@ -181,11 +181,18 @@ def _translate_engine_error(error: Exception, url: str) -> SdfmError:
     Caller-input failures the engine validates itself (an anchor time before
     the context window, an unknown option) arrive as ``ValueError``/
     ``TypeError`` with messages that are already actionable: those keep their
-    message and become ``INVALID_REQUEST``, not ``INTERNAL_ERROR``. A response
-    that does not match the contract is ``INVALID_RESPONSE``, so a malformed
-    server answer is never blamed on the request. Only genuinely unanticipated
-    failures get ``INTERNAL_ERROR``, and they name the endpoint so the report
-    is actionable.
+    message and become ``INVALID_REQUEST``, not ``INTERNAL_ERROR``. So does a
+    ``LookupError``: a name the caller supplied that the engine looked up and
+    did not find is a caller mistake however deep the lookup was, and telling
+    the user to file a bug for their own typo spends the trust
+    ``INTERNAL_ERROR`` exists to carry. ``KeyError`` stringifies as the
+    ``repr`` of its argument, so its message is unwrapped rather than shown as
+    ``"'nope'"``.
+
+    A response that does not match the contract is ``INVALID_RESPONSE``, so a
+    malformed server answer is never blamed on the request. Only genuinely
+    unanticipated failures get ``INTERNAL_ERROR``, and they name the endpoint
+    so the report is actionable.
     """
     failure_type, invalid_response_type = _driver_error_types()
     if failure_type is not None and isinstance(error, failure_type):
@@ -199,7 +206,10 @@ def _translate_engine_error(error: Exception, url: str) -> SdfmError:
     if (invalid_response_type is not None
             and isinstance(error, invalid_response_type)):
         return SdfmError(str(error), code='INVALID_RESPONSE')
-    if isinstance(error, (ValueError, TypeError)):
+    if isinstance(error, KeyError):
+        message = str(error.args[0]) if error.args else str(error)
+        return SdfmError(message, code='INVALID_REQUEST')
+    if isinstance(error, (ValueError, TypeError, LookupError)):
         return SdfmError(str(error), code='INVALID_REQUEST')
     return SdfmError(
         f'The kumo-rfm prediction at {url} failed unexpectedly with '
@@ -245,8 +255,15 @@ def _validate_task_request(request: KumoRFMTaskRequest) -> None:
     r"""Reject caller-supplied task requests with clear ``INVALID_REQUEST`` errors.
 
     Fills the gaps the engine ``TaskTable`` leaves as bare exceptions: an unknown
-    ``task_type``, an ``entity_table`` absent from the graph, and context/predict
-    frames missing the entity, target or time columns.
+    ``task_type``, an ``entity_table`` absent from the graph, context/predict
+    frames missing the entity, target or time columns, and a feature column
+    present in only one of the two frames.
+
+    Anything in ``context`` beyond the entity, target and time columns becomes
+    a task feature, and the engine then reads the same column out of
+    ``predict``. Present in only one frame it raises a bare ``KeyError`` naming
+    the column but not the constraint, which the error classifier could only
+    report as an internal failure.
     """
     if request.task_type not in RFM_TASK_TYPES:
         raise SdfmError(
@@ -279,6 +296,19 @@ def _validate_task_request(request: KumoRFMTaskRequest) -> None:
         context_columns.add(request.time_column)
     _require_columns(request.context, 'context', context_columns)
     _require_columns(request.predict, 'predict', {request.entity_column})
+
+    reserved = set(context_columns)
+    reserved.add(request.time_column if request.time_column is not None
+                 else 'ANCHOR_TIMESTAMP')
+    context_only = [column for column in request.context.columns
+                    if column not in reserved
+                    and column not in set(request.predict.columns)]
+    if context_only:
+        raise SdfmError(
+            f'context carries feature column(s) {context_only} that predict '
+            f'does not; supply them in both frames or drop them from context',
+            code='INVALID_REQUEST',
+        )
 
 
 def _build_task_table(engine: Any, request: KumoRFMTaskRequest) -> Any:
@@ -366,6 +396,7 @@ class KumoRFMAdapter(ModelAdapter):
                 api_key=transport.api_key,
                 verify_ssl=transport.verify_ssl,
                 timeout=transport.timeout,
+                max_retries=transport.max_retries,
                 _token=engine._SDFM_CLIENT_TOKEN)
         # `verbose` has to reach the constructor as well as the call: it owns
         # the graph-materialization output, and a handle builds a fresh engine

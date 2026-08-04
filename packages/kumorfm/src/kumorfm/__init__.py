@@ -39,6 +39,7 @@ class GlobalState(metaclass=Singleton):
     _api_key: Optional[str] = None
     _verify_ssl: bool = True
     _timeout: Optional[float] = None
+    _max_retries: int = 3
     _client_factory: Optional[Callable[[], Any]] = None
     _serving_endpoint: Optional[str] = None
     _serving_workspace: Optional[Any] = None
@@ -63,6 +64,7 @@ class GlobalState(metaclass=Singleton):
         self._api_key = None
         self._verify_ssl = True
         self._timeout = None
+        self._max_retries = 3
 
     @property
     def _config(self) -> tuple[Optional[str], Optional[str], bool,
@@ -115,7 +117,8 @@ class GlobalState(metaclass=Singleton):
         else:
             client = KumoClient(self._url, self._api_key,
                                 verify_ssl=self._verify_ssl,
-                                timeout=self._timeout)
+                                timeout=self._timeout,
+                                max_retries=self._max_retries)
         self.thread_local._client = client
         self.thread_local._client_config = config
         return client
@@ -130,6 +133,7 @@ def init(
     verify_ssl: bool = True,
     log_level: str = "INFO",
     timeout: Optional[float] = None,
+    max_retries: int = 3,
 ) -> None:
     r"""Initializes the KumoRFM client against a Universal TFM NIM.
 
@@ -139,7 +143,8 @@ def init(
     the previous session; re-initializing with identical settings is a no-op.
 
     ``timeout`` bounds each individual request attempt, in seconds; ``None``
-    leaves requests unbounded.
+    leaves requests unbounded. ``max_retries`` bounds the transport-level
+    retries of a transient failure; ``0`` disables them.
     """
     set_log_level(os.getenv(_ENV_KUMO_LOG, log_level))
 
@@ -155,19 +160,21 @@ def init(
         unchanged = (url == global_state._url
                      and api_key == global_state._api_key
                      and verify_ssl == global_state._verify_ssl
-                     and timeout == global_state._timeout)
+                     and timeout == global_state._timeout
+                     and max_retries == global_state._max_retries)
         if unchanged:
             return
         global_state.clear()
 
     client = KumoClient(url=url, api_key=api_key, verify_ssl=verify_ssl,
-                        timeout=timeout)
+                        timeout=timeout, max_retries=max_retries)
     client.authenticate()
 
     global_state._url = client._url
     global_state._api_key = client._api_key
     global_state._verify_ssl = verify_ssl
     global_state._timeout = timeout
+    global_state._max_retries = max_retries
 
     logging.getLogger('kumorfm').info(
         f"Initialized KumoRFM SDK v{__version__} against deployment '{url}'")

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 import pandas as pd
 
+from nvidia_sdfm.errors import SdfmError
 from nvidia_sdfm.requests import (
     KumoRFMRequest,
     KumoRFMTaskRequest,
@@ -18,6 +19,30 @@ from nvidia_sdfm.requests import (
 if TYPE_CHECKING:
     from nvidia_sdfm.base import PredictResult
     from nvidia_sdfm.kumorfm import ExplainConfig
+
+
+def require_frame(value: Any, name: str) -> pd.DataFrame:
+    r"""Reject a table argument that is not a ``DataFrame``, naming the caller's
+    parameter.
+
+    Every table these handles take is used as a frame immediately, so a
+    ``dict``, a list of records, a numpy array or a ``Series`` -- the shapes a
+    pandas user reaches for before building a frame -- otherwise surfaces as
+    ``AttributeError: 'dict' object has no attribute 'columns'`` from inside an
+    adapter, which ``except SdfmError`` does not catch and which names neither
+    the argument nor the type it should have been.
+    """
+    if not isinstance(value, pd.DataFrame):
+        hint = ('; wrap a single row with pd.DataFrame([row])'
+                if isinstance(value, (dict, pd.Series)) else
+                '; build one with pd.DataFrame(...)')
+        raise SdfmError(
+            f'{name} must be a pandas DataFrame, got '
+            f'{type(value).__name__}{hint}',
+            code='INVALID_REQUEST',
+        )
+    return value
+
 
 class _Unset:
     r"""Sentinel for "argument not supplied".
@@ -90,8 +115,12 @@ class RFMModel:
                 ``explain=dict(skip_summary=True)`` to keep them local.
             batch_size: Entities per request, or ``'max'``. ``None`` sends
                 every index in one request.
-            num_retries: Retries the driver performs when the NIM rejects a
-                request as too large.
+            num_retries: Application-level retries of a failed prediction
+                request, with exponential backoff. Only transient failures
+                (408, 429, 5xx, timeouts, dropped connections) are retried; a
+                refusal such as an oversized payload is not. Distinct from
+                ``SDFMClient(max_retries=...)``, which retries at the
+                transport.
             anchor_time: The anchor timestamp for the prediction. ``None`` uses
                 the maximum timestamp in the data; ``'entity'`` uses each
                 entity's own timestamp.
@@ -107,8 +136,8 @@ class RFMModel:
             num_hops: The number of hops to sample when generating the context.
             inference_config: Inference-time model configuration, e.g.
                 ``dict(num_estimators=4, output_type='quantiles')``. See
-                ``kumorfm.rfm.KumoRFM.predict`` for the supported keys; keys
-                outside that set are dropped silently.
+                ``kumorfm.rfm.KumoRFM.predict`` for the supported keys; a key
+                outside that set is rejected rather than dropped.
             return_embeddings: Whether to also return an embedding per
                 prediction example.
             random_seed: A manual seed for pseudo-random sampling. The
@@ -262,8 +291,8 @@ class RFMModel:
         options.update(engine_options)
         request = KumoRFMTaskRequest(
             graph=self._graph,
-            context=context,
-            predict=predict,
+            context=require_frame(context, 'context'),
+            predict=require_frame(predict, 'predict'),
             task_type=task_type,
             entity_table=entity_table,
             entity_column=entity_column,
@@ -369,7 +398,7 @@ class TabICLModel:
         }
         request = TabICLRequest(
             context=self._context,
-            predict=predict,
+            predict=require_frame(predict, 'predict'),
             task=self._task,
             target=self._target,
             session=self._session,

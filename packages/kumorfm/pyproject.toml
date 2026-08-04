@@ -8,8 +8,10 @@ license = "Apache-2.0"
 license-files=["LICENSE", "NOTICE"]
 description="RFM engine (graph, samplers, PQL, native neighbor-sampler) for the nvidia-sdfm SDK"
 readme="README.md"
-# Binary wheels only, so the upper bound must match the cibuildwheel matrix in
-# .gitlab-ci.yml.
+# Upper bound matches the interpreter loop in .gitlab-ci.yml's
+# `build_kumorfm_wheels` job (cp310/cp311/cp312 on manylinux_2_28 x86-64): this
+# package ships binary wheels only (no sdist), so a version with no wheel must
+# fail resolution rather than fail to find a distribution.
 requires-python=">=3.10,<3.13"
 keywords=[
     "deep-learning",

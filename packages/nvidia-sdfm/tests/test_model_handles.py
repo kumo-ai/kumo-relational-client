@@ -13,6 +13,7 @@ from nvidia_sdfm import (
     TabICLModel,
 )
 from nvidia_sdfm.base import ModelAdapter, ModelCapabilities
+from nvidia_sdfm.errors import SdfmError
 from nvidia_sdfm.requests import (
     KumoRFMRequest,
     KumoRFMTaskRequest,
@@ -342,3 +343,84 @@ def test_rfm_handle_predict_task_only_forwards_set_options():
     assert adapter.captured.options == {
         'inference_config': {'num_estimators': 2},
     }
+
+
+_NOT_A_FRAME = [
+    {'a': [1, 2], 'y': [0, 1]},
+    [{'a': 1, 'y': 0}, {'a': 2, 'y': 1}],
+    pd.Series([1, 2], name='a'),
+    None,
+    'context.csv',
+]
+
+
+@pytest.mark.parametrize('value', _NOT_A_FRAME)
+def test_tabicl_handle_rejects_a_non_frame_context(value):
+    r"""client-non-dataframe-tables-raise-a-bare-attributeerror.md
+
+    These are the shapes a pandas user reaches for before building a frame.
+    Each used to reach ``frame.columns`` inside the adapter and raise
+    ``AttributeError``, which ``except SdfmError`` does not catch and which
+    names neither the argument nor the type it should have been.
+    """
+    client = SDFMClient(url='http://nim.test')
+    with pytest.raises(SdfmError) as excinfo:
+        client.tabicl(value, target='y', task='classification')
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert 'context must be a pandas DataFrame' in str(excinfo.value)
+    assert type(value).__name__ in str(excinfo.value)
+
+
+@pytest.mark.parametrize('value', _NOT_A_FRAME)
+def test_tabicl_handle_rejects_a_non_frame_predict(value):
+    adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
+    client = _client_with(adapter)
+    handle = client.tabicl(pd.DataFrame({'a': [1.0], 'y': [0]}), target='y',
+                           task='classification')
+
+    with pytest.raises(SdfmError) as excinfo:
+        handle.predict(value)
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert 'predict must be a pandas DataFrame' in str(excinfo.value)
+
+
+@pytest.mark.parametrize('argument', ['context', 'predict'])
+def test_rfm_handle_predict_task_rejects_a_non_frame(argument):
+    adapter = _CapturingAdapter('kumo-rfm', KumoRFMTaskRequest, pd.DataFrame())
+    client = _client_with(adapter)
+    frames = {
+        'context': pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+        'predict': pd.DataFrame({'ENTITY': [2]}),
+    }
+    frames[argument] = {'ENTITY': [1]}
+
+    with pytest.raises(SdfmError) as excinfo:
+        client.kumorfm('g').predict_task(
+            **frames, task_type='regression', entity_table='users')
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert f'{argument} must be a pandas DataFrame' in str(excinfo.value)
+
+
+def test_a_dict_or_series_is_told_how_to_become_a_row():
+    client = SDFMClient(url='http://nim.test')
+    for value in ({'a': 1, 'y': 0}, pd.Series({'a': 1, 'y': 0})):
+        with pytest.raises(SdfmError) as excinfo:
+            client.tabicl(value, target='y', task='classification')
+        assert 'pd.DataFrame([row])' in str(excinfo.value)
+
+
+def test_frames_and_subclasses_are_still_accepted():
+    r"""The guard must not reject what already worked. A ``DataFrame``
+    subclass is a legitimate frame and passes ``isinstance``.
+    """
+
+    class _MyFrame(pd.DataFrame):
+        pass
+
+    adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
+    client = _client_with(adapter)
+    context = _MyFrame({'a': [1.0, 2.0], 'y': [0, 1]})
+
+    client.tabicl(context, target='y', task='classification').predict(
+        _MyFrame({'a': [3.0]}))
+    assert adapter.captured is not None

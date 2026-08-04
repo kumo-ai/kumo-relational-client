@@ -74,6 +74,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         'api_key': client.api_key,
         'verify_ssl': client.verify_ssl,
         'timeout': client.timeout,
+        'max_retries': client.max_retries,
         '_token': rfm_engine._SDFM_CLIENT_TOKEN,
     }
     assert captured['graph'] == 'fake-graph'
@@ -196,12 +197,26 @@ def test_kumorfm_shim_namespace_is_pinned():
         'Explanation',
         'Graph',
         'LocalTable',
-        'MaterializedPredictionRequest',
         'Stype',
         'Table',
-        'TaskTable',
+        'ViewConversionWarning',
     ]
     assert kumorfm_shim.__dir__() == sorted(kumorfm_shim.__all__)
+
+
+def test_kumorfm_shim_withholds_names_the_supported_api_cannot_reach():
+    r"""`MaterializedPredictionRequest` and `TaskTable` are off the shim.
+
+    Neither is reachable through `SDFMClient`: the first is returned only by
+    `KumoRFM.materialize_*` and the second is built by the adapter itself, and
+    `KumoRFM` is deliberately absent, so exporting them promised a surface that
+    does not exist. `KumoRFM` and `init` stay withheld for the same reason.
+    """
+    from nvidia_sdfm import kumorfm as kumorfm_shim
+
+    for name in ('MaterializedPredictionRequest', 'TaskTable', 'KumoRFM',
+                 'init', 'LocalGraph'):
+        assert not hasattr(kumorfm_shim, name), name
 
 
 @requires_engine
@@ -563,14 +578,31 @@ def test_nim_failure_without_a_status_becomes_a_transport_error(
 
 @requires_engine
 def test_unexpected_engine_failure_becomes_internal_error(monkeypatch, client):
-    r"""client-rfm-path-never-raises-sdfmerror.md: no bare KeyError escapes."""
-    _failing_engine(monkeypatch, KeyError('id'))
+    r"""client-rfm-path-never-raises-sdfmerror.md: no bare exception escapes."""
+    _failing_engine(monkeypatch, RuntimeError('the wheels came off'))
 
     with pytest.raises(SdfmError) as excinfo:
         _predict(client)
     assert excinfo.value.code == 'INTERNAL_ERROR'
     assert client.url in str(excinfo.value)
-    assert 'KeyError' in str(excinfo.value)
+    assert 'RuntimeError' in str(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
+
+
+@requires_engine
+def test_engine_lookup_failure_becomes_invalid_request(monkeypatch, client):
+    r"""rfm-caller-input-keyerror-reported-as-internal-error.md
+
+    A name the caller supplied that the engine looked up and did not find is a
+    caller mistake, not an SDK failure, however deep the lookup happened. The
+    key is reported unwrapped rather than as ``KeyError``'s ``repr``.
+    """
+    _failing_engine(monkeypatch, KeyError('nope'))
+
+    with pytest.raises(SdfmError) as excinfo:
+        _predict(client)
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert str(excinfo.value) == '[INVALID_REQUEST] nope'
     assert isinstance(excinfo.value.__cause__, KeyError)
 
 
@@ -1073,3 +1105,66 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
         'A': ('https://tenant-a.example', 'key-A'),
         'B': ('https://tenant-b.example', 'key-B'),
     }
+
+
+@requires_engine
+def test_predict_task_names_a_feature_column_missing_from_predict(client):
+    r"""rfm-caller-input-keyerror-reported-as-internal-error.md
+
+    Anything in ``context`` beyond entity/target/time becomes a task feature,
+    and the engine then reads the same column out of ``predict``. Present in
+    only one frame it raised a bare ``KeyError`` naming the column but not the
+    constraint, which the classifier could only report as an internal failure.
+    """
+    with pytest.raises(SdfmError) as excinfo:
+        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a'],
+                                  'EXTRA': [1]}),
+            predict=pd.DataFrame({'ENTITY': [2]}),
+            task_type='regression', entity_table='users'))
+
+    assert excinfo.value.code == 'INVALID_REQUEST'
+    assert "['EXTRA']" in str(excinfo.value)
+    assert 'supply them in both frames' in str(excinfo.value)
+
+
+@requires_engine
+@pytest.mark.parametrize(('context_columns', 'predict_columns'), [
+    ({'ENTITY': [1], 'TARGET': ['a']}, {'ENTITY': [2]}),
+    ({'ENTITY': [1], 'TARGET': ['a'], 'EXTRA': [1]},
+     {'ENTITY': [2], 'EXTRA': [3]}),
+    ({'ENTITY': [1], 'TARGET': ['a']}, {'ENTITY': [2], 'EXTRA': [3]}),
+    ({'ENTITY': [1], 'TARGET': ['a'],
+      'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-01'])},
+     {'ENTITY': [2]}),
+])
+def test_predict_task_still_accepts_the_supported_frame_shapes(
+        monkeypatch, client, context_columns, predict_columns):
+    r"""The guard must not reject what already worked: a feature in both
+    frames, a feature in ``predict`` alone (ignored), and an anchor timestamp
+    in ``context`` alone.
+    """
+    class FakeTaskTable:
+        ENTITY_TIME = '__entity_time__'
+
+        def __init__(self, **kwargs):
+            pass
+
+    class FakeKumoRFM(_FakeEngineModel):
+        def __init__(self, graph, **kwargs):
+            pass
+
+        def predict_task(self, task, **kwargs):
+            return pd.DataFrame({'ENTITY': [2]})
+
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
+    monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
+    monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
+
+    out = KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
+        graph=_FakeGraph('users'),
+        context=pd.DataFrame(context_columns),
+        predict=pd.DataFrame(predict_columns),
+        task_type='regression', entity_table='users'))
+    assert isinstance(out, pd.DataFrame)

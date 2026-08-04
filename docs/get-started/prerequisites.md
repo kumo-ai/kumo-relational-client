@@ -26,11 +26,14 @@ The KumoRFM driver ships prebuilt binary wheels for the following platforms:
 
 | Platform | Supported |
 | --- | --- |
-| Linux x86_64 (glibc 2.28+) | Yes |
-| macOS arm64 (macOS 12+) | Yes |
+| Linux x86_64 (glibc 2.28+, `manylinux_2_28`) | Yes |
+| Everything else, including macOS | No — build from source |
 
-The base client and connectors are pure Python and install on any platform that
-supports Python 3.10 or later.
+No source distribution is published either, so `pip install
+"nvidia-sdfm[kumorfm]"` resolves on Linux x86_64 only. On any other platform,
+install the base `nvidia-sdfm` — it is pure Python, as are the connectors, and
+installs on anything running Python 3.10 or later — and run KumoRFM from a Linux
+x86_64 host.
 
 ### Runtime Dependencies
 
@@ -45,7 +48,7 @@ install only when you request the matching extra.
 ## Verified Configurations
 
 - Python 3.12 on Linux x86_64, installing `nvidia-sdfm[kumorfm]`.
-- Python 3.12 on macOS arm64, installing `nvidia-sdfm[kumorfm]`.
+- Python 3.12 on macOS arm64, installing the base `nvidia-sdfm`.
 
 ## Network Access
 
@@ -72,9 +75,10 @@ Before you continue to installation, confirm the following:
 ## Troubleshoot Prerequisites
 
 - **`No matching distribution found for kumorfm`.** Your platform or Python
-  version is outside the wheel matrix (Linux x86_64 or macOS arm64, Python
-  3.10–3.12). Install the base `nvidia-sdfm` without the `[kumorfm]` extra, or
-  use a supported interpreter.
+  version is outside the wheel matrix (Linux x86_64, Python 3.10–3.12), and no
+  source distribution is published to fall back to. Install the base
+  `nvidia-sdfm` without the `[kumorfm]` extra, or use a supported host and
+  interpreter.
 - **Cannot reach the package index.** Confirm you are connected to the NVIDIA
   network, then retry the install.
 

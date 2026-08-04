@@ -8,24 +8,28 @@ template-library-version: "1.0.0"
 
 The NVIDIA SDFM (Structured Data Foundation Models) SDK is one Python client for
 NVIDIA's structured-data foundation model NIMs, served behind the Universal TFM
-API. A thin, model-agnostic client dispatches typed requests to per-model
-adapters; heavy model drivers are optional and installed only when you ask for
-them. Two models are available today: **TabICL** (single-table, in-context
+API. A thin, model-agnostic client dispatches through per-model handles to
+per-model adapters; heavy model drivers are optional and installed only when you
+ask for them. Two models are available today: **TabICL** (single-table, in-context
 learning) and **KumoRFM** (relational, graph-aware in-context learning).
 
 ## Benefits
 
 - **One client for every model.** A single `SDFMClient` connects to a NIM and
-  serves any registered model through one typed `predict` call.
+  serves any registered model through a handle of its own —
+  `client.tabicl(...).predict(...)` and `client.kumorfm(...).predict(...)` —
+  each returning the same shape of pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
   every platform. Heavy drivers, such as KumoRFM's native graph sampler, are
   opt-in extras.
 - **NIM-first and secure by default.** The client talks to a NIM you control;
   your data stays on your infrastructure, and authentication is owned by the
   deployment rather than the API contract.
-- **Typed, discoverable requests.** Each model has a typed request object, so
-  your editor autocompletes the fields and the client validates them before
-  sending.
+- **Typed, discoverable calls.** Each model's handle is fully typed, so your
+  editor autocompletes the arguments that model takes, and the adapter rejects
+  what it can see is wrong — an unsupported task, an output field the task
+  cannot produce, a missing column — before anything is sent. What only the NIM
+  can judge is judged there.
 
 ## Skip Ahead
 

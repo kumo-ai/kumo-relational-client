@@ -72,12 +72,14 @@ def _configure(
     verify_ssl: bool,
     log_level: str,
     timeout: float | None,
+    max_retries: int = 3,
 ) -> None:
     resolved_url = (url or os.getenv("RFM_API_URL")
                     or os.getenv("KUMO_API_ENDPOINT"))
 
     kumorfm.init(url=resolved_url, api_key=api_key, verify_ssl=verify_ssl,
-                 log_level=log_level, timeout=timeout)
+                 log_level=log_level, timeout=timeout,
+                 max_retries=max_retries)
 
     global_state._url = kumorfm.global_state._url
     global_state._initialized = True
@@ -90,12 +92,14 @@ def init(
     log_level: str = "INFO",
     *,
     timeout: float | None = None,
+    max_retries: int = 3,
     _token: object | None = None,
 ) -> None:
     if _token is not _SDFM_CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
-        _configure(url, api_key, verify_ssl, log_level, timeout)
+        _configure(url, api_key, verify_ssl, log_level, timeout,
+                   max_retries)
 
 
 def init_client(
@@ -105,6 +109,7 @@ def init_client(
     log_level: str = "INFO",
     *,
     timeout: float | None = None,
+    max_retries: int = 3,
     _token: object | None = None,
 ) -> RFMTransport:
     r"""Configures the engine and returns the client that configuration
@@ -126,7 +131,8 @@ def init_client(
     if _token is not _SDFM_CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
-        _configure(url, api_key, verify_ssl, log_level, timeout)
+        _configure(url, api_key, verify_ssl, log_level, timeout,
+                   max_retries)
         return kumorfm.global_state.client
 
 

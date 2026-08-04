@@ -7,8 +7,8 @@ template-library-version: "1.0.0"
 # Quickstart for the NVIDIA SDFM SDK
 
 This quickstart shows you how to connect to a NIM and run a prediction with each
-model. A `SDFMClient` owns one connection to a NIM; requests are typed per model,
-so the client validates them before sending.
+model. A `SDFMClient` owns one connection to a NIM, and each model has its own
+typed handle.
 
 ## Prerequisites
 

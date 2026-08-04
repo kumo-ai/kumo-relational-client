@@ -146,6 +146,13 @@ def build_request(
             code='INVALID_REQUEST',
         )
 
+    if isinstance(outputs, (str, bytes)):
+        raise SdfmError(
+            f'outputs must be a list of field names, not a single string; '
+            f'pass [{outputs!r}]. A bare string is iterable, so the check '
+            f'below would otherwise read it one character at a time',
+            code='INVALID_REQUEST',
+        )
     unsupported = [field for field in outputs
                    if field not in _OUTPUT_FIELDS[wire_task]]
     if unsupported:
@@ -280,6 +287,65 @@ def delete_session_quietly(transport: Transport, session_id: str) -> None:
         pass
 
 
+def _acquire_session(
+    transport: Transport,
+    payload: dict[str, Any],
+    session: TabICLSession,
+    pinned: str,
+) -> tuple[str | None, str | None]:
+    r"""Decide, under ``session.lock``, which session id should serve this call.
+
+    Returns the id to score against (``None`` to score statelessly) and the id
+    of a superseded session the caller should release. The release is handed
+    back rather than done here so the network round trip happens outside the
+    lock: it is bookkeeping, and holding the lock across it would serialize
+    every concurrent caller behind it.
+
+    Opening a session is an optimisation, so any failure to open one falls back
+    to the stateless path instead of failing the caller's prediction -- a
+    NIM without the session routes latches ``supported`` off so the handle
+    stops asking, while a transient failure is simply retried next call.
+    """
+    with session.lock:
+        if session.pinned != pinned:
+            # First call, or a call whose context half differs (a widened
+            # dtype, a different positive_class): the old session cannot
+            # answer it.
+            stale, session.id = session.id, None
+            session.pinned = pinned
+            return None, stale
+        if session.id is not None:
+            return session.id, None
+        try:
+            session.id = _create_session(transport, payload)
+        except NimRequestError as error:
+            if error.status_code in _SESSION_UNSUPPORTED_STATUS:
+                session.supported = False
+            return None, None
+        except SdfmError:
+            return None, None
+        return session.id, None
+
+
+def _refresh_session(
+    transport: Transport,
+    payload: dict[str, Any],
+    session: TabICLSession,
+    stale_id: str,
+) -> str:
+    r"""Re-pin the context after the NIM forgot ``stale_id``.
+
+    Under the lock, and only when no concurrent caller has already replaced it,
+    so a TTL boundary reached by several threads at once costs one new session
+    rather than one per thread.
+    """
+    with session.lock:
+        if session.id is not None and session.id != stale_id:
+            return session.id
+        session.id = _create_session(transport, payload)
+        return session.id
+
+
 def _predict_with_session(
     transport: Transport,
     payload: dict[str, Any],
@@ -301,34 +367,24 @@ def _predict_with_session(
         return transport.predict(payload)
 
     pinned = _pinned_digest(payload)
-    if session.pinned != pinned:
-        # First call, or a call whose context half differs (a widened dtype, a
-        # different positive_class): the old session cannot answer it.
-        if session.id is not None:
-            delete_session_quietly(transport, session.id)
-            session.id = None
-        session.pinned = pinned
+    session_id, stale_id = _acquire_session(transport, payload, session,
+                                            pinned)
+    if stale_id is not None:
+        delete_session_quietly(transport, stale_id)
+    if session_id is None:
         return transport.predict(payload)
-
-    if session.id is None:
-        try:
-            session.id = _create_session(transport, payload)
-        except NimRequestError as error:
-            if error.status_code not in _SESSION_UNSUPPORTED_STATUS:
-                raise
-            session.supported = False
-            return transport.predict(payload)
 
     predict_payload = _sections(payload, _SESSION_PREDICT_SECTIONS)
     try:
-        return transport.session_predict(session.id, predict_payload)
+        return transport.session_predict(session_id, predict_payload)
     except NimRequestError as error:
         # The session expired or was evicted: pin the context again and retry
         # once, so a long-lived handle never fails on a TTL boundary.
         if error.status_code != 404:
             raise
-        session.id = _create_session(transport, payload)
-        return transport.session_predict(session.id, predict_payload)
+        return transport.session_predict(
+            _refresh_session(transport, payload, session, session_id),
+            predict_payload)
 
 
 class TabICLAdapter(ModelAdapter):

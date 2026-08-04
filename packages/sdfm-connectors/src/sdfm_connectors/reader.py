@@ -263,7 +263,7 @@ def _require_local_path(path: str) -> None:
     a DataFrame. A single-character scheme is a Windows drive letter, not a
     URI. A ``file://`` URI naming a host is refused too: ``urllib`` drops the
     authority and reads the path locally, so the URI does not mean what it
-    says. See ``bugs/security-local-connector-fetches-arbitrary-urls.md``.
+    says.
     """
     parsed = urlparse(path)
     if len(parsed.scheme) > 1 and parsed.scheme != 'file':

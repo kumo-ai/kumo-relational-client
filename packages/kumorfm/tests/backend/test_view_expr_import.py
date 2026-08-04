@@ -319,3 +319,12 @@ def test_semantic_view_keeps_a_scalar_function_column(snow_graph):
     table = graph['USERS']
     assert table.has_column('NAME_MASKED')
     assert table.has_column('NAME_TRUNC')
+
+
+def test_a_literal_holding_the_table_name_survives_conversion(snow_graph):
+    r"""End to end through the public constructor."""
+    graph = snow_graph("""      - name: TAGGED
+        expr: CONCAT('USERS.', NAME)
+        data_type: VARCHAR
+""")
+    assert str(graph['USERS']['TAGGED'].expr) == "CONCAT('USERS.', NAME)"

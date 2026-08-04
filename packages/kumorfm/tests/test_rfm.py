@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import re
 from typing import Any, cast
 from unittest.mock import MagicMock, patch
 
@@ -18,6 +19,7 @@ from kumorfm.api.typing import Dtype, Stype
 from kumorfm.rfm import Graph, KumoRFM, LocalTable, TaskTable
 from kumorfm.rfm.base.utils import Timestamp
 from kumorfm.rfm.rfm import Explanation
+from kumorfm.utils.progress_logger import PlainProgressLogger
 
 
 class MockAPI:
@@ -1192,3 +1194,48 @@ def test_link_prediction_class_column_keeps_the_target_key_dtype(
 
     assert df['CLASS'].dtype == user_store_graph['STORES']['STORE_ID'].dtype
     assert df['CLASS'].tolist() == [1, 2]
+
+
+def test_over_cap_batch_size_suggests_a_value_under_the_cap() -> None:
+    r"""rfm-batch-size-hint-exceeds-link-pred-cap.md
+
+    The message hard-coded ``batch_size=500`` as its worked example. Temporal
+    link prediction caps at 200, so following the suggestion verbatim
+    reproduced the identical error including the identical suggestion. Checked
+    for every task type, since the cap is per task type.
+    """
+    from kumorfm.rfm.rfm import _MAX_PRED_SIZE
+
+    for task_type in TaskType:
+        limit = _MAX_PRED_SIZE[task_type]
+        message = _over_cap_message(task_type, limit + 1)
+        suggested = int(re.search(r'`batch_size=(\d+)`', message).group(1))
+        assert suggested <= limit, task_type
+        assert f'more than {limit:,} entities' in message
+        assert "`batch_size='max'`" in message
+
+
+def _over_cap_message(task_type: TaskType, batch_size: int) -> str:
+    r"""Drive the real raise site, so the assertion is about shipped text."""
+    graph = Graph.from_data({
+        'users': pd.DataFrame({'user_id': [0, 1], 'age': [30, 40]}),
+    }, verbose=False)
+    model = KumoRFM(graph, verbose=False)
+    model._validate_task_references = lambda _task: None
+    model._batch_size = batch_size
+
+    task = MagicMock()
+    task.task_type = task_type
+    task.num_context_examples = 8
+    task.num_prediction_examples = batch_size
+    task.num_forecasts = 1
+    task.narrow_context.return_value = task
+
+    with pytest.raises(ValueError) as excinfo:
+        next(model._iter_task_requests(
+            task, explain=False, return_embeddings=False, run_mode='fast',
+            num_neighbors=[8, 8], inference_config=MagicMock(),
+            logger=PlainProgressLogger('Predicting', verbose=False),
+            exclude_cols_dict=None, use_prediction_time=False, top_k=None,
+            random_seed=42))
+    return str(excinfo.value)

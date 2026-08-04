@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, Sequence
 
@@ -35,10 +36,20 @@ class TabICLSession:
     second copy of the context; a request whose context half differs cannot use
     the session. ``supported`` latches to ``False`` against a NIM without
     session routes, so the handle stops asking.
+
+    ``lock`` serializes the decision of whether to open a session, so a handle
+    shared across a thread pool -- which the handle's own docstring recommends
+    -- opens one session rather than one per thread. Without it every thread
+    reads ``id is None`` at once, they all create, the last writer wins and the
+    rest are pinned on the NIM with no ``session_id`` left to release them by.
+    Scoring against an established session runs outside the lock and so stays
+    concurrent.
     """
     id: str | None = None
     pinned: str | None = None
     supported: bool = True
+    lock: threading.Lock = field(default_factory=threading.Lock, repr=False,
+                                 compare=False)
 
 
 @dataclass
@@ -74,9 +85,10 @@ class KumoRFMRequest(ModelRequest):
     ``options`` forwards any additional keyword arguments to the driver's
     ``predict`` (e.g. ``num_neighbors``, ``anchor_time``).
 
-    ``num_retries`` applies whether or not ``batch_size`` is set: each failed
-    request is retried that many times with an exponential backoff. Set it to
-    ``0`` to fail on the first error.
+    ``num_retries`` applies whether or not ``batch_size`` is set: each
+    transiently failed request is retried that many times with an exponential
+    backoff. Set it to ``0`` to fail on the first error. It sits above
+    ``SDFMClient(max_retries=...)``, which retries at the transport.
 
     This is the internal request built by the public handle
     ``client.kumorfm(graph).predict(query, ...)``. With ``explain`` set (a

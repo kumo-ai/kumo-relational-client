@@ -49,9 +49,9 @@ configured it last. Drive the driver through `SDFMClient` only.
 
 Every model is a peer module implementing the `ModelAdapter` interface and
 registered in the client's `AdapterRegistry`. An adapter advertises its
-capabilities, shapes an internal typed request (`TabICLRequest`, `KumoRFMRequest`,
-built by the model handles) into the Universal TFM API envelope, and normalizes
-the NIM's response into a consistent
+capabilities, shapes an internal typed request (`TabICLRequest`, `KumoRFMRequest`
+— built by the model handles, and not importable from `nvidia_sdfm`) into the
+Universal TFM API envelope, and normalizes the NIM's response into a consistent
 pandas DataFrame. Adding a model means adding one adapter module — the client
 core does not change.
 
@@ -65,9 +65,12 @@ platform-independent. TabICL requires no driver.
 
 ## Data Flow
 
-1. Your application constructs a typed request and calls `client.predict`.
-2. The client selects the model's adapter and validates the request against the
-   model's advertised capabilities.
+1. Your application builds a model handle with `client.tabicl(...)` or
+   `client.kumorfm(...)` and calls `predict` on it.
+2. The handle builds that model's internal typed request; the client checks it is
+   the type the model's adapter accepts and dispatches to it. Nothing is checked
+   against `capabilities()`, which describes the client-side adapter for callers
+   who ask and is not consulted on this path.
 3. The adapter builds the Universal TFM API request. For KumoRFM, the driver
    parses the PQL query, samples the relevant subgraph, and materializes the
    request; for TabICL, the adapter serializes the context and predict tables

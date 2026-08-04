@@ -68,6 +68,11 @@ class RFMAPI:
         uploaded once; :meth:`session_predict` then references it by the
         returned ``session_id`` so subsequent batches send only their
         prediction rows.
+
+        A ``200`` with no ``session_id`` is an ``InvalidResponseError``, like a
+        malformed prediction body: the request that produced it is the SDK's
+        own generated payload, so the caller cannot have influenced whether the
+        server echoes an id and must not be told they did.
         """
         response = self._client._request(
             TFMOperations.create_session.endpoint,
@@ -75,10 +80,14 @@ class RFMAPI:
             headers={'Content-Type': 'application/json'},
         )
         raise_on_error(response)
-        body = response.json()
+        try:
+            body = response.json()
+        except ValueError as error:
+            raise InvalidResponseError(
+                'Create-session response was not valid JSON.') from error
         session_id = body.get('session_id') if isinstance(body, dict) else None
         if not isinstance(session_id, str) or not session_id:
-            raise ValueError(
+            raise InvalidResponseError(
                 'Create-session response did not include a session_id.')
         return session_id
 

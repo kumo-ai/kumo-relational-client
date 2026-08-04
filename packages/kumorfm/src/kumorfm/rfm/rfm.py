@@ -856,12 +856,9 @@ class KumoRFM:
           ``"median"`` or ``"quantiles"`` there. Tracked as
           ``structured-data-nims#5``.
 
-        .. warning::
-
-            Keys other than those listed above are currently dropped silently
-            instead of raising, so a misspelled option runs to completion and
-            returns the default result. Check the spelling if an option appears
-            to have no effect.
+        A key other than those listed above is rejected, naming the offending
+        key: nothing forwards an unknown key to the NIM, so accepting one could
+        only ever mean silently substituting the default.
 
         .. code-block:: python
 
@@ -1324,13 +1321,17 @@ class KumoRFM:
 
         batch_size = self._resolve_batch_size(task)
 
-        if batch_size > _MAX_PRED_SIZE[task.task_type]:
+        max_batch_size = _MAX_PRED_SIZE[task.task_type]
+        if batch_size > max_batch_size:
+            # The example has to stay under the cap it just quoted: temporal
+            # link prediction caps at 200, so a fixed `batch_size=500` told the
+            # user to retry with a value that reproduces this same error.
             raise ValueError(
-                f"Cannot predict for more than "
-                f"{_MAX_PRED_SIZE[task.task_type]:,} entities at once "
-                f"(got {batch_size:,}). Pass `batch_size=` to `predict(...)` "
-                f"(for example `batch_size=500`) to process entities in "
-                f"batches.")
+                f"Cannot predict for more than {max_batch_size:,} entities at "
+                f"once (got {batch_size:,}). Pass `batch_size=` to "
+                f"`predict(...)` (for example "
+                f"`batch_size={min(500, max_batch_size)}`, or "
+                f"`batch_size='max'`) to process entities in batches.")
 
         num_batches = math.ceil(task.num_prediction_examples / batch_size)
         if num_batches > 1:

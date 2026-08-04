@@ -1,0 +1,168 @@
+# Changelog
+
+## nvidia-sdfm 0.2.0 · kumorfm 2.24.0 · sdfm-connectors 0.3.0
+
+The outcome of a full audit of the SDK's public surface — every connector, every
+graph-construction path, every sampler, all five task types, the HTTP client, and
+the error handling around each. 78 findings were reported and fixed.
+
+### Removed — read this before upgrading
+
+The typed-request surface `nvidia-sdfm` 0.1.0 exported was replaced by the model
+handles. Code written against 0.1.0 that used it will not import.
+
+- `nvidia_sdfm.ModelRequest`, `TabICLRequest`, `KumoRFMRequest`, `ModelAdapter`
+  and `AdapterRegistry` are no longer exported; the request types are an
+  implementation detail of the handles. Use `client.tabicl(...)` /
+  `client.kumorfm(...)`.
+- `SDFMClient.predict(request)` and `SDFMClient.register(adapter)` are internal
+  (`_predict` / `_register`). Run inference through the handles, and pass a
+  custom registry with `SDFMClient(url, registry=...)`.
+- `nvidia_sdfm.kumorfm` no longer exports `KumoRFM`, `LocalGraph`,
+  `MaterializedPredictionRequest` or `TaskTable`. Direct engine use is refused,
+  and nothing on the supported surface returns or accepts the other two — the
+  shim now carries what a caller can actually reach. Build graphs with
+  `nvidia_sdfm.kumorfm.Graph` and predict through `client.kumorfm(graph)`.
+  `Dtype`, `Stype` and `ViewConversionWarning` were added in their place.
+- `Graph.visualize(backend=...)` — visualization is Mermaid-only; the parameter
+  is replaced by `height=`.
+- `kumorfm.rfm.init()` raises `RuntimeError` unless called by `SDFMClient`.
+  Construct an `SDFMClient` instead.
+
+### Compatibility
+
+Everything else on the supported surface is unchanged, verified by an AST diff of
+the public API against the 0.1.0 tag (`ed86392`): `SDFMClient`'s constructor and
+its `tabicl` / `kumorfm` / `models` / `capabilities` / `health_ready` / `close`
+methods, `RFMModel.predict` and `predict_task`, `TabICLModel.predict`, every
+`Graph.from_*`, `KumoRFM`'s methods, and `read` / `connect` / `quote_ident` /
+`read_table` / `resolve_sql`. Every other signature change is an added parameter
+with a default, so an existing call site is unaffected: `driver_options=` on the
+Snowflake and Databricks `connect`, `database=` on the SQLite and DuckDB ones,
+and `timeout=` / `max_retries=` on `kumorfm.init`.
+
+### Behaviour changes to check before upgrading
+
+These are visible to working code. Each is the fix for a case that previously
+produced a wrong or silently-degraded result.
+
+- **Multiclass `CLASS` column keeps its target's dtype** instead of always being
+  `str`. `result['CLASS'] == '5'` becomes `result['CLASS'] == 5`. Previously
+  `CLASS` could not be joined back to the table it names without a manual cast.
+- **Client-side validation failures on the KumoRFM path raise `SdfmError`**
+  (code `INVALID_REQUEST`) rather than a bare `ValueError`, matching the contract
+  TabICL already followed. Messages are unchanged. The `kumorfm` driver surface is
+  unaffected: `NimFailureError` subclasses `RuntimeError` and `InvalidResponseError`
+  subclasses `ValueError`.
+- **Four cases that used to succeed silently now raise**: a `.json` or `.tsv` file
+  read as CSV, an unrecognised connection keyword, a missing SQLite database path
+  (which used to be created), and an API key sent over plaintext HTTP.
+- **An unknown key in `inference_config` is rejected** instead of dropped. A typo
+  such as `output_typ='mean'` used to return the *median* with no diagnostic. No
+  call can depend on the dropped key having had an effect — by construction it had
+  none, since only the declared fields reach the wire.
+- **`edges=[]` now means "these edges and no others"**, as its docstring says. On a
+  backend with declared foreign keys it used to add them anyway, so a caller who
+  pinned the graph's shape got extra edges — and therefore different predictions.
+  `edges=None` is unchanged and still applies them.
+- **`SDFMClient(max_retries=...)` now governs the KumoRFM transport too**, which
+  previously used a fixed policy of its own. A caller who raised it will see
+  transient failures retried where they were not before, and one who set `0` will
+  see them surface immediately; failures on the KumoRFM path therefore take longer
+  or shorter to surface than in 0.1.0 according to what was asked for.
+- **A caller mistake the engine reports as a `KeyError`** — a typo in
+  `exclude_cols_dict`, a feature column present in `context` but not `predict` —
+  is `SdfmError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
+  invitation to file a bug. Code branching on `.code` for those inputs sees the new
+  value; `except SdfmError` is unaffected.
+- **A malformed create-session response is `INVALID_RESPONSE`**, not
+  `INVALID_REQUEST`, matching the prediction path.
+
+### Fixed — wrong results
+
+- TabICL no longer applies the context frame's dtype to the predict frame, which
+  truncated fractional values (`[1.9, 2.5, 3.7]` was sent as `[1, 2, 3]`) and could
+  change the predicted class.
+- A nullable integer column no longer widens to `float64` and corrupts large ids
+  (`9007199254740993` became `9007199254740992`), which affected nullable foreign
+  keys — the join keys that become graph edges.
+- Timezone-aware timestamps are converted to UTC rather than having their offset
+  dropped, so tables in different zones no longer land on the same instant.
+- Int64 values outside the JS-safe range are encoded as base-10 strings on the
+  KumoRFM path, as the contract requires; they previously failed with HTTP 422.
+- `random_seed` now produces identical payloads across processes. Set iteration
+  order leaked Python's per-process string hashing into the request.
+- `random_seed` is honoured by the SQL samplers, or refused explicitly.
+
+### Fixed — security
+
+- Entity ids are parameter-bound rather than interpolated into SQL, and discovery
+  queries quote their identifiers.
+- Expressions imported from a metric or semantic view are refused if they carry a
+  statement separator, comment, or statement keyword outside a quoted literal. A
+  view definition is attacker-controllable input; a user-written `ColumnSpec(expr=)`
+  is unchanged.
+- An API key is no longer re-sent across a cross-origin redirect.
+- Response bodies are read under a 64 MiB cap, so a hostile server cannot force
+  unbounded decompression.
+- `read('local', path=...)` refuses URI schemes instead of fetching remote URLs.
+- `KumoClient` refuses to send credentials over plaintext HTTP, matching `Transport`,
+  and importing the package no longer opens a connection.
+- Added `SECURITY.md`.
+
+### Fixed — errors and diagnostics
+
+- Raw `TypeError`, `KeyError` and `AssertionError` no longer escape the public API.
+- The NIM's RFC-9457 `invalid_params` detail — which names the exact table, row and
+  column rejected — is surfaced instead of discarded.
+- `SDFMClient(timeout=..., max_retries=...)` reaches the KumoRFM path; it was
+  silently ignored there.
+- `validate()` reports a graph inconsistency as `ValueError` naming the edge, rather
+  than `KeyError` from a column lookup.
+- Graph discovery constructors reject an empty result instead of returning a
+  valid-looking empty graph.
+- Primary-key inference reports candidates it declined, deferred until after link
+  inference so junction tables stay quiet, and says whether their uniqueness was
+  established over the whole table or only over the rows it sampled.
+- View conversion diagnostics are readable from `Graph.conversion_messages`.
+- FK/PK dtype compatibility is checked on every backend, not only the local one.
+- A `context` / `predict` table given to a handle as a `dict`, a list of records or
+  a `Series` is refused by name, rather than as `AttributeError: 'dict' object has
+  no attribute 'columns'` from inside an adapter.
+- `timeout=float('inf')` and `timeout=float('nan')` are refused at construction
+  like every other unusable value, rather than at the first request as a raw
+  `OverflowError`.
+- The "too many entities at once" message suggests a `batch_size` under the cap it
+  quotes; on temporal link prediction it suggested 500 against a cap of 200.
+- An unsupported column dtype points at `astype(...)`, which works, rather than at
+  a per-column override the local table does not offer.
+- An invalid PQL query no longer prints ANTLR internals to stdout.
+
+### Added
+
+- KumoRFM sessions upload a batched job's context once instead of per batch.
+- TabICL reuses an uploaded context across predictions on the same handle,
+  reducing a repeat call to about 1% of its former size with identical results.
+  A handle shared across threads now opens one session rather than one per
+  thread, and `POST /v1/sessions` is excluded from the transport retries, so a
+  slow create no longer strands a pinned context on the NIM per attempt.
+- `RFMModel.predict` / `predict_task` accept `verbose`, and pass unrecognised
+  keywords through to the engine instead of raising `TypeError`.
+- Unsigned integer columns are accepted at every width. Only `uint8` was, so
+  `astype('uint32')` — or reading an unsigned Parquet column — refused the table.
+- `nvidia_sdfm.kumorfm` exports `ViewConversionWarning`, so the diagnostics that
+  view-based graph construction raises can be filtered without importing the
+  driver package directly.
+
+### Changed
+
+- `sdfm-connectors` and `kumorfm` minimum versions were raised in `nvidia-sdfm`'s
+  requirements so the client cannot resolve against pre-audit releases.
+- Linting covers all three packages; it previously skipped the `kumorfm` package
+  entirely.
+- Removed unreferenced Kumo-Enterprise modules from the `kumorfm` wheel.
+- Corrected README and `docs/` claims that the code did not support: requests are
+  not validated against a NIM's advertised capabilities, there is no public
+  `client.predict`, `client.models()` lists the local registry rather than
+  discovering what a NIM serves, no macOS wheels are built, and
+  `nvidia-sdfm[all]` deliberately excludes `[explain]` and `[relbench]`.

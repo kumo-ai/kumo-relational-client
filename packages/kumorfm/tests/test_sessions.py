@@ -9,7 +9,7 @@ from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.rfm import RFMPredictResponse
 from kumorfm.client import KumoClient
 from kumorfm.client.rfm import RFMAPI
-from kumorfm.exceptions import HTTPException
+from kumorfm.exceptions import HTTPException, InvalidResponseError
 from kumorfm.rfm import Graph, KumoRFM
 from kumorfm.rfm.payload import (
     INSTANCE_ID,
@@ -275,9 +275,24 @@ def test_rfmapi_create_session_returns_id(mock_api: Any) -> None:
 
 
 def test_rfmapi_create_session_requires_id(mock_api: Any) -> None:
+    r"""rfm-malformed-session-response-blamed-on-request.md
+
+    A ``200`` with no ``session_id`` is the server breaking the contract: the
+    request that produced it is the SDK's own generated payload, so the caller
+    cannot have influenced it. Raising the classified type is what puts it in
+    the ``INVALID_RESPONSE`` branch of the SDK's error classifier rather than
+    the ``ValueError`` one, which blames the request.
+    """
     mock_api.post(f'{MOCK_URL}/v1/sessions', json={'ttl_seconds': 3600})
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    with pytest.raises(ValueError, match='session_id'):
+    with pytest.raises(InvalidResponseError, match='session_id'):
+        api.create_session({'model': 'kumo-rfm'})
+
+
+def test_rfmapi_create_session_rejects_a_non_json_body(mock_api: Any) -> None:
+    mock_api.post(f'{MOCK_URL}/v1/sessions', text='<html>gateway</html>')
+    api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
+    with pytest.raises(InvalidResponseError):
         api.create_session({'model': 'kumo-rfm'})
 
 

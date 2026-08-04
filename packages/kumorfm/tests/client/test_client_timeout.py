@@ -99,3 +99,83 @@ def test_init_forwards_the_timeout_to_the_request_client():
     finally:
         rfm_engine.global_state.reset()
         kumorfm.global_state.clear()
+
+
+def test_max_retries_reaches_the_transport_policy():
+    r"""quality-max-retries-not-reaching-rfm-path.md /
+    client-max-retries-never-reaches-the-kumorfm-path.md
+
+    `SDFMClient(max_retries=...)` is documented without a model qualifier, next
+    to `timeout`, which was made to reach both paths. This client used to
+    hardcode `total=10, connect=3, read=3, status=5` regardless, so `0` still
+    retried and a raised value changed nothing -- and its prediction `POST` was
+    not retried on a 5xx at all, because urllib3's default `allowed_methods`
+    excludes `POST`.
+    """
+    for max_retries in (0, 3, 7):
+        client = KumoClient('https://tenant.example', max_retries=max_retries)
+        policy = client._session.get_adapter(
+            'https://tenant.example/v1/predictions').max_retries
+        assert policy.total == max_retries
+        assert policy.connect == max_retries
+        assert policy.status == max_retries
+        assert policy._is_method_retryable('POST')
+        assert 503 in policy.status_forcelist
+        assert 429 in policy.status_forcelist
+
+
+def test_a_server_chosen_retry_after_is_capped():
+    r"""urllib3's own ceiling is six hours, which a `Retry-After` header on a
+    retried request could park the caller for.
+    """
+    policy = KumoClient('https://tenant.example')._session.get_adapter(
+        'https://tenant.example/v1/predictions').max_retries
+    cap = getattr(policy, 'retry_after_max', None)
+    if cap is not None:  # urllib3 >= 2.3 only
+        assert cap == 60
+
+
+def test_session_create_is_held_out_of_the_post_retries():
+    r"""client-retried-session-create-orphans-sessions.md
+
+    Creating a session pins the context before the response is written, so a
+    re-sent create strands one pinned context per attempt. The routes below it
+    are replayable and keep the full policy.
+    """
+    client = KumoClient('https://tenant.example', max_retries=3)
+    create = client._session.get_adapter(
+        'https://tenant.example/v1/sessions').max_retries
+    assert not create._is_method_retryable('POST')
+    assert create.connect == 3
+
+    for path in ('/v1/predictions', '/v1/sessions/s1/predictions',
+                 '/v1/sessions/s1'):
+        policy = client._session.get_adapter(
+            f'https://tenant.example{path}').max_retries
+        assert policy._is_method_retryable('POST'), path
+
+
+def test_a_read_timeout_is_not_retried_and_keeps_its_type():
+    r"""A read timeout on a prediction means the NIM may already be running it,
+    so resending duplicates the most expensive work in the system. It also has
+    to stay a `requests.Timeout`: that is the one failure the caller can fix
+    from their side, and the driver's message says so.
+    """
+    with _serve(delay=5.0) as url:
+        client = KumoClient(url, timeout=0.5, max_retries=3)
+        started = time.monotonic()
+        with pytest.raises(requests.Timeout):
+            client._post('/v1/predictions', json={})
+        elapsed = time.monotonic() - started
+    assert elapsed < 4.0
+
+
+def test_init_forwards_max_retries_to_the_request_client():
+    try:
+        with _serve() as url:
+            rfm_engine.init(url=url, max_retries=5,
+                            _token=rfm_engine._SDFM_CLIENT_TOKEN)
+            assert kumorfm.global_state.client._max_retries == 5
+    finally:
+        rfm_engine.global_state.reset()
+        kumorfm.global_state.clear()

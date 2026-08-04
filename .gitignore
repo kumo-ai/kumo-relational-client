@@ -15,3 +15,7 @@ _skbuild/
 # e2e local datasets
 e2e/data/
 e2e/adult.data
+
+# Local audit workspace: defect reports written against unreleased code, kept
+# out of the published repository.
+bugs/

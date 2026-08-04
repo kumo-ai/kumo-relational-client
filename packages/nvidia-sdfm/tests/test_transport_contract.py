@@ -358,11 +358,25 @@ def test_nim_error_truncates_a_huge_response_body(requests_mock):
     assert excinfo.value.status_code == 502
 
 
-@pytest.mark.parametrize('timeout', [-1, 0, 'sixty', None])
+@pytest.mark.parametrize(
+    'timeout', [-1, 0, 'sixty', None, float('inf'), float('nan'),
+                float('-inf')])
 def test_invalid_timeout_is_rejected_at_construction(timeout):
+    r"""``inf`` and ``nan`` too: client-non-finite-timeout-escapes-the-limit-
+    guard.md. Both compare ``False`` against ``<= 0``, so they used to be
+    accepted here and then surface on the first request as ``OverflowError:
+    timestamp out of range for platform time_t``, which names nothing the
+    caller typed. ``inf`` is the reachable one -- this constructor rejects
+    ``None``, so it is the only way left to spell "no timeout".
+    """
     with pytest.raises(SdfmError) as excinfo:
         Transport(_URL, timeout=timeout)
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
+
+
+@pytest.mark.parametrize('timeout', [1, 0.5, 60, 3600.0])
+def test_usable_timeouts_are_still_accepted(timeout):
+    assert Transport(_URL, timeout=timeout).timeout == timeout
 
 
 @pytest.mark.parametrize('max_retries', [-1, 2.5, 'three'])

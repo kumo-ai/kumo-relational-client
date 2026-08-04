@@ -39,7 +39,14 @@ the same index.
 | `pip install "nvidia-sdfm"` | The client plus every lightweight model (TabICL). |
 | `pip install "nvidia-sdfm[kumorfm]"` | Adds the KumoRFM driver (native graph sampler and PQL). |
 | `pip install "nvidia-sdfm[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`. |
-| `pip install "nvidia-sdfm[all]"` | Everything. |
+| `pip install "nvidia-sdfm[all]"` | KumoRFM plus every data-source connector. |
+
+Two extras are deliberately outside `[all]` and must be named:
+
+| Command | You get |
+| --- | --- |
+| `pip install "nvidia-sdfm[explain]"` | Fills in `Explanation.summary`, which POSTs row data to a third-party LLM endpoint. Kept opt-in for that reason. |
+| `pip install "nvidia-sdfm[relbench]"` | The RelBench datasets used by `Graph.from_relbench()`. |
 
 For example, to install the client with the KumoRFM driver and Snowflake
 connector:
@@ -98,9 +105,10 @@ True
   `--index-url` for the NVIDIA internal index and that you are on the NVIDIA
   network.
 - **`No matching distribution found for kumorfm`.** The `[kumorfm]` extra has
-  prebuilt wheels only for Linux x86_64 and macOS arm64 on Python 3.10–3.12.
-  Use a supported platform and interpreter, or install the base `nvidia-sdfm`
-  without the extra.
+  prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.12,
+  and no source distribution is published, so there is nothing to fall back to
+  on another platform — macOS included. Install the base `nvidia-sdfm` and run
+  KumoRFM from a Linux x86_64 host, or build the driver from source.
 - **The native extension fails to import after installing `[kumorfm]`.**
   Reinstall the `kumorfm` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.

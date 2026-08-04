@@ -13,7 +13,7 @@ from nvidia_sdfm.base import (AdapterRegistry, ModelAdapter, ModelCapabilities,
 from nvidia_sdfm.core.serving import ServingTarget
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import SdfmError
-from nvidia_sdfm.models import RFMModel, TabICLModel
+from nvidia_sdfm.models import RFMModel, TabICLModel, require_frame
 from nvidia_sdfm.requests import ModelRequest
 
 
@@ -76,8 +76,13 @@ class SDFMClient:
             timeout: Seconds to wait for each individual attempt -- not for the
                 call as a whole. A call that exhausts ``max_retries`` can take
                 up to ``(max_retries + 1) * timeout`` plus backoff.
-            max_retries: Retries on transient failures (429, 500, 502, 503,
-                504) with exponential backoff. ``0`` disables retrying.
+            max_retries: Transport-level retries of a transient failure (408,
+                429, 500, 502, 503, 504, or a dropped connection) with
+                exponential backoff, on both the TabICL and the KumoRFM path.
+                ``0`` disables them. ``POST /v1/sessions`` is excluded: a
+                re-sent create would orphan a pinned context on the NIM.
+                Distinct from ``predict(num_retries=...)``, which retries a
+                KumoRFM prediction at the application level and defaults to 1.
             registry: The adapter registry to dispatch with. Defaults to the
                 built-in TabICL and KumoRFM adapters.
         """
@@ -209,7 +214,8 @@ class SDFMClient:
 
         This is the supported way to run TabICL inference.
         """
-        return TabICLModel(self, context, task=task, target=target)
+        return TabICLModel(self, require_frame(context, 'context'), task=task,
+                           target=target)
 
     def _predict(self, request: ModelRequest) -> PredictResult:
         r"""Internal dispatch used by the model handles.
