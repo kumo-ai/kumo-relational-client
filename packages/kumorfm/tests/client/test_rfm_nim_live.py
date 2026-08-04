@@ -40,6 +40,7 @@ from rfm_nim_payloads import (
     nim_v1_session_create_payload,
     nim_v1_session_predict_minimal_payload,
     nim_v1_smoke_payload,
+    nim_v1_text_stringlist_payload,
     nim_v1_two_predict_rows_payload,
     nim_v1_without_inference_payload,
 )
@@ -171,7 +172,7 @@ def test_live_nim_smoke_public_sdk_prediction(
     assert len(prediction['data']) == 1
     entity_index = prediction['columns'].index('ENTITY')
     assert prediction['data'][0][entity_index] == 'account-601'
-    assert 'prediction' in prediction['columns']
+    assert 'PREDICTION' in prediction['columns']
 
 
 @pytest.mark.live_nim_smoke
@@ -243,6 +244,10 @@ def test_live_nim_smoke_session_lifecycle(
         pytest.param(
             nim_v1_explicit_utc_offset_timestamp_payload,
             id='timestamp-offsets',
+        ),
+        pytest.param(
+            nim_v1_text_stringlist_payload,
+            id='text-stringlist',
         ),
         pytest.param(nim_v1_regression_payload, id='regression'),
         pytest.param(nim_v1_multiclass_payload, id='multiclass'),

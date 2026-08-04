@@ -114,6 +114,25 @@ def nim_v1_smoke_payload() -> dict[str, Any]:
     return deepcopy(_NIM_V1_SMOKE_PAYLOAD)
 
 
+def nim_v1_text_stringlist_payload() -> dict[str, Any]:
+    """Exercise automatic text token payloads and GloVe initialization."""
+    payload = nim_v1_smoke_payload()
+    accounts_schema = payload['schema']['related_tables']['accounts']
+    accounts_schema['columns']['description'] = {
+        'dtype': 'stringlist',
+        'stype': 'text',
+    }
+    for split, values in (
+        ('context', [['enterprise'], ['startup']]),
+        ('predict', [['enterprise']]),
+    ):
+        accounts = payload[split]['related_tables']['accounts']
+        accounts['columns'].append('description')
+        for row, value in zip(accounts['rows'], values, strict=True):
+            row.append(value)
+    return payload
+
+
 def nim_v1_prediction_only_output_payload() -> dict[str, Any]:
     payload = nim_v1_smoke_payload()
     payload['output']['fields'] = ['prediction']

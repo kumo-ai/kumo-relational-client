@@ -20,7 +20,10 @@ from rfm_nim_live_harness import (
     assert_ready_and_model_available,
     normalize_base_url,
 )
-from rfm_nim_payloads import nim_v1_two_predict_rows_payload
+from rfm_nim_payloads import (
+    nim_v1_text_stringlist_payload,
+    nim_v1_two_predict_rows_payload,
+)
 
 
 def _response(
@@ -60,6 +63,22 @@ def test_normalize_base_url(raw_url: str, expected: str) -> None:
 def test_normalize_base_url_rejects_invalid_urls(raw_url: str) -> None:
     with pytest.raises(ValueError):
         normalize_base_url(raw_url)
+
+
+def test_text_stringlist_live_payload_exercises_equal_length_tokens() -> None:
+    payload = nim_v1_text_stringlist_payload()
+    schema = payload['schema']['related_tables']['accounts']['columns']
+
+    assert schema['description'] == {
+        'dtype': 'stringlist',
+        'stype': 'text',
+    }
+    for split in ('context', 'predict'):
+        table = payload[split]['related_tables']['accounts']
+        index = table['columns'].index('description')
+        values = [row[index] for row in table['rows']]
+        assert values, f'{split} split must include at least one row'
+        assert all(isinstance(value, list) and len(value) == 1 for value in values)
 
 
 @pytest.mark.parametrize(
