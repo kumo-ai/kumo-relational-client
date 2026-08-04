@@ -1,6 +1,10 @@
 # Changelog
 
-## nvidia-sdfm 0.2.0 · kumorfm 2.24.0 · sdfm-connectors 0.3.0
+## nvidia-sdfm 0.2.1 · kumorfm 2.24.1 · sdfm-connectors 0.3.0
+
+Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and
+contain none of them. `nvidia-sdfm 0.2.1` requires `kumorfm>=2.24.1` so it
+cannot resolve the affected build.
 
 The outcome of a full audit of the SDK's public surface — every connector, every
 graph-construction path, every sampler, all five task types, the HTTP client, and
