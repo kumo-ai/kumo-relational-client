@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from kumorfm.api.model_plan import RunMode
+from kumorfm.runmode import RunMode
 from kumorfm.api.rfm import RFMPredictRequest
 from kumorfm.api.rfm.context import REV_REL, Context, EdgeLayout
 from kumorfm.api.rfm.inference import (

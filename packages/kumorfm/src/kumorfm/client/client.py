@@ -304,8 +304,6 @@ class KumoClient:
             return self._get(endpoint_str, **kwargs)
         if endpoint.method == HTTPMethod.POST:
             return self._post(endpoint_str, **kwargs)
-        if endpoint.method == HTTPMethod.PATCH:
-            return self._patch(endpoint_str, **kwargs)
         if endpoint.method == HTTPMethod.DELETE:
             return self._delete(endpoint_str, **kwargs)
         raise ValueError(f"Unsupported HTTP method: {endpoint.method}")
@@ -329,10 +327,6 @@ class KumoClient:
 
     def _post(self, endpoint: str, **kwargs: Any) -> requests.Response:
         return self._send('POST', self._format_endpoint_url(endpoint),
-                          **kwargs)
-
-    def _patch(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        return self._send('PATCH', self._format_endpoint_url(endpoint),
                           **kwargs)
 
     def _delete(self, endpoint: str, **kwargs: Any) -> requests.Response:

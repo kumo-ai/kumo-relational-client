@@ -5,7 +5,7 @@
 from typing import Sequence, cast
 
 import pandas as pd
-from kumorfm.api.model_plan import MissingType
+from kumorfm.runmode import MissingType
 
 from kumorfm.rfm.base import (
     Column,

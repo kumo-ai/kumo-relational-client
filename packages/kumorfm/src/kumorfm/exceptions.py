@@ -6,32 +6,6 @@ import http
 from typing import Dict, Optional
 
 
-class FeatureNotEnabledError(Exception):
-    r"""Raised when an RBAC feature is not enabled for this workspace."""
-    def __init__(self) -> None:
-        super().__init__(
-            "The projects/groups feature is not enabled for this workspace. ")
-
-
-class GroupNotSetError(Exception):
-    r"""Raised when a group operation is attempted without a group set."""
-    def __init__(self) -> None:
-        super().__init__(
-            "No group is set. Call kumorfm.set_group() or pass group= to "
-            "kumorfm.init() before performing this operation.")
-
-
-class ProjectNotSetError(Exception):
-    r"""Raised when an object operation is attempted without a project
-    set.
-    """
-    def __init__(self) -> None:
-        super().__init__(
-            "No project is set. Call kumorfm.set_project() or pass "
-            "project= to kumorfm.init() before performing object "
-            "operations.")
-
-
 class InvalidResponseError(ValueError):
     r"""The NIM answered, but its response does not match the contract.
 

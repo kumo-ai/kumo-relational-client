@@ -22,7 +22,7 @@ from rich.markdown import Markdown
 
 from kumorfm import in_notebook
 from kumorfm.api.explain import GraphGradientScore
-from kumorfm.api.model_plan import RunMode
+from kumorfm.runmode import RunMode
 from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
 from kumorfm.api.pquery.AST import (
     Aggregation,

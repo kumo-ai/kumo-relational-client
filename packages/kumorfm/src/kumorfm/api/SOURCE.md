@@ -25,3 +25,22 @@ self-contained (no external `kumo-api` dependency) for the open-source release.
 Re-sync procedure: see `scripts/sync_internal_packages.py`. It re-applies the
 module exclusions automatically and fails if a re-synced tree still references
 `rfm.protos`, so the method removals above have to be re-applied by hand.
+
+
+`model_plan.py`, `encoder.py` and `train.py` are excluded as well: they describe
+model architectures, encoders and training jobs for a service that trains
+models, and this SDK sends in-context examples to a NIM and trains nothing. So
+are `rfm/pquery.py`, `rfm/explain.py` and four of the five `explain/` modules,
+which describe server-side query and explanation types that nothing outside
+`api/` names.
+
+Two names from `model_plan.py` were reachable, `RunMode` and `MissingType`. They
+live in `kumorfm/runmode.py`, outside this tree, because `sync_api()` replaces
+`api/` wholesale and anything defined here is lost on the next sync.
+
+The files in `API_OWNED` are the SDK's, and `sync_api()` preserves them rather
+than taking upstream's copy: `rfm/__init__.py` and `explain/__init__.py` re-export
+only the subset used here, and `rfm/requests.py` keeps only the prediction
+request and response. An upstream change to the request envelope has to be
+reviewed and applied by hand, which is the intent -- it is a wire contract.
+

@@ -11,7 +11,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-from kumorfm.api.model_plan import RunMode
+from kumorfm.runmode import RunMode
 from kumorfm.api.rfm import RFMPredictRequest
 from kumorfm.api.rfm.context import Context, Subgraph, Table
 from kumorfm.api.rfm.inference import ClassificationInferenceConfig

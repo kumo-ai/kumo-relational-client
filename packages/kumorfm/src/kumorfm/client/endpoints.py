@@ -13,7 +13,6 @@ class HTTPMethod(Enum):
     GET = "GET"
     POST = "POST"
     DELETE = "DELETE"
-    PATCH = "PATCH"
 
 
 @dataclass(frozen=True)
@@ -22,9 +21,6 @@ class Endpoint:
 
     path: Optional[str] = field(default=None)
     method: HTTPMethod = HTTPMethod.GET
-
-    def validate(self) -> None:
-        pass
 
     def get_path(self) -> str:
         if self.path is None:

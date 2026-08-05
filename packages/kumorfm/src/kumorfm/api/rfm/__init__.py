@@ -2,41 +2,23 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+# SDK-owned: listed in API_OWNED in scripts/sync_internal_packages.py. Upstream
+# also re-exports the server-side query and explanation types, which nothing
+# outside api/ names. See api/SOURCE.md.
+
 from .context import Context
-from .pquery import PQueryDefinition
-from .explain import ContextExample, Explanation
 from .inference import (
     InferenceConfig,
     ClassificationInferenceConfig,
     RegressionInferenceConfig,
 )
-from .requests import (
-    RFMValidateQueryRequest,
-    RFMValidateQueryResponse,
-    RFMParseQueryRequest,
-    RFMParseQueryResponse,
-    RFMPredictRequest,
-    RFMExplanationResponse,
-    RFMPredictResponse,
-    RFMEvaluateRequest,
-    RFMEvaluateResponse,
-)
+from .requests import RFMPredictRequest, RFMPredictResponse
 
 __all__ = [
     'Context',
-    'PQueryDefinition',
-    'ContextExample',
-    'Explanation',
     'InferenceConfig',
     'ClassificationInferenceConfig',
     'RegressionInferenceConfig',
-    'RFMValidateQueryRequest',
-    'RFMValidateQueryResponse',
-    'RFMParseQueryRequest',
-    'RFMParseQueryResponse',
     'RFMPredictRequest',
-    'RFMExplanationResponse',
     'RFMPredictResponse',
-    'RFMEvaluateRequest',
-    'RFMEvaluateResponse',
 ]

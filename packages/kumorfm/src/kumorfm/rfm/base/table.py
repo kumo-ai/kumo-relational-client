@@ -10,7 +10,7 @@ from importlib.util import find_spec
 
 import numpy as np
 import pandas as pd
-from kumorfm.api.model_plan import MissingType
+from kumorfm.runmode import MissingType
 from kumorfm.api.source_table import UnavailableSourceTable
 from kumorfm.api.table import Column as ColumnDefinition
 from kumorfm.api.table import TableDefinition

@@ -269,7 +269,6 @@ def get_mock_method(mock_api, endpoint: Endpoint):
     method_map = {
         HTTPMethod.GET: mock_api.get,
         HTTPMethod.POST: mock_api.post,
-        HTTPMethod.PATCH: mock_api.patch,
         HTTPMethod.DELETE: mock_api.delete,
     }
     if endpoint.method not in method_map:

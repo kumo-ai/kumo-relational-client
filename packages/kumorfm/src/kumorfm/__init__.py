@@ -16,10 +16,8 @@ from kumorfm._version import __version__
 from kumorfm.api.typing import Dtype, Stype
 from kumorfm.client.client import KumoClient
 from kumorfm.client.transport import RFMTransport
-from kumorfm.futures import initialize_event_loop
 
 initialize_logging()
-initialize_event_loop()
 
 
 @dataclass

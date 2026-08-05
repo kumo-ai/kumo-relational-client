@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from typing import cast
 
 import pandas as pd
-from kumorfm.api.model_plan import MissingType
+from kumorfm.runmode import MissingType
 from kumorfm.api.typing import Dtype
 
 from kumorfm.rfm.backend.sqlite import Connection
