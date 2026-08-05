@@ -195,8 +195,7 @@ def quote_ident(ident: str, char: str = '"') -> str:
     sufficient for a string literal on a backend that also honours backslash
     escapes: Snowflake and Databricks both read ``\'`` as an escaped quote, so
     ``char="'"`` leaves a value containing ``\'`` able to close the literal and
-    run the rest as SQL. Bind such a value as a query parameter instead; see
-    ``bugs/security-discovery-sql-quote-ident-backslash-injection.md``. The
+    run the rest as SQL. Bind such a value as a query parameter instead. The
     literal mode remains only for backends whose single-quoted strings are
     standard-conforming (DuckDB, SQLite), where a backslash is an ordinary
     character.

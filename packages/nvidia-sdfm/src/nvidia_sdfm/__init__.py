@@ -13,15 +13,23 @@ from nvidia_sdfm._version import __version__
 from nvidia_sdfm.base import ModelCapabilities
 from nvidia_sdfm.client import SDFMClient
 from nvidia_sdfm.core.connectors import read as _read
-from nvidia_sdfm.errors import SdfmError
+from nvidia_sdfm.errors import (
+    MissingExtraError,
+    NimRequestError,
+    SdfmError,
+    UnknownModelError,
+)
 from nvidia_sdfm.models import RFMModel, TabICLModel
 
 __all__ = [
+    'MissingExtraError',
     'ModelCapabilities',
+    'NimRequestError',
     'RFMModel',
     'SDFMClient',
     'SdfmError',
     'TabICLModel',
+    'UnknownModelError',
     '__version__',
     'kumorfm',
     'read',

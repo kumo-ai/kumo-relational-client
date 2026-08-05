@@ -117,8 +117,9 @@ class RFMModel:
                 every index in one request.
             num_retries: Application-level retries of a failed prediction
                 request, with exponential backoff. Only transient failures
-                (408, 429, 5xx, timeouts, dropped connections) are retried; a
-                refusal such as an oversized payload is not. Distinct from
+                (408, 429, 500, 502, 503, 504, timeouts, dropped connections)
+                are retried; a refusal such as an oversized payload is not.
+                Distinct from
                 ``SDFMClient(max_retries=...)``, which retries at the
                 transport.
             anchor_time: The anchor timestamp for the prediction. ``None`` uses

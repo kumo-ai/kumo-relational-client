@@ -68,7 +68,7 @@ the relevant subgraph and returns predictions for the entities you name.
 | --- | --- | --- |
 | Client SDK | `nvidia-sdfm` | The `SDFMClient`, typed requests, and per-model adapters. Pure Python. |
 | KumoRFM driver | `kumorfm` | Graph, samplers, native `kumolib`, and PQL for the relational model. Installed via the `[kumorfm]` extra. |
-| Connectors | `sdfm-connectors` | Shared data-source connectors (SQLite, DuckDB, Snowflake, Databricks) used by the client and the driver. |
+| Connectors | `sdfm-connectors` | Shared data-source connectors (SQLite, DuckDB, Snowflake, Databricks, S3) used by the client and the driver. |
 
 ## Learn More
 

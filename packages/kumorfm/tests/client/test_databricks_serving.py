@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """The Databricks Model Serving transport, against a fake WorkspaceClient.
 
 No network, no Databricks SDK required. The point of these tests is that the

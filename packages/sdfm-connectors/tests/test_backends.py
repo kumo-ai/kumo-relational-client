@@ -100,7 +100,7 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
 )
 def test_driver_options_cannot_restate_a_validated_argument(
         backend, module, argument):
-    r"""MR !69 review: the escape hatch must not override a validated argument.
+    r"""The escape hatch must not override a validated argument.
 
     ``driver_options`` bypasses the allow-list by design, so silently letting
     either side win would let it replace a credential or redirect a read to
@@ -116,7 +116,7 @@ def test_driver_options_cannot_restate_a_validated_argument(
 
 
 def test_snowflake_driver_options_credentials_suppress_borrowing(monkeypatch):
-    r"""MR !69 review: credentials given through the escape hatch still count.
+    r"""Credentials given through the escape hatch still count.
 
     Anchoring the borrow decision to the top-level arguments alone would
     silently ignore them, which is what the guard exists to prevent.

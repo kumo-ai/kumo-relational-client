@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """``kumorfm.rfm.init_databricks_serving``, without the native extension.
 
 ``kumorfm/rfm/backend/local/__init__.py`` does a bare ``import

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Invoke Kumo RFM through a Databricks Model Serving endpoint.
 
 The RFM execution path is unchanged: it still calls ``_request`` and reads

@@ -22,8 +22,7 @@ def paramstyle(
     Server-side ``qmark`` binding is how a caller-supplied name or value
     reaches Snowflake as data rather than as SQL text. Snowflake honours
     backslash escapes inside single-quoted literals, so building a literal by
-    doubling quotes is not sufficient escaping; see
-    ``bugs/security-discovery-sql-quote-ident-backslash-injection.md``.
+    doubling quotes is not sufficient escaping.
 
     This lives in its own module so both the table and the sampler layers can
     bind without importing each other.

@@ -38,8 +38,9 @@ the same index.
 | --- | --- |
 | `pip install "nvidia-sdfm"` | The client plus every lightweight model (TabICL). |
 | `pip install "nvidia-sdfm[kumorfm]"` | Adds the KumoRFM driver (native graph sampler and PQL). |
-| `pip install "nvidia-sdfm[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`. |
-| `pip install "nvidia-sdfm[all]"` | KumoRFM plus every data-source connector. |
+| `pip install "nvidia-sdfm[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
+| `pip install "nvidia-sdfm[databricks-serving]"` | Reaches a KumoRFM model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
+| `pip install "nvidia-sdfm[all]"` | KumoRFM, every data-source connector, and `[databricks-serving]`. |
 
 Two extras are deliberately outside `[all]` and must be named:
 
@@ -74,7 +75,8 @@ uv add "nvidia-sdfm[kumorfm]"
 
 ## Installation Verification
 
-Confirm the client imports and reports its models:
+Confirm the client imports and reports its models. This reads the client's own
+adapters and does not contact a NIM, so it works before you have one running:
 
 ```bash
 python -c "from nvidia_sdfm import SDFMClient; print(SDFMClient(url='http://localhost:8000').models())"

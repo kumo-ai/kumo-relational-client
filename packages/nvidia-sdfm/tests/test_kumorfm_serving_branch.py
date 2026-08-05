@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """The adapter's serving-mode branch, without the native RFM engine.
 
 ``test_kumorfm_adapter.py`` skips everything when ``kumorfm.rfm`` is unusable,

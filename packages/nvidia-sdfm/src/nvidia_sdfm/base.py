@@ -90,6 +90,21 @@ class ModelAdapter(ABC):
         """
         raise NotImplementedError
 
+    def close(self) -> None:
+        r"""Releases anything this adapter opened that the client cannot see.
+
+        Called by :meth:`~nvidia_sdfm.SDFMClient.close` for every registered
+        adapter, before the client closes its own transport. Most adapters
+        send through that transport and so have nothing of their own to
+        release, which is why this does nothing by default; an adapter backed
+        by a driver that opens its own connections overrides it.
+
+        Releasing must leave the adapter usable: a client is closed once, but
+        an adapter may share what it releases with another client, and that
+        client has to be able to carry on. Reconnecting is an acceptable cost
+        here, failing is not.
+        """
+
 
 class AdapterRegistry:
     r"""The per-client mapping from model id to :class:`ModelAdapter`."""
@@ -115,3 +130,19 @@ class AdapterRegistry:
     def names(self) -> list[str]:
         r"""The registered model ids, sorted."""
         return sorted(self._adapters)
+
+    def close(self) -> None:
+        r"""Closes every registered adapter.
+
+        One adapter failing to release its resources must not strand the
+        rest, so each is closed independently and the first error is raised
+        only once they all have been.
+        """
+        error: BaseException | None = None
+        for adapter in self._adapters.values():
+            try:
+                adapter.close()
+            except BaseException as adapter_error:  # noqa: BLE001
+                error = error or adapter_error
+        if error is not None:
+            raise error

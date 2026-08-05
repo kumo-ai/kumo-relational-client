@@ -2,12 +2,73 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+r"""The exceptions this SDK raises.
+
+Every call on :class:`~nvidia_sdfm.SDFMClient` and its model handles raises
+:class:`SdfmError` or one of its subclasses, so ``except SdfmError`` is enough
+to catch anything the SDK reports. Building a graph is the exception: the
+KumoRFM engine validates a graph in its own constructor, before any SDK call,
+and reports problems as :class:`ValueError`.
+
+Every error carries a ``code``, a short stable string meant to be branched on.
+Messages are written for people and will change; codes will not.
+"""
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Sequence
+
+#: Entries rendered from an RFC-9457 ``invalid_params`` list before the rest
+#: are summarised as a count. A rejected batch can name thousands of rows.
+MAX_INVALID_PARAMS = 5
+
+
+def format_invalid_params(params: Sequence[Any] | None) -> str:
+    r"""Render a NIM's per-field validation diagnosis into a message suffix.
+
+    A validation failure answers with RFC-9457 ``invalid_params``, naming the
+    exact table, row and column it rejected, while the top-level ``detail`` is
+    often only "Request validation failed." Dropping the list leaves the caller
+    with nothing to act on.
+
+    Returns the empty string when there is nothing to render, so callers can
+    concatenate unconditionally.
+
+    Note:
+        ``kumorfm.rfm.rfm`` carries an equivalent renderer for the KumoRFM
+        path. The two cannot share one: ``kumorfm`` does not depend on
+        ``nvidia_sdfm``, and the package both do depend on is a SQL-connector
+        package with no HTTP surface. Keep the rendered shape in step.
+    """
+    if not isinstance(params, (list, tuple)):
+        return ''
+    entries = []
+    for param in params[:MAX_INVALID_PARAMS]:
+        if not isinstance(param, dict):
+            continue
+        name, reason = param.get('name'), param.get('reason')
+        if name and reason:
+            entries.append(f'{name}: {reason}')
+        elif name or reason:
+            entries.append(str(name or reason))
+    if not entries:
+        return ''
+    omitted = len(params) - len(entries)
+    more = f' (and {omitted} more)' if omitted > 0 else ''
+    return ' ' + '; '.join(entries) + more
 
 
 class SdfmError(Exception):
+    r"""Base class for every error this SDK raises.
+
+    Attributes:
+        message: The human-readable description, without the code prefix.
+        code: A short stable identifier, e.g. ``'TRANSPORT_ERROR'`` or
+            ``'INVALID_REQUEST'``. Branch on this rather than on the message.
+        details: Whatever structured context the failure carried, such as the
+            ``invalid_params`` entries from a NIM validation error. Empty when
+            there is none.
+    """
+
     def __init__(
         self,
         message: str,
@@ -27,6 +88,13 @@ class SdfmError(Exception):
 
 
 class UnknownModelError(SdfmError):
+    r"""A request named a model no registered adapter serves.
+
+    Raised by :meth:`~nvidia_sdfm.SDFMClient.capabilities` and when dispatching
+    a request whose ``model`` is not in the client's registry. Code:
+    ``UNKNOWN_MODEL``.
+    """
+
     def __init__(self, model: str, known: list[str]) -> None:
         super().__init__(
             f'Unknown model {model!r}; registered adapters: {sorted(known)}',
@@ -37,6 +105,13 @@ class UnknownModelError(SdfmError):
 
 
 class MissingExtraError(SdfmError):
+    r"""An optional dependency this call needs is not installed.
+
+    The KumoRFM engine and the connector drivers ship as extras, so the SDK can
+    be installed without them. The message names the ``pip install`` that fixes
+    it. Code: ``MISSING_EXTRA``.
+    """
+
     def __init__(self, extra: str, package: str) -> None:
         super().__init__(
             f'{package!r} is required for this adapter; install it with '
@@ -47,6 +122,16 @@ class MissingExtraError(SdfmError):
 
 
 class NimRequestError(SdfmError):
+    r"""The NIM answered, and the answer was an error.
+
+    Distinguished from :class:`SdfmError` by carrying the HTTP
+    :attr:`status_code`, which is what tells a caller whether retrying can
+    help: 5xx and 429 are worth retrying, 4xx means the request has to change.
+
+    Attributes:
+        status_code: The HTTP status the NIM returned.
+    """
+
     def __init__(
         self,
         status_code: int,

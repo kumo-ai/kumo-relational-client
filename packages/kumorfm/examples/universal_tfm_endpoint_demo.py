@@ -34,7 +34,6 @@ from kumorfm.api.typing import Stype
 
 from kumorfm.client import KumoClient
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
-from kumorfm.client.generated.tfm_api import TFMOperations
 
 
 DEFAULT_BASE_URL = os.getenv('TFM_BASE_URL', 'http://127.0.0.1:8001')
@@ -124,8 +123,8 @@ def run_sdk_route_descriptors(
     client = KumoClient(base_url, api_key=api_key)
 
     endpoint_examples = (
-        ('health live', TFMOperations.get_health_live.endpoint),
-        ('health ready', TFMOperations.get_health_ready.endpoint),
+        ('health live', Endpoint('/v1/health/live', HTTPMethod.GET)),
+        ('health ready', Endpoint('/v1/health/ready', HTTPMethod.GET)),
         ('version', Endpoint('/v1/version', HTTPMethod.GET)),
         ('models', Endpoint('/v1/models', HTTPMethod.GET)),
         ('metadata', Endpoint('/v1/metadata', HTTPMethod.GET)),

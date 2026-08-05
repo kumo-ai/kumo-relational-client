@@ -853,8 +853,7 @@ class KumoRFM:
           once roughly 40% of the predicted quantile grid sits at zero, the
           NIM returns exactly ``0.0`` for every entity, with no error --
           which is precisely the data shape a mean is chosen for. Prefer
-          ``"median"`` or ``"quantiles"`` there. Tracked as
-          ``structured-data-nims#5``.
+          ``"median"`` or ``"quantiles"`` there.
 
         A key other than those listed above is rejected, naming the offending
         key: nothing forwards an unknown key to the NIM, so accepting one could

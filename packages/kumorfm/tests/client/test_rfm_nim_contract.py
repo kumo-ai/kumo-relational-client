@@ -512,7 +512,7 @@ def test_prediction_item_missing_id_is_an_invalid_response_error() -> None:
 
 
 def test_identity_mapping_mismatch_stays_a_caller_error() -> None:
-    r"""MR !69 review: identity mappings describe the request, not the response.
+    r"""Identity mappings describe the request, not the response.
 
     ``entity_ids``/``instance_ids``/``anchor_times`` are built by the caller, so
     a length mismatch among them must not be reported as a malformed NIM
@@ -542,7 +542,7 @@ def test_identity_mapping_mismatch_stays_a_caller_error() -> None:
 
 
 def test_response_count_mismatch_is_still_an_invalid_response() -> None:
-    r"""MR !69 review: the neighbouring response-side check keeps its class."""
+    r"""The neighbouring response-side check keeps its class."""
     from kumorfm.exceptions import InvalidResponseError
 
     response = _StubResponse({

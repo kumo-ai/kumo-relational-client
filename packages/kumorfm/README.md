@@ -1,6 +1,6 @@
 # kumorfm
 
-The KumoRFM driver for the [`nvidia-sdfm`](../../README.md) SDK.
+The KumoRFM driver for the [`nvidia-sdfm`](../nvidia-sdfm/README.md) SDK.
 
 This distribution provides the heavy, client-side machinery a KumoRFM prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
@@ -15,7 +15,9 @@ It is imported as `kumorfm` and is normally installed transitively via the SDK's
 pip install nvidia-sdfm[kumorfm]      # pulls the kumorfm driver
 ```
 
-Direct install (e.g. for benchmarking or reuse outside the SDK):
+It can also be installed on its own, for the graph, sampler and PQL machinery.
+Predicting is not available that way: the engine's entry points refuse a direct
+call, so a prediction has to go through `nvidia-sdfm`.
 
 ```bash
 pip install kumorfm

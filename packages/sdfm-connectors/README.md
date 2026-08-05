@@ -1,6 +1,6 @@
 # sdfm-connectors
 
-Shared data-source connectors for the [`nvidia-sdfm`](../README.md) SDK and its
+Shared data-source connectors for the [`nvidia-sdfm`](../nvidia-sdfm/README.md) SDK and its
 model engines. One place that knows how to reach each warehouse, so the client
 (flat table reads for TabICL) and the KumoRFM driver (warehouse connections for
 its graph samplers) don't each carry their own copy.
@@ -23,9 +23,11 @@ suffix is rejected with `INVALID_CONNECTOR_ARGS` rather than parsed as CSV; pass
 `format='csv'` or `format='parquet'` to read a file whose name carries no
 recognised suffix.
 
-The SQL backends accept `database=` and `uri=` as aliases for the same argument
-(supplying both is an error), and reject connection keywords their driver does
-not declare — `driver_options={...}` passes anything else straight through. The
+The two file-backed backends, `sqlite` and `duckdb`, accept `database=` and
+`uri=` as aliases for the same argument (supplying both is an error). The two
+warehouse backends, `snowflake` and `databricks`, are addressed by connection
+keywords instead, and reject any their driver does not declare —
+`driver_options={...}` passes anything else straight through. The
 `snowflake` backend reuses an active Snowpark session when no authentication
 arguments are given; a borrowed session cannot be reconfigured, so passing
 session-scoped arguments such as `schema=` alongside it is an error.

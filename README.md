@@ -21,7 +21,7 @@ Full documentation lives under [`docs/`](docs/index.md):
 | `pip install nvidia-sdfm` | The client + every lightweight model (TabICL today). Works out of the box. |
 | `pip install nvidia-sdfm[kumorfm]` | Adds KumoRFM (pulls the native `kumorfm` driver). |
 | `pip install nvidia-sdfm[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
-| `pip install nvidia-sdfm[all]` | KumoRFM + every data-source backend. Not `[explain]` or `[relbench]` — see below. |
+| `pip install nvidia-sdfm[all]` | KumoRFM, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
 
 The rule is dependency weight, not favoritism: a model that does no client-side work
 (like TabICL, which just shapes a request the NIM runs) ships in the base wheel; a model
@@ -77,7 +77,7 @@ prediction reconfigures, so drive it through `SDFMClient` rather than mixing in 
 the client's own adapter registry, not the connected endpoint: a NIM serving only one of
 these models still reports both, and the mismatch surfaces as an error from the NIM on
 the first prediction. The transport pools connections and retries transient failures
-(408/429/5xx) with backoff; tune it per client with
+(429, 500, 502, 503, 504) with backoff; tune it per client with
 `SDFMClient(url, timeout=30, max_retries=3)`.
 
 `from nvidia_sdfm import kumorfm` is a neutral, explicitly-exported surface for the
@@ -89,12 +89,19 @@ A monorepo workspace; every independently released distribution lives under `pac
 with the same `src/` + `tests/` convention:
 
 ```text
-rfm-sdk/
+nvidia-sdfm-sdk/
 ├── pyproject.toml              # workspace root: shared tooling only, builds nothing
 ├── e2e/                        # cross-distribution live harnesses
+├── docs/                       # user-facing documentation
+├── examples/                   # runnable notebooks and scripts
+├── scripts/                    # release and maintenance tooling
 └── packages/
     ├── nvidia-sdfm/            # the client SDK (pure-python, universal wheel)
     │   └── src/nvidia_sdfm/
+    │       ├── client.py       #   SDFMClient: the entry point and its registry
+    │       ├── models.py       #   the per-model handles the client hands back
+    │       ├── requests.py     #   the internal typed requests handles build
+    │       ├── errors.py       #   the exception hierarchy
     │       ├── core/           #   HTTP transport, response parsing, connectors, dtypes
     │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
     │       ├── adapters/       #   one peer module per model
@@ -114,7 +121,7 @@ an internal typed request that declares which model it targets; the client dispa
 that, checks it is the type that model's adapter accepts, and calls the adapter. Nothing is
 checked against `capabilities()`, which is a discovery accessor for callers, not a gate on
 the dispatch path. You reach all of this through the handles (`client.kumorfm(...)` /
-`client.tabicl(...)`); the request types are not importable.
+`client.tabicl(...)`); the request types are not exported from `nvidia_sdfm`.
 
 Both the client (flat table reads) and the KumoRFM driver (warehouse connections for its
 graph samplers) sit on the shared **`sdfm-connectors`** package, so each warehouse is
@@ -125,8 +132,8 @@ needs the ADBC driver's `adbc_ingest`, which is a separate concern).
 ## Adding a model
 
 1. Add `packages/nvidia-sdfm/src/nvidia_sdfm/adapters/<model>.py` implementing
-   `ModelAdapter`, and register it in `packages/nvidia-sdfm/src/nvidia_sdfm/__init__.py`.
-   The core never changes.
+   `ModelAdapter`, and register it in `_default_registry()` in
+   `packages/nvidia-sdfm/src/nvidia_sdfm/client.py`. The core never changes.
 2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its own
    distribution and add a `[<model>]` extra; the adapter lazy-imports the driver so base
    installs stay light.

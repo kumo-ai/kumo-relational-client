@@ -64,15 +64,23 @@ with SDFMClient(url="http://localhost:8000") as client:
 print(predictions.head())
 ```
 
-### Discover What a NIM Serves
+### Check Which Models the Client Can Serve
+
+Both calls describe the client's own adapters, not the endpoint it points at.
+Neither contacts the NIM, so they answer before you have one running, and a NIM
+serving only one of these models still reports both.
 
 ```python
 from nvidia_sdfm import SDFMClient
 
 with SDFMClient(url="http://localhost:8000") as client:
-    print(client.models())              # e.g. ['kumo-rfm', 'tabicl']
+    print(client.models())                # ['kumo-rfm', 'tabicl']
     print(client.capabilities("tabicl"))  # tasks and outputs the model supports
 ```
+
+To check the endpoint itself, call `client.health_ready()`. It returns whether
+the NIM answered `GET /v1/health/ready` with 200, and raises `SdfmError` with
+code `TRANSPORT_ERROR` if the endpoint cannot be reached at all.
 
 ## Next Steps
 

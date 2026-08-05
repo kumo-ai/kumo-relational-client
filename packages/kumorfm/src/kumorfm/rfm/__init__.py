@@ -102,6 +102,34 @@ def init(
                    max_retries)
 
 
+def close_client(_token: object | None = None) -> None:
+    r"""Releases this thread's pooled connections to the engine's endpoint.
+
+    The counterpart to :func:`init_client`, for a caller that is done with the
+    endpoint it configured. The client is closed and evicted, but the
+    configuration is left in place, so the next prediction on this thread
+    rebuilds a client and carries on rather than failing. That is what makes
+    this safe to call while another caller is still using the same endpoint:
+    the cost of releasing early is a reconnect.
+
+    Only this thread's client is released. Another thread's is its own, and
+    closing it from here would break a prediction already in flight on it.
+
+    Does nothing if this thread never built a client.
+    """
+    if _token is not _SDFM_CLIENT_TOKEN:
+        raise RuntimeError(_DIRECT_USE_MESSAGE)
+    with global_state._lock:
+        thread_local = kumorfm.global_state.thread_local
+        client = getattr(thread_local, '_client', None)
+        if client is None:
+            return
+        del thread_local._client
+        if hasattr(thread_local, '_client_config'):
+            del thread_local._client_config
+        client.close()
+
+
 def init_client(
     url: str | None = None,
     api_key: str | None = None,
@@ -173,6 +201,7 @@ LocalGraph = Graph  # NOTE Backward compatibility - do not use anymore.
 __all__ = [
     'init',
     'init_client',
+    'close_client',
     'init_databricks_serving',
     'Table',
     'LocalTable',

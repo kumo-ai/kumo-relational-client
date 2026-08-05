@@ -19,10 +19,12 @@ flowchart TD
     registry --> tabicl["TabICL adapter"]
     registry --> rfm["KumoRFM adapter"]
     rfm --> driver["kumorfm driver: graph, sampler, PQL"]
-    client --> transport["Transport (HTTP)"]
-    tabicl --> transport
-    driver --> transport
+    tabicl --> transport["Transport (HTTP)"]
+    driver --> kumoclient["KumoClient (HTTP)"]
+    driver -.-> serving["DatabricksServingClient"]
     transport --> nim["Universal TFM NIM"]
+    kumoclient --> nim
+    serving --> endpoint["Databricks Model Serving endpoint"]
     client --> connectors["sdfm-connectors"]
     driver --> connectors
 ```
@@ -31,11 +33,18 @@ flowchart TD
 
 ### Client Layer
 
-`SDFMClient` owns one connection to a NIM. It holds a `Transport` (a pooled HTTP
-session with retry and backoff) and an `AdapterRegistry`. Because each client
-owns its own transport and registry, several clients can target different
-endpoints or tenants in the same process, concurrently: every prediction is
-issued against the endpoint and credential of the client that started it.
+`SDFMClient` owns the endpoint address and an `AdapterRegistry`. Because each
+client owns its own registry and configuration, several clients can target
+different endpoints or tenants in the same process, concurrently: every
+prediction is issued against the endpoint and credential of the client that
+started it.
+
+Requests do not all leave through the same object. The client holds a
+`Transport`, a pooled HTTP session with retry and backoff, and TabICL predicts
+through it. KumoRFM does not: the client hands its address and credential to
+the driver, which opens its own pooled session (`KumoClient`) and sends from
+there. The two are separate implementations of the same HTTP contract, because
+`kumorfm` cannot depend on `nvidia-sdfm` — the dependency runs the other way.
 
 The KumoRFM driver underneath does keep a process-wide configuration, which
 each prediction reconfigures. The adapter applies that configuration and
@@ -75,8 +84,12 @@ platform-independent. TabICL requires no driver.
    parses the PQL query, samples the relevant subgraph, and materializes the
    request; for TabICL, the adapter serializes the context and predict tables
    directly.
-4. The `Transport` sends the request to the NIM over HTTP with retry on
-   transient failures.
+4. The request goes to the NIM over HTTP, with retry on transient failures:
+   TabICL sends through the client's `Transport`, KumoRFM through the driver's
+   own `KumoClient`. A client built with `SDFMClient.for_databricks_serving`
+   sends through `DatabricksServingClient` instead, which invokes a named
+   Model Serving endpoint through the Databricks SDK rather than speaking
+   HTTP.
 5. The adapter normalizes the response into a pandas DataFrame and returns it.
 
 ## Deployment Topologies
@@ -86,21 +99,38 @@ The SDK is a client library; it connects to a NIM you deploy and operate.
 - **Local NIM.** Point `SDFMClient(url=...)` at a NIM running on `localhost`.
 - **Networked NIM.** Point the client at any reachable NIM endpoint. If the
   deployment fronts the NIM with an authenticating gateway, pass an `api_key`.
+- **Databricks Model Serving.** Build the client with
+  `SDFMClient.for_databricks_serving(endpoint_name)` to reach a KumoRFM model
+  served inside a Databricks workspace.
 
 ## Service Interactions
 
-The client communicates with the NIM exclusively over the Universal TFM API HTTP
-contract (`/v1/predictions`, plus `/v1/models` and `/v1/health/ready` for
-discovery and readiness). Standard NIM management endpoints are provided by the
-NIM runtime, not by the SDK.
+The SDK speaks the Universal TFM API. Every prediction is a
+`POST /v1/predictions`, except that KumoRFM switches to the session routes
+under `/v1/sessions` when a prediction splits into more than one batch and is
+reproducible: sessions upload the context once and reuse it across the batches,
+so they need a `random_seed`, and they are skipped when an explanation is
+requested. Standard NIM management endpoints are provided by the NIM runtime,
+not by the SDK.
+
+Two endpoints are read rather than predicted against, and not by the same
+caller. `SDFMClient.health_ready()` issues `GET /v1/health/ready` and reports
+whether it answered 200. The KumoRFM driver checks more before its first
+prediction: it reads `/v1/health/ready` for a ready status and then
+`/v1/models`, and fails if the endpoint does not advertise `kumo-rfm`. Nothing
+on the TabICL path reads `/v1/models`.
 
 ## External Integration Points
 
 - **Data sources.** Both the client and the KumoRFM driver read tables through
   the shared `sdfm-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
-- **NIM endpoint.** Any NIM that implements the Universal TFM API and advertises
-  a supported model in `/v1/models`.
+- **NIM endpoint.** Any NIM that implements the Universal TFM API. The KumoRFM
+  path additionally requires the endpoint to advertise `kumo-rfm` in
+  `/v1/models`.
+- **Databricks Model Serving.** `SDFMClient.for_databricks_serving(name)`
+  targets a named serving endpoint through the Databricks SDK. There is no base
+  URL and no HTTP session on this path, and it serves KumoRFM only.
 
 ## Related Topics
 

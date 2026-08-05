@@ -144,15 +144,14 @@ def _unsafe_expr_reason(expr: str) -> str | None:
     the string boundaries disagrees with the warehouse's, so it fails closed
     rather than scanning a string it cannot account for -- which also refuses
     a quoted name ending in a lone backslash (invalid on Databricks, exotic on
-    Snowflake). See the ``$$``/backslash guard-bypass report under ``bugs/``.
+    Snowflake).
 
     ``INSERT`` and ``TRUNCATE`` are also ordinary Snowflake scalar functions,
     and as statements are always followed by ``INTO``/``TABLE`` rather than by
     ``(``, so a call cannot be one. A keyword directly behind a ``.`` is the
     trailing part of a qualified name (``ORDERS.MERGE``), which likewise
     cannot begin a statement -- unlike ``SELECT``, which may legally be
-    followed by ``(``, so it stays refused either way. See
-    ``bugs/graph-view-expr-guard-rejects-scalar-functions.md``.
+    followed by ``(``, so it stays refused either way.
 
     Args:
         expr: The expression as written in the view definition.

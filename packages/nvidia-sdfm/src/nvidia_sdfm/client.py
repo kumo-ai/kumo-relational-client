@@ -76,8 +76,8 @@ class SDFMClient:
             timeout: Seconds to wait for each individual attempt -- not for the
                 call as a whole. A call that exhausts ``max_retries`` can take
                 up to ``(max_retries + 1) * timeout`` plus backoff.
-            max_retries: Transport-level retries of a transient failure (408,
-                429, 500, 502, 503, 504, or a dropped connection) with
+            max_retries: Transport-level retries of a transient failure (429,
+                500, 502, 503, 504, or a dropped connection) with
                 exponential backoff, on both the TabICL and the KumoRFM path.
                 ``0`` disables them. ``POST /v1/sessions`` is excluded: a
                 re-sent create would orphan a pinned context on the NIM.
@@ -241,8 +241,18 @@ class SDFMClient:
 
         Every later call raises; construct a new ``SDFMClient`` instead.
         Leaving a ``with`` block does this for you.
+
+        Both pools are released. A model backed by a driver connects to the
+        NIM through the driver's own pool rather than this client's, so
+        closing the transport alone would leave that one open; each adapter is
+        asked to release what it opened first. The transport is closed even if
+        an adapter fails to, since the adapter's pool is the one that can be
+        rebuilt on demand.
         """
-        self._transport.close()
+        try:
+            self._registry.close()
+        finally:
+            self._transport.close()
 
     def __enter__(self) -> SDFMClient:
         return self

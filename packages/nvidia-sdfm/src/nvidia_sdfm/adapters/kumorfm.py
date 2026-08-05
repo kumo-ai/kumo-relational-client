@@ -359,6 +359,9 @@ class KumoRFMAdapter(ModelAdapter):
     name = 'kumo-rfm'
     request_type = (KumoRFMRequest, KumoRFMTaskRequest)
 
+    def __init__(self) -> None:
+        self._opened_engine_client = False
+
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
             model='kumo-rfm',
@@ -389,6 +392,7 @@ class KumoRFMAdapter(ModelAdapter):
         # configured client re-point this one -- see `init_client`.
         if isinstance(transport, ServingTarget):
             _init_serving(engine, transport)
+            self._opened_engine_client = True
             api_client = None
         else:
             api_client = engine.init_client(
@@ -398,6 +402,7 @@ class KumoRFMAdapter(ModelAdapter):
                 timeout=transport.timeout,
                 max_retries=transport.max_retries,
                 _token=engine._SDFM_CLIENT_TOKEN)
+            self._opened_engine_client = True
         # `verbose` has to reach the constructor as well as the call: it owns
         # the graph-materialization output, and a handle builds a fresh engine
         # model per prediction, so that banner is printed on every predict.
@@ -438,3 +443,17 @@ class KumoRFMAdapter(ModelAdapter):
             raise _translate_engine_error(
                 error, _describe(transport)) from error
         return _coerce_result(result, explain is not False)
+
+    def close(self) -> None:
+        r"""Releases the engine's pooled connections for this thread.
+
+        The engine keeps its own connection pool, separate from the client's
+        transport, so closing the client alone would leave it open. Skipped
+        when this adapter never configured the engine, so that closing a
+        client that only ever used another model does not import the driver.
+        """
+        if not self._opened_engine_client:
+            return
+        self._opened_engine_client = False
+        engine = _load_engine()
+        engine.close_client(_token=engine._SDFM_CLIENT_TOKEN)

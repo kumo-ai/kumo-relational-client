@@ -10,7 +10,8 @@ per-model adapters; heavy model drivers are optional extras.
 pip install nvidia-sdfm              # client + every lightweight model (TabICL)
 pip install nvidia-sdfm[kumorfm]     # adds KumoRFM (native driver)
 pip install nvidia-sdfm[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
-pip install nvidia-sdfm[all]         # KumoRFM + every data-source backend
+pip install nvidia-sdfm[all]         # KumoRFM, every data-source backend,
+                                     # and [databricks-serving]
 pip install nvidia-sdfm[explain]     # KumoRFM plus the explanation-summary LLM
                                      # client. Deliberately NOT part of [all],
                                      # because it enables the third-party data

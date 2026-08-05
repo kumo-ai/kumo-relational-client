@@ -79,7 +79,9 @@ databricks=[
 requires = [
     "pybind11>=2.13.6",
     "scikit-build-core<0.12.0",
-    "setuptools",
+    # PEP 639 `license` + `license-files` above; older setuptools silently
+    # drops the license files from the wheel's .dist-info.
+    "setuptools>=77",
     "setuptools_scm",
 ]
 build-backend = "scikit_build_core.setuptools.build_meta"

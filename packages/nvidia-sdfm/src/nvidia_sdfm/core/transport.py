@@ -13,7 +13,11 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from nvidia_sdfm.errors import NimRequestError, SdfmError
+from nvidia_sdfm.errors import (
+    NimRequestError,
+    SdfmError,
+    format_invalid_params,
+)
 
 _PREDICTIONS_PATH = '/v1/predictions'
 _SESSIONS_PATH = '/v1/sessions'
@@ -400,6 +404,10 @@ def _to_nim_error(status_code: int, content: bytes) -> NimRequestError:
     message = _snippet(str(reported)) if reported else (
         f'NIM request failed with status {status_code}'
     )
+    # A validation failure's top-level detail is often only "Request validation
+    # failed."; the per-field diagnosis is in invalid_params, so render it into
+    # the message rather than leaving it for the caller to dig out of details.
+    message += format_invalid_params(body.get('invalid_params'))
     details = {
         key: value
         for key, value in body.items()

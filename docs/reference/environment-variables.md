@@ -19,6 +19,7 @@ without passing the values explicitly.
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `KUMO_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. Read when the driver initializes; importing the package never connects. |
+| `RFM_API_URL` | Optional | None | An alternative to `KUMO_API_ENDPOINT` for the same URL. Takes precedence over it when both are set. |
 | `KUMO_API_KEY` | No | None | API key sent to the NIM as `X-API-Key`. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. It is refused on a plaintext `http://` endpoint other than localhost. |
 | `KUMO_LOG` | No | `INFO` | Log level for the KumoRFM driver, for example `DEBUG`, `INFO`, or `WARNING`. |
 | `KUMORFM_DISABLE_SESSIONS` | No | Unset | Set to `1`/`true` to stop a multi-batch prediction from sharing one uploaded context through a NIM session. Each batch then re-uploads the full context, which the progress output reports. Only affects transport cost; predictions are unchanged. Passing `random_seed=None` has the same effect, because unseeded runs re-sample neighborhoods per batch. |

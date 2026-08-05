@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
+# All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
 """Addressing a model served by a managed platform rather than by URL.
 
 :class:`~nvidia_sdfm.core.transport.Transport` speaks HTTP to a NIM at a base
