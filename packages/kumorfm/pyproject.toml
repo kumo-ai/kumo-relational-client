@@ -63,7 +63,7 @@ sqlite=[
     "sdfm-connectors[sqlite]",
 ]
 duckdb=[
-    "adbc-driver-duckdb",
+    "sdfm-connectors[duckdb]",
 ]
 snowflake=[
     "numpy<2.0",

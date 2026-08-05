@@ -1862,9 +1862,7 @@ class KumoRFM:
             assert isinstance(connection, AdbcSqliteConnection)
             self._sampler._connection = connection
         if self._sampler.backend == DataBackend.DUCKDB:
-            from adbc_driver_duckdb.dbapi import Connection
-
-            from kumorfm.rfm.backend.duckdb import DuckDBSampler
+            from kumorfm.rfm.backend.duckdb import Connection, DuckDBSampler
             assert isinstance(self._sampler, DuckDBSampler)
             assert isinstance(connection, Connection)
             self._sampler._connection = connection

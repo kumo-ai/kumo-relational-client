@@ -21,8 +21,6 @@ from kumorfm.rfm import Graph
 
 duckdb = pytest.importorskip('duckdb',
                              reason="'duckdb' extension not installed")
-pytest.importorskip('adbc_driver_duckdb',
-                    reason="'duckdb' extension not installed")
 
 from kumorfm.rfm.backend.duckdb import DuckDBSampler  # noqa: E402
 

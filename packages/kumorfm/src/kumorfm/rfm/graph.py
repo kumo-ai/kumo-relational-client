@@ -31,8 +31,8 @@ from kumorfm.rfm.infer import infer_time_column
 from kumorfm.utils import display, quote_ident
 
 if TYPE_CHECKING:
-    from adbc_driver_duckdb.dbapi import Connection as AdbcDuckDBConnection
     from adbc_driver_sqlite.dbapi import AdbcSqliteConnection
+    from duckdb import DuckDBPyConnection
     from snowflake.connector import SnowflakeConnection
     from databricks.sql.client import Connection as DatabricksConnection
 
@@ -299,7 +299,7 @@ class Graph:
         self._tables: dict[str, Table] = {}
         self._edges: list[Edge] = []
         self._conversion_messages: tuple[str, ...] = ()
-        self._connection: (AdbcSqliteConnection | AdbcDuckDBConnection
+        self._connection: (AdbcSqliteConnection | DuckDBPyConnection
                            | SnowflakeConnection | DatabricksConnection
                            | None) = None
 
@@ -513,7 +513,7 @@ class Graph:
     def from_duckdb(
         cls,
         connection: Union[
-            'AdbcDuckDBConnection',
+            'DuckDBPyConnection',
             DuckDBConnectionConfig,
             str,
             Path,
@@ -2511,7 +2511,7 @@ class Graph:
 
     def update_connection(
         self,
-        connection: (AdbcSqliteConnection | AdbcDuckDBConnection
+        connection: (AdbcSqliteConnection | DuckDBPyConnection
                      | SnowflakeConnection | DatabricksConnection),
     ) -> None:
         r"""Updates the connection to a database."""
@@ -2529,9 +2529,7 @@ class Graph:
                 assert isinstance(connection, AdbcSqliteConnection)
                 table._connection = connection
             if table.backend == DataBackend.DUCKDB:
-                from adbc_driver_duckdb.dbapi import Connection
-
-                from kumorfm.rfm.backend.duckdb import DuckDBTable
+                from kumorfm.rfm.backend.duckdb import Connection, DuckDBTable
                 assert isinstance(table, DuckDBTable)
                 assert isinstance(connection, Connection)
                 table._connection = connection

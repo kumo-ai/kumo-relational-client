@@ -71,15 +71,13 @@ def sqlite_sampler(
 def duckdb_sampler(
     tmp_path_factory: pytest.TempPathFactory,
 ) -> Iterator[Any]:
-    pytest.importorskip('adbc_driver_duckdb')
-
-    import adbc_driver_duckdb.dbapi as adbc
+    duckdb = pytest.importorskip('duckdb')
 
     import kumorfm.rfm as rfm
     from kumorfm.rfm.backend.duckdb import DuckDBSampler
 
     path = Path(tmp_path_factory.mktemp('duckdb')) / 'entity_ids.duckdb'
-    connection = adbc.connect(str(path))
+    connection = duckdb.connect(str(path))
     with connection.cursor() as cursor:
         cursor.execute("CREATE TABLE users (user_id VARCHAR PRIMARY KEY, "
                        "ts TIMESTAMP NOT NULL)")

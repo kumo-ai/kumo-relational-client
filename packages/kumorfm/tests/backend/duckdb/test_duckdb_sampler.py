@@ -11,8 +11,6 @@ from kumorfm.rfm import Graph
 
 duckdb = pytest.importorskip('duckdb', reason="'duckdb' extension "
                              "not installed")
-pytest.importorskip('adbc_driver_duckdb', reason="'duckdb' extension "
-                    "not installed")
 
 from kumorfm.rfm.backend.duckdb import DuckDBSampler  # noqa: E402
 
@@ -80,9 +78,9 @@ def test_missing_database_is_reported_rather_than_created(
 ) -> None:
     r"""graph-duckdb-empty-discovery-not-rejected.md
 
-    ``Graph.from_duckdb`` reaches DuckDB through its own ``adbc``-backed shim
-    rather than the ``sdfm_connectors`` backend, so the existence guard has to
-    be applied there too. A read must not write.
+    DuckDB creates a database for a missing path by default, so the shared
+    connector's existence guard must run before opening it. A read must not
+    write.
     """
     path = tmp_path / 'typo.duckdb'
 

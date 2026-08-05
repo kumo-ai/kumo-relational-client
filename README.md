@@ -125,9 +125,8 @@ the dispatch path. You reach all of this through the handles (`client.kumorfm(..
 
 Both the client (flat table reads) and the KumoRFM driver (warehouse connections for its
 graph samplers) sit on the shared **`sdfm-connectors`** package, so each warehouse is
-reached through one place. The `sqlite`, `snowflake`, and `databricks` connection factories
-are shared directly; `duckdb` is provided for flat reads (the driver's duckdb graph sampler
-needs the ADBC driver's `adbc_ingest`, which is a separate concern).
+reached through one place. The `sqlite`, `duckdb`, `snowflake`, and `databricks` connection
+factories are shared directly.
 
 ## Adding a model
 

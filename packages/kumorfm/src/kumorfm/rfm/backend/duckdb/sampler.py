@@ -154,9 +154,9 @@ class DuckDBSampler(SQLSampler):
                f") = 1")
 
         with self._connection.cursor() as cursor:
-            cursor.adbc_ingest(tmp_name, tmp, mode='replace', temporary=True)
+            cursor.register(tmp_name, tmp)
             cursor.execute(sql)
-            table = cursor.fetch_arrow_table()
+            table = cursor.to_arrow_table()
 
         batch = table['__kumo_batch__'].to_numpy()
         batch_index = table.schema.get_field_index('__kumo_batch__')
@@ -207,9 +207,9 @@ class DuckDBSampler(SQLSampler):
         sql += f") <= {num_neighbors}"
 
         with self._connection.cursor() as cursor:
-            cursor.adbc_ingest(tmp_name, tmp, mode='replace', temporary=True)
+            cursor.register(tmp_name, tmp)
             cursor.execute(sql)
-            table = cursor.fetch_arrow_table()
+            table = cursor.to_arrow_table()
 
         batch = table['__kumo_batch__'].to_numpy()
         batch_index = table.schema.get_field_index('__kumo_batch__')
@@ -260,9 +260,9 @@ class DuckDBSampler(SQLSampler):
             sql += f"\n AND {time_ref} > tmp.__kumo_start__"
 
         with self._connection.cursor() as cursor:
-            cursor.adbc_ingest(tmp_name, tmp, mode='replace', temporary=True)
+            cursor.register(tmp_name, tmp)
             cursor.execute(sql)
-            table = cursor.fetch_arrow_table()
+            table = cursor.to_arrow_table()
 
         batch = table['__kumo_batch__'].to_numpy()
         batch_index = table.schema.get_field_index('__kumo_batch__')
@@ -382,7 +382,7 @@ class DuckDBSampler(SQLSampler):
 
         with self._connection.cursor() as cursor:
             cursor.execute(sql, parameters)
-            table = cursor.fetch_arrow_table()
+            table = cursor.to_arrow_table()
 
         return Table._sanitize(
             df=table.to_pandas(types_mapper=pd.ArrowDtype),

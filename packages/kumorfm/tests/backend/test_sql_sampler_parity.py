@@ -100,7 +100,8 @@ def _graph(backend: str, path: str) -> rfm.Graph:
 @pytest.fixture(params=['duckdb', 'sqlite'])
 def sql_graph(request, tmp_path) -> rfm.Graph:
     backend = request.param
-    pytest.importorskip(f'adbc_driver_{backend}')
+    driver = 'duckdb' if backend == 'duckdb' else 'adbc_driver_sqlite'
+    pytest.importorskip(driver)
     users, orders = _frames()
     path = str(tmp_path / f'db.{backend}')
     if backend == 'duckdb':
