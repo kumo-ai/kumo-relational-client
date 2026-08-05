@@ -94,6 +94,55 @@ def test_rfm_handle_defaults_are_minimal():
     assert req.options == {}
 
 
+@pytest.mark.parametrize(
+    'run_mode',
+    ['turbo', 3, None, np.array(['fast']), pd.NA],
+)
+def test_rfm_handle_names_allowed_run_modes(run_mode):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError,
+        match="run_mode must be one of 'debug', 'fast', 'normal', 'best'",
+    ) as exc:
+        client.relational('g').predict('PREDICT x', run_mode=run_mode)
+
+    assert exc.value.code == 'INVALID_REQUEST'
+    assert adapter.captured is None
+
+
+def test_rfm_handle_preserves_debug_run_mode():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict('PREDICT x', run_mode='debug')
+
+    assert adapter.captured.run_mode == 'debug'
+
+
+def test_rfm_task_handle_names_allowed_run_modes():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(PredictError, match=r"run_mode must be one of.*'best'"):
+        client.relational('g').predict_task(
+            pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+            pd.DataFrame({'ENTITY': [1]}),
+            task_type='regression',
+            entity_table='users',
+            run_mode='turbo',
+        )
+
+    assert adapter.captured is None
+
+
 @pytest.mark.parametrize('indices', ['payment-1', b'payment-1', 42, 4.2])
 def test_rfm_handle_rejects_scalar_indices(indices):
     adapter = _CapturingAdapter(

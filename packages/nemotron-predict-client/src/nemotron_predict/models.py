@@ -64,6 +64,19 @@ class _Unset:
 
 _UNSET: Any = _Unset()
 
+_RFM_RUN_MODES = ('debug', 'fast', 'normal', 'best')
+
+
+def _validate_run_mode(value: Any) -> None:
+    r"""Name every accepted mode instead of leaking the engine enum error."""
+    if not isinstance(value, str) or value not in _RFM_RUN_MODES:
+        allowed = ', '.join(repr(mode) for mode in _RFM_RUN_MODES)
+        raise PredictError(
+            f'run_mode must be one of {allowed}, got '
+            f'{type(value).__name__} {value!r}',
+            code='INVALID_REQUEST',
+        )
+
 
 def _validate_num_neighbors(value: Any) -> list[int] | None:
     r"""Keep malformed sampling shapes out of the native RFM sampler."""
@@ -179,9 +192,11 @@ class RelationalModel:
             indices: The entity primary keys to predict for. Overrides the
                 indices given in the query. Predictions are generated for every
                 index, whether or not it satisfies the query's entity filters.
-            run_mode: ``'fast'``, ``'normal'`` or ``'best'`` -- how much
-                context the model is given. Explanations require ``'fast'``.
-            explain: ``True``, a ``nemotron_relational.ExplainConfig`` or its dict form.
+            run_mode: ``'debug'``, ``'fast'``, ``'normal'`` or ``'best'`` --
+                how much context the model is given. Explanations require
+                ``'fast'``.
+            explain: ``True``, a ``nemotron_relational.ExplainConfig`` or its
+                dict form.
                 Limits the request to a single entity and makes this call
                 return an ``Explanation`` instead of a DataFrame. Filling in
                 ``Explanation.summary`` sends the query, predictions and raw
@@ -287,6 +302,7 @@ class RelationalModel:
             )
         if random_seed is not _UNSET:
             random_seed = _validate_random_seed(random_seed)
+        _validate_run_mode(run_mode)
         options = {
             name: value
             for name, value in (
@@ -448,6 +464,7 @@ class RelationalModel:
             )
         if random_seed is not _UNSET:
             random_seed = _validate_random_seed(random_seed)
+        _validate_run_mode(run_mode)
         options = {
             name: value
             for name, value in (
