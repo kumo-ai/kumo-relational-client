@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from nvidia_sdfm.core.dtypes import (
+from nvidia_sdfm.wire.dtypes import (
     JSON_SAFE_INT_MAX,
     UNTYPED,
     infer_tfm_dtype,
@@ -32,9 +32,17 @@ def test_infer_tfm_dtype_basic(values, expected):
     assert infer_tfm_dtype(pd.Series(values)) == expected
 
 
-def test_infer_tfm_dtype_int32():
-    series = pd.Series([1, 2, 3], dtype='int32')
-    assert infer_tfm_dtype(series) == 'int32'
+@pytest.mark.parametrize('width', ['int8', 'int16', 'int32', 'int64'])
+def test_every_integer_width_is_declared_int64(width: str) -> None:
+    r"""One rule for both model paths.
+
+    They used to disagree: one reported the true width, the other always
+    ``int64``, so identical data was described two ways. The server decodes
+    both through ``int()`` and cannot tell them apart, but it does require a
+    task's target dtype to equal the schema dtype for that column exactly, so
+    a second rule anywhere is a 422 rather than a cosmetic difference.
+    """
+    assert infer_tfm_dtype(pd.Series([1, 2, 3], dtype=width)) == 'int64'
 
 
 def test_infer_tfm_dtype_timestamp():

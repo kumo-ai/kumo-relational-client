@@ -164,15 +164,6 @@ def test_build_request_unknown_task_raises(context_df, predict_df):
     assert 'task' in str(err.value)
 
 
-def test_table_payload_preserves_rows_for_zero_column_frame():
-    from nvidia_sdfm.adapters.tabicl import _table_payload
-
-    frame = pd.DataFrame(index=range(3))
-    payload = _table_payload(frame, {})
-    assert payload['columns'] == []
-    assert payload['rows'] == [[], [], []]
-
-
 def test_build_request_generates_unique_request_ids(context_df, predict_df):
     first = build_request(
         context=context_df, predict=predict_df, task='classification',

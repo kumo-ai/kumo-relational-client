@@ -59,6 +59,20 @@ def infer_tfm_dtype(series: pd.Series) -> str:
     An ``object`` column with no non-null values is reported as
     :data:`UNTYPED` rather than guessed at, so that a frame which happens to be
     missing a feature entirely cannot re-type the same column in another frame.
+
+    Every integer width is reported as ``int64``, narrow ones included. The
+    two model paths used to disagree here -- one reported the true width, the
+    other always ``int64`` -- which meant identical data was described two
+    ways. The server decodes both through ``int()`` and cannot tell them
+    apart, so the choice is about which description to standardize on, and
+    ``int64`` is the one that is never wrong: every narrower value fits it,
+    while the reverse is not true of a column that is widened after its dtype
+    is taken.
+
+    Being consistent matters more than being narrow. The server requires a
+    task's declared target dtype to equal the schema's dtype for that column
+    exactly, and answers 422 when they differ, so a second rule anywhere is a
+    rejected request rather than a cosmetic difference.
     """
     dtype = series.dtype
     if pd.api.types.is_bool_dtype(dtype):
@@ -66,7 +80,7 @@ def infer_tfm_dtype(series: pd.Series) -> str:
     if pd.api.types.is_datetime64_any_dtype(dtype):
         return 'timestamp[us]'
     if pd.api.types.is_integer_dtype(dtype):
-        return 'int64' if dtype.itemsize > 4 else 'int32'
+        return 'int64'
     if pd.api.types.is_float_dtype(dtype):
         return 'float64' if dtype.itemsize > 4 else 'float32'
     if pd.api.types.is_object_dtype(dtype):

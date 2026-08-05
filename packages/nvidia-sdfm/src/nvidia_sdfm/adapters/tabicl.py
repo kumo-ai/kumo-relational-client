@@ -12,14 +12,14 @@ from typing import Any
 import pandas as pd
 
 from nvidia_sdfm.base import ModelAdapter, ModelCapabilities
-from nvidia_sdfm.core.dtypes import (
-    infer_tfm_dtype,
-    serialize_column,
-    widen_tfm_dtype,
-)
 from nvidia_sdfm.core.response import parse_prediction_response
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import NimRequestError, SdfmError
+from nvidia_sdfm.wire import (
+    encode_table,
+    infer_tfm_dtype,
+    widen_tfm_dtype,
+)
 from nvidia_sdfm.requests import TabICLRequest, TabICLSession
 
 _CLASSIFICATION_KINDS = frozenset({
@@ -79,21 +79,6 @@ def _check_columns(name: str, frame: pd.DataFrame) -> None:
             f'{name} column names must be strings; got {non_strings}',
             code='INVALID_REQUEST',
         )
-
-
-def _table_payload(frame: pd.DataFrame, dtypes: dict[str, str]) -> dict[str, Any]:
-    columns = list(frame.columns)
-    if not columns:
-        return {
-            'format': 'arrays',
-            'columns': [],
-            'rows': [[] for _ in range(len(frame))],
-        }
-    serialized_columns = [
-        serialize_column(frame[column], dtypes[column]) for column in columns
-    ]
-    rows = [list(row) for row in zip(*serialized_columns)]
-    return {'format': 'arrays', 'columns': columns, 'rows': rows}
 
 
 def build_request(
@@ -232,11 +217,11 @@ def build_request(
         'task': task_spec,
         'schema': schema,
         'context': {
-            'instance_table': _table_payload(context, dtypes),
+            'instance_table': encode_table(context, dtypes),
             'related_tables': {},
         },
         'predict': {
-            'instance_table': _table_payload(predict, dtypes),
+            'instance_table': encode_table(predict, dtypes),
             'related_tables': {},
         },
         'output': output_spec,
