@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
+from pandas.api.types import is_list_like
 
 from nemotron_predict.errors import PredictError
 from nemotron_predict.requests import (
@@ -185,6 +186,13 @@ class RelationalModel:
             ``return_embeddings=True`` adds an ``EMBEDDINGS`` column without
             changing the row count. See ``docs/reference/prediction-output.md``.
         """
+        if indices is not None and not is_list_like(indices):
+            raise PredictError(
+                'indices must be a list-like collection of entity IDs, got '
+                f'{type(indices).__name__} ({indices!r}); for one entity ID, '
+                f'pass indices=[{indices!r}]',
+                code='INVALID_REQUEST',
+            )
         options = {
             name: value
             for name, value in (

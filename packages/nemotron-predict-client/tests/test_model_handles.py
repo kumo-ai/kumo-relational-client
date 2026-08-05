@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -91,6 +92,49 @@ def test_rfm_handle_defaults_are_minimal():
     assert req.indices is None
     assert req.run_mode == 'fast'
     assert req.options == {}
+
+
+@pytest.mark.parametrize('indices', ['payment-1', b'payment-1', 42, 4.2])
+def test_rfm_handle_rejects_scalar_indices(indices):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError,
+        match=(
+            r'indices must be a list-like collection of entity IDs.*'
+            r'for one entity ID, pass indices='
+        ),
+    ) as exc:
+        client.relational('g').predict('PREDICT x', indices=indices)
+
+    assert exc.value.code == 'INVALID_REQUEST'
+    assert f'{type(indices).__name__} ({indices!r})' in str(exc.value)
+    assert f'indices=[{indices!r}]' in str(exc.value)
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize(
+    'indices',
+    [
+        [1, 2],
+        (1, 2),
+        np.array([1, 2]),
+        pd.Series([1, 2]),
+        pd.Index([1, 2]),
+    ],
+)
+def test_rfm_handle_accepts_list_like_indices(indices):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict('PREDICT x', indices=indices)
+
+    assert adapter.captured.indices is indices
 
 
 def test_rfm_handle_only_forwards_set_options():
