@@ -4,6 +4,7 @@
 
 import io
 import logging
+import re
 from collections.abc import Iterator
 from contextlib import (
     contextmanager,
@@ -70,6 +71,26 @@ def test_parse_query_locally_returns_validated_query(
         'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0'
     )
     assert query.get_rfm_entity_id_list() == [0]
+
+
+def test_parse_query_names_allowed_aggregation_time_units() -> None:
+    from nemotron_relational.pql.parser.parser import (
+        PQLParser,
+        QueryValidationType,
+    )
+
+    query = 'PREDICT COUNT(ORDERS.*, 0, 30, fortnights) FOR EACH USERS.USER_ID'
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            r"Line 1, col \d+; Invalid aggregation time unit 'fortnights'. "
+            r"Expected one of: 'days', 'hours', 'minutes', or 'months'\."
+        ),
+    ):
+        PQLParser(
+            query_validation_type=QueryValidationType.RFM_SDK,
+        ).to_parsed_predictive_query(query)
 
 
 def test_demo_prefix_offsets_assuming_location(
@@ -737,6 +758,9 @@ def test_an_unsupported_time_unit_is_named(
         )
 
     message = str(excinfo.value)
-    assert f"'{unit}' is not a time unit" in message
-    assert 'Supported units are minutes, hours, days, months.' in message
+    assert f"Invalid aggregation time unit '{unit}'." in message
+    assert (
+        "Expected one of: 'days', 'hours', 'minutes', or 'months'." in message
+    )
+    assert re.search(r'Line 1, col \d+;', message)
     assert 'target (PREDICT) clause' not in message

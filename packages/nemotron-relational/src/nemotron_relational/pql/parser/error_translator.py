@@ -200,6 +200,10 @@ class ErrorTranslator:
         r"""Given an ANTLR error, returns a user-readable response as a
         single string.
         """
+        time_unit_error = self._invalid_time_unit_error(err)
+        if time_unit_error is not None:
+            return time_unit_error
+
         error_parts = []
 
         # Add error summary if available
@@ -230,6 +234,62 @@ class ErrorTranslator:
 
         # Join all error parts with newlines
         return '\n'.join(error_parts)
+
+    def _invalid_time_unit_error(
+        self,
+        err: Antlr4SyntaxError,
+    ) -> str | None:
+        r"""Recognize the fourth argument of an aggregation as a bad unit."""
+        if not isinstance(err.e, NoViableAltException):
+            return None
+        input_stream = err.recognizer.getInputStream()
+        if input_stream is None:
+            return None
+        tokens = input_stream.getTokens(0, 2**30)
+        index = next(
+            (
+                i
+                for i, token in enumerate(tokens)
+                if token is err.offending_symbol
+            ),
+            None,
+        )
+        if (
+            index is None
+            or index < 1
+            or index + 1 >= len(tokens)
+            or tokens[index - 1].text != ','
+            or tokens[index + 1].text != ')'
+        ):
+            return None
+
+        depth = 0
+        commas = 0
+        opening = None
+        for i in range(index - 1, -1, -1):
+            text = tokens[i].text
+            if text == ')':
+                depth += 1
+            elif text == '(':
+                if depth:
+                    depth -= 1
+                else:
+                    opening = i
+                    break
+            elif text == ',' and depth == 0:
+                commas += 1
+        if (
+            opening is None
+            or opening == 0
+            or commas != 3
+            or tokens[opening - 1].type != PQLGrammarParser.AGGR
+        ):
+            return None
+        return (
+            f'Line {err.line}, col {err.column}; Invalid aggregation '
+            f'time unit {err.offending_symbol.text!r}. Expected one '
+            "of: 'days', 'hours', 'minutes', or 'months'."
+        )
 
     def _handle_no_viable_alt_exception(
         self, err: Antlr4SyntaxError

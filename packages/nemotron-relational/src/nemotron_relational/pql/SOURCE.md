@@ -29,7 +29,7 @@ Import rewrites:
 - `kumopql.*` → `nemotron_relational.pql.*`, and `kumoapi.*` → `nemotron_relational.api.*`.
 - The baseline's `sys.modules['kumopql']` alias shim dropped.
 
-Five local patches, all of which are now simply part of this code:
+Six local patches, all of which are now simply part of this code:
 
 1. `validator/problem_type_validator.py` — reject `TOP K` without `RANK`, and
    reject non-positive `TOP K`.
@@ -48,6 +48,9 @@ Five local patches, all of which are now simply part of this code:
    it is canonicalized through `nemotron_relational._names.canonical_fqn` as the query is
    parsed. Everything downstream — the sampler, a dataframe lookup, the graph —
    then reads the name the data itself uses.
+6. `parser/error_translator.py` — identify unsupported aggregation time units
+   and report them with the public `Line …, col …;` prefix while listing the
+   four accepted units.
 
 Internal identifiers removed from shipped comments: three TODOs naming an
 individual engineer.
