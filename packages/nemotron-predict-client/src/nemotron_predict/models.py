@@ -87,6 +87,28 @@ def _validate_num_neighbors(value: Any) -> list[int] | None:
     return [int(item) for item in value]
 
 
+def _validate_integer_option(
+    name: str,
+    value: Any,
+    *,
+    minimum: int,
+    maximum: int | None = None,
+) -> int:
+    r"""Reject booleans, wrong types and out-of-range integer options."""
+    valid = isinstance(value, Integral) and not isinstance(value, bool)
+    if valid:
+        valid = value >= minimum and (maximum is None or value <= maximum)
+    if valid:
+        return int(value)
+    expected = f'an integer greater than or equal to {minimum}'
+    if maximum is not None:
+        expected = f'an integer between {minimum} and {maximum}'
+    raise PredictError(
+        f'{name} must be {expected}, got {type(value).__name__} {value!r}',
+        code='INVALID_REQUEST',
+    )
+
+
 class RelationalModel:
     r"""A Nemotron Relational handle bound to a graph, offering the familiar
     ``model.predict(query, ...)`` call from the old SDK.
@@ -219,6 +241,18 @@ class RelationalModel:
             )
         if num_neighbors is not _UNSET:
             num_neighbors = _validate_num_neighbors(num_neighbors)
+        if num_hops is not _UNSET:
+            num_hops = _validate_integer_option(
+                'num_hops', num_hops, minimum=1, maximum=6
+            )
+        if max_pq_iterations is not _UNSET:
+            max_pq_iterations = _validate_integer_option(
+                'max_pq_iterations', max_pq_iterations, minimum=1
+            )
+        if lag_timesteps is not _UNSET:
+            lag_timesteps = _validate_integer_option(
+                'lag_timesteps', lag_timesteps, minimum=0
+            )
         options = {
             name: value
             for name, value in (
@@ -366,6 +400,10 @@ class RelationalModel:
         """
         if num_neighbors is not _UNSET:
             num_neighbors = _validate_num_neighbors(num_neighbors)
+        if num_hops is not _UNSET:
+            num_hops = _validate_integer_option(
+                'num_hops', num_hops, minimum=1, maximum=6
+            )
         options = {
             name: value
             for name, value in (

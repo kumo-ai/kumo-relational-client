@@ -324,6 +324,96 @@ def test_rfm_handle_forwards_num_neighbors_and_num_hops():
 
 
 @pytest.mark.parametrize(
+    ('option', 'value', 'expected'),
+    [
+        ('num_hops', 'two', 'integer between 1 and 6'),
+        ('num_hops', 0, 'integer between 1 and 6'),
+        ('num_hops', 7, 'integer between 1 and 6'),
+        ('num_hops', True, 'integer between 1 and 6'),
+        ('max_pq_iterations', 'ten', 'integer greater than or equal to 1'),
+        ('max_pq_iterations', 0, 'integer greater than or equal to 1'),
+        ('lag_timesteps', 'one', 'integer greater than or equal to 0'),
+        ('lag_timesteps', -1, 'integer greater than or equal to 0'),
+    ],
+)
+def test_rfm_handle_rejects_malformed_integer_options(
+    option,
+    value,
+    expected,
+):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError, match=rf'{option} must be an {expected}'
+    ) as exc:
+        client.relational('g').predict('PREDICT x', **{option: value})
+
+    assert exc.value.code == 'INVALID_REQUEST'
+    assert adapter.captured is None
+
+
+def test_rfm_task_handle_rejects_malformed_num_hops():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError, match=r'num_hops.*integer between 1 and 6'
+    ):
+        client.relational('g').predict_task(
+            pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+            pd.DataFrame({'ENTITY': [1]}),
+            task_type='regression',
+            entity_table='users',
+            num_hops='two',
+        )
+
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize(
+    ('option', 'value'),
+    [
+        ('num_hops', np.int64(2)),
+        ('max_pq_iterations', pd.Series([3], dtype='Int64').iloc[0]),
+        ('lag_timesteps', np.int32(1)),
+    ],
+)
+def test_rfm_handle_normalizes_integral_options(option, value):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict('PREDICT x', **{option: value})
+
+    assert adapter.captured.options[option] == int(value)
+    assert type(adapter.captured.options[option]) is int
+
+
+def test_rfm_task_handle_normalizes_integral_num_hops():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict_task(
+        pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+        pd.DataFrame({'ENTITY': [1]}),
+        task_type='regression',
+        entity_table='users',
+        num_hops=np.int64(2),
+    )
+
+    assert adapter.captured.options['num_hops'] == 2
+    assert type(adapter.captured.options['num_hops']) is int
+
+
+@pytest.mark.parametrize(
     'num_neighbors',
     [[-1], ['eight'], [1.5], [True], [1] * 7, (8, 8)],
 )
