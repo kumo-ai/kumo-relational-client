@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from numbers import Integral
 from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
@@ -61,6 +62,29 @@ class _Unset:
 
 
 _UNSET: Any = _Unset()
+
+
+def _validate_num_neighbors(value: Any) -> list[int] | None:
+    r"""Keep malformed sampling shapes out of the native RFM sampler."""
+    valid = value is None or (
+        isinstance(value, list)
+        and len(value) <= 6
+        and all(
+            isinstance(item, Integral)
+            and not isinstance(item, bool)
+            and item >= 0
+            for item in value
+        )
+    )
+    if not valid:
+        raise PredictError(
+            'num_neighbors must be None or a list of at most 6 non-negative '
+            f'integers, got {type(value).__name__} ({value!r})',
+            code='INVALID_REQUEST',
+        )
+    if value is None:
+        return None
+    return [int(item) for item in value]
 
 
 class RelationalModel:
@@ -193,6 +217,8 @@ class RelationalModel:
                 f'pass indices=[{indices!r}]',
                 code='INVALID_REQUEST',
             )
+        if num_neighbors is not _UNSET:
+            num_neighbors = _validate_num_neighbors(num_neighbors)
         options = {
             name: value
             for name, value in (
@@ -338,6 +364,8 @@ class RelationalModel:
             column without changing the row count. See
             ``docs/reference/prediction-output.md``.
         """
+        if num_neighbors is not _UNSET:
+            num_neighbors = _validate_num_neighbors(num_neighbors)
         options = {
             name: value
             for name, value in (

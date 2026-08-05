@@ -323,6 +323,75 @@ def test_rfm_handle_forwards_num_neighbors_and_num_hops():
     }
 
 
+@pytest.mark.parametrize(
+    'num_neighbors',
+    [[-1], ['eight'], [1.5], [True], [1] * 7, (8, 8)],
+)
+def test_rfm_handle_rejects_malformed_num_neighbors(num_neighbors):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError,
+        match=(
+            'num_neighbors must be None or a list of at most 6 non-negative '
+            'integers'
+        ),
+    ) as exc:
+        client.relational('g').predict('PREDICT x', num_neighbors=num_neighbors)
+
+    assert exc.value.code == 'INVALID_REQUEST'
+    assert adapter.captured is None
+
+
+def test_rfm_task_handle_rejects_malformed_num_neighbors():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError, match=r'num_neighbors.*non-negative integers'
+    ):
+        client.relational('g').predict_task(
+            pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+            pd.DataFrame({'ENTITY': [1]}),
+            task_type='regression',
+            entity_table='users',
+            num_neighbors=[-1],
+        )
+
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize(
+    'num_neighbors',
+    [
+        None,
+        [],
+        [0],
+        [np.int64(8)],
+        [pd.Series([8], dtype='Int64').iloc[0]],
+    ],
+)
+def test_rfm_handle_preserves_supported_num_neighbors(num_neighbors):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict('PREDICT x', num_neighbors=num_neighbors)
+
+    expected = (
+        None if num_neighbors is None else [int(item) for item in num_neighbors]
+    )
+    assert adapter.captured.options['num_neighbors'] == expected
+    if expected:
+        assert type(adapter.captured.options['num_neighbors'][0]) is int
+
+
 def test_rfm_handle_forwards_explain_config():
     adapter = _CapturingAdapter(
         'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
