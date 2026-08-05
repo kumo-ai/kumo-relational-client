@@ -155,6 +155,79 @@ def test_rfm_handle_only_forwards_set_options():
     }
 
 
+@pytest.mark.parametrize('random_seed', ['forty-two', 4.2, True, -1])
+def test_rfm_handle_rejects_malformed_random_seed(random_seed):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError,
+        match='random_seed must be None or a non-negative integer',
+    ) as exc:
+        client.relational('g').predict('PREDICT x', random_seed=random_seed)
+
+    assert exc.value.code == 'INVALID_REQUEST'
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize('random_seed', ['forty-two', -1])
+def test_rfm_task_handle_rejects_malformed_random_seed(random_seed):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(
+        PredictError,
+        match='random_seed must be None or a non-negative integer',
+    ):
+        client.relational('g').predict_task(
+            pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+            pd.DataFrame({'ENTITY': [1]}),
+            task_type='regression',
+            entity_table='users',
+            random_seed=random_seed,
+        )
+
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize(
+    'random_seed',
+    [np.int64(42), pd.Series([7], dtype='Int64').iloc[0]],
+)
+def test_rfm_handle_normalizes_integral_random_seed(random_seed):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict('PREDICT x', random_seed=random_seed)
+
+    assert adapter.captured.options['random_seed'] == int(random_seed)
+    assert type(adapter.captured.options['random_seed']) is int
+
+
+def test_rfm_task_handle_normalizes_integral_random_seed():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict_task(
+        pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+        pd.DataFrame({'ENTITY': [1]}),
+        task_type='regression',
+        entity_table='users',
+        random_seed=np.int32(9),
+    )
+
+    assert adapter.captured.options['random_seed'] == 9
+    assert type(adapter.captured.options['random_seed']) is int
+
+
 @pytest.mark.parametrize(
     ('option', 'value'),
     [

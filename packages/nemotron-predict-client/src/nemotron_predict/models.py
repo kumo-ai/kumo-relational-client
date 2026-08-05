@@ -120,6 +120,19 @@ def _validate_bool_option(name: str, value: Any) -> bool:
     return bool(value)
 
 
+def _validate_random_seed(value: Any) -> int | None:
+    r"""Reject values that would otherwise leak NumPy SeedSequence errors."""
+    if value is not None and (
+        not isinstance(value, Integral) or isinstance(value, bool) or value < 0
+    ):
+        raise PredictError(
+            'random_seed must be None or a non-negative integer, got '
+            f'{type(value).__name__} ({value!r})',
+            code='INVALID_REQUEST',
+        )
+    return None if value is None else int(value)
+
+
 class RelationalModel:
     r"""A Nemotron Relational handle bound to a graph, offering the familiar
     ``model.predict(query, ...)`` call from the old SDK.
@@ -272,6 +285,8 @@ class RelationalModel:
             use_prediction_time = _validate_bool_option(
                 'use_prediction_time', use_prediction_time
             )
+        if random_seed is not _UNSET:
+            random_seed = _validate_random_seed(random_seed)
         options = {
             name: value
             for name, value in (
@@ -431,6 +446,8 @@ class RelationalModel:
             use_prediction_time = _validate_bool_option(
                 'use_prediction_time', use_prediction_time
             )
+        if random_seed is not _UNSET:
+            random_seed = _validate_random_seed(random_seed)
         options = {
             name: value
             for name, value in (
