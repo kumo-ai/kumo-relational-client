@@ -160,17 +160,21 @@ def _json_or_none(response: requests.Response) -> Any:
         return None
 
 
-def _snippet(response: Optional[requests.Response]) -> str:
+def capped_body(text: Optional[str]) -> str:
     r"""A one-line, length-capped view of a response body, so a multi-megabyte
     error page cannot become a multi-megabyte exception message.
     """
-    if response is None:
+    if not text:
         return ''
-    text = ' '.join(response.text.split())
+    text = ' '.join(text.split())
     if len(text) <= _MAX_BODY_SNIPPET:
         return text
     return (f'{text[:_MAX_BODY_SNIPPET]}... '
             f'[truncated, {len(text)} chars total]')
+
+
+def _snippet(response: Optional[requests.Response]) -> str:
+    return capped_body(response.text if response is not None else None)
 
 
 def _raise_init_error(url: str, exc: BaseException) -> NoReturn:

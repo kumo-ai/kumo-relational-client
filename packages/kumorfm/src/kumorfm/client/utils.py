@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from kumorfm.client.client import capped_body
 from kumorfm.client.transport import TransportResponse
 from kumorfm.exceptions import HTTPException
 
@@ -9,7 +10,12 @@ from kumorfm.exceptions import HTTPException
 def raise_on_error(response: TransportResponse) -> None:
     r"""Raises an :class:`~kumorfm.exceptions.HTTPException` if a response does
     not return with an OK status code.
+
+    The body is capped: a NIM behind a proxy can answer an error with a large
+    HTML page, and the whole of it used to become the exception message. The
+    response is already bounded by the read cap, which is measured in
+    megabytes, so the cap here is what keeps the message readable.
     """
     if not response.ok:
         assert response.status_code is not None
-        raise HTTPException(response.status_code, response.text)
+        raise HTTPException(response.status_code, capped_body(response.text))

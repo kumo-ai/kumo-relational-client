@@ -13,9 +13,21 @@ from kumorfm.client.generated.tfm_api import (
     PredictionResponse,
     TFMOperations,
 )
+from urllib.parse import quote
+
 from kumorfm.client.transport import RFMTransport
 from kumorfm.client.utils import raise_on_error
 from kumorfm.exceptions import InvalidResponseError
+
+
+def _path_segment(value: str) -> str:
+    r"""Escape a server-supplied id before it becomes part of a URL path.
+
+    The session id comes back from the NIM, so it is not ours to trust: an id
+    carrying a slash or ``..`` would otherwise redirect the call to a different
+    route.
+    """
+    return quote(value, safe='')
 
 
 class RFMAPI:
@@ -108,7 +120,8 @@ class RFMAPI:
         """
         response = self._client._request(
             Endpoint(
-                path=f'/v1/sessions/{session_id}/predictions',
+                path=f'/v1/sessions/{_path_segment(session_id)}'
+                     f'/predictions',
                 method=HTTPMethod.POST,
             ),
             json=request,
@@ -128,7 +141,7 @@ class RFMAPI:
         """
         self._client._request(
             Endpoint(
-                path=f'/v1/sessions/{session_id}',
+                path=f'/v1/sessions/{_path_segment(session_id)}',
                 method=HTTPMethod.DELETE,
             ))
 
