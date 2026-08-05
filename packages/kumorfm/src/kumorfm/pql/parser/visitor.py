@@ -28,6 +28,7 @@ from kumorfm.api.typing import (
     TimeUnit,
 )
 
+from kumorfm._names import canonical_fqn
 from kumorfm.pql.grammar.PQLGrammarParser import PQLGrammarParser
 from kumorfm.pql.grammar.PQLGrammarVisitor import PQLGrammarVisitor
 
@@ -335,9 +336,10 @@ class PQLVisitor(PQLGrammarVisitor):
         Returns:
             A :class:`Column`.
         """
-        # "ID.ID" or "ID.*"
+        # "NAME.NAME" or "NAME.*", either NAME optionally quoted
         location = self.get_interval(ctx)
-        return Column(fqn=str(ctx.getChild(0)), location=location)
+        return Column(fqn=canonical_fqn(str(ctx.getChild(0))),
+                      location=location)
 
     # Visit a parse tree produced by PQLGrammarParser#filtered_column.
     def visitFiltered_column(

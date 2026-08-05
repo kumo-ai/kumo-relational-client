@@ -78,8 +78,8 @@ BOOL: 'true' | 'false' | 'True' | 'False' | 'TRUE' | 'FALSE';
 
 // Section: all terminal symbols
 
-FQN_COLUMN: ID '.' ID;
-WILDCARD_COLUMN: ID '.' '*';
+FQN_COLUMN: NAME '.' NAME;
+WILDCARD_COLUMN: NAME '.' '*';
 
 PREDICT: 'predict' | 'PREDICT';
 
@@ -173,6 +173,13 @@ TIME_UNIT:
 // underscore to avoid ambiguity with numbers. This follows SQL name guidelines.
 
 ID: [_a-zA-Z][_a-zA-Z0-9]*;
+
+// A name that a warehouse accepts but this grammar's bare identifier cannot spell, such as one
+// holding a space or a dot. Backticks follow the same convention the SDK's SQL backends use, and
+// a backtick cannot appear inside the name, matching those backends.
+QUOTED_ID: '`' ~[`\r\n]+ '`';
+
+fragment NAME: ID | QUOTED_ID;
 
 INT: '-'? [0-9]+;
 

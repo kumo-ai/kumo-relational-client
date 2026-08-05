@@ -6,6 +6,7 @@ from typing import List, Tuple
 
 from pydantic.dataclasses import dataclass
 
+from kumorfm._names import fqn as quote_fqn
 from kumorfm.api.pquery.AST.ast_node import ASTNode
 from kumorfm.api.pquery.AST.location_interval import ASTQueryLocationInterval
 
@@ -42,4 +43,8 @@ class Column(ASTNode):
         return [self.fqn]
 
     def to_string(self, rich: bool = False) -> str:
-        return self.fqn
+        # ``fqn`` holds the name as the data spells it, so a name the bare
+        # identifier cannot express is quoted back up here; the rendered query
+        # is the one the user would have to write to reproduce this node.
+        table, _, column = self.fqn.partition('.')
+        return quote_fqn(table, column)
