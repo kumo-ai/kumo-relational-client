@@ -155,6 +155,79 @@ def test_rfm_handle_only_forwards_set_options():
     }
 
 
+@pytest.mark.parametrize(
+    ('option', 'value'),
+    [
+        ('return_embeddings', 'yes'),
+        ('return_embeddings', 1),
+        ('use_prediction_time', 'yes'),
+        ('use_prediction_time', 0),
+    ],
+)
+def test_rfm_handle_rejects_non_boolean_options(option, value):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(PredictError, match=rf'{option} must be a bool') as exc:
+        client.relational('g').predict('PREDICT x', **{option: value})
+
+    assert exc.value.code == 'INVALID_REQUEST'
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize('option', ['return_embeddings', 'use_prediction_time'])
+def test_rfm_task_handle_rejects_non_boolean_options(option):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    with pytest.raises(PredictError, match=rf'{option} must be a bool'):
+        client.relational('g').predict_task(
+            pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+            pd.DataFrame({'ENTITY': [1]}),
+            task_type='regression',
+            entity_table='users',
+            **{option: 'yes'},
+        )
+
+    assert adapter.captured is None
+
+
+@pytest.mark.parametrize('option', ['return_embeddings', 'use_prediction_time'])
+@pytest.mark.parametrize('value', [np.bool_(True), pd.Series([False]).iloc[0]])
+def test_rfm_handle_normalizes_numpy_boolean_options(option, value):
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict('PREDICT x', **{option: value})
+
+    assert adapter.captured.options[option] is bool(value)
+
+
+def test_rfm_task_handle_normalizes_numpy_boolean_options():
+    adapter = _CapturingAdapter(
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+    )
+    client = _client_with(adapter)
+
+    client.relational('g').predict_task(
+        pd.DataFrame({'ENTITY': [1], 'TARGET': [2]}),
+        pd.DataFrame({'ENTITY': [1]}),
+        task_type='regression',
+        entity_table='users',
+        return_embeddings=np.bool_(True),
+        use_prediction_time=np.bool_(False),
+    )
+
+    assert adapter.captured.options['return_embeddings'] is True
+    assert adapter.captured.options['use_prediction_time'] is False
+
+
 def test_rfm_handle_can_silence_progress_output():
     adapter = _CapturingAdapter(
         'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()

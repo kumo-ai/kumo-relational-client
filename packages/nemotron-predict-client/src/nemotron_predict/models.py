@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from numbers import Integral
 from typing import TYPE_CHECKING, Any, Literal
 
+import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like
 
@@ -107,6 +108,16 @@ def _validate_integer_option(
         f'{name} must be {expected}, got {type(value).__name__} {value!r}',
         code='INVALID_REQUEST',
     )
+
+
+def _validate_bool_option(name: str, value: Any) -> bool:
+    r"""Reject truthy strings and integers before they change RFM behavior."""
+    if not isinstance(value, (bool, np.bool_)):
+        raise PredictError(
+            f'{name} must be a bool, got {type(value).__name__} {value!r}',
+            code='INVALID_REQUEST',
+        )
+    return bool(value)
 
 
 class RelationalModel:
@@ -252,6 +263,14 @@ class RelationalModel:
         if lag_timesteps is not _UNSET:
             lag_timesteps = _validate_integer_option(
                 'lag_timesteps', lag_timesteps, minimum=0
+            )
+        if return_embeddings is not _UNSET:
+            return_embeddings = _validate_bool_option(
+                'return_embeddings', return_embeddings
+            )
+        if use_prediction_time is not _UNSET:
+            use_prediction_time = _validate_bool_option(
+                'use_prediction_time', use_prediction_time
             )
         options = {
             name: value
@@ -403,6 +422,14 @@ class RelationalModel:
         if num_hops is not _UNSET:
             num_hops = _validate_integer_option(
                 'num_hops', num_hops, minimum=1, maximum=6
+            )
+        if return_embeddings is not _UNSET:
+            return_embeddings = _validate_bool_option(
+                'return_embeddings', return_embeddings
+            )
+        if use_prediction_time is not _UNSET:
+            use_prediction_time = _validate_bool_option(
+                'use_prediction_time', use_prediction_time
             )
         options = {
             name: value
