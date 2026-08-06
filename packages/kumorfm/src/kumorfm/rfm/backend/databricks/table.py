@@ -43,6 +43,11 @@ class DatabricksTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+    _SQL_TEXT_TYPE = 'STRING'
+
+    def _quote_key_column(self, name: str) -> str:
+        return quote_ident(name, BACKTICK)
+
     def __init__(
         self,
         connection: Connection,

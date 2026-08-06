@@ -25,6 +25,7 @@ from kumorfm import in_jupyter_notebook, in_streamlit_notebook, in_tmux
 from kumorfm.graph.graph import Edge, EdgeLike
 from kumorfm.mixin import CastMixin
 from kumorfm.rfm.base import Column, ColumnSpec, DataBackend, Table
+from kumorfm.rfm.base import composite_key
 from kumorfm.rfm.base.utils import Timedelta
 from kumorfm.rfm.infer import infer_time_column
 from kumorfm.utils import display, quote_ident
@@ -1842,10 +1843,123 @@ class Graph:
         else:
             display.italic("No links registered")
 
+    def _resolve_foreign_key(
+        self,
+        src_table: str,
+        fkey: str | Sequence[str],
+        dst_table: str,
+    ) -> str:
+        r"""The single column an edge joins on.
+
+        A reference naming one column is that column, however it was written,
+        so a one-element sequence takes the ordinary path rather than folding
+        a column that already identifies a row on its own.
+        """
+        names = (fkey, ) if isinstance(fkey, str) else tuple(fkey)
+        if len(names) > 1:
+            return self._derive_composite_foreign_key(src_table, names,
+                                                      dst_table)
+
+        name = names[0]
+        if self.has_table(dst_table):
+            destination = self[dst_table]
+            identity = destination.primary_key_columns
+            if (destination.has_composite_primary_key
+                    and name != destination.primary_key.name):
+                raise ValueError(
+                    f"Cannot link '{src_table}' to '{dst_table}' on "
+                    f"'{name}': '{dst_table}' identifies a row by "
+                    f"{list(identity)} together, so one column cannot name "
+                    f"one of its rows. Reference every part of the identity.")
+        return name
+
+    def _derive_composite_foreign_key(
+        self,
+        src_table: str,
+        fkey: Sequence[str],
+        dst_table: str,
+    ) -> str:
+        r"""Folds a multi-column reference into the key the edge joins on.
+
+        The destination's identity is carried by a derived column, so a table
+        referencing it needs the same fold over its own columns. The two are
+        then checked to actually meet: a fold that agrees on neither side
+        produces an edge that matches no rows, which trains a graph with a
+        relationship silently missing rather than failing.
+        """
+        fkey = tuple(fkey)
+        if not self.has_table(src_table):
+            raise ValueError(f"Source table '{src_table}' does not exist in "
+                             f"the graph")
+        if not self.has_table(dst_table):
+            raise ValueError(f"Destination table '{dst_table}' does not exist "
+                             f"in the graph")
+
+        source, destination = self[src_table], self[dst_table]
+        expected = destination.primary_key_columns
+        if len(expected) != len(fkey):
+            raise ValueError(
+                f"Cannot link '{src_table}' to '{dst_table}' on {list(fkey)}: "
+                f"the destination's identity is {list(expected)}, so the "
+                f"reference has to name {len(expected)} column(s), not "
+                f"{len(fkey)}")
+
+        missing = [name for name in fkey if not source.has_column(name)]
+        if missing:
+            raise ValueError(
+                f"Cannot link '{src_table}' to '{dst_table}': column(s) "
+                f"{missing} are not present in '{src_table}'. A table "
+                f"referencing a composite identity has to carry every part "
+                f"of it.")
+        composite_key.refuse_unfoldable_dtypes([(name, source[name].dtype)
+                                                for name in fkey])
+
+        self._assert_composite_link_meets(source, destination, fkey)
+
+        derived = source._derived_key_column_name(fkey)
+        if not source.has_column(derived):
+            source._materialize_derived_key(derived, fkey)
+        source[derived].stype = Stype.ID
+        return derived
+
+    def _assert_composite_link_meets(
+        self,
+        source: Table,
+        destination: Table,
+        fkey: Sequence[str],
+    ) -> None:
+        r"""Refuses a composite link whose two sides share no value.
+
+        Checked before the derived column is built, so a rejected link leaves
+        the source exactly as it found it.
+        """
+        destination_key = destination.primary_key
+        if destination_key is None:
+            return
+        left_frame = source._source_sample_df
+        if any(name not in left_frame.columns for name in fkey):
+            return
+        right = destination._sample_values(destination_key.name)
+        if right is None:
+            return
+        left = composite_key.encode_frame(left_frame, list(fkey))
+        if len(left) == 0 or len(right) == 0:
+            return
+        if len(set(left).intersection(set(right))) > 0:
+            return
+        raise ValueError(
+            f"Linking '{source.name}' to '{destination.name}' on "
+            f"{list(fkey)} matches no rows: no value of {list(fkey)} in "
+            f"'{source.name}' identifies a row of '{destination.name}'. "
+            f"Check that the columns are named in the same order as "
+            f"'{destination.name}' declares its identity "
+            f"({list(destination.primary_key_columns)}), and that they hold "
+            f"the same values.")
+
     def link(
         self,
         src_table: str | Table,
-        fkey: str,
+        fkey: str | Sequence[str],
         dst_table: str | Table,
     ) -> Self:
         r"""Links two tables (``src_table`` and ``dst_table``) from the foreign
@@ -1876,6 +1990,8 @@ class Graph:
         if isinstance(dst_table, Table):
             dst_table = dst_table.name
         assert isinstance(dst_table, str)
+
+        fkey = self._resolve_foreign_key(src_table, fkey, dst_table)
 
         edge = Edge(src_table, fkey, dst_table)
 
@@ -1909,7 +2025,7 @@ class Graph:
     def unlink(
         self,
         src_table: str | Table,
-        fkey: str,
+        fkey: str | Sequence[str],
         dst_table: str | Table,
     ) -> Self:
         r"""Removes an :class:`~kumorfm.graph.Edge` from the graph.
@@ -1925,6 +2041,10 @@ class Graph:
         if isinstance(src_table, Table):
             src_table = src_table.name
         assert isinstance(src_table, str)
+        if not isinstance(fkey, str):
+            names = tuple(fkey)
+            fkey = (names[0] if len(names) == 1 else
+                    self[src_table]._derived_key_column_name(names))
 
         if isinstance(dst_table, Table):
             dst_table = dst_table.name

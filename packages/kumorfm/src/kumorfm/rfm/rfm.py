@@ -48,6 +48,7 @@ from kumorfm.exceptions import HTTPException, NimFailureError
 from kumorfm.mixin import CastMixin
 from kumorfm.rfm import Graph, TaskTable
 from kumorfm.rfm.base import DataBackend, Sampler
+from kumorfm.rfm.base import composite_key
 from kumorfm.rfm.base.utils import Timestamp, to_naive_utc
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
 from kumorfm.rfm.explain_summary import generate_summary
@@ -551,6 +552,74 @@ def _extract_explanation(
     return prediction.drop(columns=['EXPLANATION']), summary, details, warning
 
 
+
+def _encode_composite_indices(
+    indices: Sequence[Any],
+    entity_key: tuple[str, ...],
+) -> list[str]:
+    r"""Folds tuple seeds into the identity the entity table is keyed on.
+
+    A caller names an entity the way the data does -- ``('AB-10015',
+    'Central')`` -- rather than by the derived value that carries it.
+    """
+    encoded: list[str] = []
+    for index in indices:
+        if isinstance(index, str):
+            raise ValueError(
+                f"Entity table is identified by {list(entity_key)}, so each "
+                f"index has to name {len(entity_key)} value(s) as a tuple; "
+                f"got the single value {index!r}. No row is identified by a "
+                f"value on its own.")
+        if not isinstance(index, (tuple, list)):
+            raise ValueError(
+                f"Entity table is identified by {list(entity_key)}, so each "
+                f"index has to name {len(entity_key)} value(s); got "
+                f"{index!r}")
+        if len(index) != len(entity_key):
+            raise ValueError(
+                f"Entity table is identified by {list(entity_key)}, so each "
+                f"index has to name {len(entity_key)} value(s); got "
+                f"{list(index)}")
+        encoded.append(composite_key.encode_values(list(index)))
+    return encoded
+
+
+def _decode_composite_entities(
+    result: Any,
+    entity_key: tuple[str, ...],
+) -> Any:
+    r"""Reports a prediction against the columns the caller named.
+
+    The derived identity is an implementation detail, so it is unfolded back
+    into the key columns and ``ENTITY`` is dropped in their favour.
+    """
+    frame = result.prediction if hasattr(result, 'prediction') else result
+    if not isinstance(frame, pd.DataFrame) or 'ENTITY' not in frame.columns:
+        return result
+
+    decoded = [
+        composite_key.decode_value(str(value), len(entity_key))
+        for value in frame['ENTITY']
+    ]
+    frame = frame.copy(deep=False)
+    position = frame.columns.get_loc('ENTITY')
+    frame = frame.drop(columns=['ENTITY'])
+    occupied = [name for name in entity_key if name in frame.columns]
+    if occupied:
+        raise ValueError(
+            f"Cannot report a prediction against key column(s) {occupied}: "
+            f"the result already carries a column of that name. Rename the "
+            f"key column(s) in the graph.")
+    for offset, name in enumerate(entity_key):
+        frame.insert(position + offset, name,
+                     [parts[offset] for parts in decoded])
+
+    if hasattr(result, 'prediction'):
+        result.prediction = frame
+        return result
+    return frame
+
+
 class KumoRFM:
     r"""The Kumo Relational Foundation model (RFM) from the KumoRFM: A Foundation Model for In-Context Learning on
     Relational Data.
@@ -608,6 +677,11 @@ class KumoRFM:
     ) -> None:
         graph = graph.validate()
         self._graph_def = graph._to_api_graph_definition()
+        self._composite_key_dict: dict[str, tuple[str, ...]] = {
+            name: table.primary_key_columns
+            for name, table in graph.tables.items()
+            if table.has_composite_primary_key
+        }
 
         if optimize and graph.backend not in _OPTIMIZABLE_BACKENDS:
             warnings.warn(f"'optimize=True' has no effect on the "
@@ -947,6 +1021,9 @@ class KumoRFM:
                 raise ValueError("Cannot find entities to predict for. Please "
                                  "pass them via `predict(query, indices=...)`")
             indices = query_def.get_rfm_entity_id_list()
+        entity_key = self._composite_entity_key(query_def)
+        if entity_key is not None:
+            indices = _encode_composite_indices(indices, entity_key)
         query_def = replace(
             query_def,
             for_each='FOR EACH',
@@ -975,7 +1052,7 @@ class KumoRFM:
             )
             task_table._query = query_def.to_string()
 
-            return self.predict_task(
+            result = self.predict_task(
                 task_table,
                 explain=explain,
                 return_embeddings=return_embeddings,
@@ -989,6 +1066,17 @@ class KumoRFM:
                 top_k=query_def.top_k,
                 random_seed=random_seed,
             )
+            if entity_key is not None:
+                result = _decode_composite_entities(result, entity_key)
+            return result
+
+    def _composite_entity_key(self, query: Any) -> tuple[str, ...] | None:
+        r"""The columns the query's entity table spreads its identity across.
+
+        Returns ``None`` unless that identity is composite, so a single-column
+        entity takes exactly the path it did before.
+        """
+        return self._composite_key_dict.get(query.entity_table)
 
     def materialize_task(
         self,

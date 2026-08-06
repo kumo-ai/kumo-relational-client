@@ -26,6 +26,7 @@ from kumorfm.rfm.base import (
     SourceColumn,
     SourceForeignKey,
 )
+from kumorfm.rfm.base import composite_key
 from kumorfm.rfm.base.utils import to_datetime
 from kumorfm.rfm.infer import (
     infer_dtype,
@@ -34,6 +35,9 @@ from kumorfm.rfm.infer import (
     infer_time_column,
 )
 from kumorfm.utils import display, quote_ident
+
+
+_DERIVED_KEY_PREFIX = '__kumo_key_'
 
 
 def _is_key_like(ser: pd.Series) -> bool:
@@ -76,6 +80,7 @@ class Table(ABC):
         self._source_name = source_name or name
         self._column_dict: dict[str, Column] = {}
         self._primary_key: str | None = None
+        self._primary_key_columns: tuple[str, ...] | None = None
         self._time_column: str | None = None
         self._end_time_column: str | None = None
         self._declined_primary_keys: tuple[str, ...] = ()
@@ -306,8 +311,160 @@ class Table(ABC):
             return None
         return self[self._primary_key]
 
+    @property
+    def primary_key_columns(self) -> tuple[str, ...]:
+        r"""The columns this table's identity is spread across.
+
+        A single-column key reports one name. A composite key reports the
+        columns the caller declared, not the derived column that carries their
+        folded value.
+        """
+        if self._primary_key_columns is not None:
+            return self._primary_key_columns
+        if self._primary_key is None:
+            return ()
+        return (self._primary_key, )
+
+    @property
+    def has_composite_primary_key(self) -> bool:
+        r"""Whether this table's identity is spread across several columns."""
+        return self._primary_key_columns is not None
+
+    def _set_composite_primary_key(self, names: Sequence[str]) -> None:
+        r"""Folds *names* into one derived identity column and keys on it.
+
+        Everything downstream -- links, the sampler, the payload, the serving
+        contract's ``instance_id`` -- identifies a row by a single value, so a
+        multi-column identity is carried by a derived column here rather than
+        threaded through each of those.
+        """
+        names = tuple(names)
+        missing = [name for name in names if name not in self]
+        if missing:
+            raise ValueError(
+                f"Cannot use {list(names)} as a composite primary key of "
+                f"table '{self.name}': column(s) {missing} are not present")
+        for name in names:
+            if name in (self._time_column, self._end_time_column):
+                raise ValueError(
+                    f"Cannot use column '{name}' in a composite primary key "
+                    f"since it is already defined to be a time column")
+        composite_key.refuse_unfoldable_dtypes([(name, self[name].dtype)
+                                                for name in names])
+
+        derived = self._derived_key_column_name(names)
+        self._materialize_derived_key(derived, names)
+        self.primary_key = derived
+        self._primary_key_columns = names
+
+    def _derived_key_column_name(self, names: Sequence[str]) -> str:
+        r"""Names the column carrying the folded identity of *names*.
+
+        The same columns always give the same name, so declaring a key twice,
+        or linking twice, reuses one column instead of accumulating a new one
+        each time and hiding the duplicate from the checks that reject it.
+        """
+        derived = _DERIVED_KEY_PREFIX + '_'.join(names)
+        if derived in self and not self._is_derived_key_column(derived):
+            raise ValueError(
+                f"Cannot fold {list(names)} into an identity for table "
+                f"'{self.name}': it already holds a column named "
+                f"'{derived}'. Rename that column.")
+        return derived
+
+    def _is_derived_key_column(self, name: str) -> bool:
+        return name.startswith(_DERIVED_KEY_PREFIX)
+
+    def _drop_derived_key(self, derived: str | None) -> None:
+        r"""Forgets a derived identity column this table no longer keys on."""
+        if derived is None or not derived.startswith(_DERIVED_KEY_PREFIX):
+            return
+        if derived in self:
+            self._column_dict.pop(derived, None)
+        self._forget_derived_key(derived)
+
+    def _forget_derived_key(self, derived: str) -> None:
+        pass
+
+    _SQL_TEXT_TYPE: str | None = None
+    _SQL_CHR_FUNCTION = 'CHR'
+
+    def _quote_key_column(self, name: str) -> str:
+        return quote_ident(name)
+
+    def _materialize_derived_key(
+        self,
+        derived: str,
+        names: Sequence[str],
+    ) -> None:
+        if self._SQL_TEXT_TYPE is None:
+            raise ValueError(
+                f"Composite primary keys are not supported on "
+                f"'{self.__class__.__name__}' yet. The identity of table "
+                f"'{self.name}' is spread across {list(names)}; add a column "
+                f"holding that identity to the source and declare it "
+                f"instead.")
+
+        expression = composite_key.sql_expression(
+            names,
+            quote=self._quote_key_column,
+            text_type=self._SQL_TEXT_TYPE,
+            chr_function=self._SQL_CHR_FUNCTION,
+        )
+        self.add_column(ColumnSpec(name=derived, expr=expression))
+        self[derived].stype = Stype.ID
+        self._assert_warehouse_folds_like_pandas(derived, names)
+
+    def _sample_values(self, name: str) -> pd.Series | None:
+        r"""A sample of *name*, whether the source holds it or it is derived."""
+        source = self._source_sample_df
+        if name in source.columns:
+            return source[name]
+        if name in self._expr_sample_df.columns:
+            return self._expr_sample_df[name]
+        return None
+
+    def _assert_warehouse_folds_like_pandas(
+        self,
+        derived: str,
+        names: Sequence[str],
+    ) -> None:
+        r"""Checks the warehouse renders an identity exactly as pandas does.
+
+        Seeds are folded here while the warehouse folds the rows it joins
+        against, so a dialect that renders a value differently -- a number, a
+        date, a decimal's trailing zeros -- yields no matched rows rather than
+        an error. Comparing the two on a sample turns that into a refusal at
+        the point the key is declared.
+        """
+        folded = self._sample_values(derived)
+        source = self._source_sample_df
+        if folded is None or any(name not in source.columns for name in names):
+            return
+        warehouse = set(folded.dropna())
+        locally = set(composite_key.encode_frame(source, list(names)))
+        if not warehouse or warehouse == locally:
+            return
+        differing = sorted(warehouse - locally)[:1]
+        raise ValueError(
+            f"'{self.name}' folds {list(names)} into an identity differently "
+            f"in the warehouse than this SDK does, so a prediction seeded "
+            f"here would match no row: the warehouse produced "
+            f"{differing!r}. Add a column holding the identity you intend "
+            f"and declare that instead.")
+
     @primary_key.setter
-    def primary_key(self, name: str | None) -> None:
+    def primary_key(self, name: str | Sequence[str] | None) -> None:
+        if name is not None and not isinstance(name, str):
+            names = tuple(name)
+            if len(names) == 0:
+                raise ValueError(
+                    f"Cannot use an empty composite primary key on table "
+                    f"'{self.name}'")
+            if len(names) > 1:
+                self._set_composite_primary_key(names)
+                return
+            name = names[0]
         if name is not None and name == self._time_column:
             raise ValueError(f"Cannot specify column '{name}' as a primary "
                              f"key since it is already defined to be a time "
@@ -316,17 +473,28 @@ class Table(ABC):
             raise ValueError(f"Cannot specify column '{name}' as a primary "
                              f"key since it is already defined to be an end "
                              f"time column")
+        if name is not None and name not in self:
+            raise KeyError(f"Column '{name}' not found in table '{self.name}'")
+
+        stale_derived: str | None = None
+        if (self._primary_key_columns is not None
+                and name != self._primary_key):
+            stale_derived = self._primary_key
+            self._primary_key = None
+        self._primary_key_columns = None
 
         if self.primary_key is not None:
             self.primary_key._is_primary_key = False
 
         if name is None:
             self._primary_key = None
+            self._drop_derived_key(stale_derived)
             return
 
         self[name].stype = Stype.ID
         self[name]._is_primary_key = True
         self._primary_key = name
+        self._drop_derived_key(stale_derived)
 
     # Time column #############################################################
 

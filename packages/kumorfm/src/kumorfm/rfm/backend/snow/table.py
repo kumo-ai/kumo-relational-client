@@ -59,6 +59,8 @@ class SnowTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+    _SQL_TEXT_TYPE = 'VARCHAR'
+
     def __init__(
         self,
         connection: Connection,

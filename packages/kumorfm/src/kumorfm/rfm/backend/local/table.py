@@ -7,6 +7,7 @@ from typing import Sequence, cast
 import pandas as pd
 from kumorfm.runmode import MissingType
 
+from kumorfm.rfm.base import composite_key
 from kumorfm.rfm.base import (
     Column,
     ColumnSpec,
@@ -105,6 +106,24 @@ class LocalTable(Table):
 
     def _get_source_sample_df(self) -> pd.DataFrame:
         return self._data
+
+    def _materialize_derived_key(
+        self,
+        derived: str,
+        names: Sequence[str],
+    ) -> None:
+        self._data[derived] = composite_key.encode_frame(self._data,
+                                                         list(names))
+        self.__dict__.pop('_source_column_dict', None)
+        self.__dict__.pop('_source_sample_df', None)
+        if not self.has_column(derived):
+            self.add_column(derived)
+
+    def _forget_derived_key(self, derived: str) -> None:
+        if derived in self._data.columns:
+            self._data = self._data.drop(columns=[derived])
+        self.__dict__.pop('_source_column_dict', None)
+        self.__dict__.pop('_source_sample_df', None)
 
     def _get_expr_sample_df(
         self,
