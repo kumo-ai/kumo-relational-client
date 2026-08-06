@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
+import hashlib
 import math
 
 import numpy as np
@@ -29,6 +30,7 @@ import pandas as pd
 
 from kumorfm.api.typing import Dtype
 
+DERIVED_PREFIX = '__kumo_key_'
 SEPARATOR = '\x1f'
 ESCAPE = '\\'
 
@@ -194,3 +196,20 @@ def sql_expression(
                    f"{backslash} || 'u')")
         parts.append(escaped)
     return f' || {separator} || '.join(parts)
+
+
+def digest(columns: Sequence[str]) -> str:
+    r"""A short, stable name for the identity *columns* describe.
+
+    Joining the names with a separator would make ``('a_b', 'c')`` and
+    ``('a', 'b_c')`` indistinguishable, and two references from one table
+    would then share a column and silently join on each other's values.
+
+    Args:
+        columns: The key columns, in the order the key declares them.
+
+    Returns:
+        Sixteen hexadecimal characters identifying that exact sequence.
+    """
+    joined = SEPARATOR.join(escape_part(name) for name in columns)
+    return hashlib.sha256(joined.encode('utf-8')).hexdigest()[:16]

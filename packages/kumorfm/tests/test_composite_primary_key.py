@@ -503,3 +503,67 @@ def test_a_numpy_boolean_folds_like_a_python_one() -> None:
         encode_values([np.bool_(True), 'x']),
         encode_values([np.bool_(False), 'y']),
     ]
+
+
+def test_two_identities_that_join_the_same_way_get_different_columns(
+) -> None:
+    r"""``('a_b', 'c')`` and ``('a', 'b_c')`` must not share a column.
+
+    Joining names with a separator made them indistinguishable, so a second
+    reference from one table landed on the first one's folded values and
+    joined against the wrong rows without any error.
+    """
+    import kumorfm.rfm as rfm
+    table = rfm.LocalTable(
+        pd.DataFrame({
+            'a_b': ['x'],
+            'c': ['1'],
+            'a': ['p'],
+            'b_c': ['q'],
+        }), name='T')
+
+    assert (table._derived_key_column_name(('a_b', 'c')) !=
+            table._derived_key_column_name(('a', 'b_c')))
+
+
+def test_the_derived_name_is_stable_and_ordered() -> None:
+    import kumorfm.rfm as rfm
+    table = rfm.LocalTable(pd.DataFrame({'a': ['x'], 'c': ['1']}), name='T')
+
+    assert (table._derived_key_column_name(('a', 'c')) ==
+            table._derived_key_column_name(('a', 'c')))
+    assert (table._derived_key_column_name(('a', 'c')) !=
+            table._derived_key_column_name(('c', 'a')))
+
+
+def test_a_query_names_the_identity_by_any_of_its_columns(superstore) -> None:
+    r"""A caller should not have to spell a column this SDK invented."""
+    from kumorfm.rfm.query_parser import parse_query_locally
+    people, orders = superstore
+    graph = build_graph(people, orders)
+    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
+               dst_table='PEOPLE')
+    definition = graph._to_api_graph_definition()
+    identity = {'PEOPLE': graph['PEOPLE'].primary_key_columns}
+    derived = graph['PEOPLE'].primary_key.name
+
+    for named in ('`Customer ID`', 'Region', f'`{derived}`'):
+        query = (f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
+                 f'FOR EACH PEOPLE.{named}')
+        validated = parse_query_locally(query, definition, identity)
+        assert validated.entity_column == f'PEOPLE.{derived}'
+
+
+def test_a_column_outside_the_identity_still_cannot_be_the_entity(
+        superstore) -> None:
+    from kumorfm.rfm.query_parser import parse_query_locally
+    people, orders = superstore
+    graph = build_graph(people, orders)
+    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
+               dst_table='PEOPLE')
+
+    with pytest.raises(ValueError, match='primary key'):
+        parse_query_locally(
+            'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.Segment',
+            graph._to_api_graph_definition(),
+            {'PEOPLE': graph['PEOPLE'].primary_key_columns})

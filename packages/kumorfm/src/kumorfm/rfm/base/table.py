@@ -37,7 +37,7 @@ from kumorfm.rfm.infer import (
 from kumorfm.utils import display, quote_ident
 
 
-_DERIVED_KEY_PREFIX = '__kumo_key_'
+_DERIVED_KEY_PREFIX = composite_key.DERIVED_PREFIX
 
 
 def _is_key_like(ser: pd.Series) -> bool:
@@ -361,10 +361,12 @@ class Table(ABC):
         r"""Names the column carrying the folded identity of *names*.
 
         The same columns always give the same name, so declaring a key twice,
-        or linking twice, reuses one column instead of accumulating a new one
+        or linking twice, reuses one column rather than accumulating a new one
         each time and hiding the duplicate from the checks that reject it.
+        Different columns always give a different name, so two references from
+        one table cannot land on each other's values.
         """
-        derived = _DERIVED_KEY_PREFIX + '_'.join(names)
+        derived = _DERIVED_KEY_PREFIX + composite_key.digest(names)
         if derived in self and not self._is_derived_key_column(derived):
             raise ValueError(
                 f"Cannot fold {list(names)} into an identity for table "

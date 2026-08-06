@@ -1893,7 +1893,8 @@ class KumoRFM:
         if isinstance(query, ValidatedPredictiveQuery):
             return query
 
-        return parse_query_locally(query, self._graph_def)
+        return parse_query_locally(query, self._graph_def,
+                                   self._composite_key_dict)
 
     @staticmethod
     def _get_task_type(

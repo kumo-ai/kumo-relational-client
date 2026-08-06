@@ -6,12 +6,37 @@ import warnings
 from typing import Any
 
 from kumorfm.api.graph import GraphDefinition
+from kumorfm.rfm.base import composite_key
 from kumorfm.api.pquery import ValidatedPredictiveQuery
+
+
+
+def _name_the_identity(
+    parsed_query: Any,
+    composite_keys: dict[str, tuple[str, ...]],
+) -> None:
+    r"""Lets a query name a table whose identity spans several columns.
+
+    Such a table is keyed on a derived column this SDK invented, and asking a
+    caller to spell that is asking them to know an implementation detail. Any
+    column of the identity therefore names the identity, and the derived
+    column keeps working for a query already written against it.
+    """
+    entity = getattr(parsed_query, 'entity_column_obj', None)
+    if entity is None or not isinstance(getattr(entity, 'fqn', None), str):
+        return
+    table, _, column = entity.fqn.partition('.')
+    identity = composite_keys.get(table)
+    if identity is None or column not in identity:
+        return
+    entity.fqn = f'{table}.{composite_key.DERIVED_PREFIX}' \
+                 f'{composite_key.digest(identity)}'
 
 
 def parse_query_locally(
     query: str,
     graph_definition: GraphDefinition,
+    composite_keys: dict[str, tuple[str, ...]] | None = None,
 ) -> ValidatedPredictiveQuery:
     try:
         from kumorfm.pql.parser.parser import PQLParser, QueryValidationType
@@ -27,6 +52,8 @@ def parse_query_locally(
         parsed_query = PQLParser(
             query_validation_type=query_validation_type,
         ).to_parsed_predictive_query(query)
+        if composite_keys:
+            _name_the_identity(parsed_query, composite_keys)
         validator = PredictiveQueryValidator(
             graph=graph_definition,
             query_validation_type=query_validation_type,
