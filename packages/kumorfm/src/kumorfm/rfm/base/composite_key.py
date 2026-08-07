@@ -22,7 +22,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-import hashlib
 import math
 
 import numpy as np
@@ -198,18 +197,63 @@ def sql_expression(
     return f' || {separator} || '.join(parts)
 
 
-def digest(columns: Sequence[str]) -> str:
-    r"""A short, stable name for the identity *columns* describe.
+#: A derived name has to survive a predictive query, a fully qualified name
+#: being split on its dots, and a warehouse's identifier rules. Anything
+#: longer is refused rather than truncated, since truncating would let two
+#: identities collide.
+MAX_DERIVED_NAME = 200
 
-    Joining the names with a separator would make ``('a_b', 'c')`` and
-    ``('a', 'b_c')`` indistinguishable, and two references from one table
-    would then share a column and silently join on each other's values.
+
+def encode_identity(columns: Sequence[str]) -> str:
+    r"""Names the identity *columns* describe, recoverably and safely.
+
+    Each name is written as hexadecimal and the parts are joined with
+    underscores. Hexadecimal cannot contain an underscore, so the join is
+    unambiguous, and the result holds only ``[0-9a-f_]`` -- which matters
+    because this name is written into predictive queries, split back out of a
+    fully qualified name, and created as a warehouse column. Carrying the
+    names as themselves let a dot break the split, a backtick break the
+    quoting, and a space force every reference to be quoted.
 
     Args:
         columns: The key columns, in the order the key declares them.
 
     Returns:
-        Sixteen hexadecimal characters identifying that exact sequence.
+        A name identifying that exact sequence.
+
+    Raises:
+        ValueError: If the result would exceed what a warehouse accepts.
     """
-    joined = SEPARATOR.join(escape_part(name) for name in columns)
-    return hashlib.sha256(joined.encode('utf-8')).hexdigest()[:16]
+    encoded = '_'.join(name.encode('utf-8').hex() for name in columns)
+    if len(DERIVED_PREFIX) + len(encoded) > MAX_DERIVED_NAME:
+        raise ValueError(
+            f"An identity over {list(columns)} needs a column name longer "
+            f"than {MAX_DERIVED_NAME} characters, which a warehouse will not "
+            f"accept. Add a column holding that identity and declare it "
+            f"instead.")
+    return encoded
+
+
+def decode_identity(derived: str) -> tuple[str, ...] | None:
+    r"""Recovers the columns an identity was folded from.
+
+    Args:
+        derived: A column name produced with :data:`DERIVED_PREFIX` and
+            :func:`encode_identity`.
+
+    Returns:
+        The key columns in declaration order, or :obj:`None` if *derived* does
+        not name a folded identity.
+    """
+    if not derived.startswith(DERIVED_PREFIX):
+        return None
+    rest = derived[len(DERIVED_PREFIX):]
+    if not rest:
+        return None
+    columns: list[str] = []
+    for part in rest.split('_'):
+        try:
+            columns.append(bytes.fromhex(part).decode('utf-8'))
+        except (ValueError, UnicodeDecodeError):
+            return None
+    return tuple(columns)

@@ -366,7 +366,7 @@ class Table(ABC):
         Different columns always give a different name, so two references from
         one table cannot land on each other's values.
         """
-        derived = _DERIVED_KEY_PREFIX + composite_key.digest(names)
+        derived = _DERIVED_KEY_PREFIX + composite_key.encode_identity(names)
         if derived in self and not self._is_derived_key_column(derived):
             raise ValueError(
                 f"Cannot fold {list(names)} into an identity for table "

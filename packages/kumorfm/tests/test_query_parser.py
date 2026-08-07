@@ -55,8 +55,7 @@ def test_kumo_rfm_parse_query_delegates_strings_to_local_parser(
     ) as mock_parse:
         assert model._parse_query(query) is ltv
 
-    mock_parse.assert_called_once_with(query, model._graph_def,
-                                       model._composite_key_dict)
+    mock_parse.assert_called_once_with(query, model._graph_def)
 
 
 def test_parse_query_locally_returns_validated_query(

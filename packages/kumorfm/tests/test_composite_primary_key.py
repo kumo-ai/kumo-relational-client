@@ -544,13 +544,12 @@ def test_a_query_names_the_identity_by_any_of_its_columns(superstore) -> None:
     graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
                dst_table='PEOPLE')
     definition = graph._to_api_graph_definition()
-    identity = {'PEOPLE': graph['PEOPLE'].primary_key_columns}
     derived = graph['PEOPLE'].primary_key.name
 
     for named in ('`Customer ID`', 'Region', f'`{derived}`'):
         query = (f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
                  f'FOR EACH PEOPLE.{named}')
-        validated = parse_query_locally(query, definition, identity)
+        validated = parse_query_locally(query, definition)
         assert validated.entity_column == f'PEOPLE.{derived}'
 
 
@@ -565,5 +564,126 @@ def test_a_column_outside_the_identity_still_cannot_be_the_entity(
     with pytest.raises(ValueError, match='primary key'):
         parse_query_locally(
             'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.Segment',
-            graph._to_api_graph_definition(),
-            {'PEOPLE': graph['PEOPLE'].primary_key_columns})
+            graph._to_api_graph_definition())
+
+
+def test_a_caller_holding_only_the_graph_definition_gets_the_same_rule(
+        superstore) -> None:
+    r"""The service and a local pre-check have to agree.
+
+    A caller validating before it sends holds the graph definition and nothing
+    else. If the identity rule needed anything more, a query the service
+    accepts would be refused locally and never sent.
+    """
+    from kumorfm.rfm.query_parser import parse_query_locally
+    people, orders = superstore
+    graph = build_graph(people, orders)
+    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
+               dst_table='PEOPLE')
+    definition = graph._to_api_graph_definition()
+
+    validated = parse_query_locally(
+        'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
+        'FOR EACH PEOPLE.`Customer ID`', definition)
+
+    assert validated.entity_column == f'PEOPLE.{graph["PEOPLE"].primary_key.name}'
+
+
+def test_an_identity_is_recoverable_from_the_derived_column_alone() -> None:
+    from kumorfm.rfm.base.composite_key import (
+        DERIVED_PREFIX,
+        decode_identity,
+        encode_identity,
+    )
+    for columns in [('Customer ID', 'Region'), ('a_b', 'c'), ('a', 'b_c'),
+                    ('a', 'b', 'c'), ('holds:colon', 'y'), ('Cust.ID', 'R'),
+                    ('back`tick', 'R'), ('ünïcode', 'x')]:
+        derived = DERIVED_PREFIX + encode_identity(columns)
+        assert decode_identity(derived) == columns
+    assert decode_identity('Customer ID') is None
+    assert decode_identity(DERIVED_PREFIX) is None
+    assert decode_identity(DERIVED_PREFIX + 'nothex') is None
+
+
+@pytest.mark.parametrize('columns', [
+    ('Customer ID', 'Region'),
+    ('Cust.ID', 'Region'),
+    ('back`tick', 'Region'),
+    ('has space', 'Region'),
+])
+def test_a_derived_name_is_written_without_quoting(columns) -> None:
+    r"""The name reaches places a column name generally cannot.
+
+    It is written into a predictive query, split back out of a fully
+    qualified name, and created as a warehouse column. Carrying the member
+    names as themselves let a dot break the split, a backtick break the
+    quoting, and a space force every reference to be quoted.
+    """
+    import re
+
+    from kumorfm.rfm.base.composite_key import DERIVED_PREFIX, encode_identity
+    derived = DERIVED_PREFIX + encode_identity(columns)
+
+    assert re.fullmatch(r'[_A-Za-z0-9]+', derived)
+
+
+def test_an_identity_too_long_to_name_is_refused() -> None:
+    from kumorfm.rfm.base.composite_key import encode_identity
+    with pytest.raises(ValueError, match='longer than'):
+        encode_identity(
+            tuple(f'a_very_long_warehouse_column_name_{i}' for i in range(8)))
+
+
+def test_the_derived_column_can_be_named_without_backticks(
+        superstore) -> None:
+    r"""How anyone on 2.27.0 would have written it, since it was bare then."""
+    from kumorfm.rfm.query_parser import parse_query_locally
+    people, orders = superstore
+    graph = build_graph(people, orders)
+    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
+               dst_table='PEOPLE')
+    definition = graph._to_api_graph_definition()
+    derived = graph['PEOPLE'].primary_key.name
+
+    for named in (derived, f'`{derived}`'):
+        validated = parse_query_locally(
+            f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
+            f'FOR EACH PEOPLE.{named}', definition)
+        assert validated.entity_column == f'PEOPLE.{derived}'
+
+
+def test_a_dotted_key_column_does_not_break_the_derived_name() -> None:
+    r"""A dot in a member name used to make the entity unsplittable."""
+    import numpy as np
+
+    import kumorfm.rfm as rfm
+    from kumorfm.rfm.query_parser import parse_query_locally
+    rng = np.random.default_rng(0)
+    size = 40
+    people = pd.DataFrame({
+        'Cust.ID': ['A', 'A', 'B'],
+        'Region': ['C', 'E', 'C'],
+        'Segment': ['x', 'y', 'z'],
+    })
+    orders = pd.DataFrame({
+        'Order ID': np.arange(size),
+        'Cust.ID': rng.choice(['A', 'B'], size),
+        'Region': rng.choice(['C', 'E'], size),
+        'Order Date': (pd.to_datetime('2024-01-01') +
+                       pd.to_timedelta(rng.integers(0, 300, size), unit='D')),
+        'Sales': rng.uniform(5, 400, size).round(2),
+    })
+    graph = rfm.Graph.from_data({'PEOPLE': people, 'ORDERS': orders},
+                                infer_metadata=False, verbose=False)
+    graph['PEOPLE'].primary_key = ('Cust.ID', 'Region')
+    graph['ORDERS'].primary_key = 'Order ID'
+    graph['ORDERS'].time_column = 'Order Date'
+    graph.link(src_table='ORDERS', fkey=('Cust.ID', 'Region'),
+               dst_table='PEOPLE')
+    derived = graph['PEOPLE'].primary_key.name
+
+    assert '.' not in derived
+    validated = parse_query_locally(
+        f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.{derived}',
+        graph._to_api_graph_definition())
+    assert validated.entity_column == f'PEOPLE.{derived}'
