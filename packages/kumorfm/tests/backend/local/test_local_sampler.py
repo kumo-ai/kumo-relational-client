@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import kumorfm.kumolib as kumolib
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,8 +17,6 @@ from kumorfm.api.pquery.AST import (
     LogicalOperation,
 )
 from kumorfm.api.typing import BoolOp, Dtype
-
-import kumorfm.kumolib as kumolib
 from kumorfm.rfm import Graph
 from kumorfm.rfm.backend.local import LocalSampler
 from kumorfm.rfm.base.utils import Timestamp
@@ -45,32 +44,44 @@ def test_kumolib_sampler_validation() -> None:
     seed_node = np.array([0, 1])
     seed_time = np.array([0, 1])
     with pytest.raises(RuntimeError, match='is not 1D'):
-        sampler = kumolib.NeighborSampler(node_types, edge_types, {
-            'a__to__b': 'invalid',
-            'b__to__a': None
-        }, row, node_time, 123)
+        sampler = kumolib.NeighborSampler(
+            node_types,
+            edge_types,
+            {'a__to__b': 'invalid', 'b__to__a': None},
+            row,
+            node_time,
+            123,
+        )
 
     with pytest.raises(RuntimeError, match='invalid'):
-        sampler = kumolib.NeighborSampler(node_types, edge_types, colptr, row,
-                                          node_time, 123)
+        sampler = kumolib.NeighborSampler(
+            node_types, edge_types, colptr, row, node_time, 123
+        )
         sampler.sample({'invalid': 1}, {}, 'a', seed_node, seed_time)
 
     with pytest.raises(RuntimeError, match='Invalid entity table'):
-        sampler = kumolib.NeighborSampler(node_types, edge_types, colptr, row,
-                                          node_time, 123)
+        sampler = kumolib.NeighborSampler(
+            node_types, edge_types, colptr, row, node_time, 123
+        )
         sampler.sample(num_neighbors, {}, 'k', seed_node, seed_time)
 
     with pytest.raises(RuntimeError, match='size mismatch'):
-        sampler = kumolib.NeighborSampler(node_types, edge_types, colptr, row,
-                                          node_time, 123)
+        sampler = kumolib.NeighborSampler(
+            node_types, edge_types, colptr, row, node_time, 123
+        )
         sampler.sample(num_neighbors, {}, 'a', seed_node, np.array([0]))
 
     with pytest.raises(RuntimeError, match='same edge type'):
-        sampler = kumolib.NeighborSampler(node_types, edge_types, colptr, row,
-                                          node_time, 123)
-        sampler.sample(num_neighbors,
-                       {'a__to__b': np.array([[0, 5], [None, 0]])}, 'a',
-                       seed_node, seed_time)
+        sampler = kumolib.NeighborSampler(
+            node_types, edge_types, colptr, row, node_time, 123
+        )
+        sampler.sample(
+            num_neighbors,
+            {'a__to__b': np.array([[0, 5], [None, 0]])},
+            'a',
+            seed_node,
+            seed_time,
+        )
 
 
 def test_kumolib_sampler_temporal() -> None:
@@ -89,8 +100,9 @@ def test_kumolib_sampler_temporal() -> None:
         'B': np.array([2, 1]),
     }
 
-    sampler = kumolib.NeighborSampler(node_types, edge_types, colptr, row,
-                                      node_time)
+    sampler = kumolib.NeighborSampler(
+        node_types, edge_types, colptr, row, node_time
+    )
 
     num_neighbors = {
         'A__to__B': [1, 1],
@@ -154,8 +166,7 @@ def test_kumolib_sampler_static() -> None:
         batch,
         num_sampled_nodes,
         num_sampled_edges,
-    ) = sampler.sample(num_neighbors, {}, entity_table, seed_node,
-                       np.array([]))
+    ) = sampler.sample(num_neighbors, {}, entity_table, seed_node, np.array([]))
     # Outputs are non-deterministic but this specific
     # config is deterministic for this graph
     assert row['A__to__B'].tolist() == [0, 3, 4, 5, 6, 2]
@@ -188,8 +199,9 @@ def test_kumolib_sampler_temporal_range() -> None:
         'B': np.array([2, 1]),
     }
 
-    sampler = kumolib.NeighborSampler(node_types, edge_types, colptr, row,
-                                      node_time)
+    sampler = kumolib.NeighborSampler(
+        node_types, edge_types, colptr, row, node_time
+    )
 
     sampling_time_offsets = {
         'A__to__B': np.array([[0, 1], [-1, 2]]),
@@ -205,8 +217,9 @@ def test_kumolib_sampler_temporal_range() -> None:
         batch,
         num_sampled_nodes,
         num_sampled_edges,
-    ) = sampler.sample({}, sampling_time_offsets, entity_table, seed_node,
-                       seed_time)
+    ) = sampler.sample(
+        {}, sampling_time_offsets, entity_table, seed_node, seed_time
+    )
     assert row['A__to__B'].shape[0] == sum(num_sampled_edges['A__to__B'])
     assert row['B__to__A'].shape[0] == sum(num_sampled_edges['B__to__A'])
     assert col['A__to__B'].shape[0] == sum(num_sampled_edges['A__to__B'])
@@ -229,18 +242,20 @@ def test_kumolib_sampler_temporal_range() -> None:
 
 def test_sample_entity_table_with_int_entity_ids() -> None:
     df_dict = {
-        'USERS':
-        pd.DataFrame({
-            'USER_ID': [1, 2, 3, 4, 5],
-            'AGE': [20, 30, 40, 50, 60],
-        }),
-        'ORDERS':
-        pd.DataFrame({
-            'ORDER_ID': range(10),
-            'USER_ID': [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
-            'AMOUNT': range(10),
-            'TIME': pd.date_range('2025-01-01', periods=10, freq='D'),
-        }),
+        'USERS': pd.DataFrame(
+            {
+                'USER_ID': [1, 2, 3, 4, 5],
+                'AGE': [20, 30, 40, 50, 60],
+            }
+        ),
+        'ORDERS': pd.DataFrame(
+            {
+                'ORDER_ID': range(10),
+                'USER_ID': [1, 1, 2, 2, 3, 3, 4, 4, 5, 5],
+                'AMOUNT': range(10),
+                'TIME': pd.date_range('2025-01-01', periods=10, freq='D'),
+            }
+        ),
     }
     graph = Graph.from_data(df_dict, verbose=False)
     sampler = LocalSampler(graph, verbose=False)
@@ -256,17 +271,19 @@ def test_sample_entity_table_with_int_entity_ids() -> None:
 
 def test_sample_entity_table_with_string_entity_ids() -> None:
     df_dict = {
-        'USERS':
-        pd.DataFrame({
-            'USER_ID': ['alice', 'bob', 'charlie'],
-            'AGE': [20, 30, 40],
-        }),
-        'ORDERS':
-        pd.DataFrame({
-            'ORDER_ID': range(3),
-            'USER_ID': ['alice', 'bob', 'charlie'],
-            'AMOUNT': [10, 20, 30],
-        }),
+        'USERS': pd.DataFrame(
+            {
+                'USER_ID': ['alice', 'bob', 'charlie'],
+                'AGE': [20, 30, 40],
+            }
+        ),
+        'ORDERS': pd.DataFrame(
+            {
+                'ORDER_ID': range(3),
+                'USER_ID': ['alice', 'bob', 'charlie'],
+                'AMOUNT': [10, 20, 30],
+            }
+        ),
     }
     graph = Graph.from_data(df_dict, verbose=False)
     sampler = LocalSampler(graph, verbose=False)
@@ -283,24 +300,26 @@ def test_sample_entity_table_with_string_entity_ids() -> None:
 
 def test_sample_target() -> None:
     df_dict: dict[str, pd.DataFrame] = {}
-    df_dict['USERS'] = pd.DataFrame({
-        'USER_ID': [10, 10, 0],
-        'AGE': [30, 30, 20],
-    })
-    df_dict['ORDERS'] = pd.DataFrame({
-        'USER_ID': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        'AMOUNT':
-        range(18),
-        'TIME':
-        pd.date_range('2025-01-01', periods=18, unit='ns'),
-    })
-    df_dict['VIEWS'] = pd.DataFrame({
-        'USER_ID': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
-        'AMOUNT':
-        range(18),
-        'TIME':
-        pd.date_range('2025-01-01', periods=18, unit='ns'),
-    })
+    df_dict['USERS'] = pd.DataFrame(
+        {
+            'USER_ID': [10, 10, 0],
+            'AGE': [30, 30, 20],
+        }
+    )
+    df_dict['ORDERS'] = pd.DataFrame(
+        {
+            'USER_ID': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            'AMOUNT': range(18),
+            'TIME': pd.date_range('2025-01-01', periods=18, unit='ns'),
+        }
+    )
+    df_dict['VIEWS'] = pd.DataFrame(
+        {
+            'USER_ID': [0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1],
+            'AMOUNT': range(18),
+            'TIME': pd.date_range('2025-01-01', periods=18, unit='ns'),
+        }
+    )
 
     graph = Graph.from_data(df_dict, verbose=False)
     sampler = LocalSampler(graph, verbose=False)
@@ -378,21 +397,23 @@ def test_sample_target() -> None:
 
 
 def test_sample_target_empty_entity_table_names_the_table() -> None:
-    # Regression: bugs/quality-missing-f-prefix-error-messages.md -- this
-    # message used to print the literal '{query.entity_table}'.
+    # Regression: this message used to print the literal
+    # '{query.entity_table}'.
     df_dict = {
-        'USERS':
-        pd.DataFrame({
-            'USER_ID': [1, 2, 3],
-            'AGE': [20, 30, 40],
-        }),
-        'ORDERS':
-        pd.DataFrame({
-            'ORDER_ID': range(6),
-            'USER_ID': [1, 1, 2, 2, 3, 3],
-            'AMOUNT': range(6),
-            'TIME': pd.date_range('2025-01-01', periods=6, freq='D'),
-        }),
+        'USERS': pd.DataFrame(
+            {
+                'USER_ID': [1, 2, 3],
+                'AGE': [20, 30, 40],
+            }
+        ),
+        'ORDERS': pd.DataFrame(
+            {
+                'ORDER_ID': range(6),
+                'USER_ID': [1, 1, 2, 2, 3, 3],
+                'AMOUNT': range(6),
+                'TIME': pd.date_range('2025-01-01', periods=6, freq='D'),
+            }
+        ),
     }
     graph = Graph.from_data(df_dict, verbose=False)
     sampler = LocalSampler(graph, verbose=False)
@@ -420,3 +441,68 @@ def test_sample_target_empty_entity_table_names_the_table() -> None:
             test_anchor_time=Timestamp('2025-01-04'),
             num_test_trials=5,
         )
+
+
+def test_a_context_shortfall_is_reported() -> None:
+    r"""Ask for a context the data cannot fill and the shortfall is reported.
+
+    The two coverage warnings were guarded on ``not num_train_examples > 0``,
+    which also makes ``num_train_examples // 2`` non-positive, so the
+    ``len(train_y) <`` comparison could never hold and neither warning could
+    ever be emitted. Nobody was told to raise `max_pq_iterations`.
+    """
+    import warnings
+
+    import kumorfm.rfm.base.sampler as sampler_module
+    from kumorfm.api.typing import Stype
+    from kumorfm.rfm.backend.local import LocalSampler
+
+    rng = np.random.default_rng(3)
+    num_users = 12_000
+    score = np.full(num_users, np.nan)
+    score[:5] = rng.uniform(0, 1, 5)
+    users = pd.DataFrame({'USER_ID': np.arange(num_users), 'SCORE': score})
+    orders = pd.DataFrame(
+        {
+            'ORDER_ID': np.arange(4_000),
+            'USER_ID': rng.integers(0, num_users, 4_000),
+            'AMOUNT': rng.uniform(1, 9, 4_000),
+            'TIME': pd.Timestamp('2024-01-01')
+            + pd.to_timedelta(rng.integers(0, 300, 4_000), unit='D'),
+        }
+    )
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')
+        graph = Graph.from_data(
+            {'USERS': users, 'ORDERS': orders}, verbose=False
+        )
+        graph.infer_metadata(verbose=False)
+        graph.infer_links(verbose=False)
+        local_sampler = LocalSampler(graph, verbose=False)
+
+    query = ValidatedPredictiveQuery(
+        target_ast=Column(fqn='USERS.SCORE', stype_maybe=Stype.numerical),
+        entity_ast=Column(fqn='USERS.USER_ID'),
+    )
+
+    sampler_module._coverage_warned = False
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter('always')
+        local_sampler.sample_target(
+            query=query,
+            num_train_examples=1_000,
+            train_anchor_time=pd.Timestamp('2024-06-01'),
+            num_train_trials=10_000,
+            num_test_examples=0,
+            test_anchor_time=pd.Timestamp('2024-06-01'),
+            num_test_trials=0,
+            random_seed=7,
+        )
+    sampler_module._coverage_warned = False
+
+    shortfall = [
+        str(w.message) for w in caught if 'max_pq_iterations' in str(w.message)
+    ]
+    assert len(shortfall) == 1
+    assert '1,000 context examples' in shortfall[0]
+    assert '10,000 candidates' in shortfall[0]

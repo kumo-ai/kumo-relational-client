@@ -2,11 +2,11 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""Types the SDK owns that the vendored ``kumorfm.api`` tree used to hold.
+r"""Types the SDK owns that the internalized ``kumorfm.api`` tree used to hold.
 
-``kumorfm/api`` is re-copied wholesale from upstream ``kumo-api`` by
-``scripts/sync_internal_packages.py``, so anything defined there is lost on the
-next sync. These two are used across the runtime, so they live here instead.
+Both come from upstream ``kumo-api``'s ``model_plan.py``, which was dropped as
+unreachable (see ``api/SOURCE.md``). They are the only two names in it this SDK
+reaches, and they are used across the runtime, so they live here.
 """
 
 from kumorfm.api.common import StrEnum
@@ -23,6 +23,7 @@ class RunMode(StrEnum):
     10,000 (``best``); the exact counts live in ``kumorfm.rfm.rfm``. Temporal
     link prediction always uses the ``fast`` budget regardless of the mode.
     """
+
     FAST = 'fast'
     NORMAL = 'normal'
     BEST = 'best'
@@ -35,4 +36,5 @@ class MissingType(StrEnum):
     Distinguishes "not given, so infer it" from an explicit ``None``, which
     means "this table has no such column".
     """
+
     VALUE = '???'

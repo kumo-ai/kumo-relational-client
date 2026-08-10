@@ -5,12 +5,12 @@
 from sdfm_connectors.backends.duckdb import Connection, connect
 
 
-from .table import DuckDBTable  # noqa: E402
-from .sampler import DuckDBSampler  # noqa: E402
+from .table import DuckDBTable
+from .sampler import DuckDBSampler
 
 __all__ = [
-    'connect',
     'Connection',
-    'DuckDBTable',
     'DuckDBSampler',
+    'DuckDBTable',
+    'connect',
 ]

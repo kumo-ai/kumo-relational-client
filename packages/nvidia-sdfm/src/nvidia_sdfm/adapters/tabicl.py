@@ -4,29 +4,34 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
+import math
 import uuid
+from numbers import Real
 from typing import Any
 
 import pandas as pd
 
 from nvidia_sdfm.base import ModelAdapter, ModelCapabilities
 from nvidia_sdfm.core.response import parse_prediction_response
-from nvidia_sdfm.core.transport import Transport
+from nvidia_sdfm.core.transport import Transport, redact_url
 from nvidia_sdfm.errors import NimRequestError, SdfmError
+from nvidia_sdfm.requests import TabICLRequest, TabICLSession
 from nvidia_sdfm.wire import (
     encode_table,
     infer_tfm_dtype,
     widen_tfm_dtype,
 )
-from nvidia_sdfm.requests import TabICLRequest, TabICLSession
 
-_CLASSIFICATION_KINDS = frozenset({
-    'classification',
-    'binary_classification',
-    'multiclass_classification',
-})
+_CLASSIFICATION_KINDS = frozenset(
+    {
+        'classification',
+        'binary_classification',
+        'multiclass_classification',
+    }
+)
 
 _TASK_KINDS = _CLASSIFICATION_KINDS | frozenset({'regression'})
 
@@ -66,17 +71,80 @@ def _new_request_id() -> str:
 
 def _check_columns(name: str, frame: pd.DataFrame) -> None:
     if frame.columns.has_duplicates:
-        duplicates = sorted({str(column) for column in
-                             frame.columns[frame.columns.duplicated()]})
+        duplicates = sorted(
+            {
+                str(column)
+                for column in frame.columns[frame.columns.duplicated()]
+            }
+        )
         raise SdfmError(
             f'{name} has duplicate column name(s) {duplicates}',
             code='INVALID_REQUEST',
         )
-    non_strings = [column for column in frame.columns
-                   if not isinstance(column, str)]
+    non_strings = [
+        column for column in frame.columns if not isinstance(column, str)
+    ]
     if non_strings:
         raise SdfmError(
             f'{name} column names must be strings; got {non_strings}',
+            code='INVALID_REQUEST',
+        )
+
+
+def _validate_outputs(outputs: Any, wire_task: str) -> None:
+    if isinstance(outputs, (str, bytes)):
+        raise SdfmError(
+            f'outputs must be a list of field names, not a single string; '
+            f'pass [{outputs!r}]. A bare string is iterable, so the check '
+            f'below would otherwise read it one character at a time',
+            code='INVALID_REQUEST',
+        )
+    if not isinstance(outputs, (list, tuple)):
+        raise SdfmError(
+            'outputs must be a list or tuple of field names; got '
+            f'{type(outputs).__name__}',
+            code='INVALID_REQUEST',
+        )
+    non_strings = [field for field in outputs if not isinstance(field, str)]
+    if non_strings:
+        raise SdfmError(
+            f'outputs entries must be strings; got {non_strings}',
+            code='INVALID_REQUEST',
+        )
+    unsupported = [
+        field for field in outputs if field not in _OUTPUT_FIELDS[wire_task]
+    ]
+    if unsupported:
+        raise SdfmError(
+            f'TabICL does not produce {unsupported} for a {wire_task} task; '
+            f'supported output fields: {list(_OUTPUT_FIELDS[wire_task])}',
+            code='INVALID_REQUEST',
+        )
+
+
+def _validate_quantile_levels(quantile_levels: Any) -> None:
+    if quantile_levels is None:
+        return
+    if not isinstance(quantile_levels, (list, tuple)):
+        raise SdfmError(
+            'quantile_levels must be a list or tuple of finite numbers; got '
+            f'{type(quantile_levels).__name__}',
+            code='INVALID_REQUEST',
+        )
+    invalid = [
+        level
+        for level in quantile_levels
+        if (
+            isinstance(level, bool)
+            or not isinstance(level, Real)
+            or not math.isfinite(level)
+            or not 0.0 < level < 1.0
+        )
+    ]
+    if invalid:
+        raise SdfmError(
+            f'quantile_levels must lie strictly between 0 and 1; got '
+            f'{quantile_levels}',
             code='INVALID_REQUEST',
         )
 
@@ -131,35 +199,16 @@ def build_request(
             code='INVALID_REQUEST',
         )
 
-    if isinstance(outputs, (str, bytes)):
-        raise SdfmError(
-            f'outputs must be a list of field names, not a single string; '
-            f'pass [{outputs!r}]. A bare string is iterable, so the check '
-            f'below would otherwise read it one character at a time',
-            code='INVALID_REQUEST',
-        )
-    unsupported = [field for field in outputs
-                   if field not in _OUTPUT_FIELDS[wire_task]]
-    if unsupported:
-        raise SdfmError(
-            f'TabICL does not produce {unsupported} for a {wire_task} task; '
-            f'supported output fields: {list(_OUTPUT_FIELDS[wire_task])}',
-            code='INVALID_REQUEST',
-        )
-    if quantile_levels is not None and not all(
-            0.0 < level < 1.0 for level in quantile_levels):
-        raise SdfmError(
-            f'quantile_levels must lie strictly between 0 and 1; got '
-            f'{quantile_levels}',
-            code='INVALID_REQUEST',
-        )
+    _validate_outputs(outputs, wire_task)
+    _validate_quantile_levels(quantile_levels)
 
     # A column typed differently in the two frames travels under the wider of
     # the two dtypes, so neither frame's values are coerced to the other's.
     dtypes = {
         column: widen_tfm_dtype(
             infer_tfm_dtype(frame[column])
-            for frame in (context, predict) if column in frame.columns
+            for frame in (context, predict)
+            if column in frame.columns
         )
         for column in dict.fromkeys([*context.columns, *predict.columns])
     }
@@ -172,7 +221,9 @@ def build_request(
         },
     }
     if task in _CLASSIFICATION_KINDS:
-        classes = sorted(str(value) for value in context[target].dropna().unique())
+        classes = sorted(
+            str(value) for value in context[target].dropna().unique()
+        )
         if len(classes) > _MAX_CLASSES:
             raise SdfmError(
                 f'TabICL supports at most {_MAX_CLASSES} classes; context '
@@ -253,12 +304,13 @@ def _pinned_digest(payload: dict[str, Any]) -> str:
 
 def _create_session(transport: Transport, payload: dict[str, Any]) -> str:
     body = transport.create_session(
-        _sections(payload, _SESSION_CREATE_SECTIONS))
+        _sections(payload, _SESSION_CREATE_SECTIONS)
+    )
     session_id = body.get('session_id')
     if not isinstance(session_id, str) or not session_id:
         raise SdfmError(
-            f'Create-session response from {transport.url} did not include a '
-            f'session_id',
+            f'Create-session response from {redact_url(transport.url)} did '
+            f'not include a session_id',
             code='INVALID_RESPONSE',
         )
     return session_id
@@ -266,10 +318,8 @@ def _create_session(transport: Transport, payload: dict[str, Any]) -> str:
 
 def delete_session_quietly(transport: Transport, session_id: str) -> None:
     r"""Best-effort session release; the NIM also reaps a session on its TTL."""
-    try:
+    with contextlib.suppress(SdfmError):
         transport.delete_session(session_id)
-    except SdfmError:
-        pass
 
 
 def _acquire_session(
@@ -352,8 +402,7 @@ def _predict_with_session(
         return transport.predict(payload)
 
     pinned = _pinned_digest(payload)
-    session_id, stale_id = _acquire_session(transport, payload, session,
-                                            pinned)
+    session_id, stale_id = _acquire_session(transport, payload, session, pinned)
     if stale_id is not None:
         delete_session_quietly(transport, stale_id)
     if session_id is None:
@@ -369,7 +418,8 @@ def _predict_with_session(
             raise
         return transport.session_predict(
             _refresh_session(transport, payload, session, session_id),
-            predict_payload)
+            predict_payload,
+        )
 
 
 class TabICLAdapter(ModelAdapter):
@@ -406,7 +456,9 @@ class TabICLAdapter(ModelAdapter):
         if request.session is None:
             response = transport.predict(payload)
         else:
-            response = _predict_with_session(transport, payload,
-                                             request.session)
+            response = _predict_with_session(
+                transport, payload, request.session
+            )
         return parse_prediction_response(
-            response, requested_fields=request.outputs)
+            response, requested_fields=request.outputs
+        )

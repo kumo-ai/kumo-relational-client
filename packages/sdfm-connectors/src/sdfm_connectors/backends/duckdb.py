@@ -9,6 +9,7 @@ from typing import Any, TypeAlias
 
 from sdfm_connectors.sql import (
     ConnectorError,
+    connect_with,
     require_driver,
     require_existing_database,
 )
@@ -28,8 +29,10 @@ def connect(
 
     DuckDB opens a missing path in create-if-missing mode, so a mistyped path
     is reported as ``NOT_FOUND`` before the driver can write an empty database
-    into the caller's working tree — the same contract the sibling ``sqlite``
-    connector enforces for the identical mistake.
+    into the caller's working tree -- the same contract the sibling ``sqlite``
+    connector enforces for the identical mistake, and the one
+    ``kumorfm.rfm.backend.duckdb.connect`` enforces for the separate
+    ``adbc_driver_duckdb`` entry point the sampler needs.
     """
     if uri is not None and database is not None:
         raise ConnectorError(
@@ -39,7 +42,7 @@ def connect(
         )
     uri = uri if uri is not None else database
     if uri is None:
-        return duckdb.connect(':memory:', **kwargs)
+        return connect_with('duckdb', duckdb.connect, ':memory:', **kwargs)
     uri = str(uri)
     require_existing_database('duckdb', uri)
-    return duckdb.connect(uri, **kwargs)
+    return connect_with('duckdb', duckdb.connect, uri, **kwargs)

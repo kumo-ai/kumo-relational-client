@@ -23,6 +23,7 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Database",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Typing :: Typed",
@@ -78,6 +79,9 @@ version = {attr = "sdfm_connectors.__version__"}
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["-q"]
+# An xfail that starts passing is a fixed bug, and should fail the run so it
+# gets un-marked rather than sitting there silently.
+xfail_strict = true
 
 [tool.ruff]
 # Inherit the workspace lint baseline so this package cannot silently opt out of

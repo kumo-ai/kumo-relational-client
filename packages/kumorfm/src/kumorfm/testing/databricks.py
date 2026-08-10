@@ -21,8 +21,9 @@ def connect(
     credentials from the ``DATABRICKS_*`` environment variables.
     """
     return _connect(
-        server_hostname=(server_hostname
-                         or os.getenv('DATABRICKS_SERVER_HOSTNAME')),
+        server_hostname=(
+            server_hostname or os.getenv('DATABRICKS_SERVER_HOSTNAME')
+        ),
         http_path=http_path or os.getenv('DATABRICKS_HTTP_PATH'),
         access_token=access_token or os.getenv('DATABRICKS_TOKEN'),
         catalog=catalog or os.getenv('DATABRICKS_CATALOG'),

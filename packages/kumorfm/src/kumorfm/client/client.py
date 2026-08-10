@@ -3,15 +3,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Any, NoReturn, Optional
+import re
+from typing import Any, NoReturn
 from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
+
+# `typing.assert_never` is 3.11+, and this package supports 3.10. Sourced from
+# `typing_extensions`, as `Self` already is throughout the package.
+from typing_extensions import assert_never
 from urllib3.util import Retry
 
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
-from kumorfm.exceptions import InvalidResponseError
+from kumorfm.exceptions import (
+    AuthenticationError,
+    ClientInitializationError,
+    InvalidResponseError,
+    NimTimeoutError,
+    NimUnreachableError,
+)
 
 logger = logging.getLogger('kumorfm')
 
@@ -30,6 +41,12 @@ _RETRY_BACKOFF_FACTOR = 2.0
 # Caps how long a server-chosen `Retry-After` may park the caller; urllib3's
 # own default is six hours.
 _RETRY_AFTER_MAX_SECONDS = 60
+# The readiness/model probes run at init, before the caller is waiting on a
+# result, so they use their own short bound rather than the request timeout:
+# an unreachable endpoint should fail fast rather than hold up construction.
+_PROBE_TIMEOUT_SECONDS = 10
+# The `user:secret@` of a URL authority, wherever one appears in free text.
+_USERINFO_RE = re.compile(r'(?<=//)[^/@\s]+@')
 
 
 def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
@@ -71,24 +88,62 @@ def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
         return Retry(**options)
 
 
-def _validate_url(url: str, api_key: Optional[str]) -> None:
+def _validate_url(url: str, api_key: str | None) -> None:
     r"""Mirrors ``nvidia_sdfm.core.transport._validate_url``.
 
     This client carries every KumoRFM prediction, so the guard the SDK
     documents has to hold here too rather than only on the path that happens
     to construct a ``Transport`` first.
     """
+    if not isinstance(url, str):
+        raise ValueError(f'url must be a string, got {type(url).__name__}')
     parsed = urlparse(url)
+    shown = redact_url(url)
     if parsed.scheme not in ('http', 'https'):
         raise ValueError(
-            f"url must start with http:// or https://, got {url!r}")
+            f'url must start with http:// or https://, got {shown!r}'
+        )
     if not parsed.hostname:
-        raise ValueError(f"url is missing a host, got {url!r}")
-    if (api_key and parsed.scheme == 'http'
-            and parsed.hostname.lower() not in _LOCAL_HOSTS):
+        raise ValueError(f'url is missing a host, got {shown!r}')
+    if (
+        api_key
+        and parsed.scheme == 'http'
+        and parsed.hostname.lower() not in _LOCAL_HOSTS
+    ):
         raise ValueError(
-            f"refusing to send an API key over plaintext HTTP; use an "
-            f"https:// URL (or a localhost endpoint), got {url!r}")
+            f'refusing to send an API key over plaintext HTTP; use an '
+            f'https:// URL (or a localhost endpoint), got {shown!r}'
+        )
+
+
+def redact_url(url: str | None) -> str | None:
+    r"""Strip any userinfo from ``url`` so it is safe to log or display.
+
+    ``https://user:token@host/path`` is a legal way to point the SDK at a
+    deployment, and the credential is in the URL itself. Anywhere a URL reaches
+    a log line, an error message or a repr, it goes through here first.
+    """
+    if not url:
+        return url
+    parsed = urlparse(url)
+    if not parsed.username and not parsed.password:
+        return url
+    host = parsed.hostname or ''
+    if ':' in host:
+        host = f'[{host}]'
+    if parsed.port:
+        host = f'{host}:{parsed.port}'
+    return parsed._replace(netloc=host).geturl()
+
+
+def scrub_userinfo(text: str) -> str:
+    r"""Remove any ``user:secret@`` credential from free text.
+
+    The counterpart to :func:`redact_url` for strings that merely *contain* a
+    URL rather than being one -- chiefly the driver exception messages quoted
+    into init errors, which echo back whatever URL was requested.
+    """
+    return _USERINFO_RE.sub('', text)
 
 
 class _Session(requests.Session):
@@ -114,8 +169,11 @@ class _Session(requests.Session):
     ) -> None:
         super().rebuild_auth(prepared_request, response)
         previous_url = response.request.url
-        if previous_url and prepared_request.url and self.should_strip_auth(
-                previous_url, prepared_request.url):
+        if (
+            previous_url
+            and prepared_request.url
+            and self.should_strip_auth(previous_url, prepared_request.url)
+        ):
             prepared_request.headers.pop('X-API-Key', None)
 
 
@@ -143,8 +201,9 @@ def _read_capped(response: requests.Response, url: str) -> requests.Response:
         for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
             if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
                 raise InvalidResponseError(
-                    f'Response body from {url!r} exceeds the '
-                    f'{_MAX_RESPONSE_BYTES} byte limit')
+                    f'Response body from {redact_url(url)!r} exceeds the '
+                    f'{_MAX_RESPONSE_BYTES} byte limit'
+                )
             body.extend(chunk)
     finally:
         response.close()
@@ -160,7 +219,7 @@ def _json_or_none(response: requests.Response) -> Any:
         return None
 
 
-def capped_body(text: Optional[str]) -> str:
+def capped_body(text: str | None) -> str:
     r"""A one-line, length-capped view of a response body, so a multi-megabyte
     error page cannot become a multi-megabyte exception message.
     """
@@ -169,47 +228,57 @@ def capped_body(text: Optional[str]) -> str:
     text = ' '.join(text.split())
     if len(text) <= _MAX_BODY_SNIPPET:
         return text
-    return (f'{text[:_MAX_BODY_SNIPPET]}... '
-            f'[truncated, {len(text)} chars total]')
+    return f'{text[:_MAX_BODY_SNIPPET]}... [truncated, {len(text)} chars total]'
 
 
-def _snippet(response: Optional[requests.Response]) -> str:
+def _snippet(response: requests.Response | None) -> str:
     return capped_body(response.text if response is not None else None)
 
 
 def _raise_init_error(url: str, exc: BaseException) -> NoReturn:
-    """Translate an init-time requests exception into a user-facing error."""
+    r"""Translate an init-time requests exception into a user-facing error."""
+    # The driver echoes the URL it was given back into its own message, so the
+    # quoted cause is scrubbed as well as the URL this function was handed.
+    shown = redact_url(url)
+    cause = scrub_userinfo(str(exc))
     if isinstance(exc, requests.exceptions.HTTPError):
         response = exc.response
-        status_code = (response.status_code if response is not None else None)
+        status_code = response.status_code if response is not None else None
         body = _snippet(response)
         if status_code in _AUTH_STATUS_CODES:
-            raise ValueError(
-                f"Client authentication failed for {url!r}. If the NIM is "
-                "behind an authenticating gateway, pass a matching "
-                f"'api_key'. HTTP {status_code}: {body}") from exc
-        raise ValueError(
-            f"NIM at {url!r} returned HTTP {status_code} while "
-            f"initializing the SDK. Response: {body}") from exc
+            raise AuthenticationError(
+                f'Client authentication failed for {shown!r}. If the NIM is '
+                'behind an authenticating gateway, pass a matching '
+                f"'api_key'. HTTP {status_code}: {body}"
+            ) from exc
+        raise ClientInitializationError(
+            f'NIM at {shown!r} returned HTTP {status_code} while '
+            f'initializing the SDK. Response: {body}'
+        ) from exc
     if isinstance(exc, requests.exceptions.Timeout):
-        raise ValueError(f"Timed out connecting to the NIM at {url!r}. "
-                         f"Original error: {exc}") from exc
+        raise NimTimeoutError(
+            f'Timed out connecting to the NIM at {shown!r}. '
+            f'Original error: {cause}'
+        ) from exc
     if isinstance(exc, requests.exceptions.ConnectionError):
-        raise ValueError(
-            f"Could not connect to the NIM at {url!r}. Verify the "
-            f"server is running and the URL is correct. Original error: "
-            f"{exc}") from exc
-    raise ValueError(f"Failed to initialize KumoRFM client against {url!r}. "
-                     f"Exception: {exc}") from exc
+        raise NimUnreachableError(
+            f'Could not connect to the NIM at {shown!r}. Verify the '
+            f'server is running and the URL is correct. Original error: '
+            f'{cause}'
+        ) from exc
+    raise ClientInitializationError(
+        f'Failed to initialize KumoRFM client against {shown!r}. '
+        f'Exception: {cause}'
+    ) from exc
 
 
 class KumoClient:
     def __init__(
         self,
         url: str,
-        api_key: Optional[str] = None,
+        api_key: str | None = None,
         verify_ssl: bool = True,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         max_retries: int = 3,
     ) -> None:
         r"""Creates a client for KumoRFM requests against a Universal TFM NIM.
@@ -251,20 +320,21 @@ class KumoClient:
         session.mount('https://', http_adapter)
         session.mount(
             url + _SESSIONS_PATH,
-            HTTPAdapter(max_retries=_build_retry(max_retries,
-                                                 retry_post=False)),
+            HTTPAdapter(
+                max_retries=_build_retry(max_retries, retry_post=False)
+            ),
         )
         session.mount(url + _SESSIONS_PATH + '/', http_adapter)
         self._session = session
         if self._api_key:
-            self._session.headers.update({"X-API-Key": self._api_key})
+            self._session.headers.update({'X-API-Key': self._api_key})
 
     def close(self) -> None:
         r"""Closes the underlying HTTP session and its pooled connections."""
         self._session.close()
 
     def authenticate(self) -> None:
-        """Verify the endpoint is a reachable Universal TFM NIM.
+        r"""Verify the endpoint is a reachable Universal TFM NIM.
 
         NIMs are unauthenticated by contract. When a deployment fronts the NIM
         with an authenticating gateway, a 401/403 from either probe surfaces as
@@ -272,30 +342,45 @@ class KumoClient:
         """
         ready = self._probe('/v1/health/ready')
         ready_data = _json_or_none(ready)
-        ready_status = (str(ready_data.get('status', '')).lower()
-                        if isinstance(ready_data, dict) else '')
-        ready_check = (str(ready_data.get('check', '')).lower()
-                       if isinstance(ready_data, dict) else '')
-        if not (ready_status == 'ready'
-                or (ready_status == 'healthy' and ready_check == 'ready')):
+        ready_status = (
+            str(ready_data.get('status', '')).lower()
+            if isinstance(ready_data, dict)
+            else ''
+        )
+        ready_check = (
+            str(ready_data.get('check', '')).lower()
+            if isinstance(ready_data, dict)
+            else ''
+        )
+        if not (
+            ready_status == 'ready'
+            or (ready_status == 'healthy' and ready_check == 'ready')
+        ):
             raise ValueError(
-                f"NIM at {self._url!r} is not ready. '/v1/health/ready' "
-                f"returned: {ready_data!r}")
+                f'NIM at {redact_url(self._url)!r} is not ready. '
+                f"'/v1/health/ready' "
+                f'returned: {ready_data!r}'
+            )
 
         models = self._probe('/v1/models')
         data = _json_or_none(models)
         advertised = isinstance(data, dict) and any(
             isinstance(model, dict) and model.get('id') == 'kumo-rfm'
-            for model in data.get('data', []))
+            for model in data.get('data', [])
+        )
         if not advertised:
             raise ValueError(
-                f"Endpoint {self._url!r} did not advertise the 'kumo-rfm' "
+                f'Endpoint {redact_url(self._url)!r} did not advertise '
+                "the 'kumo-rfm' "
                 "model at '/v1/models'. Point the SDK at a Universal TFM NIM "
-                "serving KumoRFM.")
+                'serving KumoRFM.'
+            )
 
     def _probe(self, path: str) -> requests.Response:
         try:
-            response = self._send('GET', self._url + path, timeout=10)
+            response = self._send(
+                'GET', self._url + path, timeout=_PROBE_TIMEOUT_SECONDS
+            )
             response.raise_for_status()
             return response
         except requests.RequestException as e:
@@ -310,10 +395,13 @@ class KumoClient:
             return self._post(endpoint_str, **kwargs)
         if endpoint.method == HTTPMethod.DELETE:
             return self._delete(endpoint_str, **kwargs)
-        raise ValueError(f"Unsupported HTTP method: {endpoint.method}")
+        # HTTPMethod is closed and every member is handled above, so this is
+        # unreachable today. Stated as an exhaustiveness check so that adding a
+        # member without extending the dispatch fails type checking rather than
+        # falling through and returning None.
+        assert_never(endpoint.method)
 
-    def _send(self, method: str, url: str,
-              **kwargs: Any) -> requests.Response:
+    def _send(self, method: str, url: str, **kwargs: Any) -> requests.Response:
         r"""Issues one request and reads its body under a size cap.
 
         Every request this client makes goes through here, so the cap cannot be
@@ -322,22 +410,23 @@ class KumoClient:
         handed back behaves exactly like an eagerly read one.
         """
         kwargs.setdefault('timeout', self._timeout)
-        response = self._session.request(method, url, verify=self._verify_ssl,
-                                         stream=True, **kwargs)
+        response = self._session.request(
+            method, url, verify=self._verify_ssl, stream=True, **kwargs
+        )
         return _read_capped(response, url)
 
     def _get(self, endpoint: str, **kwargs: Any) -> requests.Response:
         return self._send('GET', self._format_endpoint_url(endpoint), **kwargs)
 
     def _post(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        return self._send('POST', self._format_endpoint_url(endpoint),
-                          **kwargs)
+        return self._send('POST', self._format_endpoint_url(endpoint), **kwargs)
 
     def _delete(self, endpoint: str, **kwargs: Any) -> requests.Response:
-        return self._send('DELETE', self._format_endpoint_url(endpoint),
-                          **kwargs)
+        return self._send(
+            'DELETE', self._format_endpoint_url(endpoint), **kwargs
+        )
 
     def _format_endpoint_url(self, endpoint: str) -> str:
-        if not endpoint.startswith("/"):
+        if not endpoint.startswith('/'):
             raise ValueError("Endpoint path must start with '/'")
-        return f"{self._url}{endpoint}"
+        return f'{self._url}{endpoint}'

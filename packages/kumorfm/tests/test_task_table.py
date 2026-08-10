@@ -6,20 +6,22 @@ import pandas as pd
 import pytest
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import Dtype, Stype
-
 from kumorfm.rfm import TaskTable
-from kumorfm.rfm.task_table import _get_target_stype
 from kumorfm.rfm.base import Column
+from kumorfm.rfm.task_table import _get_target_stype
 
 
-@pytest.mark.parametrize('task_type', [
-    TaskType.BINARY_CLASSIFICATION,
-    TaskType.MULTICLASS_CLASSIFICATION,
-    TaskType.REGRESSION,
-    TaskType.TEMPORAL_LINK_PREDICTION,
-])
+@pytest.mark.parametrize(
+    'task_type',
+    [
+        TaskType.BINARY_CLASSIFICATION,
+        TaskType.MULTICLASS_CLASSIFICATION,
+        TaskType.REGRESSION,
+        TaskType.TEMPORAL_LINK_PREDICTION,
+    ],
+)
 def test_basic(task_type: TaskType) -> None:
-    entity_table_names = ('USERS', )
+    entity_table_names = ('USERS',)
     if task_type == TaskType.BINARY_CLASSIFICATION:
         target = [True, False, True]
         target_dtype = Dtype.bool
@@ -39,15 +41,19 @@ def test_basic(task_type: TaskType) -> None:
         target_dtype = Dtype.stringlist
         target_stype = Stype.multicategorical
 
-    context_df = pd.DataFrame({
-        'ENTITY': [0, 1, 2],
-        'TARGET': target,
-        'TIME': ['2020-01-01'] * 3,
-    })
-    pred_df = pd.DataFrame({
-        'ENTITY': [3, 4],
-        'TIME': ['2021-01-01'] * 2,
-    })
+    context_df = pd.DataFrame(
+        {
+            'ENTITY': [0, 1, 2],
+            'TARGET': target,
+            'TIME': ['2020-01-01'] * 3,
+        }
+    )
+    pred_df = pd.DataFrame(
+        {
+            'ENTITY': [3, 4],
+            'TIME': ['2021-01-01'] * 2,
+        }
+    )
 
     task_table = TaskTable(
         task_type=task_type,
@@ -86,16 +92,18 @@ def test_basic(task_type: TaskType) -> None:
         entity_table_repr = f'entity_table_names={entity_table_names}'
     else:
         entity_table_repr = f'entity_table_name={entity_table_names[0]}'
-    assert str(task_table) == (f'TaskTable(\n'
-                               f'  task_type={task_type},\n'
-                               f'  num_context_examples=3,\n'
-                               f'  num_prediction_examples=2,\n'
-                               f'  num_columns=3,\n'
-                               f'  {entity_table_repr},\n'
-                               f'  entity_column=ENTITY,\n'
-                               f'  target_column=TARGET,\n'
-                               f'  time_column=TIME,\n'
-                               f')')
+    assert str(task_table) == (
+        f'TaskTable(\n'
+        f'  task_type={task_type},\n'
+        f'  num_context_examples=3,\n'
+        f'  num_prediction_examples=2,\n'
+        f'  num_columns=3,\n'
+        f'  {entity_table_repr},\n'
+        f'  entity_column=ENTITY,\n'
+        f'  target_column=TARGET,\n'
+        f'  time_column=TIME,\n'
+        f')'
+    )
 
     out = task_table.narrow_context(start=0, length=2)
     assert out.num_context_examples == 2
@@ -107,13 +115,17 @@ def test_basic(task_type: TaskType) -> None:
 def test_entity_time() -> None:
     task_table = TaskTable(
         task_type=TaskType.BINARY_CLASSIFICATION,
-        context_df=pd.DataFrame({
-            'ENTITY': [0, 1, 2],
-            'TARGET': [True, False, True],
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': [3, 4],
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 2],
+                'TARGET': [True, False, True],
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': [3, 4],
+            }
+        ),
         entity_table_name='USER',
         entity_column='ENTITY',
         target_column='TARGET',
@@ -121,32 +133,38 @@ def test_entity_time() -> None:
     )
 
     assert task_table.use_entity_time
-    assert str(task_table) == ('TaskTable(\n'
-                               '  task_type=binary_classification,\n'
-                               '  num_context_examples=3,\n'
-                               '  num_prediction_examples=2,\n'
-                               '  num_columns=2,\n'
-                               '  entity_table_name=USER,\n'
-                               '  entity_column=ENTITY,\n'
-                               '  target_column=TARGET,\n'
-                               '  use_entity_time=True,\n'
-                               ')')
+    assert str(task_table) == (
+        'TaskTable(\n'
+        '  task_type=binary_classification,\n'
+        '  num_context_examples=3,\n'
+        '  num_prediction_examples=2,\n'
+        '  num_columns=2,\n'
+        '  entity_table_name=USER,\n'
+        '  entity_column=ENTITY,\n'
+        '  target_column=TARGET,\n'
+        '  use_entity_time=True,\n'
+        ')'
+    )
 
 
 def test_custom_features() -> None:
     task_table = TaskTable(
         task_type=TaskType.BINARY_CLASSIFICATION,
-        context_df=pd.DataFrame({
-            'ENTITY': [0, 1, 2],
-            'TARGET': [True, False, True],
-            'FEAT_1': [0.0, 1.0, 2.0],
-            'FEAT_2': ['A', 'B', 'C'],
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': [3, 4],
-            'FEAT_1': [3.0, 4.0],
-            'FEAT_2': ['D', 'E'],
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 2],
+                'TARGET': [True, False, True],
+                'FEAT_1': [0.0, 1.0, 2.0],
+                'FEAT_2': ['A', 'B', 'C'],
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': [3, 4],
+                'FEAT_1': [3.0, 4.0],
+                'FEAT_2': ['D', 'E'],
+            }
+        ),
         entity_table_name='USER',
         entity_column='ENTITY',
         target_column='TARGET',
@@ -163,16 +181,72 @@ def test_custom_features() -> None:
     assert task_table['FEAT_2'].stype == Stype.categorical
 
 
-# Regression tests for bugs/quality-task-table-message-less-raises.md: these
-# three sites used to raise ``ValueError`` with an empty message.
+def test_add_columns_does_not_reinfer_existing_task_columns() -> None:
+    task_table = TaskTable(
+        task_type=TaskType.REGRESSION,
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 2],
+                'TARGET': [0, 1, 0],
+                'TIME': pd.date_range('2026-01-01', periods=3),
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': [3, 4],
+                'TIME': pd.date_range('2026-01-04', periods=2),
+            }
+        ),
+        entity_table_name='USER',
+        entity_column='ENTITY',
+        target_column='TARGET',
+        time_column='TIME',
+    )
+
+    task_table._context_df['LAG'] = [0.1, 0.2, 0.3]
+    task_table._pred_df['LAG'] = [0.4, 0.5]
+    task_table.add_columns(['LAG'])
+
+    assert task_table.target_column.stype == Stype.numerical
+    assert task_table.time_column is not None
+    assert task_table.time_column.stype == Stype.timestamp
+    assert task_table['LAG'].dtype == Dtype.float
+
+
+def test_add_columns_rejects_unknown_and_duplicate_columns() -> None:
+    task_table = TaskTable(
+        task_type=TaskType.REGRESSION,
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1],
+                'TARGET': [1.0, 2.0],
+            }
+        ),
+        pred_df=pd.DataFrame({'ENTITY': [2]}),
+        entity_table_name='USER',
+        entity_column='ENTITY',
+        target_column='TARGET',
+    )
+
+    with pytest.raises(KeyError, match='not found'):
+        task_table.add_columns(['MISSING'])
+
+    with pytest.raises(KeyError, match='already exists'):
+        task_table.add_columns(['TARGET'])
+
+
+# Regression tests: these three sites used to raise ``ValueError`` with an
+# empty message.
 def test_unsupported_task_type_message() -> None:
     with pytest.raises(ValueError) as err:
         TaskTable(
             task_type=TaskType.MULTILABEL_RANKING,
-            context_df=pd.DataFrame({
-                'ENTITY': [0, 1],
-                'TARGET': [[0], [1]],
-            }),
+            context_df=pd.DataFrame(
+                {
+                    'ENTITY': [0, 1],
+                    'TARGET': [[0], [1]],
+                }
+            ),
             pred_df=pd.DataFrame({'ENTITY': [2]}),
             entity_table_name='USER',
             entity_column='ENTITY',
@@ -185,14 +259,17 @@ def test_unsupported_task_type_message() -> None:
 
 @pytest.mark.parametrize('entity_table_name', [[], ['A', 'B', 'C']])
 def test_invalid_entity_table_name_arity_message(
-        entity_table_name: list[str], ) -> None:
+    entity_table_name: list[str],
+) -> None:
     with pytest.raises(ValueError) as err:
         TaskTable(
             task_type=TaskType.BINARY_CLASSIFICATION,
-            context_df=pd.DataFrame({
-                'ENTITY': [0, 1],
-                'TARGET': [True, False],
-            }),
+            context_df=pd.DataFrame(
+                {
+                    'ENTITY': [0, 1],
+                    'TARGET': [True, False],
+                }
+            ),
             pred_df=pd.DataFrame({'ENTITY': [2]}),
             entity_table_name=entity_table_name,
             entity_column='ENTITY',

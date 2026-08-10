@@ -9,12 +9,15 @@ from typing import Any, TypeAlias
 
 from sdfm_connectors.sql import (
     ConnectorError,
+    connect_with,
     require_driver,
     require_existing_database,
 )
 
 adbc = require_driver(
-    'sqlite', 'adbc-driver-sqlite', 'adbc_driver_sqlite.dbapi',
+    'sqlite',
+    'adbc-driver-sqlite',
+    'adbc_driver_sqlite.dbapi',
 )
 
 Connection: TypeAlias = adbc.AdbcSqliteConnection
@@ -44,4 +47,4 @@ def connect(
     if uri is not None:
         uri = str(uri)
         require_existing_database('sqlite', uri)
-    return adbc.connect(uri, **kwargs)
+    return connect_with('sqlite', adbc.connect, uri, **kwargs)

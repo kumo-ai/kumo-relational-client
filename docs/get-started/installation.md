@@ -15,24 +15,18 @@ connectors so you install only what you need.
 Before you start, you must complete the following prerequisites:
 
 1. Confirm your environment meets the [NVIDIA SDFM SDK Prerequisites](prerequisites.md).
-2. Connect to the NVIDIA network so the internal package index is reachable.
 
 ## Installation Methods
 
-Install from the NVIDIA internal PyPI index. The `--index-url` resolves the SDK
-packages and their dependencies from one place:
-
 ```bash
-pip install "nvidia-sdfm" \
-    --index-url https://pypi.org/simple
+pip install "nvidia-sdfm"
 ```
 
 This installs the client and every lightweight model, including TabICL.
 
 ## Package Extras
 
-Add extras in brackets to install additional capabilities. Extras resolve from
-the same index.
+Add extras in brackets to install additional capabilities.
 
 | Command | You get |
 | --- | --- |
@@ -53,21 +47,12 @@ For example, to install the client with the KumoRFM driver and Snowflake
 connector:
 
 ```bash
-pip install "nvidia-sdfm[kumorfm,snowflake]" \
-    --index-url https://pypi.org/simple
+pip install "nvidia-sdfm[kumorfm,snowflake]"
 ```
 
 ## Additional Setup
 
-If you use `uv`, add the index to your project configuration:
-
-```toml
-[[tool.uv.index]]
-name = "nv-shared"
-url = "https://pypi.org/simple"
-```
-
-Then add the dependency:
+If you use `uv`, add the dependency with:
 
 ```bash
 uv add "nvidia-sdfm[kumorfm]"
@@ -103,11 +88,10 @@ True
 
 ## Troubleshoot the Installation
 
-- **`No matching distribution found for nvidia-sdfm`.** Confirm you passed the
-  `--index-url` for the NVIDIA internal index and that you are on the NVIDIA
-  network.
+- **`No matching distribution found for nvidia-sdfm`.** Confirm your Python is
+  3.10 or newer and that `pip` can reach your configured package index.
 - **`No matching distribution found for kumorfm`.** The `[kumorfm]` extra has
-  prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.12,
+  prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.13,
   and no source distribution is published, so there is nothing to fall back to
   on another platform — macOS included. Install the base `nvidia-sdfm` and run
   KumoRFM from a Linux x86_64 host, or build the driver from source.

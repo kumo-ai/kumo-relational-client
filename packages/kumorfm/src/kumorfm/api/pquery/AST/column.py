@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List, Tuple
 
 from pydantic.dataclasses import dataclass
 
@@ -14,6 +13,7 @@ from kumorfm.api.pquery.AST.location_interval import ASTQueryLocationInterval
 @dataclass(repr=False)
 class Column(ASTNode):
     r"""Creates an atomic description of a column :obj:`fqn`.
+
     Args:
         fqn: A fully-qualified name in the "table.column" format.
     """
@@ -24,7 +24,8 @@ class Column(ASTNode):
         if len(self.fqn.split('.')) != 2:
             raise ValueError(
                 f'The column name {self.fqn} was not given in its '
-                f'fully-qualified name form. Format it as "table.column".')
+                f'fully-qualified name form. Format it as "table.column".'
+            )
 
         # internal helper var for checking if wildcard columns correctly
         # appear only inside COUNT aggregations
@@ -34,12 +35,13 @@ class Column(ASTNode):
 
     @property
     def all_query_columns_with_locations(
-            self) -> List[Tuple[str, ASTQueryLocationInterval]]:
+        self,
+    ) -> list[tuple[str, ASTQueryLocationInterval]]:
         assert self.location is not None
         return [(self.fqn, self.location)]
 
     @property
-    def all_query_columns(self) -> List[str]:
+    def all_query_columns(self) -> list[str]:
         return [self.fqn]
 
     def to_string(self, rich: bool = False) -> str:

@@ -15,7 +15,6 @@ from kumorfm.api.rfm import RFMPredictResponse
 from kumorfm.api.rfm.context import REV_REL, EdgeLayout
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import Dtype, Stype
-
 from kumorfm.rfm import Graph, KumoRFM, LocalTable, TaskTable
 from kumorfm.rfm.base.utils import Timestamp
 from kumorfm.rfm.rfm import Explanation
@@ -31,10 +30,12 @@ class MockAPI:
         instance_ids: list[Any] | None = None,
         anchor_times: list[Any] | None = None,
     ) -> RFMPredictResponse:
-        return RFMPredictResponse(prediction={
-            'columns': ['ENTITY', 'TRUE_PROB'],
-            'data': [[0, 0.15]],
-        })
+        return RFMPredictResponse(
+            prediction={
+                'columns': ['ENTITY', 'TRUE_PROB'],
+                'data': [[0, 0.15]],
+            }
+        )
 
     def create_session(self, request: dict[str, Any]) -> str:
         return 'sess_mock'
@@ -81,15 +82,18 @@ def test_temporal_rfm(
     )
     pd.testing.assert_frame_equal(
         train_table.sort_values('ENTITY').reset_index(drop=True),
-        pd.DataFrame({
-            'ENTITY': [0, 1, 2, 3],
-            'ANCHOR_TIMESTAMP':
-            pd.Series([anchor_time] * 4, dtype='datetime64[ns]'),
-            'TARGET':
-            pd.Series([0.0, 75.0, 0.0, 95.0], dtype='float32'),
-        }))
+        pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 2, 3],
+                'ANCHOR_TIMESTAMP': pd.Series(
+                    [anchor_time] * 4, dtype='datetime64[ns]'
+                ),
+                'TARGET': pd.Series([0.0, 75.0, 0.0, 95.0], dtype='float32'),
+            }
+        ),
+    )
 
-    with pytest.warns(UserWarning, match="form proper input data"):
+    with pytest.warns(UserWarning, match='form proper input data'):
         task_table = model._get_task_table(
             query,
             indices=None if evaluate else query.get_rfm_entity_id_list(),
@@ -98,12 +102,14 @@ def test_temporal_rfm(
         context = model._get_context(task_table)
 
     assert context.task_type == TaskType.REGRESSION
-    assert context.entity_table_names == ('USERS', )
+    assert context.entity_table_names == ('USERS',)
 
     assert np.array_equal(
         context.subgraph.anchor_time,
-        np.array([(anchor_time - pd.DateOffset(days=7)).value] * 4 +
-                 [anchor_time.value] * 4),
+        np.array(
+            [(anchor_time - pd.DateOffset(days=7)).value] * 4
+            + [anchor_time.value] * 4
+        ),
     )
 
     assert set(context.subgraph.table_dict) == {'USERS', 'ORDERS', 'STORES'}
@@ -111,12 +117,14 @@ def test_temporal_rfm(
     table = context.subgraph.table_dict['USERS']
     pd.testing.assert_frame_equal(
         table.df,
-        pd.DataFrame({
-            'USER_ID': [0, 1, 2, 3],
-            'AGE': [20.0, 30.0, 40.0, None],
-            'GENDER': ['male', 'female', 'female', None],
-            'STATUS': ['A', 'B', 'A', 'C'],
-        }),
+        pd.DataFrame(
+            {
+                'USER_ID': [0, 1, 2, 3],
+                'AGE': [20.0, 30.0, 40.0, None],
+                'GENDER': ['male', 'female', 'female', None],
+                'STATUS': ['A', 'B', 'A', 'C'],
+            }
+        ),
         check_like=True,
     )
     assert table.row is not None
@@ -136,16 +144,19 @@ def test_temporal_rfm(
     table = context.subgraph.table_dict['ORDERS']
     pd.testing.assert_frame_equal(
         table.df,
-        pd.DataFrame({
-            'AMOUNT': [10.0, 15.0, 10.0],
-            'CAT': [10.0, 15.0, 28.0],
-            'TIME':
-            pd.to_datetime([
-                '2025-01-01',
-                '2024-12-20',
-                '2025-01-01',
-            ]).astype('datetime64[ns]'),
-        }),
+        pd.DataFrame(
+            {
+                'AMOUNT': [10.0, 15.0, 10.0],
+                'CAT': [10.0, 15.0, 28.0],
+                'TIME': pd.to_datetime(
+                    [
+                        '2025-01-01',
+                        '2024-12-20',
+                        '2025-01-01',
+                    ]
+                ).astype('datetime64[ns]'),
+            }
+        ),
         check_like=True,
     )
     assert table.row is not None
@@ -201,8 +212,9 @@ def test_temporal_rfm(
     assert link.col is None
     assert link.num_sampled_edges == [0, 4]
 
-    link = context.subgraph.link_dict[('STORES', f'{REV_REL}STORE_ID',
-                                       'ORDERS')]
+    link = context.subgraph.link_dict[
+        ('STORES', f'{REV_REL}STORE_ID', 'ORDERS')
+    ]
     assert link.layout == EdgeLayout.COO
     assert link.row is None
     assert link.col is None
@@ -243,7 +255,7 @@ def test_assuming(
 
     query = request.getfixturevalue(query_fixture)
 
-    with pytest.warns(UserWarning, match="form proper input data"):
+    with pytest.warns(UserWarning, match='form proper input data'):
         task_table = model._get_task_table(
             query,
             indices=None if evaluate else query.get_rfm_entity_id_list(),
@@ -252,23 +264,27 @@ def test_assuming(
         context = model._get_context(task_table)
 
     assert context.task_type == TaskType.REGRESSION
-    assert context.entity_table_names == ('USERS', )
+    assert context.entity_table_names == ('USERS',)
 
     n_predict = 2 if evaluate else 4
     n_context = 2
     assert np.array_equal(
         context.subgraph.anchor_time,
-        np.array([(anchor_time - pd.DateOffset(days=7)).value] * n_context +
-                 [anchor_time.value] * n_predict),
+        np.array(
+            [(anchor_time - pd.DateOffset(days=7)).value] * n_context
+            + [anchor_time.value] * n_predict
+        ),
     )
 
     table = context.subgraph.table_dict['USERS']
-    expected_df = pd.DataFrame({
-        'USER_ID': [0, 1, 2, 3],
-        'AGE': [20.0, 30.0, 40.0, None],
-        'GENDER': ['male', 'female', 'female', None],
-        'STATUS': ['A', 'B', 'A', 'C'],
-    })
+    expected_df = pd.DataFrame(
+        {
+            'USER_ID': [0, 1, 2, 3],
+            'AGE': [20.0, 30.0, 40.0, None],
+            'GENDER': ['male', 'female', 'female', None],
+            'STATUS': ['A', 'B', 'A', 'C'],
+        }
+    )
     if evaluate:
         # 2 has no transactions and is thus filtered out everywhere
         expected_df = expected_df[expected_df['USER_ID'] != 2]
@@ -314,16 +330,17 @@ def test_static_rfm(
     )
     pd.testing.assert_frame_equal(
         train_table.sort_values('ENTITY').reset_index(drop=True),
-        pd.DataFrame({
-            'ENTITY': [0, 1, 2],
-            'ANCHOR_TIMESTAMP':
-            pd.Series(
-                [Timestamp('2025-01-09')] * 3,
-                dtype='datetime64[ns]',
-            ),
-            'TARGET':
-            pd.Series([20.0, 30.0, 40.0], dtype='float32'),
-        }))
+        pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 2],
+                'ANCHOR_TIMESTAMP': pd.Series(
+                    [Timestamp('2025-01-09')] * 3,
+                    dtype='datetime64[ns]',
+                ),
+                'TARGET': pd.Series([20.0, 30.0, 40.0], dtype='float32'),
+            }
+        ),
+    )
 
     task_table = model._get_task_table(
         query,
@@ -336,7 +353,7 @@ def test_static_rfm(
     )
 
     assert context.task_type == TaskType.REGRESSION
-    assert context.entity_table_names == ('USERS', )
+    assert context.entity_table_names == ('USERS',)
 
     size = 3 if evaluate else 5
     assert np.array_equal(
@@ -392,21 +409,25 @@ def test_static_rfm(
         assert link.col is not None
         assert link.num_sampled_edges == [13, 0]
 
-        link = context.subgraph.link_dict[(
-            'USERS',
-            f'{REV_REL}USER_ID',
-            'ORDERS',
-        )]
+        link = context.subgraph.link_dict[
+            (
+                'USERS',
+                f'{REV_REL}USER_ID',
+                'ORDERS',
+            )
+        ]
         assert link.layout == EdgeLayout.REV
         assert link.row is None
         assert link.col is None
         assert link.num_sampled_edges == [0, 13]
 
-        link = context.subgraph.link_dict[(
-            'STORES',
-            f'{REV_REL}STORE_ID',
-            'ORDERS',
-        )]
+        link = context.subgraph.link_dict[
+            (
+                'STORES',
+                f'{REV_REL}STORE_ID',
+                'ORDERS',
+            )
+        ]
         assert link.layout == EdgeLayout.COO
         assert link.row is not None
         assert link.col is None
@@ -440,9 +461,13 @@ def test_entity_anchor_time(
 
     query = ValidatedPredictiveQuery(
         target_ast=Column(fqn='ORDERS.AMOUNT', stype_maybe=Stype.numerical),
-        entity_ast=Column(fqn='ORDERS.ORDER_ID'), rfm_entity_ids=Condition(
-            target=Column(fqn='ORDERS.ORDER_ID'), op='=',
-            value=Constant(value='0', dtype_maybe=Dtype.int)))
+        entity_ast=Column(fqn='ORDERS.ORDER_ID'),
+        rfm_entity_ids=Condition(
+            target=Column(fqn='ORDERS.ORDER_ID'),
+            op='=',
+            value=Constant(value='0', dtype_maybe=Dtype.int),
+        ),
+    )
 
     task_table = model._get_task_table(
         query,
@@ -453,7 +478,7 @@ def test_entity_anchor_time(
 
     df = context.subgraph.table_dict['ORDERS'].df
     df = df.iloc[context.subgraph.table_dict['ORDERS'].row]
-    df = df.iloc[:context.subgraph.batch_size]
+    df = df.iloc[: context.subgraph.batch_size]
 
     df = pd.merge(
         df.drop(columns='TIME'),
@@ -498,8 +523,22 @@ def test_forecasting(
             context.y_train.reset_index(drop=True),
             pd.Series(
                 [
-                    0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 10., 0., 0.,
-                    0., 0.
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    10.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
                 ],
                 dtype='float32',
             ),
@@ -508,15 +547,33 @@ def test_forecasting(
         assert context.y_test is not None
         assert context.y_test.dtype == np.float32
         assert len(context.y_test) == 4  # One per forecast step.
-        train_times = context.subgraph.anchor_time[:len(context.y_train)]
-        test_times = context.subgraph.anchor_time[len(context.y_train):]
+        train_times = context.subgraph.anchor_time[: len(context.y_train)]
+        test_times = context.subgraph.anchor_time[len(context.y_train) :]
         assert len(np.intersect1d(train_times, test_times)) == 0
     else:
         pd.testing.assert_series_equal(
             context.y_train.reset_index(drop=True),
-            pd.Series([
-                0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 10., 0., 0., 0., 0.
-            ], dtype='float32'),
+            pd.Series(
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    10.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                ],
+                dtype='float32',
+            ),
             check_names=False,
         )
         assert context.y_test is None
@@ -534,7 +591,8 @@ def test_forecasting_single_step(
     task_table = model._get_task_table(
         forecast_single_step,
         indices=None
-        if evaluate else forecast_single_step.get_rfm_entity_id_list(),
+        if evaluate
+        else forecast_single_step.get_rfm_entity_id_list(),
         anchor_time=anchor_time,
     )
     context = model._get_context(task_table)
@@ -559,21 +617,21 @@ def test_validation(
 
     model = KumoRFM(user_store_graph, verbose=False)
 
-    with pytest.raises(ValueError, match="is before the earliest timestamp"):
+    with pytest.raises(ValueError, match='is before the earliest timestamp'):
         model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
             anchor_time=Timestamp('2024-12-19'),
         )
 
-    with pytest.raises(ValueError, match="too early or aggregation"):
+    with pytest.raises(ValueError, match='too early or aggregation'):
         model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
             anchor_time=Timestamp('2024-12-26'),
         )
 
-    with pytest.warns(UserWarning, match="later date than the prediction"):
+    with pytest.warns(UserWarning, match='later date than the prediction'):
         model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
@@ -581,7 +639,7 @@ def test_validation(
             context_anchor_time=Timestamp('2024-12-31'),
         )
 
-    with pytest.warns(UserWarning, match="will leak information"):
+    with pytest.warns(UserWarning, match='will leak information'):
         model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
@@ -589,21 +647,21 @@ def test_validation(
             context_anchor_time=Timestamp('2024-12-23'),
         )
 
-    with pytest.warns(UserWarning, match="form proper input data"):
+    with pytest.warns(UserWarning, match='form proper input data'):
         model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
             anchor_time=Timestamp('2025-01-02'),
         )
 
-    with pytest.warns(UserWarning, match="is after the latest timestamp"):
+    with pytest.warns(UserWarning, match='is after the latest timestamp'):
         model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
             anchor_time=Timestamp('2025-01-11'),
         )
 
-    with pytest.raises(ValueError, match="is after the latest supported"):
+    with pytest.raises(ValueError, match='is after the latest supported'):
         model._get_task_table(
             ltv,
             indices=None,
@@ -614,7 +672,7 @@ def test_validation(
         ltv,
         indices=ltv.get_rfm_entity_id_list(),
     )
-    with pytest.raises(ValueError, match="more than 6 hops"):
+    with pytest.raises(ValueError, match='more than 6 hops'):
         model._get_context(task_table, num_neighbors=[10] * 7)
 
 
@@ -635,7 +693,7 @@ def test_context_anchor_time(
 ) -> None:
     model = KumoRFM(user_store_graph, verbose=False)
 
-    with pytest.warns(UserWarning, match="form proper input data"):
+    with pytest.warns(UserWarning, match='form proper input data'):
         task_table = model._get_task_table(
             ltv,
             indices=ltv.get_rfm_entity_id_list(),
@@ -688,8 +746,9 @@ def test_optimize_left_unset_does_not_warn(user_store_graph: Graph) -> None:
         warnings.simplefilter('always')
         KumoRFM(user_store_graph, verbose=False)
 
-    assert [str(item.message) for item in caught
-            if 'optimize' in str(item.message)] == []
+    assert [
+        str(item.message) for item in caught if 'optimize' in str(item.message)
+    ] == []
 
 
 def test_batch_mode_restores_state_after_an_exception(
@@ -709,9 +768,8 @@ def test_retry_restores_state_after_an_exception(
 ) -> None:
     r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
     model = KumoRFM(user_store_graph, verbose=False)
-    with pytest.raises(RuntimeError):
-        with model.retry(7):
-            raise RuntimeError('boom')
+    with pytest.raises(RuntimeError), model.retry(7):
+        raise RuntimeError('boom')
     assert model._num_retries == 0
 
 
@@ -745,10 +803,12 @@ def test_predict_rejects_a_non_timestamp_anchor_time(
     r"""rfm-bare-assertionerror-empty-message.md"""
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
-    with pytest.raises(TypeError, match="'anchor_time' must be a "
-                                        'pandas.Timestamp'):
-        model.predict(ltv, indices=[0, 1], anchor_time=anchor_time,
-                      verbose=False)
+    with pytest.raises(
+        TypeError, match="'anchor_time' must be a pandas.Timestamp"
+    ):
+        model.predict(
+            ltv, indices=[0, 1], anchor_time=anchor_time, verbose=False
+        )
 
 
 def test_predict_anchor_time_string_hint_names_the_timestamp_call(
@@ -759,8 +819,9 @@ def test_predict_anchor_time_string_hint_names_the_timestamp_call(
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
     with pytest.raises(TypeError, match="pd.Timestamp\\('2024-10-01'\\)"):
-        model.predict(ltv, indices=[0, 1], anchor_time='2024-10-01',
-                      verbose=False)
+        model.predict(
+            ltv, indices=[0, 1], anchor_time='2024-10-01', verbose=False
+        )
 
 
 @pytest.mark.parametrize('max_pq_iterations', [0, -5])
@@ -772,10 +833,15 @@ def test_predict_rejects_non_positive_max_pq_iterations(
     r"""rfm-bare-assertionerror-empty-message.md"""
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
-    with pytest.raises(ValueError, match="'max_pq_iterations' must be greater "
-                                         'than zero'):
-        model.predict(ltv, indices=[0, 1],
-                      max_pq_iterations=max_pq_iterations, verbose=False)
+    with pytest.raises(
+        ValueError, match="'max_pq_iterations' must be greater than zero"
+    ):
+        model.predict(
+            ltv,
+            indices=[0, 1],
+            max_pq_iterations=max_pq_iterations,
+            verbose=False,
+        )
 
 
 @pytest.mark.parametrize('num_hops', [-1, 0, 100])
@@ -813,7 +879,8 @@ def test_regression_quantile_output_config(
                 prediction={
                     'columns': columns,
                     'data': [[0, 0.5, 2.5, 50.0, 97.5, 99.5]],
-                })
+                }
+            )
 
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = MockQuantileAPI()  # type: ignore
@@ -835,7 +902,7 @@ def test_forecasting_single_entity_validation(
     forecast: ValidatedPredictiveQuery,
 ) -> None:
     model = KumoRFM(user_store_graph, verbose=False)
-    with pytest.raises(ValueError, match="single entity ID"):
+    with pytest.raises(ValueError, match='single entity ID'):
         model._get_task_table(
             forecast,
             indices=[0, 1],
@@ -844,11 +911,13 @@ def test_forecasting_single_entity_validation(
 
 
 def test_end_time_column() -> None:
-    df = pd.DataFrame({
-        'USER_ID': [0, 1, 2, 3, 4, 5],
-        'END': pd.date_range('2023-01-01', periods=6),
-        'Y': [0, 1, 0, 1, 0, 1],
-    })
+    df = pd.DataFrame(
+        {
+            'USER_ID': [0, 1, 2, 3, 4, 5],
+            'END': pd.date_range('2023-01-01', periods=6),
+            'Y': [0, 1, 0, 1, 0, 1],
+        }
+    )
     graph = Graph.from_data({'USERS': df}, verbose=False)
     graph['USERS'].time_column = None
     graph['USERS'].end_time_column = 'END'
@@ -880,20 +949,22 @@ def test_end_time_column() -> None:
     df = df.sort_values('USER_ID').reset_index(drop=True)
     pd.testing.assert_frame_equal(
         df,
-        pd.DataFrame({
-            'USER_ID': [0, 4, 5],
-            'END':
-            pd.Series(
-                [Timestamp('2023-01-01'), pd.NaT, pd.NaT],
-                dtype='datetime64[ns]',
-            ),
-        }),
+        pd.DataFrame(
+            {
+                'USER_ID': [0, 4, 5],
+                'END': pd.Series(
+                    [Timestamp('2023-01-01'), pd.NaT, pd.NaT],
+                    dtype='datetime64[ns]',
+                ),
+            }
+        ),
         check_like=True,
     )
 
 
-@pytest.mark.parametrize('ltv_offset', [(1, 1), (2, 1), (1, 2), (2, 2)],
-                         indirect=True)
+@pytest.mark.parametrize(
+    'ltv_offset', [(1, 1), (2, 1), (1, 2), (2, 2)], indirect=True
+)
 @pytest.mark.parametrize('anchor_time', [Timestamp('2025-01-01')])
 @pytest.mark.parametrize('evaluate', [False, True])
 def test_query_start(
@@ -912,9 +983,10 @@ def test_query_start(
     context = model._get_context(task_table)
 
     earliest_timestamp = pd.to_datetime(
-        cast(LocalTable, user_store_graph['ORDERS'])._data['TIME']).min()
+        cast(LocalTable, user_store_graph['ORDERS'])._data['TIME']
+    ).min()
     anchor_times = pd.to_datetime(context.subgraph.anchor_time)
-    context_anchor_times = anchor_times[:len(context.y_train)]
+    context_anchor_times = anchor_times[: len(context.y_train)]
     unique_anchor_times = context_anchor_times.unique().sort_values()
     target_timeframe = ltv_offset.target_timeframe
     assert target_timeframe is not None
@@ -924,7 +996,7 @@ def test_query_start(
     expected_anchor_times = pd.date_range(
         start=anchor_time - pd.DateOffset(days=target_timeframe.end),
         end=earliest_timestamp,
-        freq=f"-{steps}D",
+        freq=f'-{steps}D',
         unit='ns',
     )[::-1]
 
@@ -935,17 +1007,21 @@ def test_query_start(
 
 
 def _make_forecast_task(num_context: int, num_forecasts: int) -> TaskTable:
-    context_df = pd.DataFrame({
-        'ENTITY': [0] * num_context,
-        'TARGET':
-        pd.Series([10.0] * num_context, dtype='float32'),
-        'ANCHOR_TIMESTAMP':
-        pd.date_range('2025-01-01', periods=num_context, freq='D'),
-    })
-    pred_df = pd.DataFrame({
-        'ENTITY': [0],
-        'ANCHOR_TIMESTAMP': [Timestamp('2025-06-01')],
-    })
+    context_df = pd.DataFrame(
+        {
+            'ENTITY': [0] * num_context,
+            'TARGET': pd.Series([10.0] * num_context, dtype='float32'),
+            'ANCHOR_TIMESTAMP': pd.date_range(
+                '2025-01-01', periods=num_context, freq='D'
+            ),
+        }
+    )
+    pred_df = pd.DataFrame(
+        {
+            'ENTITY': [0],
+            'ANCHOR_TIMESTAMP': [Timestamp('2025-06-01')],
+        }
+    )
     return TaskTable(
         task_type=TaskType.FORECASTING,
         context_df=context_df,
@@ -958,32 +1034,35 @@ def _make_forecast_task(num_context: int, num_forecasts: int) -> TaskTable:
     )
 
 
-def test_num_forecasts_exceeds_context_predict(
-        user_store_graph: Graph) -> None:
+def test_num_forecasts_exceeds_context_predict(user_store_graph: Graph) -> None:
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
     task = _make_forecast_task(num_context=3, num_forecasts=5)
-    with pytest.raises(ValueError, match="number of forecast steps"):
+    with pytest.raises(ValueError, match='number of forecast steps'):
         model.predict_task(task, verbose=False, use_prediction_time=True)
 
 
 def test_custom_task_features(user_store_graph: Graph) -> None:
-    context_df = pd.DataFrame({
-        'ENTITY': [0, 0, 0],
-        'TARGET':
-        pd.Series([10.0, 15.0, 20.0], dtype='float32'),
-        'ANCHOR_TIMESTAMP':
-        pd.date_range('2025-01-01', periods=3, freq='D'),
-        'FEAT_A': ['A', 'B', 'C'],
-    })
-    pred_df = pd.DataFrame({
-        'ENTITY': [0, 0, 0, 0, 0],
-        'TARGET':
-        pd.Series([5.0, 8.0, 12.0, 6.0, 9.0], dtype='float32'),
-        'ANCHOR_TIMESTAMP':
-        pd.date_range('2025-02-01', periods=5, freq='D'),
-        'FEAT_A': ['D', 'E', 'F', 'G', 'H'],
-    })
+    context_df = pd.DataFrame(
+        {
+            'ENTITY': [0, 0, 0],
+            'TARGET': pd.Series([10.0, 15.0, 20.0], dtype='float32'),
+            'ANCHOR_TIMESTAMP': pd.date_range(
+                '2025-01-01', periods=3, freq='D'
+            ),
+            'FEAT_A': ['A', 'B', 'C'],
+        }
+    )
+    pred_df = pd.DataFrame(
+        {
+            'ENTITY': [0, 0, 0, 0, 0],
+            'TARGET': pd.Series([5.0, 8.0, 12.0, 6.0, 9.0], dtype='float32'),
+            'ANCHOR_TIMESTAMP': pd.date_range(
+                '2025-02-01', periods=5, freq='D'
+            ),
+            'FEAT_A': ['D', 'E', 'F', 'G', 'H'],
+        }
+    )
     task = TaskTable(
         task_type=TaskType.FORECASTING,
         context_df=context_df,
@@ -1032,9 +1111,65 @@ def test_lag_timesteps(
         df = df.sort_values('ENTITY').reset_index(drop=True)
         pd.testing.assert_series_equal(
             df['TARGET'],
-            pred_df[f'__kumo_arl{i-1}__'],
+            pred_df[f'__kumo_arl{i - 1}__'],
             check_names=False,
         )
+
+
+@pytest.mark.parametrize('lag_timesteps', [-1, -4])
+def test_a_negative_lag_is_refused_by_get_task_table(
+    user_store_graph: Graph,
+    churn: ValidatedPredictiveQuery,
+    lag_timesteps: int,
+) -> None:
+    r"""A negative count reached the sampler and produced empty lag columns
+    rather than an error, so the caller got a silently featureless task.
+    """
+    model = KumoRFM(user_store_graph, verbose=False)
+
+    with pytest.raises(ValueError, match='cannot be negative'):
+        model._get_task_table(
+            churn,
+            indices=churn.get_rfm_entity_id_list(),
+            anchor_time=Timestamp('2025-01-05'),
+            lag_timesteps=lag_timesteps,
+        )
+
+
+def test_zero_lags_is_accepted_by_get_task_table(
+    user_store_graph: Graph,
+    churn: ValidatedPredictiveQuery,
+) -> None:
+    r"""Zero means "no lagged features", which is a valid request."""
+    model = KumoRFM(user_store_graph, verbose=False)
+
+    task_table = model._get_task_table(
+        churn,
+        indices=churn.get_rfm_entity_id_list(),
+        anchor_time=Timestamp('2025-01-05'),
+        lag_timesteps=0,
+    )
+    assert not [c for c in task_table._pred_df.columns if 'arl' in c]
+
+
+@pytest.mark.parametrize('lag_timesteps', [0, -1])
+def test_add_lagged_target_requires_a_positive_count(
+    user_store_graph: Graph,
+    churn: ValidatedPredictiveQuery,
+    lag_timesteps: int,
+) -> None:
+    r"""Unlike ``_get_task_table``, asking to add lags needs at least one:
+    adding zero of them is a no-op the caller did not intend.
+    """
+    model = KumoRFM(user_store_graph, verbose=False)
+    task_table = model._get_task_table(
+        churn,
+        indices=churn.get_rfm_entity_id_list(),
+        anchor_time=Timestamp('2025-01-05'),
+    )
+
+    with pytest.raises(ValueError, match='needs to be positive'):
+        model.add_lagged_target(task_table, churn, lag_timesteps)
 
 
 # --- Explanation warning tests -------------------------------------------
@@ -1042,19 +1177,26 @@ def test_lag_timesteps(
 
 def test_explanation_warning_display():
     """Warning appears in all display paths when set; absent when None."""
-    warning_msg = "Cross-region fallback used."
+    warning_msg = 'Cross-region fallback used.'
     prediction = pd.DataFrame({'ENTITY': [1], 'SCORE': [0.9]})
 
-    with_warning = Explanation(prediction=prediction, summary="s",
-                               details=MagicMock(), warning=warning_msg)
-    no_warning = Explanation(prediction=prediction, summary="s",
-                             details=MagicMock(), warning=None)
+    with_warning = Explanation(
+        prediction=prediction,
+        summary='s',
+        details=MagicMock(),
+        warning=warning_msg,
+    )
+    no_warning = Explanation(
+        prediction=prediction, summary='s', details=MagicMock(), warning=None
+    )
 
     assert warning_msg in str(with_warning)
-    assert "Warning" not in str(no_warning)
+    assert 'Warning' not in str(no_warning)
 
-    with patch('kumorfm.rfm.rfm.in_notebook', return_value=True), \
-         patch('kumorfm.rfm.rfm.display') as mock_display:
+    with (
+        patch('kumorfm.rfm.rfm.in_notebook', return_value=True),
+        patch('kumorfm.rfm.rfm.display') as mock_display,
+    ):
         with_warning.print()
         calls = [str(c) for c in mock_display.message.call_args_list]
         assert any(warning_msg in c for c in calls)
@@ -1062,20 +1204,29 @@ def test_explanation_warning_display():
         mock_display.reset_mock()
         no_warning.print()
         calls = [str(c) for c in mock_display.message.call_args_list]
-        assert not any("Warning" in c for c in calls)
+        assert not any('Warning' in c for c in calls)
 
 
 def test_explanation_warning_flows_from_api_response(
-        user_store_graph: Graph, ltv: ValidatedPredictiveQuery) -> None:
+    user_store_graph: Graph, ltv: ValidatedPredictiveQuery
+) -> None:
     """Warning from predictions[].explanation is surfaced in Explanation."""
-    mock_resp = RFMPredictResponse(prediction={
-        'columns': ['ENTITY', 'SCORE', 'EXPLANATION'],
-        'data': [[1, 0.9, {
-            'format': 'natural_language_summary',
-            'summary': 'Summary.',
-            'warning': 'Cross-region fallback used.',
-        }]],
-    })
+    mock_resp = RFMPredictResponse(
+        prediction={
+            'columns': ['ENTITY', 'SCORE', 'EXPLANATION'],
+            'data': [
+                [
+                    1,
+                    0.9,
+                    {
+                        'format': 'natural_language_summary',
+                        'summary': 'Summary.',
+                        'warning': 'Cross-region fallback used.',
+                    },
+                ]
+            ],
+        }
+    )
 
     class MockPredictAPI:
         def predict(
@@ -1094,13 +1245,14 @@ def test_explanation_warning_flows_from_api_response(
     assert isinstance(result, Explanation)
     assert result.summary == 'Summary.'
     assert result.details['format'] == 'natural_language_summary'
-    assert result.warning == "Cross-region fallback used."
+    assert result.warning == 'Cross-region fallback used.'
 
 
 class MockMulticlassAPI(MockAPI):
     r"""Returns a multi-class frame whose CLASS values are strings, exactly as
     the wire format delivers them.
     """
+
     def predict(
         self,
         request: dict[str, Any],
@@ -1109,32 +1261,38 @@ class MockMulticlassAPI(MockAPI):
         instance_ids: list[Any] | None = None,
         anchor_times: list[Any] | None = None,
     ) -> RFMPredictResponse:
-        return RFMPredictResponse(prediction={
-            'columns': ['ENTITY', 'CLASS', 'SCORE', 'PREDICTED'],
-            'data': [
-                [0, '2', 0.7, True],
-                [0, '1', 0.3, False],
-            ],
-        })
+        return RFMPredictResponse(
+            prediction={
+                'columns': ['ENTITY', 'CLASS', 'SCORE', 'PREDICTED'],
+                'data': [
+                    [0, '2', 0.7, True],
+                    [0, '1', 0.3, False],
+                ],
+            }
+        )
 
 
 def test_multiclass_class_column_keeps_the_target_dtype(
     user_store_graph: Graph,
 ) -> None:
-    # Regression: bugs/rfm-class-column-dtype-inconsistency.md -- CLASS came
-    # back as str while ENTITY in the same frame was int64, so `df['CLASS'] ==
-    # 2` was False everywhere and a merge back to the source table raised.
+    # Regression: CLASS came back as str while ENTITY in the same frame was
+    # int64, so `df['CLASS'] == 2` was False everywhere and a merge back to the
+    # source table raised.
     task = TaskTable(
         task_type=TaskType.MULTICLASS_CLASSIFICATION,
-        context_df=pd.DataFrame({
-            'ENTITY': [0, 1, 3, 0],
-            'TARGET': pd.Series([1, 2, 1, 2], dtype='int64'),
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 4),
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': [0],
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 3, 0],
+                'TARGET': pd.Series([1, 2, 1, 2], dtype='int64'),
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 4),
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': [0],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
+            }
+        ),
         entity_table_name='USERS',
         entity_column='ENTITY',
         target_column='TARGET',
@@ -1159,29 +1317,35 @@ class MockRankingAPI(MockAPI):
         instance_ids: list[Any] | None = None,
         anchor_times: list[Any] | None = None,
     ) -> RFMPredictResponse:
-        return RFMPredictResponse(prediction={
-            'columns': ['ENTITY', 'CLASS', 'SCORE'],
-            'data': [[0, '1', 0.9], [0, '2', 0.5]],
-        })
+        return RFMPredictResponse(
+            prediction={
+                'columns': ['ENTITY', 'CLASS', 'SCORE'],
+                'data': [[0, '1', 0.9], [0, '2', 0.5]],
+            }
+        )
 
 
 def test_link_prediction_class_column_keeps_the_target_key_dtype(
     user_store_graph: Graph,
 ) -> None:
-    # Regression: bugs/rfm-class-column-dtype-inconsistency.md -- ranking ids
-    # arrive as strings, so a merge back to the destination table raised
-    # 'You are trying to merge on str and int64 columns'.
+    # Regression: ranking ids arrive as strings, so a merge back to the
+    # destination table raised 'You are trying to merge on str and int64
+    # columns'.
     task = TaskTable(
         task_type=TaskType.TEMPORAL_LINK_PREDICTION,
-        context_df=pd.DataFrame({
-            'ENTITY': [0, 1, 3, 0],
-            'TARGET': [[0, 1], [1, 2], [0, 2], [1]],
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 4),
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': [0],
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1, 3, 0],
+                'TARGET': [[0, 1], [1, 2], [0, 2], [1]],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 4),
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': [0],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
+            }
+        ),
         entity_table_name=('USERS', 'STORES'),
         entity_column='ENTITY',
         target_column='TARGET',
@@ -1217,9 +1381,12 @@ def test_over_cap_batch_size_suggests_a_value_under_the_cap() -> None:
 
 def _over_cap_message(task_type: TaskType, batch_size: int) -> str:
     r"""Drive the real raise site, so the assertion is about shipped text."""
-    graph = Graph.from_data({
-        'users': pd.DataFrame({'user_id': [0, 1], 'age': [30, 40]}),
-    }, verbose=False)
+    graph = Graph.from_data(
+        {
+            'users': pd.DataFrame({'user_id': [0, 1], 'age': [30, 40]}),
+        },
+        verbose=False,
+    )
     model = KumoRFM(graph, verbose=False)
     model._validate_task_references = lambda _task: None
     model._batch_size = batch_size
@@ -1232,10 +1399,19 @@ def _over_cap_message(task_type: TaskType, batch_size: int) -> str:
     task.narrow_context.return_value = task
 
     with pytest.raises(ValueError) as excinfo:
-        next(model._iter_task_requests(
-            task, explain=False, return_embeddings=False, run_mode='fast',
-            num_neighbors=[8, 8], inference_config=MagicMock(),
-            logger=PlainProgressLogger('Predicting', verbose=False),
-            exclude_cols_dict=None, use_prediction_time=False, top_k=None,
-            random_seed=42))
+        next(
+            model._iter_task_requests(
+                task,
+                explain=False,
+                return_embeddings=False,
+                run_mode='fast',
+                num_neighbors=[8, 8],
+                inference_config=MagicMock(),
+                logger=PlainProgressLogger('Predicting', verbose=False),
+                exclude_cols_dict=None,
+                use_prediction_time=False,
+                top_k=None,
+                random_seed=42,
+            )
+        )
     return str(excinfo.value)

@@ -10,7 +10,7 @@ from .validated_predictive_query import (
 
 __all__ = [
     'PQueryResource',
-    'QueryType',
     'ParsedPredictiveQuery',
+    'QueryType',
     'ValidatedPredictiveQuery',
 ]

@@ -10,7 +10,6 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 import requests
-
 from rfm_nim_payloads import NIM_HEALTH_READY_PATH
 
 _JSON_MEDIA_TYPE = 'application/json'
@@ -23,11 +22,13 @@ def normalize_base_url(base_url: str) -> str:
     parsed = urlsplit(candidate)
     if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
         raise ValueError(
-            'RFM NIM base URL must be an absolute http:// or https:// URL.')
+            'RFM NIM base URL must be an absolute http:// or https:// URL.'
+        )
     if parsed.username is not None or parsed.password is not None:
         raise ValueError(
             'RFM NIM base URL cannot contain credentials; use the API key '
-            'environment variable.')
+            'environment variable.'
+        )
     if parsed.query or parsed.fragment:
         raise ValueError('RFM NIM base URL cannot contain a query or fragment.')
     path = parsed.path.rstrip('/')
@@ -79,7 +80,8 @@ def assert_problem_details(
     """Assert only the problem-details fields required by the API contract."""
     assert response.status_code in expected_statuses
     assert response.headers.get('content-type', '').startswith(
-        _PROBLEM_MEDIA_TYPE)
+        _PROBLEM_MEDIA_TYPE
+    )
     body = response.json()
     assert isinstance(body, dict)
     assert body.get('status') == response.status_code

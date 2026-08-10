@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Optional
 
 import numpy as np
 from pydantic.dataclasses import dataclass
@@ -13,29 +12,34 @@ from kumorfm.api.graph import GraphDefinition
 
 @dataclass
 class PQueryResource:
-    """Predictive Query resource definition."""
+    r"""Predictive Query resource definition."""
+
     query_string: str
     graph: GraphDefinition
-    name: Optional[str] = None
-    desc: Optional[str] = ''
+    name: str | None = None
+    desc: str | None = ''
 
 
 class QueryType(StrEnum):
     r"""Defines the type of a predictive query."""
+
     STATIC = 'static'
     TEMPORAL = 'temporal'
 
 
-def validate_int(const: int, min_int: Optional[int] = None,
-                 max_int: Optional[int] = None) -> ValidationResponse:
+def validate_int(
+    const: int, min_int: int | None = None, max_int: int | None = None
+) -> ValidationResponse:
     r"""Validate that size of :obj:`const` is within the supported
     limits.
+
     Args:
         const (int): Evaluated const.
         min_int (int, optional): Minimum permitted int. If :obj:`None`,
             minimum of int64 is used. (default: :obj:`None`)
         max_int (int, optional): Maximum permitted int. If :obj:`None`,
             maximum of int64 is used. (default: :obj:`None`)
+
     Returns:
         ValidationResponse: List of encountered errors.
     """
@@ -49,7 +53,9 @@ def validate_int(const: int, min_int: Optional[int] = None,
             ValidationError(
                 title='Unsupported constant',
                 message=f'Constant {const} is outside of the range of '
-                f'supported integers ({min_int}, {max_int}).'))
+                f'supported integers ({min_int}, {max_int}).',
+            )
+        )
     return response
 
 

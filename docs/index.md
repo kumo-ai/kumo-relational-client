@@ -22,4 +22,5 @@ model NIMs (TabICL and KumoRFM), served behind the Universal TFM API.
 
 ## Reference
 
+- [NVIDIA SDFM SDK Prediction Output](reference/prediction-output.md)
 - [NVIDIA SDFM SDK Environment Variables](reference/environment-variables.md)

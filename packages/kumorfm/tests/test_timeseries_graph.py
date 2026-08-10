@@ -6,7 +6,6 @@ import warnings
 
 import pandas as pd
 import pytest
-
 from kumorfm.rfm import Graph, LocalTable
 from kumorfm.rfm.base.utils import Timedelta, Timestamp
 from kumorfm.rfm.graph import (
@@ -46,34 +45,42 @@ def test_timedelta_to_pquery_prefers_hours_over_minutes() -> None:
 
 
 def test_timedelta_to_pquery_unsupported_raises() -> None:
-    with pytest.raises(ValueError, match="minutes, hours, or days"):
+    with pytest.raises(ValueError, match='minutes, hours, or days'):
         _timedelta_to_pquery(Timedelta('45s'))
-    with pytest.raises(ValueError, match="minutes, hours, or days"):
+    with pytest.raises(ValueError, match='minutes, hours, or days'):
         _timedelta_to_pquery(Timedelta('90s'))
 
 
 def test_timedelta_to_pquery_non_positive_raises() -> None:
-    with pytest.raises(ValueError, match="positive"):
+    with pytest.raises(ValueError, match='positive'):
         _timedelta_to_pquery(Timedelta('0D'))
-    with pytest.raises(ValueError, match="positive"):
+    with pytest.raises(ValueError, match='positive'):
         _timedelta_to_pquery(Timedelta('-1D'))
 
 
 def test_infer_timedelta_uniform() -> None:
-    series = pd.Series([
-        pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03']),
-        pd.to_datetime(['2024-01-05', '2024-01-06', '2024-01-07']),
-    ])
+    series = pd.Series(
+        [
+            pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03']),
+            pd.to_datetime(['2024-01-05', '2024-01-06', '2024-01-07']),
+        ]
+    )
     result = _infer_timedelta_from_timestamps(series)
     assert result == Timedelta('1D')
 
 
 def test_infer_timedelta_warns_on_non_uniform() -> None:
     # Mix of 1-day and 2-day gaps
-    series = pd.Series([
-        pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-04']),  # 1D, 2D
-        pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03']),  # 1D, 1D
-    ])
+    series = pd.Series(
+        [
+            pd.to_datetime(
+                ['2024-01-01', '2024-01-02', '2024-01-04']
+            ),  # 1D, 2D
+            pd.to_datetime(
+                ['2024-01-01', '2024-01-02', '2024-01-03']
+            ),  # 1D, 1D
+        ]
+    )
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
         _infer_timedelta_from_timestamps(series)
@@ -82,10 +89,12 @@ def test_infer_timedelta_warns_on_non_uniform() -> None:
 
 
 def test_infer_timedelta_no_warning_on_uniform() -> None:
-    series = pd.Series([
-        pd.to_datetime(['2024-01-01', '2024-01-02']),
-        pd.to_datetime(['2024-02-01', '2024-02-02']),
-    ])
+    series = pd.Series(
+        [
+            pd.to_datetime(['2024-01-01', '2024-01-02']),
+            pd.to_datetime(['2024-02-01', '2024-02-02']),
+        ]
+    )
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter('always')
         _infer_timedelta_from_timestamps(series)
@@ -94,21 +103,25 @@ def test_infer_timedelta_no_warning_on_uniform() -> None:
 
 def test_infer_timedelta_too_short_raises() -> None:
     # All series have only 1 element — no deltas can be computed
-    series = pd.Series([
-        pd.to_datetime(['2024-01-01']),
-        pd.to_datetime(['2024-02-01']),
-    ])
-    with pytest.raises(ValueError, match="fewer than 2 observations"):
+    series = pd.Series(
+        [
+            pd.to_datetime(['2024-01-01']),
+            pd.to_datetime(['2024-02-01']),
+        ]
+    )
+    with pytest.raises(ValueError, match='fewer than 2 observations'):
         _infer_timedelta_from_timestamps(series)
 
 
 @pytest.fixture
 def daily_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        'customer_id': [1, 2, 3],
-        'region': ['US', 'EU', 'US'],
-        'sales': [[10, 20, 15, 30], [5, 8, 12], [100, 95, 80, 60, 50]],
-    })
+    return pd.DataFrame(
+        {
+            'customer_id': [1, 2, 3],
+            'region': ['US', 'EU', 'US'],
+            'sales': [[10, 20, 15, 30], [5, 8, 12], [100, 95, 80, 60, 50]],
+        }
+    )
 
 
 @pytest.fixture
@@ -116,8 +129,9 @@ def anchor() -> pd.Timestamp:
     return Timestamp('2024-01-10')
 
 
-def test_basic_with_entity_col(daily_df: pd.DataFrame,
-                               anchor: pd.Timestamp) -> None:
+def test_basic_with_entity_col(
+    daily_df: pd.DataFrame, anchor: pd.Timestamp
+) -> None:
     graph, pquery = Graph.graph_and_pquery_from_timeseries(
         daily_df,
         timeseries_col='sales',
@@ -127,8 +141,10 @@ def test_basic_with_entity_col(daily_df: pd.DataFrame,
         num_timeframes=4,
     )
 
-    assert pquery == ("PREDICT MAX(target.value, 0, 1, days) "
-                      "FORECAST 4 TIMEFRAMES FOR EACH entity.customer_id")
+    assert pquery == (
+        'PREDICT MAX(target.value, 0, 1, days) '
+        'FORECAST 4 TIMEFRAMES FOR EACH entity.customer_id'
+    )
 
     assert set(graph.tables.keys()) == {'entity', 'target'}
     assert len(graph.edges) == 1
@@ -138,8 +154,9 @@ def test_basic_with_entity_col(daily_df: pd.DataFrame,
     assert dst == 'entity'
 
 
-def test_entity_table_structure(daily_df: pd.DataFrame,
-                                anchor: pd.Timestamp) -> None:
+def test_entity_table_structure(
+    daily_df: pd.DataFrame, anchor: pd.Timestamp
+) -> None:
     graph, _ = Graph.graph_and_pquery_from_timeseries(
         daily_df,
         timeseries_col='sales',
@@ -157,8 +174,9 @@ def test_entity_table_structure(daily_df: pd.DataFrame,
     assert 'sales' not in entity._data.columns
 
 
-def test_target_table_structure(daily_df: pd.DataFrame,
-                                anchor: pd.Timestamp) -> None:
+def test_target_table_structure(
+    daily_df: pd.DataFrame, anchor: pd.Timestamp
+) -> None:
     graph, _ = Graph.graph_and_pquery_from_timeseries(
         daily_df,
         timeseries_col='sales',
@@ -175,8 +193,9 @@ def test_target_table_structure(daily_df: pd.DataFrame,
     assert len(target._data) == 12
 
 
-def test_timestamps_go_backwards_from_anchor(daily_df: pd.DataFrame,
-                                             anchor: pd.Timestamp) -> None:
+def test_timestamps_go_backwards_from_anchor(
+    daily_df: pd.DataFrame, anchor: pd.Timestamp
+) -> None:
     graph, _ = Graph.graph_and_pquery_from_timeseries(
         daily_df,
         timeseries_col='sales',
@@ -225,15 +244,18 @@ def test_hourly_delta(anchor: pd.Timestamp) -> None:
 
 
 def test_with_timestamps_col() -> None:
-    df = pd.DataFrame({
-        'id': [1, 2],
-        'vals': [[10, 20, 30], [5, 15, 25, 35]],
-        'times': [
-            pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03']),
-            pd.to_datetime(
-                ['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04']),
-        ],
-    })
+    df = pd.DataFrame(
+        {
+            'id': [1, 2],
+            'vals': [[10, 20, 30], [5, 15, 25, 35]],
+            'times': [
+                pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03']),
+                pd.to_datetime(
+                    ['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04']
+                ),
+            ],
+        }
+    )
     graph, pquery = Graph.graph_and_pquery_from_timeseries(
         df,
         timeseries_col='vals',
@@ -253,13 +275,16 @@ def test_with_timestamps_col() -> None:
 
 
 def test_timestamps_col_takes_priority_over_anchor(
-        anchor: pd.Timestamp) -> None:
+    anchor: pd.Timestamp,
+) -> None:
     """When timestamps_col is provided, anchor_time is unused."""
-    df = pd.DataFrame({
-        'id': [1],
-        'vals': [[1, 2]],
-        'times': [pd.to_datetime(['2023-06-01', '2023-06-02'])],
-    })
+    df = pd.DataFrame(
+        {
+            'id': [1],
+            'vals': [[1, 2]],
+            'times': [pd.to_datetime(['2023-06-01', '2023-06-02'])],
+        }
+    )
     graph, _ = Graph.graph_and_pquery_from_timeseries(
         df,
         timeseries_col='vals',
@@ -270,60 +295,78 @@ def test_timestamps_col_takes_priority_over_anchor(
     target_table = graph.tables['target']
     assert isinstance(target_table, LocalTable)
     assert list(target_table._data['timestamp']) == list(
-        pd.to_datetime(['2023-06-01', '2023-06-02']))
+        pd.to_datetime(['2023-06-01', '2023-06-02'])
+    )
 
 
 def test_error_missing_timeseries_col(anchor: pd.Timestamp) -> None:
     df = pd.DataFrame({'a': [[1, 2]]})
-    with pytest.raises(ValueError, match="timeseries_col"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='missing',
-                                               time_delta=Timedelta('1D'),
-                                               anchor_time=anchor)
+    with pytest.raises(ValueError, match='timeseries_col'):
+        Graph.graph_and_pquery_from_timeseries(
+            df,
+            timeseries_col='missing',
+            time_delta=Timedelta('1D'),
+            anchor_time=anchor,
+        )
 
 
 def test_error_missing_timestamps_col(anchor: pd.Timestamp) -> None:
     df = pd.DataFrame({'vals': [[1, 2]]})
-    with pytest.raises(ValueError, match="timestamps_col"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='vals',
-                                               timestamps_col='missing',
-                                               time_delta=Timedelta('1D'),
-                                               anchor_time=anchor)
+    with pytest.raises(ValueError, match='timestamps_col'):
+        Graph.graph_and_pquery_from_timeseries(
+            df,
+            timeseries_col='vals',
+            timestamps_col='missing',
+            time_delta=Timedelta('1D'),
+            anchor_time=anchor,
+        )
 
 
 def test_error_missing_entity_col(anchor: pd.Timestamp) -> None:
     df = pd.DataFrame({'vals': [[1, 2]]})
-    with pytest.raises(ValueError, match="entity_col"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='vals',
-                                               entity_col='missing',
-                                               time_delta=Timedelta('1D'),
-                                               anchor_time=anchor)
+    with pytest.raises(ValueError, match='entity_col'):
+        Graph.graph_and_pquery_from_timeseries(
+            df,
+            timeseries_col='vals',
+            entity_col='missing',
+            time_delta=Timedelta('1D'),
+            anchor_time=anchor,
+        )
 
 
 def test_error_no_timestamps_and_no_time_delta(anchor: pd.Timestamp) -> None:
     df = pd.DataFrame({'vals': [[1, 2]]})
-    with pytest.raises(ValueError, match="time_delta"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='vals',
-                                               anchor_time=anchor)
+    with pytest.raises(ValueError, match='time_delta'):
+        Graph.graph_and_pquery_from_timeseries(
+            df, timeseries_col='vals', anchor_time=anchor
+        )
 
 
 def test_error_no_timestamps_and_no_anchor_time() -> None:
     df = pd.DataFrame({'vals': [[1, 2]]})
-    with pytest.raises(ValueError, match="anchor_time"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='vals',
-                                               time_delta=Timedelta('1D'))
+    with pytest.raises(ValueError, match='anchor_time'):
+        Graph.graph_and_pquery_from_timeseries(
+            df, timeseries_col='vals', time_delta=Timedelta('1D')
+        )
 
 
 def test_error_entity_id_conflicts_with_column(anchor: pd.Timestamp) -> None:
     df = pd.DataFrame({'entity_id': [1, 2], 'vals': [[1, 2], [3, 4]]})
-    with pytest.raises(ValueError, match="conflicts"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='vals',
-                                               time_delta=Timedelta('1D'),
-                                               anchor_time=anchor)
+    with pytest.raises(ValueError, match='conflicts'):
+        Graph.graph_and_pquery_from_timeseries(
+            df,
+            timeseries_col='vals',
+            time_delta=Timedelta('1D'),
+            anchor_time=anchor,
+        )
 
 
 def test_error_unsupported_time_delta(anchor: pd.Timestamp) -> None:
     df = pd.DataFrame({'vals': [[1, 2]]})
-    with pytest.raises(ValueError, match="minutes, hours, or days"):
-        Graph.graph_and_pquery_from_timeseries(df, timeseries_col='vals',
-                                               time_delta=Timedelta('45s'),
-                                               anchor_time=anchor)
+    with pytest.raises(ValueError, match='minutes, hours, or days'):
+        Graph.graph_and_pquery_from_timeseries(
+            df,
+            timeseries_col='vals',
+            time_delta=Timedelta('45s'),
+            anchor_time=anchor,
+        )

@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Addressing a model served by a managed platform rather than by URL.
+r"""Addressing a model served by a managed platform rather than by URL.
 
 :class:`~nvidia_sdfm.core.transport.Transport` speaks HTTP to a NIM at a base
 URL. A Databricks Model Serving endpoint is addressed by *name* through a
@@ -15,6 +15,7 @@ the reason it does not apply. An adapter reaching for one is a bug, and it
 surfaces as that error rather than as a plausible-looking value or a request
 to nowhere.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,7 +26,7 @@ from nvidia_sdfm.errors import SdfmError
 
 @dataclass(frozen=True)
 class ServingTarget:
-    """A model served by name on a managed platform.
+    r"""A model served by name on a managed platform.
 
     Attributes:
         endpoint: The serving endpoint name.
@@ -61,7 +62,7 @@ class ServingTarget:
             )
 
     def close(self) -> None:
-        """Mark the target closed.
+        r"""Mark the target closed.
 
         There is nothing to release -- the workspace client owns its own
         transport -- but a closed client must refuse work here exactly as it
@@ -71,7 +72,7 @@ class ServingTarget:
         object.__setattr__(self, '_closed', True)
 
     def _require_open(self) -> None:
-        """Part of the transport contract ``SDFMClient._predict`` relies on.
+        r"""Part of the transport contract ``SDFMClient._predict`` relies on.
 
         Absent it, the serving path raises ``AttributeError`` from inside the
         client rather than the documented error.

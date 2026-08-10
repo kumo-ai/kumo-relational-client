@@ -7,7 +7,6 @@ from datetime import timedelta, timezone
 
 import pandas as pd
 import pytest
-
 from kumorfm.rfm.base.utils import Timestamp, to_datetime
 
 
@@ -38,15 +37,14 @@ def test_to_datetime_normalizes_timezone() -> None:
     assert out.iloc[0] == pd.Timestamp('2026-01-01 07:00:00')
     assert out.iloc[0] == Timestamp(ser.iloc[0])
 
-    ser = pd.Series(pd.to_datetime(['2026-01-01 17:00:00'
-                                    ])).dt.tz_localize(timezone(timedelta(
-                                        hours=-8)))
+    ser = pd.Series(pd.to_datetime(['2026-01-01 17:00:00'])).dt.tz_localize(
+        timezone(timedelta(hours=-8))
+    )
     assert to_datetime(ser).iloc[0] == pd.Timestamp('2026-01-02 01:00:00')
 
 
 def test_to_datetime_warns_about_coerced_values() -> None:
-    # Regression: bugs/graph-unparseable-time-column-silently-coerced.md --
-    # unparseable values became NaT with no warning and no count.
+    # Regression: unparseable values became NaT with no warning and no count.
     ser = pd.Series(['2026-01-01', 'not a date', 'nope', None])
     with pytest.warns(UserWarning, match='Could not parse 2 of 4') as record:
         out = to_datetime(ser, 'TS')

@@ -12,14 +12,17 @@ from urllib.request import urlopen
 
 import pyarrow as pa
 import pyarrow.parquet
-from kumorfm.api.typing import Stype
 
+from kumorfm.api.typing import Stype
+from kumorfm.exceptions import UnknownDatasetError
 from kumorfm.rfm import Graph
 from kumorfm.rfm.backend.local import LocalTable
 
 PREFIX = 'rel-'
-HASH_URL = ('https://raw.githubusercontent.com/snap-stanford/relbench/main/'
-            'relbench/datasets/hashes.json')
+HASH_URL = (
+    'https://raw.githubusercontent.com/snap-stanford/relbench/main/'
+    'relbench/datasets/hashes.json'
+)
 
 EXCLUDE = {
     'hm': {
@@ -95,30 +98,41 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
     per-user cache directory (:func:`cache_dir`). Digests come from the
     upstream RelBench repository; see :func:`get_registry`.
 
+    ``dataset`` is an archive name from :func:`get_registry`, with or without
+    its family prefix: both ``'f1'`` and ``'rel-f1'`` resolve. Only 11 of the
+    published datasets carry a ``rel-`` prefix, so the archive name rather than
+    a stripped one is what identifies a dataset here.
+
     Requires the ``relbench`` extra (``pip install 'nvidia-sdfm[relbench]'``).
     """
     dataset = dataset.lower()
-    if dataset.startswith(PREFIX):
-        dataset = dataset[len(PREFIX):]
-
     registry = get_registry()
 
-    datasets = [key.split('/')[0][len(PREFIX):] for key in registry.registry]
-    if dataset not in datasets:
-        matches = difflib.get_close_matches(dataset, datasets, n=1)
+    archives = {key.split('/')[0] for key in registry.registry}
+    archive = next(
+        (name for name in (dataset, f'{PREFIX}{dataset}') if name in archives),
+        None,
+    )
+    if archive is None:
+        names = sorted({name.removeprefix(PREFIX) for name in archives})
+        matches = difflib.get_close_matches(dataset, names, n=1)
         hint = f" Did you mean '{matches[0]}'?" if len(matches) > 0 else ''
-        raise ValueError(f"Unknown RelBench dataset '{dataset}'.{hint} Valid "
-                         f"datasets are {str(datasets)[1:-1]}.")
+        raise UnknownDatasetError(
+            f"Unknown RelBench dataset '{dataset}'.{hint} Valid "
+            f'datasets are {str(names)[1:-1]}.'
+        )
+
+    dataset = archive.removeprefix(PREFIX)
 
     registry.fetch(
-        f'{PREFIX}{dataset}/db.zip',
+        f'{archive}/db.zip',
         processor=_pooch().Unzip(extract_dir='.'),
         progressbar=verbose,
     )
 
     graph = Graph(tables=[])
     edges: list[tuple[str, str, str]] = []
-    for path in (cache_dir() / f'{PREFIX}{dataset}' / 'db').glob('*.parquet'):
+    for path in (cache_dir() / archive / 'db').glob('*.parquet'):
         schema = pa.parquet.read_schema(path)
         exclude = EXCLUDE.get(dataset, {}).get(path.stem, [])
         columns = [name for name in schema.names if name not in exclude]
@@ -126,7 +140,7 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
         metadata = {
             key.decode('utf-8'): json.loads(value.decode('utf-8'))
             for key, value in schema.metadata.items()
-            if key in [b"fkey_col_to_pkey_table", b"pkey_col", b"time_col"]
+            if key in [b'fkey_col_to_pkey_table', b'pkey_col', b'time_col']
         }
 
         table = LocalTable(
@@ -137,10 +151,14 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
         )
         graph.add_table(table)
 
-        edges.extend([
-            (path.stem, fkey, dst_table)
-            for fkey, dst_table in metadata['fkey_col_to_pkey_table'].items()
-        ])
+        edges.extend(
+            [
+                (path.stem, fkey, dst_table)
+                for fkey, dst_table in metadata[
+                    'fkey_col_to_pkey_table'
+                ].items()
+            ]
+        )
 
     for edge in edges:
         graph.link(*edge)

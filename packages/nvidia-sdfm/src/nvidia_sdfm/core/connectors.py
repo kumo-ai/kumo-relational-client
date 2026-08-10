@@ -20,11 +20,13 @@ def read(source: str, **kwargs: Any) -> pd.DataFrame:
         raise MissingExtraError(error.backend, error.driver) from error
     except ConnectorError as error:
         raise SdfmError(
-            error.message, code=error.code, details=error.details,
+            error.message,
+            code=error.code,
+            details=error.details,
         ) from error
     except ImportError as error:
         raise SdfmError(
-            f"the {source!r} connector is installed but failed to load its "
-            f"driver: {error}",
+            f'the {source!r} connector is installed but failed to load its '
+            f'driver: {error}',
             code='DRIVER_LOAD_FAILED',
         ) from error

@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from kumorfm.rfm import Graph
 
-duckdb = pytest.importorskip('duckdb',
-                             reason="'duckdb' extension not installed")
+duckdb = pytest.importorskip(
+    'duckdb', reason="'duckdb' extension not installed"
+)
 
 from kumorfm.rfm.backend.duckdb import DuckDBSampler  # noqa: E402
 
@@ -35,7 +35,8 @@ def graph(request, tmp_path: Path) -> Graph:
     connection.execute(
         f'CREATE TABLE "{name.replace(chr(34), chr(34) * 2)}" AS '
         "SELECT i AS event_id, TIMESTAMP '2020-01-01' + INTERVAL (i) DAY "
-        "AS ts FROM range(10) t(i)")
+        'AS ts FROM range(10) t(i)'
+    )
     connection.close()
 
     return Graph.from_duckdb(
@@ -54,5 +55,4 @@ def test_min_max_time_is_keyed_by_table_name(graph: Graph) -> None:
     out = sampler._get_min_max_time_dict([name])
 
     assert set(out) == {name}
-    assert out[name] == (pd.Timestamp('2020-01-01'),
-                         pd.Timestamp('2020-01-10'))
+    assert out[name] == (pd.Timestamp('2020-01-01'), pd.Timestamp('2020-01-10'))

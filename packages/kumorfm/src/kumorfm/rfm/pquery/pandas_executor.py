@@ -4,6 +4,7 @@
 
 import numpy as np
 import pandas as pd
+
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.pquery.AST import (
     Aggregation,
@@ -15,19 +16,17 @@ from kumorfm.api.pquery.AST import (
     LogicalOperation,
 )
 from kumorfm.api.typing import AggregationType, BoolOp, MemberOp, RelOp
-
 from kumorfm.rfm.pquery import PQueryExecutor
 
 
-class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series,
-                                          np.ndarray]):
+class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series, np.ndarray]):
     def execute_column(
         self,
         column: Column,
         feat_dict: dict[str, pd.DataFrame],
         filter_na: bool = True,
     ) -> tuple[pd.Series, np.ndarray]:
-        table_name, column_name = column.fqn.split(".")
+        table_name, column_name = column.fqn.split('.')
         if column_name == '*':
             out = pd.Series(np.ones(len(feat_dict[table_name]), dtype='int64'))
         else:
@@ -136,18 +135,22 @@ class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series,
         anchor_target_time = anchor_time.iloc[target_batch]
         anchor_target_time = anchor_target_time.reset_index(drop=True)
 
-        time_filter_mask = (target_time <= anchor_target_time +
-                            aggr.aggr_time_range.end_date_offset)
+        time_filter_mask = (
+            target_time
+            <= anchor_target_time + aggr.aggr_time_range.end_date_offset
+        )
         if aggr.aggr_time_range.start is not None:
             start_offset = aggr.aggr_time_range.start_date_offset
             time_filter_mask = time_filter_mask & (
-                target_time > anchor_target_time + start_offset)
+                target_time > anchor_target_time + start_offset
+            )
         curr_target_mask = target_mask & time_filter_mask
 
         return self.execute_aggregation_type(
             AggregationType(aggr.aggr),
-            feat=target_feat[time_filter_mask[target_mask].reset_index(
-                drop=True)],
+            feat=target_feat[
+                time_filter_mask[target_mask].reset_index(drop=True)
+            ],
             batch=target_batch[curr_target_mask],
             batch_size=len(anchor_time),
             filter_na=filter_na,
@@ -169,7 +172,8 @@ class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series,
         # Promote left to float if right is a float to avoid lossy coercion.
         right_value = right.typed_value()
         if pd.api.types.is_integer_dtype(left) and isinstance(
-                right_value, float):
+            right_value, float
+        ):
             left = left.astype('float64')
         value = pd.Series([right_value], dtype=left.dtype).iloc[0]
 
@@ -266,7 +270,7 @@ class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series,
         right: pd.Series | None,
     ) -> pd.Series:
 
-        # TODO Implement Kleene-Priest three-value logic.
+        # TODO: implement Kleene-Priest three-value logic.
         if op == BoolOp.AND:
             assert right is not None
             return left & right
@@ -356,7 +360,8 @@ class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series,
                 filter_na=True,
             )
         raise NotImplementedError(
-            f'Unexpected {type(join.rhs_target)} nested in Join')
+            f'Unexpected {type(join.rhs_target)} nested in Join'
+        )
 
     def execute_filter(
         self,
@@ -470,24 +475,30 @@ class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series,
 
         if query.whatif_ast is not None:
             if isinstance(query.whatif_ast, Condition):
-                mask = mask & self.execute_condition(
-                    condition=query.whatif_ast,
-                    feat_dict=feat_dict,
-                    time_dict=time_dict,
-                    batch_dict=batch_dict,
-                    anchor_time=anchor_time,
-                    filter_na=False,
-                )[0].to_numpy()
+                mask = (
+                    mask
+                    & self.execute_condition(
+                        condition=query.whatif_ast,
+                        feat_dict=feat_dict,
+                        time_dict=time_dict,
+                        batch_dict=batch_dict,
+                        anchor_time=anchor_time,
+                        filter_na=False,
+                    )[0].to_numpy()
+                )
             else:
                 assert isinstance(query.whatif_ast, LogicalOperation)
-                mask = mask & self.execute_logical_operation(
-                    logical_operation=query.whatif_ast,
-                    feat_dict=feat_dict,
-                    time_dict=time_dict,
-                    batch_dict=batch_dict,
-                    anchor_time=anchor_time,
-                    filter_na=False,
-                )[0].to_numpy()
+                mask = (
+                    mask
+                    & self.execute_logical_operation(
+                        logical_operation=query.whatif_ast,
+                        feat_dict=feat_dict,
+                        time_dict=time_dict,
+                        batch_dict=batch_dict,
+                        anchor_time=anchor_time,
+                        filter_na=False,
+                    )[0].to_numpy()
+                )
 
         if filter_na:
             out = out[mask[_mask]].reset_index(drop=True)

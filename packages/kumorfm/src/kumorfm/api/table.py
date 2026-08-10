@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from enum import Enum
-from typing import List, Optional, Union
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
@@ -31,34 +30,36 @@ class TimestampUnit(Enum):
 @dataclass(frozen=True)
 class Column:
     r"""A column in a Kumo table."""
+
     name: str
     stype: Stype
     dtype: Dtype
 
     # If the column represents a timestamp, the format that the timestmap
     # is represented in:
-    timestamp_format: Optional[Union[TimestampUnit, str]] = None
+    timestamp_format: TimestampUnit | str | None = None
 
 
 @dataclass
 class TableDefinition:
     r"""A definition of a Kumo table."""
+
     # List of ALL columns selected from source table
-    cols: List[Column]
+    cols: list[Column]
 
     source_table: SourceTableType = Field(discriminator='data_source_type')
 
     # Name of the primary key column.
-    pkey: Optional[str] = None
+    pkey: str | None = None
 
     # Name of the time column, required to have stype=SemanticType.timestamp
-    time_col: Optional[str] = None
+    time_col: str | None = None
 
     # Name of the end time column:
-    end_time_col: Optional[str] = None
+    end_time_col: str | None = None
 
-    @compatible_field_validator("time_col", "end_time_col", "pkey")
-    def empty_str_to_none(cls, v: Optional[str]) -> Optional[str]:
+    @compatible_field_validator('time_col', 'end_time_col', 'pkey')
+    def empty_str_to_none(cls, v: str | None) -> str | None:
         if v == '':
             return None
         return v
@@ -82,7 +83,7 @@ class TableResource:
     # graph resource by either id or alias, e.g.:
     #   GET /tables/<TableResource.id>
     #   GET /tables/<name_alias>
-    name_alias: Optional[str] = None
+    name_alias: str | None = None
 
 
 # Method: Infer Metadata ======================================================
@@ -91,34 +92,38 @@ class TableResource:
 @dataclass(frozen=True)
 class ColumnMetadataRequest:
     r"""A request to infer metadata for a column in a Kumo table. This request
-    can be incomplete in its stype, dtype, or timestamp format."""
+    can be incomplete in its stype, dtype, or timestamp format.
+    """
+
     name: str
-    stype: Optional[Stype] = None
-    dtype: Optional[Dtype] = None
+    stype: Stype | None = None
+    dtype: Dtype | None = None
 
     # If the column represents a timestamp, the format that the timestmap
     # is represented in:
-    timestamp_format: Optional[Union[TimestampUnit, str]] = None
+    timestamp_format: TimestampUnit | str | None = None
 
 
 @dataclass
 class TableMetadataRequest:
     r"""A request to infer Kumo table metadata."""
-    cols: List[ColumnMetadataRequest]
+
+    cols: list[ColumnMetadataRequest]
     source_table: SourceTableType = Field(discriminator='data_source_type')
-    pkey: Optional[str] = None
-    time_col: Optional[str] = None
-    end_time_col: Optional[str] = None
+    pkey: str | None = None
+    time_col: str | None = None
+    end_time_col: str | None = None
 
 
 @dataclass
 class TableMetadataResponse:
     r"""A response containing metadata for a Kumo table."""
-    cols: List[Column]
+
+    cols: list[Column]
     source_table: SourceTableType = Field(discriminator='data_source_type')
-    pkey: Optional[str] = None
-    time_col: Optional[str] = None
-    end_time_col: Optional[str] = None
+    pkey: str | None = None
+    time_col: str | None = None
+    end_time_col: str | None = None
 
 
 # Method: Validate ============================================================

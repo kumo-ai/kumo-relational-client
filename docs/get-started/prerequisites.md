@@ -39,7 +39,7 @@ x86_64 host.
 
 | Dependency | Version |
 | --- | --- |
-| Python | 3.10, 3.11, or 3.12 |
+| Python | 3.10, 3.11, 3.12, or 3.13 |
 | pip | 23.0 or later recommended |
 
 Data-source connectors (SQLite, DuckDB, Snowflake, Databricks) are optional and
@@ -52,12 +52,6 @@ install only when you request the matching extra.
 
 ## Network Access
 
-### Package Index Access
-
-While the SDK is distributed internally, installation resolves from NVIDIA's
-internal PyPI index on `the internal package index`. You must be on the NVIDIA network to
-install.
-
 ### NIM Endpoint Access
 
 At runtime, the client needs network access to a Universal TFM API NIM. Set the
@@ -68,14 +62,13 @@ environment variable for the KumoRFM path.
 
 Before you continue to installation, confirm the following:
 
-1. Verify that Python 3.10, 3.11, or 3.12 is installed: `python --version`.
-2. Confirm you are on the NVIDIA network so the internal index is reachable.
-3. Identify the URL of the NIM you will connect to.
+1. Verify that Python 3.10, 3.11, 3.12, or 3.13 is installed: `python --version`.
+2. Identify the URL of the NIM you will connect to.
 
 ## Troubleshoot Prerequisites
 
 - **`No matching distribution found for kumorfm`.** Your platform or Python
-  version is outside the wheel matrix (Linux x86_64, Python 3.10–3.12), and no
+  version is outside the wheel matrix (Linux x86_64, Python 3.10–3.13), and no
   source distribution is published to fall back to. Install the base
   `nvidia-sdfm` without the `[kumorfm]` extra, or use a supported host and
   interpreter.

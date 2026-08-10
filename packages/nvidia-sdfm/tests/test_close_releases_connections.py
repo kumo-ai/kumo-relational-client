@@ -10,6 +10,7 @@ transport alone left it open for the life of the process. These cover the
 release path that closes both, and the constraint that makes it safe to
 release a pool another client may still be using.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -29,8 +30,9 @@ class _Recording(ModelAdapter):
         self._error = error
 
     def capabilities(self) -> ModelCapabilities:
-        return ModelCapabilities(model=self.name, request_type='none',
-                                 tasks=(), outputs=())
+        return ModelCapabilities(
+            model=self.name, request_type='none', tasks=(), outputs=()
+        )
 
     def predict(self, transport, request):
         raise NotImplementedError
@@ -61,8 +63,9 @@ def test_closing_a_client_closes_its_adapters() -> None:
     assert adapter.closed == 1
 
 
-def test_closing_a_client_still_closes_the_transport_if_an_adapter_fails(
-) -> None:
+def test_closing_a_client_still_closes_the_transport_if_an_adapter_fails() -> (
+    None
+):
     r"""The transport is the pool that cannot be rebuilt, so it wins."""
     client = SDFMClient(url='http://nim.test')
     client._register(_Recording('broken', error=RuntimeError('no')))

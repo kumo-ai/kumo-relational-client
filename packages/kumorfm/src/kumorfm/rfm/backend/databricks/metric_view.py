@@ -9,6 +9,8 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from kumorfm.exceptions import KumoRFMError
+
 if TYPE_CHECKING:
     from kumorfm.rfm.backend.databricks import Connection
 
@@ -21,13 +23,14 @@ _BARE_IDENT = r'[A-Za-z_][A-Za-z0-9_]*'
 _IDENT = rf'`(?:[^`]|``)+`|{_BARE_IDENT}'
 
 _TABLE_REFERENCE_RE = re.compile(
-    rf'\s*({_IDENT})(?:\.({_IDENT}))?(?:\.({_IDENT}))?\s*$')
+    rf'\s*({_IDENT})(?:\.({_IDENT}))?(?:\.({_IDENT}))?\s*$'
+)
 _CHAIN = rf'(?:{_IDENT})(?:\s*\.\s*(?:{_IDENT}))*'
 _JOIN_CONDITION_RE = re.compile(rf'\s*({_CHAIN})\s*=\s*({_CHAIN})\s*$')
 _IDENT_RE = re.compile(_IDENT)
 
 
-class UnsupportedJoinError(ValueError):
+class UnsupportedJoinError(KumoRFMError, ValueError):
     r"""Raised when a metric view join cannot be converted into a graph
     edge.
     """
@@ -42,6 +45,7 @@ class JoinKeyRef:
             column, if any.
         column: The referenced column name.
     """
+
     qualifier: str | None
     column: str
 
@@ -61,6 +65,7 @@ class MetricViewJoin:
         condition: The two sides of the single-column equality join condition.
         cardinality: Either ``'many_to_one'`` or ``'one_to_many'``.
     """
+
     alias: str
     table: tuple[str, ...]
     parent_alias: str
@@ -79,6 +84,7 @@ class MetricViewColumn:
             :obj:`SOURCE_ALIAS` or a join alias.
         expr: The dimension expression with the alias qualifier stripped.
     """
+
     name: str
     alias: str
     expr: str
@@ -94,6 +100,7 @@ class MetricViewSpec:
         columns: All dimensions resolved onto a single table.
         messages: Human-readable messages for every dropped element.
     """
+
     source: tuple[str, ...]
     joins: list[MetricViewJoin]
     columns: list[MetricViewColumn]
@@ -120,11 +127,13 @@ def parse_table_reference(name: Any) -> tuple[str, ...] | None:
     if match is None:
         return None
     return tuple(
-        unquote_ident(part) for part in match.groups() if part is not None)
+        unquote_ident(part) for part in match.groups() if part is not None
+    )
 
 
 def parse_join_condition(
-    condition: Any, ) -> tuple[JoinKeyRef, JoinKeyRef] | None:
+    condition: Any,
+) -> tuple[JoinKeyRef, JoinKeyRef] | None:
     r"""Parses a single-column equality join condition.
 
     Column references may be qualified by an alias or a (dotted) join path.
@@ -157,13 +166,12 @@ def _quoted_variants(name: str) -> str:
 
 def _to_path(alias: str | Sequence[str]) -> tuple[str, ...]:
     if isinstance(alias, str):
-        return (alias, )
+        return (alias,)
     return tuple(alias)
 
 
 def _path_pattern(path: Sequence[str]) -> re.Pattern[str]:
-    chain = r'\s*\.\s*'.join(
-        f'(?:{_quoted_variants(part)})' for part in path)
+    chain = r'\s*\.\s*'.join(f'(?:{_quoted_variants(part)})' for part in path)
     return re.compile(
         rf'(?<![A-Za-z0-9_`$.]){chain}\s*\.',
         flags=re.IGNORECASE,
@@ -217,15 +225,18 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
     source_ref = parse_table_reference(source)
     if source_ref is None:
         raise ValueError(
-            f"Unsupported metric view source {source!r}. Only plain table "
-            f"names are supported as the source of a metric view when "
-            f"converting it into a graph")
+            f'Unsupported metric view source {source!r}. Only plain table '
+            f'names are supported as the source of a metric view when '
+            f'converting it into a graph'
+        )
 
     messages: list[str] = []
     for key in ('filter', 'parameters', 'materialization'):
         if key in cfg:
-            messages.append(f"Ignored the '{key}' section since it cannot "
-                            f"be represented in a graph")
+            messages.append(
+                f"Ignored the '{key}' section since it cannot "
+                f'be represented in a graph'
+            )
 
     joins: list[MetricViewJoin] = []
     aliases: set[str] = set()
@@ -242,14 +253,16 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
         parent_alias = parent_path[-1] if parent_path else SOURCE_ALIAS
         for join_cfg in join_cfgs or []:
             if not isinstance(join_cfg, dict):
-                messages.append(f'Failed to add join {join_cfg!r} since it '
-                                f'is not a mapping')
+                messages.append(
+                    f'Failed to add join {join_cfg!r} since it is not a mapping'
+                )
                 continue
 
             alias = join_cfg.get('name')
             if not isinstance(alias, str):
-                messages.append(f'Failed to add join {join_cfg!r} since it '
-                                f'misses a name')
+                messages.append(
+                    f'Failed to add join {join_cfg!r} since it misses a name'
+                )
                 continue
 
             def _skip(msg: str) -> None:
@@ -287,8 +300,10 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
                 on_cfg = join_cfg.get('on', join_cfg.get(True))
                 parsed = parse_join_condition(on_cfg)
                 if parsed is None:
-                    _skip('only single-column equality join conditions are '
-                          'supported')
+                    _skip(
+                        'only single-column equality join conditions are '
+                        'supported'
+                    )
                     continue
                 condition = parsed
 
@@ -297,14 +312,16 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
                     alias=alias,
                     table=table,
                     parent_alias=parent_alias,
-                    path=parent_path + (alias, ),
+                    path=parent_path + (alias,),
                     condition=condition,
                     cardinality=cardinality,
-                ))
+                )
+            )
             aliases.add(alias)
             kept.add(alias)
-            _add_joins(join_cfg.get('joins'),
-                       parent_path=parent_path + (alias, ))
+            _add_joins(
+                join_cfg.get('joins'), parent_path=parent_path + (alias,)
+            )
 
     _add_joins(cfg.get('joins'), parent_path=())
 
@@ -312,32 +329,35 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
     for join in joins:
         candidates.append((join.path, join.alias))
         if len(join.path) > 1:
-            candidates.append(((join.alias, ), join.alias))
+            candidates.append(((join.alias,), join.alias))
     for alias in aliases - kept:
-        candidates.append(((alias, ), alias))
-    candidates.append(((SOURCE_ALIAS, ), SOURCE_ALIAS))
+        candidates.append(((alias,), alias))
+    candidates.append(((SOURCE_ALIAS,), SOURCE_ALIAS))
     candidates.sort(key=lambda candidate: len(candidate[0]), reverse=True)
 
     columns: list[MetricViewColumn] = []
     defined: dict[str, str] = {}
-    dim_cfgs = list(cfg.get('dimensions') or []) + list(cfg.get('fields')
-                                                        or [])
+    dim_cfgs = list(cfg.get('dimensions') or []) + list(cfg.get('fields') or [])
     for dim_cfg in dim_cfgs:
         if not isinstance(dim_cfg, dict):
-            messages.append(f'Failed to add dimension {dim_cfg!r} since it '
-                            f'is not a mapping')
+            messages.append(
+                f'Failed to add dimension {dim_cfg!r} since it is not a mapping'
+            )
             continue
 
         name = dim_cfg.get('name')
         expr = dim_cfg.get('expr')
         if not isinstance(name, str) or not isinstance(expr, str):
-            messages.append(f'Failed to add dimension {dim_cfg!r} since it '
-                            f'misses a name or expression')
+            messages.append(
+                f'Failed to add dimension {dim_cfg!r} since it '
+                f'misses a name or expression'
+            )
             continue
 
         for field_name, field_expr in defined.items():
             expr = _field_pattern(field_name).sub(
-                lambda match: f'({field_expr})', expr)
+                lambda match: f'({field_expr})', expr
+            )
         defined[name] = expr
 
         refs: set[str] = set()
@@ -346,14 +366,18 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
                 refs.add(path_alias)
                 expr = strip_alias_qualifier(expr, path)
         if len(refs) > 1:
-            messages.append(f"Failed to add dimension '{name}' since its "
-                            f"expression references multiple tables")
+            messages.append(
+                f"Failed to add dimension '{name}' since its "
+                f'expression references multiple tables'
+            )
             continue
 
         alias = refs.pop() if refs else SOURCE_ALIAS
         if alias != SOURCE_ALIAS and alias not in kept:
-            messages.append(f"Failed to add dimension '{name}' since it "
-                            f"references the skipped join '{alias}'")
+            messages.append(
+                f"Failed to add dimension '{name}' since it "
+                f"references the skipped join '{alias}'"
+            )
             continue
 
         columns.append(
@@ -361,7 +385,8 @@ def parse_metric_view(definition: str) -> MetricViewSpec:
                 name=name,
                 alias=alias,
                 expr=expr,
-            ))
+            )
+        )
 
     return MetricViewSpec(
         source=source_ref,
@@ -422,11 +447,12 @@ def resolve_join_keys(
     raise UnsupportedJoinError(
         f"Failed to add join '{join.alias}' since its join condition could "
         f"not be resolved into a key reference between '{join.parent_alias}' "
-        f"and '{join.alias}'")
+        f"and '{join.alias}'"
+    )
 
 
 def read_metric_view_definition(
-    connection: 'Connection',
+    connection: Connection,
     quoted_name: str,
 ) -> tuple[str, dict[str, str], str | None, str | None]:
     r"""Reads a metric view definition from a Databricks SQL warehouse.
@@ -460,11 +486,13 @@ def read_metric_view_definition(
     if details.get('Type') != 'METRIC_VIEW':
         raise ValueError(
             f"'{quoted_name}' is not a metric view "
-            f"(got type '{details.get('Type', 'UNKNOWN')}')")
+            f"(got type '{details.get('Type', 'UNKNOWN')}')"
+        )
 
     definition = details.get('View Text')
     if not definition:
-        raise ValueError(f"Could not read the definition of metric view "
-                         f"'{quoted_name}'")
+        raise ValueError(
+            f"Could not read the definition of metric view '{quoted_name}'"
+        )
 
     return definition, dtypes, details.get('Catalog'), details.get('Database')

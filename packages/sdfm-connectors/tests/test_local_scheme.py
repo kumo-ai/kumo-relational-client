@@ -1,16 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-r"""The ``local`` connector must stay local. See
-``bugs/security-local-connector-fetches-arbitrary-urls.md``.
-"""
+r"""The ``local`` connector must stay local."""
 
 from __future__ import annotations
 
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
 
 import pandas as pd
 import pytest
@@ -57,12 +55,15 @@ def test_read_local_does_not_fetch_http_urls():
     assert server.received == []
 
 
-@pytest.mark.parametrize('path', [
-    'https://example.invalid/table.csv',
-    's3://bucket/key.csv',
-    'gs://bucket/key.csv',
-    'ftp://example.invalid/table.csv',
-])
+@pytest.mark.parametrize(
+    'path',
+    [
+        'https://example.invalid/table.csv',
+        's3://bucket/key.csv',
+        'gs://bucket/key.csv',
+        'ftp://example.invalid/table.csv',
+    ],
+)
 def test_read_local_rejects_remote_uris(path):
     with pytest.raises(ConnectorError) as excinfo:
         read('local', path=path)
@@ -70,10 +71,13 @@ def test_read_local_rejects_remote_uris(path):
     assert 'local' in str(excinfo.value)
 
 
-@pytest.mark.parametrize('path', [
-    'file://example.invalid/table.csv',
-    'file://10.255.255.1/share/table.csv',
-])
+@pytest.mark.parametrize(
+    'path',
+    [
+        'file://example.invalid/table.csv',
+        'file://10.255.255.1/share/table.csv',
+    ],
+)
 def test_read_local_rejects_file_uris_naming_a_host(path):
     r"""``urllib`` drops the authority and reads the path locally, so
     ``file://example.invalid/table.csv`` silently becomes ``/table.csv``.

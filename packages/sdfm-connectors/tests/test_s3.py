@@ -26,8 +26,7 @@ def storage_options():
         patcher.setenv('AWS_SHARED_CREDENTIALS_FILE', '/dev/null')
         patcher.setenv('AWS_DEFAULT_REGION', 'us-east-1')
         patcher.setenv('AWS_REGION', 'us-east-1')
-        server = moto_server.ThreadedMotoServer(
-            ip_address='127.0.0.1', port=0)
+        server = moto_server.ThreadedMotoServer(ip_address='127.0.0.1', port=0)
         server.start()
         try:
             host, port = server.get_host_and_port()
@@ -39,14 +38,17 @@ def storage_options():
             frame = pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']})
             s3fs.S3FileSystem(**options).mkdir(BUCKET)
             frame.to_csv(
-                f's3://{BUCKET}/table.csv', index=False,
+                f's3://{BUCKET}/table.csv',
+                index=False,
                 storage_options=options,
             )
             frame.to_parquet(
-                f's3://{BUCKET}/nested/table.parquet', storage_options=options,
+                f's3://{BUCKET}/nested/table.parquet',
+                storage_options=options,
             )
             frame.to_parquet(
-                f's3://{BUCKET}/upper/TABLE.PARQUET', storage_options=options,
+                f's3://{BUCKET}/upper/TABLE.PARQUET',
+                storage_options=options,
             )
             frame.iloc[:2].to_parquet(
                 f's3://{BUCKET}/dataset/part-0.parquet',

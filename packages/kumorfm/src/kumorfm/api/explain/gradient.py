@@ -4,7 +4,7 @@
 
 import copy
 from dataclasses import field
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 import pandas as pd
 from pydantic.dataclasses import dataclass
@@ -13,7 +13,7 @@ from pydantic.dataclasses import dataclass
 @dataclass
 class TableGradientScore:
     name: str
-    columns: Dict[str, float] = field(default_factory=dict)
+    columns: dict[str, float] = field(default_factory=dict)
 
     def __getitem__(self, column_name: str) -> float:
         return self.columns[column_name]
@@ -28,7 +28,7 @@ class TableGradientScore:
 
 @dataclass
 class GraphGradientScore:
-    tables: Dict[str, TableGradientScore] = field(default_factory=dict)
+    tables: dict[str, TableGradientScore] = field(default_factory=dict)
 
     def __getitem__(self, table_name: str) -> TableGradientScore:
         if table_name not in self.tables:
@@ -47,7 +47,7 @@ class GraphGradientScore:
 
         for table_name, table in self.tables.items():
             table_score = table.total_score
-            scores: List[Tuple[str, Any]] = sorted(
+            scores: list[tuple[str, Any]] = sorted(
                 table.columns.items(),
                 key=lambda x: x[1],
                 reverse=True,
@@ -72,7 +72,7 @@ class GraphGradientScore:
 
         if total_score > 0:
             for table in out.tables.values():
-                for col_name, score in table.columns.items():
+                for col_name in table.columns:
                     table.columns[col_name] /= total_score
 
         return out
@@ -83,7 +83,7 @@ class GraphGradientScore:
         Args:
             normalize: If set to :obj:`True`, will normalize the scores.
         """
-        data: List[Tuple[str, str, float]] = []
+        data: list[tuple[str, str, float]] = []
 
         for table_name, table in self.tables.items():
             for col_name, score in table.columns.items():

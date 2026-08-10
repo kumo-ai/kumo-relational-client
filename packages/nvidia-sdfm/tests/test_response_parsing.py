@@ -15,8 +15,16 @@ def test_parse_prediction_response_basic_fields():
         'id': 'pred_abc',
         'model': 'tabicl',
         'predictions': [
-            {'row_index': 0, 'prediction': 'yes', 'probabilities': {'yes': 0.9, 'no': 0.1}},
-            {'row_index': 1, 'prediction': 'no', 'probabilities': {'yes': 0.2, 'no': 0.8}},
+            {
+                'row_index': 0,
+                'prediction': 'yes',
+                'probabilities': {'yes': 0.9, 'no': 0.1},
+            },
+            {
+                'row_index': 1,
+                'prediction': 'no',
+                'probabilities': {'yes': 0.2, 'no': 0.8},
+            },
         ],
         'metadata': {'task_kind': 'classification'},
     }
@@ -89,15 +97,15 @@ def test_parse_prediction_response_empty_predictions():
 
 
 def test_parse_prediction_response_empty_keeps_prediction_column():
-    # Regression: bugs/client-response-parser-drops-requested-columns.md -- an
-    # empty prediction set used to yield a frame with no columns at all.
+    # Regression: an empty prediction set used to yield a frame with no columns
+    # at all.
     frame = parse_prediction_response({'predictions': []})
     assert list(frame.columns) == ['row_index', 'prediction']
     assert len(frame['prediction']) == 0
 
 
 def test_parse_prediction_response_keeps_all_null_prediction_column():
-    # Regression: bugs/client-response-parser-drops-requested-columns.md
+    # Regression.
     response = {
         'predictions': [
             {'row_index': 0, 'prediction': None},
@@ -109,19 +117,19 @@ def test_parse_prediction_response_keeps_all_null_prediction_column():
 
 
 def test_parse_prediction_response_keeps_requested_fields_when_all_null():
-    # Regression: bugs/client-response-parser-drops-requested-columns.md
+    # Regression.
     response = {
         'predictions': [{'row_index': 0, 'prediction': 'a'}],
     }
     frame = parse_prediction_response(
-        response, requested_fields=['prediction', 'probabilities'])
+        response, requested_fields=['prediction', 'probabilities']
+    )
     assert 'probabilities' in frame.columns
     assert 'quantiles' not in frame.columns
 
 
 def test_parse_prediction_response_unorderable_row_index_raises():
-    # Regression: bugs/client-response-parser-drops-requested-columns.md -- a
-    # raw pandas TypeError used to escape the SdfmError contract.
+    # Regression: a raw pandas TypeError used to escape the SdfmError contract.
     response = {
         'predictions': [
             {'row_index': 0, 'prediction': 'a'},
@@ -134,10 +142,10 @@ def test_parse_prediction_response_unorderable_row_index_raises():
 
 
 def test_parse_prediction_response_null_row_index_raises():
-    # Regression: bugs/client-response-parser-drops-requested-columns.md -- a
-    # null row_index passed the presence check and was then dropped, leaving
-    # the rows silently unsorted.
+    # Regression: a null row_index passed the presence check and was then
+    # dropped, leaving the rows silently unsorted.
     with pytest.raises(SdfmError) as err:
         parse_prediction_response(
-            {'predictions': [{'row_index': None, 'prediction': 'a'}]})
+            {'predictions': [{'row_index': None, 'prediction': 'a'}]}
+        )
     assert err.value.code == 'INVALID_RESPONSE'

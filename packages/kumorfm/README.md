@@ -29,8 +29,8 @@ pip install "kumorfm[relbench]"    # Graph.from_relbench() dataset loading
 pip install "kumorfm[codegen]"     # regenerate the TFM API client (see scripts/)
 ```
 
-Release wheels are built for CPython 3.10, 3.11 and 3.12 (`manylinux_2_28`
-x86-64); no source distribution is published.
+Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
+(`manylinux_2_28` x86-64); no source distribution is published.
 
 Application code should import the SDK's neutral surface, not this package
 directly:
@@ -38,10 +38,11 @@ directly:
 ```python
 from nvidia_sdfm import SDFMClient, kumorfm
 
-graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
-with SDFMClient(url="http://localhost:8000") as client:
+graph = kumorfm.Graph.from_data({'users': df1, 'items': df2, 'orders': df3})
+with SDFMClient(url='http://localhost:8000') as client:
     result = client.kumorfm(graph).predict(
-        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1")
+        'PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1'
+    )
 ```
 
 ## Local development

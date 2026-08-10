@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib
 import weakref
 from typing import Any
@@ -52,10 +53,8 @@ def mark_owned(connection: Any, owned: bool) -> None:
         return
     except TypeError:
         pass
-    try:
+    with contextlib.suppress(AttributeError, TypeError):
         setattr(connection, OWNED_ATTR, owned)
-    except (AttributeError, TypeError):
-        pass
 
 
 def owns_connection(connection: Any) -> bool:

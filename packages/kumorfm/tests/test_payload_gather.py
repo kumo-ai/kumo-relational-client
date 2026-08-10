@@ -13,15 +13,19 @@ from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
-
 from kumorfm.rfm.payload import _entity_values
 
 
-def _context(batch: np.ndarray, df: pd.DataFrame, batch_size: int,
-             row: np.ndarray | None = None) -> SimpleNamespace:
+def _context(
+    batch: np.ndarray,
+    df: pd.DataFrame,
+    batch_size: int,
+    row: np.ndarray | None = None,
+) -> SimpleNamespace:
     table = SimpleNamespace(df=df, batch=batch, row=row, primary_key='pk')
-    return SimpleNamespace(subgraph=SimpleNamespace(
-        table_dict={'t': table}, batch_size=batch_size))
+    return SimpleNamespace(
+        subgraph=SimpleNamespace(table_dict={'t': table}, batch_size=batch_size)
+    )
 
 
 def _reference(context, table_name: str):
@@ -52,9 +56,13 @@ def _reference(context, table_name: str):
 
 def _frame(n: int) -> pd.DataFrame:
     rng = np.random.default_rng(0)
-    return pd.DataFrame({'pk': np.arange(100, 100 + n),
-                         'f': rng.random(n),
-                         's': rng.choice(list('abc'), n)})
+    return pd.DataFrame(
+        {
+            'pk': np.arange(100, 100 + n),
+            'f': rng.random(n),
+            's': rng.choice(list('abc'), n),
+        }
+    )
 
 
 def test_entity_values_matches_the_row_at_a_time_reference() -> None:

@@ -5,7 +5,7 @@
 import datetime
 import json
 import logging
-from typing import Any, List, Union
+from typing import Any
 
 import pandas as pd
 from pydantic.dataclasses import dataclass
@@ -21,10 +21,12 @@ logger = logging.getLogger(__name__)
 @dataclass(repr=False)
 class Constant(ASTNode):
     r"""Creates an atomic description of a constant.
+
     Args:
         value: Value representation as it appeared in the input query.
     """
-    value: Union[List['Constant'], str, None] = None
+
+    value: list['Constant'] | str | None = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -39,17 +41,17 @@ class Constant(ASTNode):
 
     @staticmethod
     def value_type_cast_to_internal_value(
-        value: Union[str, int, float, List[Any], Any]
-    ) -> Union[str, List['Constant']]:
+        value: str | int | float | list[Any] | Any,
+    ) -> str | list['Constant']:
         r"""If value is int or float, cast value type to string.
-            If value is string, cast value to its appropriate format.
-            If value is a list, cast each element in value to its appropriate
-            format.
-            """
+        If value is string, cast value to its appropriate format.
+        If value is a list, cast each element in value to its appropriate
+        format.
+        """
         if isinstance(value, (list, tuple)):
             value = [Constant.from_value(x) for x in value]
             return value
-        elif isinstance(value, str):
+        if isinstance(value, str):
             value = json.dumps(value)  # Escape special characters.
         elif isinstance(value, datetime.datetime):
             return str(pd.Timestamp(value))
@@ -66,18 +68,22 @@ class Constant(ASTNode):
             dtype = Dtype.int
         elif isinstance(value, float):
             dtype = Dtype.float
-        elif isinstance(value,
-                        (pd.Timestamp, datetime.datetime, datetime.date)):
+        elif isinstance(
+            value, (pd.Timestamp, datetime.datetime, datetime.date)
+        ):
             dtype = Dtype.time
-        elif (isinstance(value, str)
-              and value.startswith(_KUMO_INTERNAL_TIMESTAMP_PREFIX)):
+        elif isinstance(value, str) and value.startswith(
+            _KUMO_INTERNAL_TIMESTAMP_PREFIX
+        ):
             # This is for backward compatibility with old configs
-            value = value[len(_KUMO_INTERNAL_TIMESTAMP_PREFIX):]
+            value = value[len(_KUMO_INTERNAL_TIMESTAMP_PREFIX) :]
             try:
                 value = pd.Timestamp(value)
             except TypeError:
                 logger.warning(
-                    f"Time value {value} in config is invalid, using pd.NaT")
+                    'Time value %s in config is invalid, using pd.NaT',
+                    value,
+                )
                 value = pd.NaT
             dtype = Dtype.time
         elif isinstance(value, list):
@@ -91,19 +97,24 @@ class Constant(ASTNode):
             dtype = Dtype.string
         if dtype is None:
             raise TypeError(
-                f'Unsupported constant {value} of type {type(value)}.')
-        return cls(value=cls.value_type_cast_to_internal_value(value),
-                   dtype_maybe=dtype)
+                f'Unsupported constant {value} of type {type(value)}.'
+            )
+        return cls(
+            value=cls.value_type_cast_to_internal_value(value),
+            dtype_maybe=dtype,
+        )
 
     def typed_value(
-            self,  #
-    ) -> Union[int, float, str, pd.Timestamp, List[Any], None]:
+        self,  #
+    ) -> int | float | str | pd.Timestamp | list[Any] | None:
         if self.dtype_maybe is None:
             return None
         assert self.value is not None
         assert isinstance(self.dtype_maybe, (Dtype, ArrayDtype))
-        if (isinstance(self.dtype_maybe, ArrayDtype)
-                or self.dtype_maybe.is_list()):
+        if (
+            isinstance(self.dtype_maybe, ArrayDtype)
+            or self.dtype_maybe.is_list()
+        ):
             assert isinstance(self.value, list)
             return [v.typed_value() for v in self.value]
         assert isinstance(self.dtype_maybe, Dtype)
@@ -114,8 +125,11 @@ class Constant(ASTNode):
         if self.dtype_maybe.is_float():
             return float(str(self.value))
         if self.dtype_maybe.is_string():
-            return str(self.value)[1:-1].encode(
-                'latin-1', 'backslashreplace').decode('unicode-escape')
+            return (
+                str(self.value)[1:-1]
+                .encode('latin-1', 'backslashreplace')
+                .decode('unicode-escape')
+            )
         if self.dtype_maybe.is_timestamp():
             value = pd.to_datetime(self.value)
             assert isinstance(value, pd.Timestamp)

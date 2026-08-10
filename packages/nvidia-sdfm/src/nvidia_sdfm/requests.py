@@ -5,8 +5,9 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import pandas as pd
 
@@ -22,6 +23,7 @@ class ModelRequest:
     (``client.kumorfm(...)`` / ``client.tabicl(...)``) can dispatch to the right
     adapter without a loose ``**kwargs`` bag.
     """
+
     model: ClassVar[str] = ''
 
 
@@ -45,11 +47,13 @@ class TabICLSession:
     Scoring against an established session runs outside the lock and so stays
     concurrent.
     """
+
     id: str | None = None
     pinned: str | None = None
     supported: bool = True
-    lock: threading.Lock = field(default_factory=threading.Lock, repr=False,
-                                 compare=False)
+    lock: threading.Lock = field(
+        default_factory=threading.Lock, repr=False, compare=False
+    )
 
 
 @dataclass
@@ -59,6 +63,7 @@ class TabICLRequest(ModelRequest):
     ``context`` holds labelled rows (including the ``target`` column) and
     ``predict`` holds the unlabelled rows to score.
     """
+
     model: ClassVar[str] = 'tabicl'
 
     context: pd.DataFrame
@@ -73,8 +78,9 @@ class TabICLRequest(ModelRequest):
     embedding_dtype: str | None = None
     max_results: int | None = None
     request_id: str | None = None
-    session: TabICLSession | None = field(default=None, repr=False,
-                                          compare=False)
+    session: TabICLSession | None = field(
+        default=None, repr=False, compare=False
+    )
 
 
 @dataclass
@@ -102,6 +108,7 @@ class KumoRFMRequest(ModelRequest):
     values. Pass ``explain=dict(skip_summary=True)`` to keep that data on the
     machine; see ``kumorfm.rfm.ExplainConfig`` for the full disclosure.
     """
+
     model: ClassVar[str] = 'kumo-rfm'
 
     graph: Any
@@ -138,6 +145,7 @@ class KumoRFMTaskRequest(ModelRequest):
     ``client.kumorfm(graph).predict_task(...)``. ``run_mode``, ``explain``,
     ``batch_size`` and ``options`` behave as in :class:`KumoRFMRequest`.
     """
+
     model: ClassVar[str] = 'kumo-rfm'
 
     graph: Any

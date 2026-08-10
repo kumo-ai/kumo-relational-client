@@ -7,7 +7,6 @@ from __future__ import annotations
 import json
 
 import pytest
-
 from rfm_nim_hardening_cases import (
     EXPECTED_REJECTION_CASES,
     REGRESSION_REJECTION_CASES,
@@ -23,20 +22,21 @@ def test_rejection_catalog_is_unique_and_ticket_free() -> None:
     case_ids = [case.case_id for case in ALL_CASES]
 
     assert len(case_ids) == len(set(case_ids))
-    assert all(case.path in {NIM_V1_PREDICTION_PATH, NIM_V1_SESSIONS_PATH}
-               for case in ALL_CASES)
+    assert all(
+        case.path in {NIM_V1_PREDICTION_PATH, NIM_V1_SESSIONS_PATH}
+        for case in ALL_CASES
+    )
 
 
 def test_expected_rejection_catalog_covers_audited_statuses() -> None:
-    assert {case.expected_status
-            for case in EXPECTED_REJECTION_CASES} == {
-                400,
-                404,
-                405,
-                413,
-                415,
-                422,
-            }
+    assert {case.expected_status for case in EXPECTED_REJECTION_CASES} == {
+        400,
+        404,
+        405,
+        413,
+        415,
+        422,
+    }
 
 
 @pytest.mark.parametrize(
@@ -90,7 +90,8 @@ def test_raw_rejection_cases_preserve_wire_level_reproductions() -> None:
         json.loads(
             by_id['negative-infinity-regression-target'],
             parse_constant=lambda value: (_ for _ in ()).throw(
-                ValueError(value)),
+                ValueError(value)
+            ),
         )
 
 
@@ -101,22 +102,51 @@ def test_structured_rejection_cases_preserve_semantic_reproductions() -> None:
         if case.payload_factory is not None
     }
 
-    assert by_id['null-classification-target']['context'][
-        'instance_table']['rows'][0][1] is None
-    assert by_id['null-regression-target']['context'][
-        'instance_table']['rows'][0][1] is None
-    assert by_id['null-multiclass-target']['context'][
-        'instance_table']['rows'][0][1] is None
+    assert (
+        by_id['null-classification-target']['context']['instance_table'][
+            'rows'
+        ][0][1]
+        is None
+    )
+    assert (
+        by_id['null-regression-target']['context']['instance_table']['rows'][0][
+            1
+        ]
+        is None
+    )
+    assert (
+        by_id['null-multiclass-target']['context']['instance_table']['rows'][0][
+            1
+        ]
+        is None
+    )
     assert by_id['empty-context']['context']['instance_table']['rows'] == []
-    assert by_id['multiclass-target-outside-classes']['context'][
-        'instance_table']['rows'][0][1] == 'gold'
+    assert (
+        by_id['multiclass-target-outside-classes']['context']['instance_table'][
+            'rows'
+        ][0][1]
+        == 'gold'
+    )
     assert by_id['multiclass-duplicate-classes']['task']['target'][
-        'classes'] == ['bronze', 'bronze']
-    assert by_id['whitespace-integer-ids']['predict']['instance_table'][
-        'rows'][0][0] == ' 601'
-    assert by_id['duplicate-context-column']['context']['instance_table'][
-        'columns'].count('status') == 2
-    assert by_id['duplicate-predict-column']['predict']['instance_table'][
-        'columns'].count('anchor_time') == 2
+        'classes'
+    ] == ['bronze', 'bronze']
+    assert (
+        by_id['whitespace-integer-ids']['predict']['instance_table']['rows'][0][
+            0
+        ]
+        == ' 601'
+    )
+    assert (
+        by_id['duplicate-context-column']['context']['instance_table'][
+            'columns'
+        ].count('status')
+        == 2
+    )
+    assert (
+        by_id['duplicate-predict-column']['predict']['instance_table'][
+            'columns'
+        ].count('anchor_time')
+        == 2
+    )
     assert 'predict' not in by_id['empty-context-session']
     assert 'predict' not in by_id['duplicate-context-column-session']

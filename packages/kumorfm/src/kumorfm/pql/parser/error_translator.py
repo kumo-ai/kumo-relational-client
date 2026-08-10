@@ -6,10 +6,30 @@ import logging
 
 import antlr4
 from antlr4.error.Errors import InputMismatchException, NoViableAltException
-from kumorfm.api.common import ValidationError, ValidationResponse
 
+from kumorfm.api.common import ValidationError, ValidationResponse
 from kumorfm.pql.grammar.PQLGrammarLexer import PQLGrammarLexer
 from kumorfm.pql.grammar.PQLGrammarParser import PQLGrammarParser
+
+_SUPPORTED_TIME_UNITS = ('minutes', 'hours', 'days', 'months')
+
+# Words a caller reaches for that the grammar has no token for. `TimeUnit`
+# additionally declares `seconds` and `weeks`, which nothing implements, so
+# reading that enum is what sends people here in the first place.
+_REJECTED_TIME_UNITS = frozenset(
+    {
+        'second',
+        'seconds',
+        'minute',
+        'week',
+        'weeks',
+        'hour',
+        'day',
+        'month',
+        'year',
+        'years',
+    }
+)
 
 
 class Antlr4SyntaxError:
@@ -17,7 +37,7 @@ class Antlr4SyntaxError:
 
     Args:
         recognizer: Antlr recognizer object.
-        offendingSymbol: Unmatched token.
+        offending_symbol: Unmatched token.
         line: Line in which the error occurred.
         column: Column in which the error occurred.
         msg: Parser message to the error.
@@ -29,10 +49,11 @@ class Antlr4SyntaxError:
             had passed through before throwing this error. The int values
             correspond to the RULE enums in the parser code
     """
+
     def __init__(
         self,
         recognizer: PQLGrammarParser | PQLGrammarLexer,
-        offendingSymbol: antlr4.Token,
+        offending_symbol: antlr4.Token,
         line: int,
         column: int,
         msg: str,
@@ -41,7 +62,7 @@ class Antlr4SyntaxError:
         lineage: list[int],
     ):
         self.recognizer = recognizer
-        self.offendingSymbol = offendingSymbol
+        self.offending_symbol = offending_symbol
         self.line = line
         self.column = column
         self.msg = msg
@@ -57,6 +78,7 @@ class ErrorTranslator:
     r"""Error translator class. Given a list of errors produced by Antlr4
     parser, this class returns user-friendly error descriptions.
     """
+
     def translate_errors(
         self,
         errors: list[Antlr4SyntaxError],
@@ -71,16 +93,32 @@ class ErrorTranslator:
             log_error = self._log_error_description(error)
 
             response.errors.append(
-                ValidationError("Invalid Syntax", message=error_message))
+                ValidationError('Invalid Syntax', message=error_message)
+            )
             # DEBUG, not WARNING: the caller raises a ValueError carrying
             # `error_message` and the query on the very next line, so this
             # record is a duplicate for everyone except a grammar maintainer.
             # The raw query is deliberately omitted -- PQL embeds literal
             # filter values, and WARNING-and-above records are typically
             # shipped to a central log store.
-            logger.debug('Parser error %s was translated to: %s',
-                         log_error, error_message)
+            logger.debug(
+                'Parser error %s was translated to: %s',
+                log_error,
+                error_message,
+            )
         return response
+
+    def _rejected_time_unit(self, err: Antlr4SyntaxError) -> str | None:
+        r"""The unsupported time unit this error is about, if it is one.
+
+        An aggregation whose unit the grammar has no token for fails inside the
+        target clause, so it used to be reported as "The target (PREDICT)
+        clause in this query is empty or invalid" -- pointing at the start of
+        the query rather than at the one word that was wrong.
+        """
+        symbol = getattr(err, 'offending_symbol', None)
+        text = (getattr(symbol, 'text', None) or '').strip().lower()
+        return text if text in _REJECTED_TIME_UNITS else None
 
     def _summarize_error(self, err: Antlr4SyntaxError) -> str | None:
         # Get the high-level state of the recognizer so we can know where
@@ -99,46 +137,63 @@ class ErrorTranslator:
         if lineage == [PQLGrammarParser.RULE_prog]:
             # From kumo/pquery/grammar/PQLGrammarParser.py:prog
             if recognizer_state == 34:
-                return ('Query does not start with the PREDICT keyword. ')
+                return 'Query does not start with the PREDICT keyword. '
             # From kumo/pquery/grammar/PQLGrammarParser.py:prog
-            elif recognizer_state == 37:
+            if recognizer_state == 37:
                 if 'FOR EACH' in token_strings:
                     for_each_idx = token_strings.index('FOR EACH')
-                    return ('The target (PREDICT) clause in this query is '
-                            'invalid. We found the following extra characters '
-                            f'before the FOR EACH keyword: '
-                            f'{token_strings[for_each_idx-1]}')
-                else:
-                    return ('Query is missing the FOR EACH keyword.')
+                    return (
+                        'The target (PREDICT) clause in this query is '
+                        'invalid. We found the following extra characters '
+                        f'before the FOR EACH keyword: '
+                        f'{token_strings[for_each_idx - 1]}'
+                    )
+                return 'Query is missing the FOR EACH keyword.'
         if lineage == [
-                PQLGrammarParser.RULE_target, PQLGrammarParser.RULE_prog
+            PQLGrammarParser.RULE_target,
+            PQLGrammarParser.RULE_prog,
         ]:
             if 'WHERE' in token_strings and 'FOR EACH' in token_strings:
                 where_idx = token_strings.index('WHERE')
                 for_each_idx = token_strings.index('FOR EACH')
                 if where_idx < for_each_idx:
-                    return ('The target filter (PREDICT ... WHERE) clause in '
-                            'this query is empty or invalid.')
-            return ('The target (PREDICT) clause in this query is '
-                    'empty or invalid.')
+                    return (
+                        'The target filter (PREDICT ... WHERE) clause in '
+                        'this query is empty or invalid.'
+                    )
+            if (unit := self._rejected_time_unit(err)) is not None:
+                return (
+                    f"'{unit}' is not a time unit a predictive query can "
+                    f'use. Supported units are '
+                    f'{", ".join(_SUPPORTED_TIME_UNITS)}.'
+                )
+            return (
+                'The target (PREDICT) clause in this query is empty or invalid.'
+            )
         if lineage == [
-                PQLGrammarParser.RULE_entity, PQLGrammarParser.RULE_prog
+            PQLGrammarParser.RULE_entity,
+            PQLGrammarParser.RULE_prog,
         ]:
-            return ('The entity (FOR EACH) clause in this query is '
-                    'empty or invalid.')
+            return (
+                'The entity (FOR EACH) clause in this query is '
+                'empty or invalid.'
+            )
         if lineage == []:
-            return ('We found some syntactical errors in your query. We\'re '
-                    'unable to parse some characters. See the detailed error '
-                    'below.')
+            return (
+                "We found some syntactical errors in your query. We're "
+                'unable to parse some characters. See the detailed error '
+                'below.'
+            )
         if lineage == [
-                PQLGrammarParser.RULE_condition,
-                PQLGrammarParser.RULE_filtered_column,
-                PQLGrammarParser.RULE_entity,
-                PQLGrammarParser.RULE_prog,
+            PQLGrammarParser.RULE_condition,
+            PQLGrammarParser.RULE_filtered_column,
+            PQLGrammarParser.RULE_entity,
+            PQLGrammarParser.RULE_prog,
         ]:
             return (
                 'The entity filter (FOR EACH ... WHERE) clause in this query '
-                'is empty or invalid.')
+                'is empty or invalid.'
+            )
         return None
 
     def _translate_error(self, err: Antlr4SyntaxError) -> str:
@@ -155,26 +210,30 @@ class ErrorTranslator:
         # Add specific error messages
         if isinstance(err.e, NoViableAltException):
             error_parts.append('Specific error: ')
-            error_parts.extend(self._handleNoViableAltException(err))
+            error_parts.extend(self._handle_no_viable_alt_exception(err))
         elif isinstance(err.e, InputMismatchException):
             error_parts.append('Specific error: ')
-            error_parts.extend(self._handleInputMismatchException(err))
+            error_parts.extend(self._handle_input_mismatch_exception(err))
         elif 'extraneous input' in err.msg and err.e is None:
             error_parts.append('Specific error: ')
-            error_parts.extend(self._handleExtraneousInput(err))
+            error_parts.extend(self._handle_extraneous_input(err))
         elif 'Array with single element' in err.msg:
-            error_parts.append(f"Line {err.line}, col {err.column}; {err.msg} "
-                               f"Suggestion: If you are using 'IS IN (const)' "
-                               f"please use '= const'  instead.")
+            error_parts.append(
+                f'Line {err.line}, col {err.column}; {err.msg} '
+                f"Suggestion: If you are using 'IS IN (const)' "
+                f"please use '= const'  instead."
+            )
 
         # If no specific errors were found, use default error
         if not error_parts:
             error_parts.append(self._default_error(err))
 
         # Join all error parts with newlines
-        return "\n".join(error_parts)
+        return '\n'.join(error_parts)
 
-    def _handleNoViableAltException(self, err: Antlr4SyntaxError) -> list[str]:
+    def _handle_no_viable_alt_exception(
+        self, err: Antlr4SyntaxError
+    ) -> list[str]:
         # The parser was not able to apply any of the rules.
         # Seems the trickiest exception to handle since it happens at the root
         # so there's no context or expected tokens available.
@@ -187,7 +246,8 @@ class ErrorTranslator:
                 hints.append(
                     'If you were trying to add a column, syntax for a column '
                     'is "ID.ID", where ID stands for a valid table/column '
-                    'name.')
+                    'name.'
+                )
             if rule_name == 'condition':
                 hints.append(
                     'If you were trying to add a condition on aggregation, '
@@ -197,7 +257,8 @@ class ErrorTranslator:
                     'constant. Multiple conditions can be combined with '
                     '"AND", "OR", and "NOT" logical operators. You can refer '
                     'to the documentation for more details '
-                    'on allowed operations.')
+                    'on allowed operations.'
+                )
             if rule_name == 'aggregation':
                 hints.append(
                     'If you were trying to add an aggregation, syntax for '
@@ -207,35 +268,38 @@ class ErrorTranslator:
                     'integers that stand for time offset, and <time_unit> is '
                     'a valid time unit. You can refer '
                     'to the documentation for more details '
-                    'on allowed operations.')
+                    'on allowed operations.'
+                )
 
-        maybe_hints_text = ""
+        maybe_hints_text = ''
         # avoid repeating hints
         hints = list(set(hints))
         if len(hints) > 0:
             maybe_hints_text = '\nHINTS:\n' + '\n'.join(hints)
         return [
-            f'Could not process the text: "{err.offendingSymbol.text}"; '
+            f'Could not process the text: "{err.offending_symbol.text}"; '
             f'in line {err.line} and col {err.column}; Encountered the '
             f'following error: "{err.msg}"; '
             f'{maybe_hints_text}'
         ]
 
-    def _handleInputMismatchException(self,
-                                      err: Antlr4SyntaxError) -> list[str]:
+    def _handle_input_mismatch_exception(
+        self, err: Antlr4SyntaxError
+    ) -> list[str]:
         # The next token does not match any of the next expected token
         assert isinstance(err.e, InputMismatchException)
         offending_token_text = err.recognizer.getTokenErrorDisplay(
-            err.offendingSymbol)
+            err.offending_symbol
+        )
         # The parser is already in recovery mode and is trying to parse input
         # without the token - hence we can't rely on the parser to find the
         # expected tokens and we need to parse the default error
         if err.msg[-1] == '}':
             # multiple tokens
-            expected_tokens = err.msg[err.msg.rfind('expecting {') + 11:-1]
+            expected_tokens = err.msg[err.msg.rfind('expecting {') + 11 : -1]
         else:
             # only one
-            expected_tokens = err.msg[err.msg.rfind('expecting ') + 10:]
+            expected_tokens = err.msg[err.msg.rfind('expecting ') + 10 :]
         if expected_tokens == '<EOF>':
             return [
                 f'Line {err.line}, col {err.column}; '
@@ -246,31 +310,35 @@ class ErrorTranslator:
         # The default error displays rule name rather than the actual text
         # it stands for. We replace the internal names with the more helpful
         # text that they stand for.
-        expected_tokens = expected_tokens.replace("TARGET_FILTER",
-                                                  "TARGET FILTER IS")
-        expected_tokens = expected_tokens.replace("TEMPORAL_ENTITY_FILTER",
-                                                  "TEMPORAL ENTITY FILTER IS")
-        expected_tokens = expected_tokens.replace("ENTITY_FILTER",
-                                                  "ENTITY FILTER IS")
+        expected_tokens = expected_tokens.replace(
+            'TARGET_FILTER', 'TARGET FILTER IS'
+        )
+        expected_tokens = expected_tokens.replace(
+            'TEMPORAL_ENTITY_FILTER', 'TEMPORAL ENTITY FILTER IS'
+        )
+        expected_tokens = expected_tokens.replace(
+            'ENTITY_FILTER', 'ENTITY FILTER IS'
+        )
         return [
             f'Line {err.line}, col {err.column}; '
             f'Input Mismatch, got {offending_token_text}, but expected one '
             f'of {expected_tokens}.'
         ]
 
-    def _handleExtraneousInput(self, err: Antlr4SyntaxError) -> list[str]:
+    def _handle_extraneous_input(self, err: Antlr4SyntaxError) -> list[str]:
         # The next token does not match any of the next expected token
         offending_token_text = err.recognizer.getTokenErrorDisplay(
-            err.offendingSymbol)
+            err.offending_symbol
+        )
         # The parser is already in recovery mode and is trying to parse input
         # without the token - hence we can't rely on the parser to find the
         # expected tokens and we need to parse the default error
         if err.msg[-1] == '}':
             # multiple tokens
-            expected_tokens = err.msg[err.msg.rfind('expecting {') + 11:-1]
+            expected_tokens = err.msg[err.msg.rfind('expecting {') + 11 : -1]
         else:
             # only one
-            expected_tokens = err.msg[err.msg.rfind('expecting ') + 10:]
+            expected_tokens = err.msg[err.msg.rfind('expecting ') + 10 :]
         if expected_tokens == '<EOF>':
             return [
                 f'Line {err.line}, col {err.column}; '
@@ -279,7 +347,7 @@ class ErrorTranslator:
             ]
         # We do not report $TODAY as an option for now since we do not
         # encourage its use
-        expected_tokens = expected_tokens.replace("'$TODAY', ", "")
+        expected_tokens = expected_tokens.replace("'$TODAY', ", '')
         return [
             f'Line {err.line}, col {err.column}; '
             f'Extraneous input, got {offending_token_text}, but expected one '
@@ -288,21 +356,23 @@ class ErrorTranslator:
 
     def _default_error(self, err: Antlr4SyntaxError) -> str:
         r"""Given an ANTLR error, returns a default message."""
-        return (f" Line {err.line}, col {err.column};  "
-                f"Syntax Error: {err.msg}")
+        return f' Line {err.line}, col {err.column};  Syntax Error: {err.msg}'
 
     def _log_error_description(self, err: Antlr4SyntaxError) -> str:
         r"""Given an ANTLR error, returns a message for logging with all
         the details, relevant to debugging.
         """
         if isinstance(err.e, NoViableAltException):
-            e_str = (f'{str(err.e)}, startToken {err.e.startToken}, '
-                     f'offendingSymbol {err.offendingSymbol}, '
-                     f'deadEndConfigs {err.e.deadEndConfigs}')
+            e_str = (
+                f'{err.e!s}, startToken {err.e.startToken}, '
+                f'offendingSymbol {err.offending_symbol}, '
+                f'deadEndConfigs {err.e.deadEndConfigs}'
+            )
         else:
             e_str = str(err.e)
 
-        maybe_context = ""
+        maybe_context = ''
         return (
-            f'{type(err.e)} {str(err.offendingSymbol)}, line {err.line}, col '
-            f'{err.column}{maybe_context} {err.msg}, {e_str}')
+            f'{type(err.e)} {err.offending_symbol!s}, line {err.line}, col '
+            f'{err.column}{maybe_context} {err.msg}, {e_str}'
+        )

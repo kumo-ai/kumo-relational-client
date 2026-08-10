@@ -43,7 +43,8 @@ HTTP_METHODS = {
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Generate SDK TFM API metadata from an OpenAPI spec.')
+        description='Generate SDK TFM API metadata from an OpenAPI spec.'
+    )
     parser.add_argument(
         '--spec',
         required=True,
@@ -167,31 +168,36 @@ def generate_code(
     else:
         lines.append('    pass')
 
-    lines.extend([
-        '',
-        'TFM_ENDPOINTS_BY_OPERATION_ID: Final[dict[str, Endpoint]] = {',
-    ])
+    lines.extend(
+        [
+            '',
+            'TFM_ENDPOINTS_BY_OPERATION_ID: Final[dict[str, Endpoint]] = {',
+        ]
+    )
     for operation in operations:
         attr = operation['attr_name']
         operation_id = operation['operation_id']
-        lines.append(
-            f"    {operation_id!r}: TFMOperations.{attr}.endpoint,")
-    lines.extend([
-        '}',
-        '',
-        '',
-        '__all__ = [',
-        "    'TFMOperation',",
-        "    'TFMOperations',",
-        "    'TFM_ENDPOINTS_BY_OPERATION_ID',",
-        "    'TFM_SCHEMA_NAMES',",
-    ])
-    lines.extend(f"    {name!r}," for name in response_model_names)
-    lines.extend(f"    {name!r}," for name in sorted(constants))
-    lines.extend([
-        ']',
-        '',
-    ])
+        lines.append(f'    {operation_id!r}: TFMOperations.{attr}.endpoint,')
+    lines.extend(
+        [
+            '}',
+            '',
+            '',
+            '__all__ = [',
+            "    'TFMOperation',",
+            "    'TFMOperations',",
+            "    'TFM_ENDPOINTS_BY_OPERATION_ID',",
+            "    'TFM_SCHEMA_NAMES',",
+        ]
+    )
+    lines.extend(f'    {name!r},' for name in response_model_names)
+    lines.extend(f'    {name!r},' for name in sorted(constants))
+    lines.extend(
+        [
+            ']',
+            '',
+        ]
+    )
     code = '\n'.join(lines)
     _assert_importable_syntax(code, output_path)
     return code
@@ -215,19 +221,23 @@ def validate_generated_code(spec: dict[str, Any], code: str) -> list[str]:
                     f'{schema_name} fields differ from spec properties',
                     expected_fields=expected_fields,
                     actual_fields=actual_fields,
-                ))
+                )
+            )
 
         missing_required = tuple(
-            field for field in schema.get('required', [])
-            if field not in actual_fields)
+            field
+            for field in schema.get('required', [])
+            if field not in actual_fields
+        )
         if missing_required:
             errors.append(
-                f"{schema_name} is missing required spec fields: "
-                f"{', '.join(missing_required)}")
+                f'{schema_name} is missing required spec fields: '
+                f'{", ".join(missing_required)}'
+            )
 
     expected_output_fields = tuple(
-        _nested_enum_at(schemas.get('OutputSpec', {}),
-                        ('fields', 'items')))
+        _nested_enum_at(schemas.get('OutputSpec', {}), ('fields', 'items'))
+    )
     actual_output_fields = _generated_constant_tuple(
         code,
         'TFM_OUTPUT_FIELD_VALUES',
@@ -238,19 +248,23 @@ def validate_generated_code(spec: dict[str, Any], code: str) -> list[str]:
                 'TFM_OUTPUT_FIELD_VALUES differs from OutputSpec.fields enum',
                 expected_fields=expected_output_fields,
                 actual_fields=actual_output_fields,
-            ))
+            )
+        )
 
     prediction_operations = _operations_by_request_schema(
-        spec, 'PredictionRequest')
+        spec, 'PredictionRequest'
+    )
     if not prediction_operations:
         errors.append(
-            'Missing operation with request schema: PredictionRequest')
+            'Missing operation with request schema: PredictionRequest'
+        )
     for operation_id, operation in prediction_operations:
         response_schema = _success_response_schema(operation)
         if response_schema != 'PredictionResponse':
             errors.append(
-                f"{operation_id} success response schema must be "
-                f"'PredictionResponse', got {response_schema!r}")
+                f'{operation_id} success response schema must be '
+                f"'PredictionResponse', got {response_schema!r}"
+            )
 
     return errors
 
@@ -260,7 +274,8 @@ def _read_source(source: str) -> str:
         url = _normalize_spec_url(source)
         request = urllib.request.Request(url)
         token = os.environ.get('GITLAB_TOKEN') or os.environ.get(
-            'PRIVATE_TOKEN')
+            'PRIVATE_TOKEN'
+        )
         if token:
             request.add_header('PRIVATE-TOKEN', token)
         with urllib.request.urlopen(request) as response:
@@ -287,8 +302,9 @@ def _load_spec(spec_text: str, source: str) -> dict[str, Any]:
     else:
         if yaml is None:
             raise RuntimeError(
-                "PyYAML is required to generate TFM API metadata from YAML. "
-                "Install this repo with the 'codegen' extra.")
+                'PyYAML is required to generate TFM API metadata from YAML. '
+                "Install this repo with the 'codegen' extra."
+            )
         spec = yaml.safe_load(spec_text)
     if not isinstance(spec, dict):
         raise ValueError('OpenAPI spec must parse to an object.')
@@ -313,26 +329,23 @@ def _extract_operations(
             operation_id = operation.get('operationId')
             if not operation_id:
                 operation_id = _fallback_operation_id(method, path)
-            operations.append({
-                'attr_name':
-                _snake_case(operation_id),
-                'operation_id':
-                operation_id,
-                'path':
-                _strip_path_prefix(path, strip_prefix),
-                'method':
-                method.upper(),
-                'request_schema':
-                _request_schema(operation),
-                'response_schema':
-                _success_response_schema(operation),
-                'summary':
-                operation.get('summary'),
-            })
+            operations.append(
+                {
+                    'attr_name': _snake_case(operation_id),
+                    'operation_id': operation_id,
+                    'path': _strip_path_prefix(path, strip_prefix),
+                    'method': method.upper(),
+                    'request_schema': _request_schema(operation),
+                    'response_schema': _success_response_schema(operation),
+                    'summary': operation.get('summary'),
+                }
+            )
     return operations
 
 
-def _extract_constants(spec: dict[str, Any]) -> dict[str, str | tuple[str, ...]]:
+def _extract_constants(
+    spec: dict[str, Any],
+) -> dict[str, str | tuple[str, ...]]:
     schemas = spec.get('components', {}).get('schemas', {})
     prediction_request = schemas.get('PredictionRequest', {})
     output_spec = schemas.get('OutputSpec', {})
@@ -488,21 +501,21 @@ def _operation_lines(operation: dict[str, str | None]) -> list[str]:
         raise TypeError('operation attr_name must be a string')
     return [
         f'    {attr_name}: Final[TFMOperation] = TFMOperation(',
-        f"        operation_id={operation['operation_id']!r},",
+        f'        operation_id={operation["operation_id"]!r},',
         '        endpoint=Endpoint(',
-        f"            path={operation['path']!r},",
-        f"            method=HTTPMethod.{operation['method']},",
+        f'            path={operation["path"]!r},',
+        f'            method=HTTPMethod.{operation["method"]},',
         '        ),',
-        f"        request_schema={operation['request_schema']!r},",
-        f"        response_schema={operation['response_schema']!r},",
-        f"        summary={operation['summary']!r},",
+        f'        request_schema={operation["request_schema"]!r},',
+        f'        response_schema={operation["response_schema"]!r},',
+        f'        summary={operation["summary"]!r},',
         '    )',
         '',
     ]
 
 
 def _request_schema(operation: dict[str, Any]) -> str | None:
-    content = (operation.get('requestBody', {}).get('content', {}))
+    content = operation.get('requestBody', {}).get('content', {})
     schema = content.get('application/json', {}).get('schema')
     return _schema_ref_name(schema)
 
@@ -530,7 +543,7 @@ def _schema_ref_name(schema: dict[str, Any] | None) -> str | None:
     prefix = '#/components/schemas/'
     if not ref.startswith(prefix):
         raise ValueError(f'Unsupported schema reference: {ref}')
-    return ref[len(prefix):]
+    return ref[len(prefix) :]
 
 
 def _operations_by_request_schema(
@@ -579,7 +592,7 @@ def _strip_path_prefix(path: str, prefix: str) -> str:
     if path == prefix:
         return '/'
     if path.startswith(prefix + '/'):
-        return path[len(prefix):]
+        return path[len(prefix) :]
     return path
 
 
@@ -662,7 +675,8 @@ def _format_sequence_diff(
             fromfile='generated',
             tofile='spec',
             lineterm='',
-        ))
+        )
+    )
     return f'{title}:\n{diff}'
 
 

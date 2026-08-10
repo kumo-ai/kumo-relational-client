@@ -17,17 +17,22 @@ from sdfm_connectors.sql import (
 _ABSENT = ('databricks', 'databricks.sql', 'databricks.sql.client')
 
 databricks_sql = require_driver(
-    'databricks', 'databricks-sql-connector', 'databricks.sql',
+    'databricks',
+    'databricks-sql-connector',
+    'databricks.sql',
     absent=_ABSENT,
 )
 _client = require_driver(
-    'databricks', 'databricks-sql-connector', 'databricks.sql.client',
+    'databricks',
+    'databricks-sql-connector',
+    'databricks.sql.client',
     absent=_ABSENT,
 )
 
 if not hasattr(_client, 'Connection'):
     raise ImportError(
-        "cannot import name 'Connection' from 'databricks.sql.client'")
+        "cannot import name 'Connection' from 'databricks.sql.client'"
+    )
 
 Connection: TypeAlias = _client.Connection
 
@@ -40,38 +45,45 @@ _ENV_BY_ARG = {
 }
 
 
-
-_DOCUMENTED_KWARGS = frozenset({
-    'auth_type', 'credentials_provider', 'experimental_oauth_persistence',
-    'oauth_client_id', 'oauth_client_secret', 'oauth_redirect_port_range',
-    'oauth_scopes', 'password', 'session_configuration', 'tls_verify',
-    'use_cloud_fetch', 'user_agent_entry', 'username',
-})
+_DOCUMENTED_KWARGS = frozenset(
+    {
+        'auth_type',
+        'credentials_provider',
+        'experimental_oauth_persistence',
+        'oauth_client_id',
+        'oauth_client_secret',
+        'oauth_redirect_port_range',
+        'oauth_scopes',
+        'password',
+        'session_configuration',
+        'tls_verify',
+        'use_cloud_fetch',
+        'user_agent_entry',
+        'username',
+    }
+)
 
 
 def _declared_connect_args() -> frozenset[str]:
-    r"""The driver's own named connection parameters.
+    r"""Return the Databricks driver's accepted connection keywords.
 
-    Read off the driver so the allow-list tracks driver upgrades. The driver
-    also takes ``**kwargs`` and silently ignores anything it does not know, so
-    without this a typo'd ``catalog=`` reads from the environment default
-    instead — the wrong catalog, with no error.
-
-    A signature-only allow-list can never be complete here, because the
-    driver routes its documented OAuth parameters -- ``auth_type`` and
-    ``credentials_provider``, the non-PAT auth path -- through ``**kwargs``,
-    where they are invisible to :func:`inspect.signature`. Those are folded in
-    explicitly so the guard rejects only what the driver would really ignore.
+    The driver accepts ``**kwargs`` and silently ignores unknown names, so this
+    guard rejects typos before they fall back to ambient defaults. OAuth
+    options are added explicitly because the driver routes them through
+    ``**kwargs``, where ``inspect.signature`` cannot see them.
     """
     parameters = inspect.signature(Connection.__init__).parameters.values()
     return frozenset(
-        parameter.name for parameter in parameters
+        parameter.name
+        for parameter in parameters
         if parameter.kind is not parameter.VAR_KEYWORD
-        and parameter.name != 'self')
+        and parameter.name != 'self'
+    )
 
 
-_CONNECT_ARGS = (_declared_connect_args() | frozenset(_ENV_BY_ARG)
-                 | _DOCUMENTED_KWARGS)
+_CONNECT_ARGS = (
+    _declared_connect_args() | frozenset(_ENV_BY_ARG) | _DOCUMENTED_KWARGS
+)
 
 
 def connect(

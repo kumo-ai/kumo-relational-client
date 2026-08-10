@@ -5,18 +5,27 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
-CANONICAL_SPEC_DIR = Path('../structured-data-api')
+# These tests replay the request/response examples that ship beside the
+# Universal TFM OpenAPI contract, to check this client encodes what the
+# contract says. The examples are not vendored here, so the tests skip unless
+# a checkout is pointed at explicitly. The default is the sibling-directory
+# layout the maintainers use; anyone else sets SDFM_CONTRACT_DIR.
+_ENV_CONTRACT_DIR = 'SDFM_CONTRACT_DIR'
+CANONICAL_SPEC_DIR = Path(
+    os.environ.get(_ENV_CONTRACT_DIR, '../structured-data-api')
+)
 CANONICAL_EXAMPLES_DIR = CANONICAL_SPEC_DIR / 'examples'
 
 canonical_examples_available = pytest.mark.skipif(
     not CANONICAL_EXAMPLES_DIR.exists(),
-    reason='canonical structured-data-api checkout is not available beside '
-    'this repo',
+    reason=f'contract examples not found at {CANONICAL_EXAMPLES_DIR}; set '
+    f'{_ENV_CONTRACT_DIR} to a checkout to run these',
 )
 
 
@@ -27,18 +36,22 @@ def load_canonical_example(*parts: str) -> dict:
 
 @pytest.fixture
 def context_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        'row_id': ['ctx-0', 'ctx-1', 'ctx-2', 'ctx-3', 'ctx-4', 'ctx-5'],
-        'age': [22, 31, 47, 54, 36, 28],
-        'score': [0.20, 0.78, 0.35, 0.91, 0.66, 0.29],
-        'target_col': ['no', 'yes', 'no', 'yes', 'yes', 'no'],
-    })
+    return pd.DataFrame(
+        {
+            'row_id': ['ctx-0', 'ctx-1', 'ctx-2', 'ctx-3', 'ctx-4', 'ctx-5'],
+            'age': [22, 31, 47, 54, 36, 28],
+            'score': [0.20, 0.78, 0.35, 0.91, 0.66, 0.29],
+            'target_col': ['no', 'yes', 'no', 'yes', 'yes', 'no'],
+        }
+    )
 
 
 @pytest.fixture
 def predict_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        'row_id': ['q-0', 'q-1'],
-        'age': [33, 49],
-        'score': [0.72, 0.30],
-    })
+    return pd.DataFrame(
+        {
+            'row_id': ['q-0', 'q-1'],
+            'age': [33, 49],
+            'score': [0.72, 0.30],
+        }
+    )

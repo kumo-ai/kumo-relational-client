@@ -6,35 +6,35 @@ import re
 
 import pandas as pd
 import pytest
-
+from kumorfm.exceptions import GraphConstructionError
 from kumorfm.rfm import Graph
 
 try:
     import pyarrow as pa
     import yaml  # noqa: F401
-    from snowflake.connector.errors import ProgrammingError
-
     from kumorfm.rfm.backend.snow import Connection
+    from snowflake.connector.errors import ProgrammingError
 except ImportError:
-    pytest.skip("'snowflake' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'snowflake' extension not installed", allow_module_level=True)
 
 _DATABASE = 'DB'
 _SCHEMA = 'SCH'
 
 _DATA = {
-    'DATACENTERS':
-    pd.DataFrame({
-        'DATACENTER_ID': [f'dc_{i}' for i in range(4)],
-        'REGION': ['AMER', 'EMEA', 'APAC', 'AMER'],
-        'COUNTRY': ['US', 'DE', 'JP', 'CA'],
-    }),
-    'RACKS':
-    pd.DataFrame({
-        'RACK_ID': [f'rack_{i}' for i in range(12)],
-        'DATACENTER_ID': [f'dc_{i % 4}' for i in range(12)],
-        'HALL': [f'hall_{i % 3}' for i in range(12)],
-    }),
+    'DATACENTERS': pd.DataFrame(
+        {
+            'DATACENTER_ID': [f'dc_{i}' for i in range(4)],
+            'REGION': ['AMER', 'EMEA', 'APAC', 'AMER'],
+            'COUNTRY': ['US', 'DE', 'JP', 'CA'],
+        }
+    ),
+    'RACKS': pd.DataFrame(
+        {
+            'RACK_ID': [f'rack_{i}' for i in range(12)],
+            'DATACENTER_ID': [f'dc_{i % 4}' for i in range(12)],
+            'HALL': [f'hall_{i % 3}' for i in range(12)],
+        }
+    ),
 }
 
 _COLUMN_TYPES = {
@@ -54,7 +54,7 @@ _PRIMARY_KEYS = {'DATACENTERS': 'DATACENTER_ID', 'RACKS': 'RACK_ID'}
 
 # `SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW` echoes the author's expressions
 # verbatim, so a self-qualifier may appear in any case:
-_SEMANTIC_VIEW_YAML = '''
+_SEMANTIC_VIEW_YAML = """
 tables:
   - name: DATACENTERS
     base_table:
@@ -93,14 +93,14 @@ relationships:
     relationship_columns:
       - left_column: DATACENTER_ID
         right_column: DATACENTER_ID
-'''
+"""
 
 
 class _FakeCursor:
     def __init__(self, error: Exception | None = None) -> None:
         self._error = error
         self._rows: list = []
-        self._arrow: 'pa.Table | None' = None
+        self._arrow: pa.Table | None = None
 
     def __enter__(self) -> '_FakeCursor':
         return self
@@ -117,7 +117,7 @@ class _FakeCursor:
         sql = ' '.join(sql.split())
 
         if 'SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW' in sql:
-            self._rows = [(_SEMANTIC_VIEW_YAML, )]
+            self._rows = [(_SEMANTIC_VIEW_YAML,)]
             return
 
         if sql.startswith('SHOW IMPORTED KEYS'):
@@ -127,16 +127,29 @@ class _FakeCursor:
             # NOTE Quoted identifiers are case-sensitive in Snowflake, so only
             # the canonical spelling resolves:
             match = re.fullmatch(
-                r'DESCRIBE TABLE "([^"]+)"\."([^"]+)"\."([^"]+)"', sql)
+                r'DESCRIBE TABLE "([^"]+)"\."([^"]+)"\."([^"]+)"', sql
+            )
             assert match is not None, f'Unexpected SQL: {sql}'
             database, schema, table = match.groups()
-            if ((database, schema) != (_DATABASE, _SCHEMA)
-                    or table not in _COLUMN_TYPES):
-                raise RuntimeError(f"SQL compilation error: Table '{table}' "
-                                   f"does not exist")
-            self._rows = [(name, dtype, 'COLUMN', 'Y', None,
-                           'Y' if _PRIMARY_KEYS[table] == name else 'N', 'N')
-                          for name, dtype in _COLUMN_TYPES[table].items()]
+            if (database, schema) != (
+                _DATABASE,
+                _SCHEMA,
+            ) or table not in _COLUMN_TYPES:
+                raise RuntimeError(
+                    f"SQL compilation error: Table '{table}' does not exist"
+                )
+            self._rows = [
+                (
+                    name,
+                    dtype,
+                    'COLUMN',
+                    'Y',
+                    None,
+                    'Y' if _PRIMARY_KEYS[table] == name else 'N',
+                    'N',
+                )
+                for name, dtype in _COLUMN_TYPES[table].items()
+            ]
             return
 
         match = re.search(r'FROM "([^"]+)"\."([^"]+)"\."([^"]+)"', sql)
@@ -146,8 +159,9 @@ class _FakeCursor:
 
         names = re.findall(r'"((?:[^"]|"")+)"', sql.split(' FROM ')[0])
         self._arrow = pa.Table.from_pandas(
-            pd.DataFrame({name: df[name]
-                          for name in names}), preserve_index=False)
+            pd.DataFrame({name: df[name] for name in names}),
+            preserve_index=False,
+        )
 
     def fetchall(self) -> list:
         return self._rows
@@ -190,14 +204,18 @@ def test_from_snowflake_semantic_view_keeps_self_qualified_columns() -> None:
         )
 
     datacenters = graph['DATACENTERS']
-    assert {column.name
-            for column in datacenters.columns
-            } == {'DATACENTER_ID', 'REGION', 'COUNTRY'}
+    assert {column.name for column in datacenters.columns} == {
+        'DATACENTER_ID',
+        'REGION',
+        'COUNTRY',
+    }
 
     racks = graph['RACKS']
-    assert {column.name
-            for column in racks.columns} == {'RACK_ID', 'HALL',
-                                             'DATACENTER_ID'}
+    assert {column.name for column in racks.columns} == {
+        'RACK_ID',
+        'HALL',
+        'DATACENTER_ID',
+    }
 
     # A qualifier of another table is still rejected:
     message = str(caught[0].message)
@@ -242,7 +260,9 @@ def test_from_snowflake_propagates_non_lookup_errors() -> None:
         'again.',
         errno=390114,
     )
-    with pytest.raises(ProgrammingError, match='Authentication token'):
+    with pytest.raises(
+        GraphConstructionError, match='Authentication token'
+    ) as caught:
         Graph.from_snowflake(
             connection=_FakeConnection(error),
             database=_DATABASE,
@@ -252,11 +272,13 @@ def test_from_snowflake_propagates_non_lookup_errors() -> None:
             verbose=False,
         )
 
+    assert isinstance(caught.value.__cause__, ProgrammingError)
+
 
 def test_from_snowflake_reports_unresolvable_object_as_missing_table() -> None:
     error = ProgrammingError(
         msg="SQL compilation error:\nObject 'DB.SCH.RACKS' does not exist or "
-        "not authorized.",
+        'not authorized.',
         errno=2003,
     )
     with pytest.raises(ValueError, match='does not exist') as caught:
@@ -272,7 +294,8 @@ def test_from_snowflake_reports_unresolvable_object_as_missing_table() -> None:
 
 
 def test_from_snowflake_tracks_internal_connection(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Regression test for `graph-warehouse-connection-never-closed.md`: a
     # connection the SDK opened is a connection the SDK owns and closes.
     connection = _FakeConnection()
@@ -303,7 +326,8 @@ def test_from_snowflake_tracks_internal_connection(
 
 
 def test_from_snowflake_closes_internal_connection_on_error(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # A connection the SDK opened must not leak in case the graph is never
     # constructed and can therefore never take ownership of it:
     connection = _FakeConnection()
@@ -340,7 +364,8 @@ def test_from_snowflake_keeps_external_connection_open_on_error() -> None:
 
 
 def test_from_snowflake_semantic_view_closes_internal_connection_on_error(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     error = ProgrammingError(msg='Semantic view does not exist', errno=2003)
     connection = _FakeConnection(error)
     monkeypatch.setattr(
@@ -348,7 +373,7 @@ def test_from_snowflake_semantic_view_closes_internal_connection_on_error(
         lambda **kwargs: connection,
     )
 
-    with pytest.raises(ProgrammingError):
+    with pytest.raises(GraphConstructionError):
         Graph.from_snowflake_semantic_view(
             'GPU_FLEET_SV',
             connection=dict(account='localhost'),
@@ -358,7 +383,8 @@ def test_from_snowflake_semantic_view_closes_internal_connection_on_error(
 
 
 def test_semantic_view_drops_a_type_mismatched_relationship(
-        monkeypatch) -> None:
+    monkeypatch,
+) -> None:
     r"""Regression test for
     `graph-view-conversion-aborts-on-one-bad-relationship.md`.
 
@@ -375,8 +401,10 @@ def test_semantic_view_drops_a_type_mismatched_relationship(
     datacenters['DATACENTER_ID'] = range(len(datacenters))
     monkeypatch.setitem(_DATA, 'DATACENTERS', datacenters)
     monkeypatch.setitem(
-        _COLUMN_TYPES, 'DATACENTERS',
-        {**_COLUMN_TYPES['DATACENTERS'], 'DATACENTER_ID': 'NUMBER(38,0)'})
+        _COLUMN_TYPES,
+        'DATACENTERS',
+        {**_COLUMN_TYPES['DATACENTERS'], 'DATACENTER_ID': 'NUMBER(38,0)'},
+    )
 
     with pytest.warns(ViewConversionWarning):
         graph = Graph.from_snowflake_semantic_view(
@@ -388,8 +416,11 @@ def test_semantic_view_drops_a_type_mismatched_relationship(
     assert set(graph.tables) == {'DATACENTERS', 'RACKS'}
     assert Edge('RACKS', 'DATACENTER_ID', 'DATACENTERS') not in graph.edges
 
-    dropped = [msg for msg in graph.conversion_messages
-               if 'incompatible data types' in msg]
+    dropped = [
+        msg
+        for msg in graph.conversion_messages
+        if 'incompatible data types' in msg
+    ]
     assert len(dropped) == 1
     assert "'RACKS'" in dropped[0] and "'DATACENTERS'" in dropped[0]
     assert graph.validate() is graph

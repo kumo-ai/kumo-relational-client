@@ -10,14 +10,13 @@ from importlib.util import find_spec
 
 import numpy as np
 import pandas as pd
-from kumorfm.runmode import MissingType
+from typing_extensions import Self
+
+from kumorfm import in_tmux
 from kumorfm.api.source_table import UnavailableSourceTable
 from kumorfm.api.table import Column as ColumnDefinition
 from kumorfm.api.table import TableDefinition
 from kumorfm.api.typing import Dtype, Stype
-from typing_extensions import Self
-
-from kumorfm import in_tmux
 from kumorfm.rfm.base import (
     Column,
     ColumnSpec,
@@ -25,8 +24,8 @@ from kumorfm.rfm.base import (
     DataBackend,
     SourceColumn,
     SourceForeignKey,
+    composite_key,
 )
-from kumorfm.rfm.base import composite_key
 from kumorfm.rfm.base.utils import to_datetime
 from kumorfm.rfm.infer import (
     infer_dtype,
@@ -34,8 +33,8 @@ from kumorfm.rfm.infer import (
     infer_stype,
     infer_time_column,
 )
+from kumorfm.runmode import MissingType
 from kumorfm.utils import display, quote_ident
-
 
 _DERIVED_KEY_PREFIX = composite_key.DERIVED_PREFIX
 
@@ -64,6 +63,7 @@ class Table(ABC):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+
     _NUM_SAMPLE_ROWS = 1_000
 
     def __init__(
@@ -97,8 +97,11 @@ class Table(ABC):
             # it is already part of the column set (don't magically add it):
             if any(column.is_source for column in self.columns):
                 primary_key = self._source_primary_key
-                if (primary_key is not None and primary_key in self
-                        and self[primary_key].is_source):
+                if (
+                    primary_key is not None
+                    and primary_key in self
+                    and self[primary_key].is_source
+                ):
                     self.primary_key = primary_key
         elif primary_key is not None:
             if primary_key not in self:
@@ -174,8 +177,9 @@ class Table(ABC):
         # Obtain a batch-wise sample for all column expressions:
         expr_specs = [spec for spec in column_specs if not spec.is_source]
         if len(expr_specs) > 0:
-            if any(spec.dtype is None or spec.stype is None
-                   for spec in expr_specs):
+            if any(
+                spec.dtype is None or spec.stype is None for spec in expr_specs
+            ):
                 self._update_expr_sample_df(expr_specs)
             else:  # Remove out-dated columns:
                 self._expr_sample_df = self._expr_sample_df.drop(
@@ -185,8 +189,10 @@ class Table(ABC):
 
         for column_spec in column_specs:
             if column_spec.name in self:
-                raise KeyError(f"Column '{column_spec.name}' already exists "
-                               f"in table '{self.name}'")
+                raise KeyError(
+                    f"Column '{column_spec.name}' already exists "
+                    f"in table '{self.name}'"
+                )
 
             dtype = column_spec.dtype
             stype = column_spec.stype
@@ -195,17 +201,19 @@ class Table(ABC):
                 if column_spec.name not in self._source_column_dict:
                     raise ValueError(
                         f"Column '{column_spec.name}' does not exist in the "
-                        f"underlying source table")
+                        f'underlying source table'
+                    )
 
                 if dtype is None:
                     dtype = self._source_column_dict[column_spec.name].dtype
 
                 if dtype == Dtype.unsupported:
                     raise ValueError(
-                        f"Encountered unsupported data type for column "
+                        f'Encountered unsupported data type for column '
                         f"'{column_spec.name}' in table '{self.name}'. Please "
                         f"either change the column's data type or remove the "
-                        f"column from this table.")
+                        f'column from this table.'
+                    )
 
             if dtype is None:
                 if column_spec.is_source:
@@ -218,11 +226,12 @@ class Table(ABC):
                     raise RuntimeError(
                         f"Encountered unsupported data type '{ser.dtype}' for "
                         f"column '{column_spec.name}' in table '{self.name}'. "
-                        f"Please either cast the column to a supported type "
-                        f"before building the table (for example "
+                        f'Please either cast the column to a supported type '
+                        f'before building the table (for example '
                         f"df['{column_spec.name}'] = "
                         f"df['{column_spec.name}'].astype('int64')) or remove "
-                        f"the column from this table.") from e
+                        f'the column from this table.'
+                    ) from e
 
             if stype is None:
                 if column_spec.is_source:
@@ -233,11 +242,12 @@ class Table(ABC):
                     stype = infer_stype(ser, column_spec.name, dtype)
                 except Exception as e:
                     raise RuntimeError(
-                        f"Could not determine semantic type for column "
+                        f'Could not determine semantic type for column '
                         f"'{column_spec.name}' with data type '{dtype}' in "
                         f"table '{self.name}'. Please either change the "
                         f"column's data type or remove the column from this "
-                        f"table.") from e
+                        f'table.'
+                    ) from e
 
             self._column_dict[column_spec.name] = Column(
                 name=column_spec.name,
@@ -323,7 +333,7 @@ class Table(ABC):
             return self._primary_key_columns
         if self._primary_key is None:
             return ()
-        return (self._primary_key, )
+        return (self._primary_key,)
 
     @property
     def has_composite_primary_key(self) -> bool:
@@ -342,15 +352,18 @@ class Table(ABC):
         missing = [name for name in names if name not in self]
         if missing:
             raise ValueError(
-                f"Cannot use {list(names)} as a composite primary key of "
-                f"table '{self.name}': column(s) {missing} are not present")
+                f'Cannot use {list(names)} as a composite primary key of '
+                f"table '{self.name}': column(s) {missing} are not present"
+            )
         for name in names:
             if name in (self._time_column, self._end_time_column):
                 raise ValueError(
                     f"Cannot use column '{name}' in a composite primary key "
-                    f"since it is already defined to be a time column")
-        composite_key.refuse_unfoldable_dtypes([(name, self[name].dtype)
-                                                for name in names])
+                    f'since it is already defined to be a time column'
+                )
+        composite_key.refuse_unfoldable_dtypes(
+            [(name, self[name].dtype) for name in names]
+        )
 
         derived = self._derived_key_column_name(names)
         self._materialize_derived_key(derived, names)
@@ -369,9 +382,10 @@ class Table(ABC):
         derived = _DERIVED_KEY_PREFIX + composite_key.encode_identity(names)
         if derived in self and not self._is_derived_key_column(derived):
             raise ValueError(
-                f"Cannot fold {list(names)} into an identity for table "
+                f'Cannot fold {list(names)} into an identity for table '
                 f"'{self.name}': it already holds a column named "
-                f"'{derived}'. Rename that column.")
+                f"'{derived}'. Rename that column."
+            )
         return derived
 
     def _is_derived_key_column(self, name: str) -> bool:
@@ -385,8 +399,14 @@ class Table(ABC):
             self._column_dict.pop(derived, None)
         self._forget_derived_key(derived)
 
-    def _forget_derived_key(self, derived: str) -> None:
-        pass
+    def _forget_derived_key(self, derived: str) -> None:  # noqa: B027
+        r"""Drop any backend state cached for a derived composite key.
+
+        An optional hook rather than an abstract method: a backend that
+        materialises the derived column has something to forget, and one that
+        computes it per query does not. Left concrete and empty so the latter
+        does not have to declare an override that does nothing.
+        """
 
     _SQL_TEXT_TYPE: str | None = None
     _SQL_CHR_FUNCTION = 'CHR'
@@ -401,11 +421,12 @@ class Table(ABC):
     ) -> None:
         if self._SQL_TEXT_TYPE is None:
             raise ValueError(
-                f"Composite primary keys are not supported on "
+                f'Composite primary keys are not supported on '
                 f"'{self.__class__.__name__}' yet. The identity of table "
                 f"'{self.name}' is spread across {list(names)}; add a column "
-                f"holding that identity to the source and declare it "
-                f"instead.")
+                f'holding that identity to the source and declare it '
+                f'instead.'
+            )
 
         expression = composite_key.sql_expression(
             names,
@@ -450,10 +471,11 @@ class Table(ABC):
         differing = sorted(warehouse - locally)[:1]
         raise ValueError(
             f"'{self.name}' folds {list(names)} into an identity differently "
-            f"in the warehouse than this SDK does, so a prediction seeded "
-            f"here would match no row: the warehouse produced "
-            f"{differing!r}. Add a column holding the identity you intend "
-            f"and declare that instead.")
+            f'in the warehouse than this SDK does, so a prediction seeded '
+            f'here would match no row: the warehouse produced '
+            f'{differing!r}. Add a column holding the identity you intend '
+            f'and declare that instead.'
+        )
 
     @primary_key.setter
     def primary_key(self, name: str | Sequence[str] | None) -> None:
@@ -461,26 +483,30 @@ class Table(ABC):
             names = tuple(name)
             if len(names) == 0:
                 raise ValueError(
-                    f"Cannot use an empty composite primary key on table "
-                    f"'{self.name}'")
+                    f'Cannot use an empty composite primary key on table '
+                    f"'{self.name}'"
+                )
             if len(names) > 1:
                 self._set_composite_primary_key(names)
                 return
             name = names[0]
         if name is not None and name == self._time_column:
-            raise ValueError(f"Cannot specify column '{name}' as a primary "
-                             f"key since it is already defined to be a time "
-                             f"column")
+            raise ValueError(
+                f"Cannot specify column '{name}' as a primary "
+                f'key since it is already defined to be a time '
+                f'column'
+            )
         if name is not None and name == self._end_time_column:
-            raise ValueError(f"Cannot specify column '{name}' as a primary "
-                             f"key since it is already defined to be an end "
-                             f"time column")
+            raise ValueError(
+                f"Cannot specify column '{name}' as a primary "
+                f'key since it is already defined to be an end '
+                f'time column'
+            )
         if name is not None and name not in self:
             raise KeyError(f"Column '{name}' not found in table '{self.name}'")
 
         stale_derived: str | None = None
-        if (self._primary_key_columns is not None
-                and name != self._primary_key):
+        if self._primary_key_columns is not None and name != self._primary_key:
             stale_derived = self._primary_key
             self._primary_key = None
         self._primary_key_columns = None
@@ -525,13 +551,17 @@ class Table(ABC):
     @time_column.setter
     def time_column(self, name: str | None) -> None:
         if name is not None and name == self._primary_key:
-            raise ValueError(f"Cannot specify column '{name}' as a time "
-                             f"column since it is already defined to be a "
-                             f"primary key")
+            raise ValueError(
+                f"Cannot specify column '{name}' as a time "
+                f'column since it is already defined to be a '
+                f'primary key'
+            )
         if name is not None and name == self._end_time_column:
-            raise ValueError(f"Cannot specify column '{name}' as a time "
-                             f"column since it is already defined to be an "
-                             f"end time column")
+            raise ValueError(
+                f"Cannot specify column '{name}' as a time "
+                f'column since it is already defined to be an '
+                f'end time column'
+            )
 
         if self.time_column is not None:
             self.time_column._is_time_column = False
@@ -571,13 +601,17 @@ class Table(ABC):
     @end_time_column.setter
     def end_time_column(self, name: str | None) -> None:
         if name is not None and name == self._primary_key:
-            raise ValueError(f"Cannot specify column '{name}' as an end time "
-                             f"column since it is already defined to be a "
-                             f"primary key")
+            raise ValueError(
+                f"Cannot specify column '{name}' as an end time "
+                f'column since it is already defined to be a '
+                f'primary key'
+            )
         if name is not None and name == self._time_column:
-            raise ValueError(f"Cannot specify column '{name}' as an end time "
-                             f"column since it is already defined to be a "
-                             f"time column")
+            raise ValueError(
+                f"Cannot specify column '{name}' as an end time "
+                f'column since it is already defined to be a '
+                f'time column'
+            )
 
         if self.end_time_column is not None:
             self.end_time_column._is_end_time_column = False
@@ -609,40 +643,38 @@ class Table(ABC):
             >>> table.metadata
                 Name        Data Type  Semantic Type  Primary Key  Time Column  End Time Column
             0   CustomerID  float64    ID             True         False        False
-        """  # noqa: E501
+        """
         cols = self.columns
 
-        return pd.DataFrame({
-            'Name':
-            pd.Series(dtype=str, data=[c.name for c in cols]),
-            'Data Type':
-            pd.Series(dtype=str, data=[c.dtype for c in cols]),
-            'Semantic Type':
-            pd.Series(dtype=str, data=[c.stype for c in cols]),
-            'Primary Key':
-            pd.Series(
-                dtype=bool,
-                data=[self._primary_key == c.name for c in cols],
-            ),
-            'Time Column':
-            pd.Series(
-                dtype=bool,
-                data=[self._time_column == c.name for c in cols],
-            ),
-            'End Time Column':
-            pd.Series(
-                dtype=bool,
-                data=[self._end_time_column == c.name for c in cols],
-            ),
-        })
+        return pd.DataFrame(
+            {
+                'Name': pd.Series(dtype=str, data=[c.name for c in cols]),
+                'Data Type': pd.Series(dtype=str, data=[c.dtype for c in cols]),
+                'Semantic Type': pd.Series(
+                    dtype=str, data=[c.stype for c in cols]
+                ),
+                'Primary Key': pd.Series(
+                    dtype=bool,
+                    data=[self._primary_key == c.name for c in cols],
+                ),
+                'Time Column': pd.Series(
+                    dtype=bool,
+                    data=[self._time_column == c.name for c in cols],
+                ),
+                'End Time Column': pd.Series(
+                    dtype=bool,
+                    data=[self._end_time_column == c.name for c in cols],
+                ),
+            }
+        )
 
     def print_metadata(self) -> None:
         r"""Prints the :meth:`~metadata` of this table."""
-        msg = f"Metadata of Table `{self.name}`"
+        msg = f'Metadata of Table `{self.name}`'
         if not in_tmux():
-            msg = f"🏷️ {msg}"
+            msg = f'🏷️ {msg}'
         if num := self._num_rows:
-            msg += " (1 row)" if num == 1 else f" ({num:,} rows)"
+            msg += ' (1 row)' if num == 1 else f' ({num:,} rows)'
 
         display.title(msg)
         display.dataframe(self.metadata)
@@ -659,24 +691,32 @@ class Table(ABC):
         def _set_primary_key(primary_key: str) -> None:
             self.primary_key = primary_key
             if verbose:
-                display.message(f"Inferred primary key `{primary_key}` for "
-                                f"table `{self.name}`")
+                display.message(
+                    f'Inferred primary key `{primary_key}` for '
+                    f'table `{self.name}`'
+                )
 
         # Inference from source column metadata:
         if any(column.is_source for column in self.columns):
             primary_key = self._source_primary_key
-            if (primary_key is not None and primary_key in self
-                    and self[primary_key].is_source):
+            if (
+                primary_key is not None
+                and primary_key in self
+                and self[primary_key].is_source
+            ):
                 _set_primary_key(primary_key)
                 return self
 
             unique_keys = [
-                column.name for column in self._source_column_dict.values()
+                column.name
+                for column in self._source_column_dict.values()
                 if column.is_unique_key
             ]
-            if (len(unique_keys) == 1  # NOTE No composite keys yet.
-                    and unique_keys[0] in self
-                    and self[unique_keys[0]].is_source):
+            if (
+                len(unique_keys) == 1  # NOTE No composite keys yet.
+                and unique_keys[0] in self
+                and self[unique_keys[0]].is_source
+            ):
                 _set_primary_key(unique_keys[0])
                 return self
 
@@ -686,17 +726,17 @@ class Table(ABC):
         ]
         if len(candidates) == 0:
             for column in self.columns:
-                if self.name.lower() == column.name.lower():
-                    candidates.append(column.name)
-                elif (self.name.lower().endswith('s')
-                      and self.name.lower()[:-1] == column.name.lower()):
+                if self.name.lower() == column.name.lower() or (
+                    self.name.lower().endswith('s')
+                    and self.name.lower()[:-1] == column.name.lower()
+                ):
                     candidates.append(column.name)
 
         df = self._get_sample_df()
         if primary_key := infer_primary_key(
-                table_name=self.name,
-                df=df,
-                candidates=candidates,
+            table_name=self.name,
+            df=df,
+            candidates=candidates,
         ):
             _set_primary_key(primary_key)
             return self
@@ -713,9 +753,11 @@ class Table(ABC):
         # key candidate, and the diagnostic must not state as fact something
         # only the sample supports.
         self._declined_primary_keys = tuple(
-            name for name in candidates if _is_key_like(df[name]))
+            name for name in candidates if _is_key_like(df[name])
+        )
         self._declined_primary_key_rows = (
-            len(df) if len(df) == self._NUM_SAMPLE_ROWS else None)
+            len(df) if len(df) == self._NUM_SAMPLE_ROWS else None
+        )
 
         return self
 
@@ -730,20 +772,23 @@ class Table(ABC):
 
         # Heuristic-based inference:
         candidates = [
-            column.name for column in self.columns
+            column.name
+            for column in self.columns
             if column.stype == Stype.timestamp
             and column.name != self._end_time_column
         ]
 
         if time_column := infer_time_column(
-                df=self._get_sample_df(),
-                candidates=candidates,
+            df=self._get_sample_df(),
+            candidates=candidates,
         ):
             self.time_column = time_column
 
             if verbose:
-                display.message(f"Inferred time column `{time_column}` for "
-                                f"table `{self.name}`")
+                display.message(
+                    f'Inferred time column `{time_column}` for '
+                    f'table `{self.name}`'
+                )
 
         return self
 
@@ -759,16 +804,17 @@ class Table(ABC):
         if not self.has_primary_key():
             self.infer_primary_key(verbose=False)
             if self.has_primary_key():
-                logs.append(f"primary key `{self._primary_key}`")
+                logs.append(f'primary key `{self._primary_key}`')
 
         if not self.has_time_column():
             self.infer_time_column(verbose=False)
             if self.has_time_column():
-                logs.append(f"time column `{self._time_column}`")
+                logs.append(f'time column `{self._time_column}`')
 
         if verbose and len(logs) > 0:
-            display.message(f"Inferred {' and '.join(logs)} for table "
-                            f"`{self.name}`")
+            display.message(
+                f'Inferred {" and ".join(logs)} for table `{self.name}`'
+            )
 
         return self
 
@@ -796,7 +842,8 @@ class Table(ABC):
     @cached_property
     def _source_primary_key(self) -> str | None:
         primary_keys = [
-            column.name for column in self._source_column_dict.values()
+            column.name
+            for column in self._source_column_dict.values()
             if column.is_primary_key
         ]
         # NOTE No composite keys yet.
@@ -837,10 +884,14 @@ class Table(ABC):
             dfs.append(self._source_sample_df)
 
         if any(not column.is_source for column in self.columns):
-            self._update_expr_sample_df([
-                column for column in self.columns if not column.is_source
-                and column.name not in self._expr_sample_df
-            ])
+            self._update_expr_sample_df(
+                [
+                    column
+                    for column in self.columns
+                    if not column.is_source
+                    and column.name not in self._expr_sample_df
+                ]
+            )
             dfs.append(self._expr_sample_df)
 
         if len(dfs) == 0:
@@ -862,15 +913,26 @@ class Table(ABC):
         r"""Sanitzes a :class:`pandas.DataFrame` in-place such that its data
         types match table data and semantic type specification.
         """
+
         def _to_list(ser: pd.Series, dtype: Dtype | None) -> pd.Series:
-            if (pd.api.types.is_string_dtype(ser)
-                    and dtype in {Dtype.intlist, Dtype.floatlist}):
+            if pd.api.types.is_string_dtype(ser) and dtype in {
+                Dtype.intlist,
+                Dtype.floatlist,
+            }:
                 try:
-                    ser = ser.map(lambda row: np.fromstring(
-                        row.strip('[]'),
-                        sep=',',
-                        dtype=int if dtype == Dtype.intlist else np.float32,
-                    ) if row is not None else None)
+                    ser = ser.map(
+                        lambda row: (
+                            np.fromstring(
+                                row.strip('[]'),
+                                sep=',',
+                                dtype=int
+                                if dtype == Dtype.intlist
+                                else np.float32,
+                            )
+                            if row is not None
+                            else None
+                        )
+                    )
                 except Exception:
                     pass
 
@@ -880,8 +942,9 @@ class Table(ABC):
                 else:
                     json = import_module('json')
                 try:
-                    ser = ser.map(lambda row: json.loads(row)
-                                  if row is not None else None)
+                    ser = ser.map(
+                        lambda row: json.loads(row) if row is not None else None
+                    )
                 except Exception:
                     pass
 
@@ -891,9 +954,7 @@ class Table(ABC):
             dtype = (dtype_dict or {}).get(column_name)
             stype = (stype_dict or {}).get(column_name)
 
-            if dtype == Dtype.time:
-                df[column_name] = to_datetime(df[column_name], column_name)
-            elif stype == Stype.timestamp:
+            if dtype == Dtype.time or stype == Stype.timestamp:
                 df[column_name] = to_datetime(df[column_name], column_name)
             elif dtype is not None and dtype.is_list():
                 df[column_name] = _to_list(df[column_name], dtype)
@@ -922,13 +983,15 @@ class Table(ABC):
         self.remove_column(name)
 
     def __repr__(self) -> str:
-        return (f'{self.__class__.__name__}(\n'
-                f'  name={self.name},\n'
-                f'  num_columns={len(self.columns)},\n'
-                f'  primary_key={self._primary_key},\n'
-                f'  time_column={self._time_column},\n'
-                f'  end_time_column={self._end_time_column},\n'
-                f')')
+        return (
+            f'{self.__class__.__name__}(\n'
+            f'  name={self.name},\n'
+            f'  num_columns={len(self.columns)},\n'
+            f'  primary_key={self._primary_key},\n'
+            f'  time_column={self._time_column},\n'
+            f'  end_time_column={self._end_time_column},\n'
+            f')'
+        )
 
     # Abstract Methods ########################################################
 

@@ -55,4 +55,7 @@ def test_get_unknown_model_raises():
 def test_default_client_has_builtin_models():
     from nvidia_sdfm import SDFMClient
 
-    assert set(SDFMClient(url='http://nim.test').models()) == {'kumo-rfm', 'tabicl'}
+    assert set(SDFMClient(url='http://nim.test').models()) == {
+        'kumo-rfm',
+        'tabicl',
+    }

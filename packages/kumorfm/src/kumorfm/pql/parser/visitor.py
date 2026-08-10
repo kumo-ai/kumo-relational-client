@@ -5,6 +5,8 @@
 import logging
 
 import antlr4
+
+from kumorfm._names import canonical_fqn
 from kumorfm.api.pquery.AST import (
     Aggregation,
     ASTNode,
@@ -27,8 +29,6 @@ from kumorfm.api.typing import (
     StrOp,
     TimeUnit,
 )
-
-from kumorfm._names import canonical_fqn
 from kumorfm.pql.grammar.PQLGrammarParser import PQLGrammarParser
 from kumorfm.pql.grammar.PQLGrammarVisitor import PQLGrammarVisitor
 
@@ -61,9 +61,9 @@ class PQLVisitor(PQLGrammarVisitor):
     The child index from this tree is used to parse and retrieve information
     about specific nodes.
     """
+
     @staticmethod
-    def get_interval(
-            ctx: antlr4.ParserRuleContext) -> ASTQueryLocationInterval:
+    def get_interval(ctx: antlr4.ParserRuleContext) -> ASTQueryLocationInterval:
         r"""Interval for error reporting. Extracts what interval of the input
         text corresponds to this syntax tree node.
         """
@@ -83,7 +83,7 @@ class PQLVisitor(PQLGrammarVisitor):
 
     # Visit a parse tree produced by PQLGrammarParser#prog.
     def visitProg(
-            self, ctx: PQLGrammarParser.ProgContext
+        self, ctx: PQLGrammarParser.ProgContext
     ) -> dict[str, ASTNode | str | int]:
         r"""Called by the :class:`PQLGrammarParser` to parse the root node.
 
@@ -107,8 +107,9 @@ class PQLVisitor(PQLGrammarVisitor):
         assert entity is not None
         entity_maybe_tuple = entity.accept(self)
         if isinstance(entity_maybe_tuple, tuple):
-            (complete_dict[ENTITY],
-             complete_dict[RFM_ENTITY_IDS]) = entity_maybe_tuple
+            (complete_dict[ENTITY], complete_dict[RFM_ENTITY_IDS]) = (
+                entity_maybe_tuple
+            )
         else:
             complete_dict[ENTITY] = entity_maybe_tuple
 
@@ -137,14 +138,15 @@ class PQLVisitor(PQLGrammarVisitor):
 
     # Visit a parse tree produced by PQLGrammarParser#problem_type.
     def visitProblem_type(
-            self, ctx: PQLGrammarParser.Problem_typeContext) -> str | None:
+        self, ctx: PQLGrammarParser.Problem_typeContext
+    ) -> str | None:
         r"""Called by the :class:`PQLGrammarParser` to parse the problem
         type node.
 
         Returns:
             A `str` or :obj:`None`. Possible valid return values are:
                 - RANK
-                - CLASSIFY (TODO, subject to change)
+                - CLASSIFY (provisional; may change)
                 - None (the generator later chooses the default value).
         """
         # (RANK|CLASSIFY)?
@@ -192,8 +194,9 @@ class PQLVisitor(PQLGrammarVisitor):
         return int(str(ctx.getChild(1)))
 
     # Visit a parse tree produced by PQLGrammarParser#forecast.
-    def visitForecast(self,
-                      ctx: PQLGrammarParser.ForecastContext) -> int | None:
+    def visitForecast(
+        self, ctx: PQLGrammarParser.ForecastContext
+    ) -> int | None:
         r"""Called by the :class:`PQLGrammarParser` to parse the forecast
         node.
 
@@ -242,8 +245,8 @@ class PQLVisitor(PQLGrammarVisitor):
 
     # Visit a parse tree produced by PQLGrammarParser#entity_list.
     def visitEntity_list(
-            self,
-            ctx: PQLGrammarParser.EntityContext) -> tuple[Column, Condition]:
+        self, ctx: PQLGrammarParser.EntityContext
+    ) -> tuple[Column, Condition]:
         r"""Called by the :class:`PQLGrammarParser` to parse the entity_list
         node.
 
@@ -262,26 +265,31 @@ class PQLVisitor(PQLGrammarVisitor):
         assert constant_child is not None
         entity_ids = constant_child.accept(self)
         location = self.get_interval(ctx)
-        return (entity_col,
-                Condition(target=entity_col, op=rel_op, value=entity_ids,
-                          location=location))
+        return (
+            entity_col,
+            Condition(
+                target=entity_col,
+                op=rel_op,
+                value=entity_ids,
+                location=location,
+            ),
+        )
 
     def _rel_op_cast(self, rel_op: str) -> RelOp | MemberOp | StrOp:
         # We do not follow the logic in visitCondition since we don't care
         # about str operations.
-        if rel_op in set(op.value for op in RelOp):
+        if rel_op in {op.value for op in RelOp}:
             return RelOp(rel_op)
-        elif rel_op in set(op.value for op in MemberOp):
+        if rel_op in {op.value for op in MemberOp}:
             return MemberOp(rel_op)
-        elif rel_op in set(op.value for op in StrOp):
+        if rel_op in {op.value for op in StrOp}:
             return StrOp(rel_op)
-        else:
-            raise ValueError(f'Unsupported operation {rel_op}')
+        raise ValueError(f'Unsupported operation {rel_op}')
 
     # Visit a parse tree produced by PQLGrammarParser#filtered_entity_list.
     def visitFiltered_entity_list(
-            self,
-            ctx: PQLGrammarParser.EntityContext) -> tuple[Filter, Condition]:
+        self, ctx: PQLGrammarParser.EntityContext
+    ) -> tuple[Filter, Condition]:
         r"""Called by the :class:`PQLGrammarParser` to parse the
         filtered_entity_list node.
 
@@ -305,14 +313,20 @@ class PQLVisitor(PQLGrammarVisitor):
         condition = condition_child.accept(self)
         assert isinstance(condition, Condition | LogicalOperation)
         location = self.get_interval(ctx)
-        return (Filter(target=entity_col, condition=condition,
-                       location=location),
-                Condition(target=entity_col, op=rel_op, value=entity_ids,
-                          location=location))
+        return (
+            Filter(target=entity_col, condition=condition, location=location),
+            Condition(
+                target=entity_col,
+                op=rel_op,
+                value=entity_ids,
+                location=location,
+            ),
+        )
 
     # Visit a parse tree produced by PQLGrammarParser#whatif.
-    def visitWhatif(self,
-                    ctx: PQLGrammarParser.WhatifContext) -> ASTNode | None:
+    def visitWhatif(
+        self, ctx: PQLGrammarParser.WhatifContext
+    ) -> ASTNode | None:
         r"""Called by the :class:`PQLGrammarParser` to parse the whatif
         node.
 
@@ -338,12 +352,14 @@ class PQLVisitor(PQLGrammarVisitor):
         """
         # "NAME.NAME" or "NAME.*", either NAME optionally quoted
         location = self.get_interval(ctx)
-        return Column(fqn=canonical_fqn(str(ctx.getChild(0))),
-                      location=location)
+        return Column(
+            fqn=canonical_fqn(str(ctx.getChild(0))), location=location
+        )
 
     # Visit a parse tree produced by PQLGrammarParser#filtered_column.
     def visitFiltered_column(
-            self, ctx: PQLGrammarParser.Filtered_columnContext) -> Filter:
+        self, ctx: PQLGrammarParser.Filtered_columnContext
+    ) -> Filter:
         r"""Called by the :class:`PQLGrammarParser` to parse the filtered
         column node.
 
@@ -390,26 +406,34 @@ class PQLVisitor(PQLGrammarVisitor):
         if ctx.getChildCount() == 2:
             assert str(child_l).upper() == BoolOp.NOT.value
             nested_filter = child_mid.accept(self)
-            return LogicalOperation(left=nested_filter, bool_op=BoolOp.NOT,
-                                    location=location)
+            return LogicalOperation(
+                left=nested_filter, bool_op=BoolOp.NOT, location=location
+            )
 
         child_r = ctx.getChild(2)
         assert child_r is not None
 
         # AND/OR
         if isinstance(child_mid, antlr4.tree.Tree.TerminalNodeImpl) and str(
-                child_mid).upper() in {BoolOp.OR.value, BoolOp.AND.value}:
+            child_mid
+        ).upper() in {BoolOp.OR.value, BoolOp.AND.value}:
             nested_l_filter = child_l.accept(self)
             nested_r_filter = child_r.accept(self)
             bool_op = BoolOp(str(child_mid).upper())
-            return LogicalOperation(left=nested_l_filter, bool_op=bool_op,
-                                    right=nested_r_filter, location=location)
+            return LogicalOperation(
+                left=nested_l_filter,
+                bool_op=bool_op,
+                right=nested_r_filter,
+                location=location,
+            )
 
         # (condition)
-        if (isinstance(child_l, antlr4.tree.Tree.TerminalNodeImpl)
-                and str(child_l) == '('
-                and isinstance(child_r, antlr4.tree.Tree.TerminalNodeImpl)
-                and str(child_r) == ')'):
+        if (
+            isinstance(child_l, antlr4.tree.Tree.TerminalNodeImpl)
+            and str(child_l) == '('
+            and isinstance(child_r, antlr4.tree.Tree.TerminalNodeImpl)
+            and str(child_r) == ')'
+        ):
             return child_mid.accept(self)
 
         # (column|aggregation) REL_OP const
@@ -418,18 +442,19 @@ class PQLVisitor(PQLGrammarVisitor):
         value = child_r.accept(self)
         target = child_l.accept(self)
         arg_dict = {'target': target, 'value': value, 'location': location}
-        if rel_op in set(op.value for op in RelOp):
+        if rel_op in {op.value for op in RelOp}:
             arg_dict['op'] = RelOp(rel_op)
             new_filt = Condition(**arg_dict)
-        elif rel_op in set(op.value for op in MemberOp):
+        elif rel_op in {op.value for op in MemberOp}:
             arg_dict['op'] = MemberOp(rel_op)
             new_filt = Condition(**arg_dict)
         elif rel_op.upper() in {SQL_IS, SQL_IS_NOT}:
-            arg_dict['op'] = RelOp.EQ if rel_op.upper(
-            ) == SQL_IS else RelOp.NEQ
+            arg_dict['op'] = RelOp.EQ if rel_op.upper() == SQL_IS else RelOp.NEQ
             new_filt = Condition(**arg_dict)
-        elif rel_op.upper() in set(op.value
-                                   for op in StrOp) | {'LIKE', 'NOT LIKE'}:
+        elif rel_op.upper() in {op.value for op in StrOp} | {
+            'LIKE',
+            'NOT LIKE',
+        }:
             arg_dict['op'] = rel_op
             new_filt = Condition(**arg_dict)
         else:
@@ -438,7 +463,8 @@ class PQLVisitor(PQLGrammarVisitor):
 
     # Visit a parse tree produced by PQLGrammarParser#aggregation.
     def visitAggregation(
-            self, ctx: PQLGrammarParser.AggregationContext) -> Aggregation:
+        self, ctx: PQLGrammarParser.AggregationContext
+    ) -> Aggregation:
         r"""Called by the :class:`PQLGrammarParser` to parse the
         aggregation node.
 
@@ -476,8 +502,9 @@ class PQLVisitor(PQLGrammarVisitor):
         if n_children == 10:  # time_unit is given
             assert str(ctx.getChild(7)) == ','
             time_unit = TimeUnit(str(ctx.getChild(8)).lower())
-        arg_dict['aggr_time_range'] = DateOffsetRange(offset_start, offset_end,
-                                                      unit=time_unit)
+        arg_dict['aggr_time_range'] = DateOffsetRange(
+            offset_start, offset_end, unit=time_unit
+        )
         return Aggregation(**arg_dict)
 
     # Visit a parse tree produced by PQLGrammarParser#const.
@@ -500,43 +527,47 @@ class PQLVisitor(PQLGrammarVisitor):
 
         # BOOL
         if child.symbol.type == PQLGrammarParser.BOOL:
-            return Constant(value=str(child), dtype_maybe=Dtype.bool,
-                            location=location)
+            return Constant(
+                value=str(child), dtype_maybe=Dtype.bool, location=location
+            )
 
         # INT
         if child.symbol.type == PQLGrammarParser.INT:
-            return Constant(value=str(child), dtype_maybe=Dtype.int,
-                            location=location)
+            return Constant(
+                value=str(child), dtype_maybe=Dtype.int, location=location
+            )
 
         # STR
         if child.symbol.type == PQLGrammarParser.STR:
             # Handling invalid escape characters in grammar results in
             # confusing errors, so we handle them here.
-            valid_escape_chr = '\\\"\'/bfnrtu'
+            valid_escape_chr = '\\"\'/bfnrtu'
             escaped = False
             for c in str(child)[1:-1]:
                 if escaped and c not in valid_escape_chr:
                     raise ValueError(f'\\{c} is not a valid escape pattern.')
-                if not escaped and c == '\\':
-                    escaped = True
-                else:
-                    escaped = False
+                escaped = not escaped and c == '\\'
             # transform escaped characters and drop quotes
-            return Constant(value=str(child), dtype_maybe=Dtype.string,
-                            location=location)
+            return Constant(
+                value=str(child), dtype_maybe=Dtype.string, location=location
+            )
 
         # DECIMAL
         if child.symbol.type == PQLGrammarParser.DECIMAL:
-            return Constant(value=str(child), dtype_maybe=Dtype.float,
-                            location=location)
+            return Constant(
+                value=str(child), dtype_maybe=Dtype.float, location=location
+            )
 
         # NULL
         if child.symbol.type == PQLGrammarParser.NULL:
-            return Constant(value=str(child), dtype_maybe=None,
-                            location=location)
-        raise ValueError(f'Cannot parse the symbol: "{str(child)}", please '
-                         'check Predictive Query documentation for correct '
-                         'formatting.')
+            return Constant(
+                value=str(child), dtype_maybe=None, location=location
+            )
+        raise ValueError(
+            f'Cannot parse the symbol: "{child!s}", please '
+            'check Predictive Query documentation for correct '
+            'formatting.'
+        )
 
     # Visit a parse tree produced by PQLGrammarParser#datetime.
     def visitDatetime(self, ctx: PQLGrammarParser.DatetimeContext) -> Constant:
@@ -549,12 +580,17 @@ class PQLVisitor(PQLGrammarVisitor):
         # DATE TIME?
         location = self.get_interval(ctx)
         if ctx.getChildCount() == 1:
-            return Constant(value=str(ctx.getChild(0)), dtype_maybe=Dtype.time,
-                            location=location)
+            return Constant(
+                value=str(ctx.getChild(0)),
+                dtype_maybe=Dtype.time,
+                location=location,
+            )
         assert ctx.getChildCount() == 2
         return Constant(
             value=str(ctx.getChild(0)) + ' ' + str(ctx.getChild(1)),
-            dtype_maybe=Dtype.time, location=location)
+            dtype_maybe=Dtype.time,
+            location=location,
+        )
 
     # Visit a parse tree produced by PQLGrammarParser#array.
     def visitArray(self, ctx: PQLGrammarParser.ArrayContext) -> Constant:
@@ -582,5 +618,4 @@ class PQLVisitor(PQLGrammarVisitor):
                 child_trees.append(child.accept(self))
         # We validate this later
         dtype = ArrayDtype(child_trees[0].dtype_maybe)
-        return Constant(value=child_trees, dtype_maybe=dtype,
-                        location=location)
+        return Constant(value=child_trees, dtype_maybe=dtype, location=location)

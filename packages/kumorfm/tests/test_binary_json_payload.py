@@ -10,8 +10,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-from kumorfm.runmode import RunMode
 from kumorfm.api.rfm import RFMPredictRequest
 from kumorfm.api.rfm.context import Context, Subgraph, Table
 from kumorfm.api.rfm.inference import ClassificationInferenceConfig
@@ -23,6 +21,7 @@ from kumorfm.rfm.payload import (
     payload_size_bytes,
     predict_request_to_json,
 )
+from kumorfm.runmode import RunMode
 
 
 def _binary_context(
@@ -42,11 +41,12 @@ def _binary_context(
                 dtype=np.int64,
             ),
             table_dict={
-                table_name:
-                Table(
-                    df=pd.DataFrame({
-                        primary_key: np.arange(batch_size),
-                    }),
+                table_name: Table(
+                    df=pd.DataFrame(
+                        {
+                            primary_key: np.arange(batch_size),
+                        }
+                    ),
                     row=None,
                     batch=np.arange(batch_size),
                     num_sampled_nodes=[batch_size],
@@ -96,8 +96,9 @@ def test_binary_integer_targets_serialize_as_json_booleans(
 
     instance_df, _, _ = _instance_dataframe(context)
     assert instance_df['TARGET'].tolist() == [False, True, True, False]
-    assert all(isinstance(value, bool)
-               for value in instance_df['TARGET'].tolist())
+    assert all(
+        isinstance(value, bool) for value in instance_df['TARGET'].tolist()
+    )
 
     payload = json.loads(json.dumps(_binary_payload(context)))
     table = payload['context']['instance_table']
@@ -169,20 +170,44 @@ _WIDE_DECIMAL_ID = Decimal('12345678901234567890123456789012345678')
 @pytest.mark.parametrize(
     'column, expected',
     [
-        (pd.Series([Decimal('900100015'), Decimal('900200001')],
-                   dtype=object), 'int64'),
-        (pd.Series([Decimal('1.50'), Decimal('2.25')], dtype=object),
-         'float64'),
-        (pd.Series([Decimal('900100015')],
-                   dtype=pd.ArrowDtype(pa.decimal128(38, 0))), 'int64'),
-        (pd.Series([Decimal('1.50')],
-                   dtype=pd.ArrowDtype(pa.decimal128(10, 2))), 'float64'),
+        (
+            pd.Series(
+                [Decimal('900100015'), Decimal('900200001')], dtype=object
+            ),
+            'int64',
+        ),
+        (
+            pd.Series([Decimal('1.50'), Decimal('2.25')], dtype=object),
+            'float64',
+        ),
+        (
+            pd.Series(
+                [Decimal('900100015')],
+                dtype=pd.ArrowDtype(pa.decimal128(38, 0)),
+            ),
+            'int64',
+        ),
+        (
+            pd.Series(
+                [Decimal('1.50')], dtype=pd.ArrowDtype(pa.decimal128(10, 2))
+            ),
+            'float64',
+        ),
         (pd.Series([Decimal('1'), 'x'], dtype=object), 'string'),
         (pd.Series([Decimal('1'), _WIDE_DECIMAL_ID], dtype=object), 'string'),
-        (pd.Series([_WIDE_DECIMAL_ID],
-                   dtype=pd.ArrowDtype(pa.decimal128(38, 0))), 'string'),
-        (pd.Series([Decimal('1'), Decimal('NaN'), Decimal('Infinity')],
-                   dtype=object), 'int64'),
+        (
+            pd.Series(
+                [_WIDE_DECIMAL_ID], dtype=pd.ArrowDtype(pa.decimal128(38, 0))
+            ),
+            'string',
+        ),
+        (
+            pd.Series(
+                [Decimal('1'), Decimal('NaN'), Decimal('Infinity')],
+                dtype=object,
+            ),
+            'int64',
+        ),
     ],
     ids=[
         'integral-object-is-an-id-not-a-string',
@@ -209,12 +234,12 @@ def test_a_decimal_column_survives_the_whole_request() -> None:
     )
     table = context.subgraph.table_dict['ENTITY'].df
     table['ITEM_ID'] = pd.Series(
-        [Decimal(f'90010001{i}') for i in range(4)], dtype=object)
+        [Decimal(f'90010001{i}') for i in range(4)], dtype=object
+    )
     table['PRICE'] = pd.Series(
-        [Decimal('0.05'),
-         Decimal('NaN'),
-         Decimal('Infinity'),
-         Decimal('2.25')], dtype=object)
+        [Decimal('0.05'), Decimal('NaN'), Decimal('Infinity'), Decimal('2.25')],
+        dtype=object,
+    )
     table['WIDE_ID'] = pd.Series([_WIDE_DECIMAL_ID] * 4, dtype=object)
 
     payload = _binary_payload(context)

@@ -10,8 +10,7 @@ try:
     from kumorfm.rfm.backend.snow import Connection
     from kumorfm.rfm.backend.snow.sampler import paramstyle
 except ImportError:
-    pytest.skip("'snowflake' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'snowflake' extension not installed", allow_module_level=True)
 
 
 class _FakeConnection:
@@ -25,10 +24,9 @@ def test_paramstyle_restored_on_error() -> None:
     # leave it stuck in 'qmark' mode.
     connection = cast(Connection, cast(Any, _FakeConnection()))
 
-    with pytest.raises(RuntimeError):
-        with paramstyle(connection):
-            assert connection._paramstyle == 'qmark'
-            raise RuntimeError('query failed')
+    with pytest.raises(RuntimeError), paramstyle(connection):
+        assert connection._paramstyle == 'qmark'
+        raise RuntimeError('query failed')
 
     assert connection._paramstyle == 'pyformat'
 

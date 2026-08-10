@@ -2,9 +2,9 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# SDK-owned: listed in API_OWNED in scripts/sync_internal_packages.py. Upstream
-# also re-exports the server-side query and explanation types, which nothing
-# outside api/ names. See api/SOURCE.md.
+# SDK-owned, not upstream's: this re-exports only the subset of api/ the SDK
+# uses. Upstream also re-exported the server-side query and explanation types,
+# which nothing outside api/ names. See api/SOURCE.md.
 
 from .context import Context
 from .inference import (
@@ -15,10 +15,10 @@ from .inference import (
 from .requests import RFMPredictRequest, RFMPredictResponse
 
 __all__ = [
+    'ClassificationInferenceConfig',
     'Context',
     'InferenceConfig',
-    'ClassificationInferenceConfig',
-    'RegressionInferenceConfig',
     'RFMPredictRequest',
     'RFMPredictResponse',
+    'RegressionInferenceConfig',
 ]

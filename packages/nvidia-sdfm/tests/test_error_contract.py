@@ -9,6 +9,7 @@ SDK raises and each subclass is importable to branch on, and that a NIM's
 per-field validation diagnosis reaches the message instead of being buried in
 ``details``.
 """
+
 from __future__ import annotations
 
 import json
@@ -39,46 +40,64 @@ def _problem(**overrides: object) -> bytes:
 
 # --- the public surface -----------------------------------------------------
 
-@pytest.mark.parametrize('name', [
-    'SdfmError', 'NimRequestError', 'MissingExtraError', 'UnknownModelError'])
+
+@pytest.mark.parametrize(
+    'name',
+    ['SdfmError', 'NimRequestError', 'MissingExtraError', 'UnknownModelError'],
+)
 def test_error_types_are_exported(name: str) -> None:
     r"""A caller cannot branch on an error they cannot import."""
     assert name in nvidia_sdfm.__all__
     assert hasattr(nvidia_sdfm, name)
 
 
-@pytest.mark.parametrize('error', [
-    NimRequestError(503, code='X', message='m'),
-    MissingExtraError('kumorfm', 'kumorfm'),
-    UnknownModelError('nope', ['tabicl']),
-])
+@pytest.mark.parametrize(
+    'error',
+    [
+        NimRequestError(503, code='X', message='m'),
+        MissingExtraError('kumorfm', 'kumorfm'),
+        UnknownModelError('nope', ['tabicl']),
+    ],
+)
 def test_every_error_is_catchable_as_sdfm_error(error: SdfmError) -> None:
     with pytest.raises(SdfmError):
         raise error
 
 
-@pytest.mark.parametrize('cls', [
-    SdfmError, NimRequestError, MissingExtraError, UnknownModelError])
+@pytest.mark.parametrize(
+    'cls', [SdfmError, NimRequestError, MissingExtraError, UnknownModelError]
+)
 def test_error_types_are_documented(cls: type) -> None:
     r"""These are the first thing a user reads when something breaks."""
     assert cls.__doc__ and len(cls.__doc__.strip()) > 40
 
 
 def test_status_code_is_reachable_for_branching() -> None:
-    error = NimRequestError(429, code='RATE_LIMIT_EXCEEDED', message='slow down')
+    error = NimRequestError(
+        429, code='RATE_LIMIT_EXCEEDED', message='slow down'
+    )
     assert error.status_code == 429
     assert str(error) == '[429 RATE_LIMIT_EXCEEDED] slow down'
 
 
 # --- invalid_params rendering ----------------------------------------------
 
+
 def test_invalid_params_reach_the_message() -> None:
     r"""The top-level detail is often only "Request validation failed."; the
     diagnosis that lets a caller fix the request is in ``invalid_params``.
     """
-    error = _to_nim_error(422, _problem(invalid_params=[
-        {'name': 'context.instance_table.rows[0][age]',
-         'reason': 'expected int64, got string'}]))
+    error = _to_nim_error(
+        422,
+        _problem(
+            invalid_params=[
+                {
+                    'name': 'context.instance_table.rows[0][age]',
+                    'reason': 'expected int64, got string',
+                }
+            ]
+        ),
+    )
 
     assert 'context.instance_table.rows[0][age]' in error.message
     assert 'expected int64, got string' in error.message
@@ -125,5 +144,6 @@ def test_rendered_shape_matches_the_kumorfm_path() -> None:
     """
     kumorfm_rfm = pytest.importorskip('kumorfm.rfm.rfm')
     params = [{'name': 'x', 'reason': 'y'}, {'name': 'p', 'reason': 'q'}]
-    assert (format_invalid_params(params)
-            == kumorfm_rfm._invalid_params_summary({'invalid_params': params}))
+    assert format_invalid_params(params) == kumorfm_rfm._invalid_params_summary(
+        {'invalid_params': params}
+    )

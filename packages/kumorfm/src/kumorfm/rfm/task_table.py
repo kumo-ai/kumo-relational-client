@@ -6,10 +6,10 @@ import copy
 from collections.abc import Sequence
 
 import pandas as pd
-from kumorfm.api.task import TaskType
-from kumorfm.api.typing import Stype
 from typing_extensions import Self
 
+from kumorfm.api.task import TaskType
+from kumorfm.api.typing import Stype
 from kumorfm.rfm.base import Column
 from kumorfm.rfm.base.utils import to_naive_utc
 from kumorfm.rfm.infer import infer_dtype, infer_stype
@@ -31,6 +31,7 @@ class TaskTable:
             ``TaskTable.ENTITY_TIME``, use the timestamp of the entity table
             as anchor time.
     """
+
     ENTITY_TIME = '__entity_time__'
 
     def __init__(
@@ -56,17 +57,19 @@ class TaskTable:
         }
         if task_type not in supported_task_types:
             supported = sorted(t.value for t in supported_task_types)
-            raise ValueError(f"Task type '{task_type.value}' is not supported "
-                             f"by 'TaskTable' (got one of {supported})")
+            raise ValueError(
+                f"Task type '{task_type.value}' is not supported "
+                f"by 'TaskTable' (got one of {supported})"
+            )
         self._task_type = task_type
 
-        # TODO Check dfs (unify from local table)
+        # TODO: unify this frame validation with LocalTable.
         if context_df.empty:
-            raise ValueError("No context examples given")
+            raise ValueError('No context examples given')
         self._context_df = context_df.copy(deep=False)
 
         if pred_df.empty:
-            raise ValueError("Provide at least one entity to predict for")
+            raise ValueError('Provide at least one entity to predict for')
         self._pred_df = pred_df.copy(deep=False)
 
         self._column_dict: dict[str, Column] = {}
@@ -74,19 +77,21 @@ class TaskTable:
 
         self._entity_table_names: tuple[str] | tuple[str, str]
         if isinstance(entity_table_name, str):
-            self._entity_table_names = (entity_table_name, )
+            self._entity_table_names = (entity_table_name,)
         elif len(entity_table_name) == 1:
-            self._entity_table_names = (entity_table_name[0], )
+            self._entity_table_names = (entity_table_name[0],)
         elif len(entity_table_name) == 2:
             self._entity_table_names = (
                 entity_table_name[0],
                 entity_table_name[1],
             )
         else:
-            raise ValueError(f"'entity_table_name' must hold one entity table "
-                             f"name, or two for link prediction tasks (got "
-                             f"{len(entity_table_name)}: "
-                             f"{list(entity_table_name)})")
+            raise ValueError(
+                f"'entity_table_name' must hold one entity table "
+                f'name, or two for link prediction tasks (got '
+                f'{len(entity_table_name)}: '
+                f'{list(entity_table_name)})'
+            )
 
         self._entity_column: str = ''
         self._target_column: str = ''
@@ -124,7 +129,7 @@ class TaskTable:
             length: Length of the prediction examples.
         """
         out = copy.copy(self)
-        df = out._context_df.iloc[start:start + length].reset_index(drop=True)
+        df = out._context_df.iloc[start : start + length].reset_index(drop=True)
         out._context_df = df
         return out
 
@@ -137,7 +142,7 @@ class TaskTable:
             length: Length of the prediction examples.
         """
         out = copy.copy(self)
-        df = out._pred_df.iloc[start:start + length].reset_index(drop=True)
+        df = out._pred_df.iloc[start : start + length].reset_index(drop=True)
         out._pred_df = df
         return out
 
@@ -256,9 +261,9 @@ class TaskTable:
         feature_columns: list[Column] = []
         for column in self.columns:
             if column.name not in {
-                    self._entity_column,
-                    self._target_column,
-                    self._time_column,
+                self._entity_column,
+                self._target_column,
+                self._time_column,
             }:
                 feature_columns.append(column)
         return feature_columns
@@ -269,7 +274,16 @@ class TaskTable:
         Args:
             columns: The columns to add.
         """
-        for column_name in self._context_df.columns:
+        for column_name in columns:
+            if column_name in self._column_dict:
+                raise KeyError(
+                    f"Column '{column_name}' already exists in task table"
+                )
+            if column_name not in self._context_df.columns:
+                raise KeyError(
+                    f"Column '{column_name}' not found in task table"
+                )
+
             ser = self._context_df[column_name]
 
             try:
@@ -279,16 +293,18 @@ class TaskTable:
                     f"Encountered unsupported data type '{ser.dtype}' for "
                     f"column '{column_name}' in task table. Please either "
                     f"manually override the columns's data type or remove the "
-                    f"column from this table.") from e
+                    f'column from this table.'
+                ) from e
 
             try:
                 stype = infer_stype(ser, column_name, dtype)
             except Exception as e:
                 raise RuntimeError(
-                    f"Could not determine semantic type for column "
+                    f'Could not determine semantic type for column '
                     f"'{column_name}' with data type '{dtype}' in task "
                     f"table. Please either change the column's data type "
-                    f"or remove the column from this table.") from e
+                    f'or remove the column from this table.'
+                ) from e
 
             self._column_dict[column_name] = Column(
                 name=column_name,
@@ -337,27 +353,31 @@ class TaskTable:
         else:
             time_repr = f'time_column={self._time_column}'
 
-        return (f'{self.__class__.__name__}(\n'
-                f'  task_type={self.task_type},\n'
-                f'  num_context_examples={self.num_context_examples},\n'
-                f'  num_prediction_examples={self.num_prediction_examples},\n'
-                f'  num_columns={len(self.columns)},\n'
-                f'  {entity_table_repr},\n'
-                f'  entity_column={self._entity_column},\n'
-                f'  target_column={self._target_column},\n'
-                f'  {time_repr},\n'
-                f')')
+        return (
+            f'{self.__class__.__name__}(\n'
+            f'  task_type={self.task_type},\n'
+            f'  num_context_examples={self.num_context_examples},\n'
+            f'  num_prediction_examples={self.num_prediction_examples},\n'
+            f'  num_columns={len(self.columns)},\n'
+            f'  {entity_table_repr},\n'
+            f'  entity_column={self._entity_column},\n'
+            f'  target_column={self._target_column},\n'
+            f'  {time_repr},\n'
+            f')'
+        )
 
 
 def _get_target_stype(task_type: TaskType) -> Stype:
     if task_type in {
-            TaskType.BINARY_CLASSIFICATION,
-            TaskType.MULTICLASS_CLASSIFICATION,
+        TaskType.BINARY_CLASSIFICATION,
+        TaskType.MULTICLASS_CLASSIFICATION,
     }:
         return Stype.categorical
     if task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
         return Stype.numerical
     if task_type.is_link_pred:
         return Stype.multicategorical
-    raise ValueError(f"Cannot determine the semantic type of the target "
-                     f"column for task type '{task_type.value}'")
+    raise ValueError(
+        f'Cannot determine the semantic type of the target '
+        f"column for task type '{task_type.value}'"
+    )

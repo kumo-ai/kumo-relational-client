@@ -5,8 +5,8 @@
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from kumorfm.api.typing import Dtype
 
+from kumorfm.api.typing import Dtype
 from kumorfm.rfm.base.utils import is_datetime
 
 # What `pandas.api.types.infer_dtype` reports for the contents of an `object`
@@ -57,7 +57,7 @@ PANDAS_TO_DTYPE: dict[str, Dtype] = {
 
 
 def infer_dtype(ser: pd.Series) -> Dtype:
-    """Extracts the :class:`Dtype` from a :class:`pandas.Series`.
+    r"""Extracts the :class:`Dtype` from a :class:`pandas.Series`.
 
     Args:
         ser: A :class:`pandas.Series` to analyze.
@@ -72,13 +72,14 @@ def infer_dtype(ser: pd.Series) -> Dtype:
     if isinstance(ser.dtype, pd.CategoricalDtype):
         return Dtype.string
 
-    if (pd.api.types.is_object_dtype(ser.dtype)
-            and not isinstance(ser.dtype, pd.ArrowDtype)):
+    if pd.api.types.is_object_dtype(ser.dtype) and not isinstance(
+        ser.dtype, pd.ArrowDtype
+    ):
         index = ser.iloc[:1000].first_valid_index()
         if index is not None and pd.api.types.is_list_like(ser[index]):
             pos = ser.index.get_loc(index)
             assert isinstance(pos, int)
-            ser = ser.iloc[pos:pos + 1000].dropna()
+            ser = ser.iloc[pos : pos + 1000].dropna()
             arr = pa.array(ser.tolist())
             ser = pd.Series(arr, dtype=pd.ArrowDtype(arr.type))
         else:
@@ -87,8 +88,9 @@ def infer_dtype(ser: pd.Series) -> Dtype:
                 return OBJECT_CONTENT_TO_DTYPE[content]
 
     if isinstance(ser.dtype, pd.ArrowDtype):
-        if (pa.types.is_list(ser.dtype.pyarrow_dtype)
-                or pa.types.is_fixed_size_list(ser.dtype.pyarrow_dtype)):
+        if pa.types.is_list(
+            ser.dtype.pyarrow_dtype
+        ) or pa.types.is_fixed_size_list(ser.dtype.pyarrow_dtype):
             elem_dtype = ser.dtype.pyarrow_dtype.value_type
             if pa.types.is_integer(elem_dtype):
                 return Dtype.intlist

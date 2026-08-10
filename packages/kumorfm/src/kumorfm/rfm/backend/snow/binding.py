@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 @contextmanager
 def paramstyle(
-    connection: 'Connection',
+    connection: Connection,
     style: str = 'qmark',
 ) -> Iterator[None]:
     r"""Switches the driver's parameter style for the duration of the block.

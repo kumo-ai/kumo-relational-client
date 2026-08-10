@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-from kumorfm.api.rfm.context import Subgraph
 
+from kumorfm.api.rfm.context import Subgraph
 from kumorfm.rfm.backend.local import LocalTable
 from kumorfm.rfm.base import Table
 from kumorfm.rfm.diagnostics import (
@@ -33,35 +33,39 @@ class LocalGraphStore:
 
         if not isinstance(verbose, ProgressLogger):
             verbose = ProgressLogger.default(
-                msg="Materializing graph",
+                msg='Materializing graph',
                 verbose=verbose,
             )
 
         with verbose as logger:
             self.df_dict, self.mask_dict = self.sanitize(graph)
-            logger.log("Sanitized input data")
+            logger.log('Sanitized input data')
 
             self.pkey_map_dict = self.get_pkey_map_dict(graph)
             num_pkeys = sum(t.has_primary_key() for t in graph.tables.values())
             if num_pkeys > 1:
-                logger.log(f"Collected primary keys from {num_pkeys} tables")
+                logger.log(f'Collected primary keys from {num_pkeys} tables')
             else:
-                logger.log(f"Collected primary key from {num_pkeys} table")
+                logger.log(f'Collected primary key from {num_pkeys} table')
 
             self.time_dict, self.min_max_time_dict = self.get_time_data(graph)
             if len(self.min_max_time_dict) > 0:
                 min_time = min(t for t, _ in self.min_max_time_dict.values())
                 max_time = max(t for _, t in self.min_max_time_dict.values())
-                logger.log(f"Identified temporal graph from "
-                           f"{min_time.date()} to {max_time.date()}")
+                logger.log(
+                    f'Identified temporal graph from '
+                    f'{min_time.date()} to {max_time.date()}'
+                )
             else:
-                logger.log("Identified static graph without timestamps")
+                logger.log('Identified static graph without timestamps')
 
             self.row_dict, self.colptr_dict = self.get_csc(graph)
             num_nodes = sum(len(df) for df in self.df_dict.values())
             num_edges = sum(len(row) for row in self.row_dict.values())
-            logger.log(f"Created graph with {num_nodes:,} nodes and "
-                       f"{num_edges:,} edges")
+            logger.log(
+                f'Created graph with {num_nodes:,} nodes and '
+                f'{num_edges:,} edges'
+            )
 
     def get_node_id(self, table_name: str, pkey: pd.Series) -> np.ndarray:
         r"""Returns the node ID given primary keys.
@@ -74,8 +78,9 @@ class LocalGraphStore:
             raise KeyError(f"Table '{table_name}' does not exist")
 
         if table_name not in self.pkey_map_dict.keys():
-            raise ValueError(f"Table '{table_name}' does not have a primary "
-                             f"key")
+            raise ValueError(
+                f"Table '{table_name}' does not have a primary key"
+            )
 
         if len(pkey) == 0:
             raise KeyError(f"No primary keys passed for table '{table_name}'")
@@ -85,16 +90,20 @@ class LocalGraphStore:
         try:
             pkey = pkey.astype(type(pkey_map.index[0]))
         except ValueError as e:
-            raise ValueError(f"Could not cast primary keys "
-                             f"{pkey.tolist()} to the expected data "
-                             f"type '{pkey_map.index.dtype}'") from e
+            raise ValueError(
+                f'Could not cast primary keys '
+                f'{pkey.tolist()} to the expected data '
+                f"type '{pkey_map.index.dtype}'"
+            ) from e
 
         try:
             return pkey_map.loc[pkey]['arange'].to_numpy()
         except KeyError as e:
             missing = ~np.isin(pkey, pkey_map.index)
-            raise KeyError(f"The primary keys {pkey[missing].tolist()} do "
-                           f"not exist in the '{table_name}' table") from e
+            raise KeyError(
+                f'The primary keys {pkey[missing].tolist()} do '
+                f"not exist in the '{table_name}' table"
+            ) from e
 
     def validate_entity_references(
         self,
@@ -141,12 +150,10 @@ class LocalGraphStore:
             df_dict[table_name] = Table._sanitize(
                 df=table._data.copy(deep=False).reset_index(drop=True),
                 dtype_dict={
-                    column.name: column.dtype
-                    for column in table.columns
+                    column.name: column.dtype for column in table.columns
                 },
                 stype_dict={
-                    column.name: column.stype
-                    for column in table.columns
+                    column.name: column.stype for column in table.columns
                 },
             )
 
@@ -161,15 +168,11 @@ class LocalGraphStore:
             if table._primary_key is not None:
                 ser = df[table._primary_key]
                 null_pkey = ser.isna().to_numpy()
-                duplicate_pkey = (
-                    ser.duplicated().to_numpy() & ~null_pkey
-                )
+                duplicate_pkey = ser.duplicated().to_numpy() & ~null_pkey
 
             if table._time_column is not None:
                 ser = df[table._time_column]
-                null_time = (
-                    ser.isna().to_numpy() & ~null_pkey & ~duplicate_pkey
-                )
+                null_time = ser.isna().to_numpy() & ~null_pkey & ~duplicate_pkey
 
             mask = ~(null_pkey | duplicate_pkey | null_time)
             if not mask.all():
@@ -211,12 +214,16 @@ class LocalGraphStore:
             if len(pkey_map) == 0:
                 error_msg = f"Found no valid rows in table '{table.name}'. "
                 if table.has_time_column():
-                    error_msg += ("Please make sure that there exists valid "
-                                  "non-N/A primary key and time column pairs "
-                                  "in this table.")
+                    error_msg += (
+                        'Please make sure that there exists valid '
+                        'non-N/A primary key and time column pairs '
+                        'in this table.'
+                    )
                 else:
-                    error_msg += ("Please make sure that there exists valid "
-                                  "non-N/A primary keys in this table.")
+                    error_msg += (
+                        'Please make sure that there exists valid '
+                        'non-N/A primary keys in this table.'
+                    )
                 raise ValueError(error_msg)
 
             pkey_map_dict[table.name] = pkey_map
@@ -227,8 +234,8 @@ class LocalGraphStore:
         self,
         graph: 'Graph',
     ) -> tuple[
-            dict[str, np.ndarray],
-            dict[str, tuple[pd.Timestamp, pd.Timestamp]],
+        dict[str, np.ndarray],
+        dict[str, tuple[pd.Timestamp, pd.Timestamp]],
     ]:
         time_dict: dict[str, np.ndarray] = {}
         min_max_time_dict: dict[str, tuple[pd.Timestamp, pd.Timestamp]] = {}
@@ -255,8 +262,8 @@ class LocalGraphStore:
         self,
         graph: 'Graph',
     ) -> tuple[
-            dict[tuple[str, str, str], np.ndarray],
-            dict[tuple[str, str, str], np.ndarray],
+        dict[tuple[str, str, str], np.ndarray],
+        dict[tuple[str, str, str], np.ndarray],
     ]:
         # A mapping from raw primary keys to node indices (0 to N-1):
         map_dict: dict[str, pd.Index] = {}
@@ -281,7 +288,7 @@ class LocalGraphStore:
             dst = map_dict[dst_table].get_indexer(src_df[fkey])
             dst = dst.astype('int64', copy=False)
             mask = dst >= 0
-            if dst_table in offset_dict.keys():
+            if dst_table in offset_dict:
                 dst = dst + offset_dict[dst_table][dst]
             if src_table in self.mask_dict.keys():
                 mask = mask & self.mask_dict[src_table]

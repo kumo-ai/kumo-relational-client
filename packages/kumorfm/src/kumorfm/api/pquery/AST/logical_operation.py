@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import field
-from typing import List, Optional, Union
+from typing import Union
 
 import pydantic
 from pydantic.dataclasses import dataclass
@@ -33,42 +33,46 @@ class LogicalOperation(ASTNode):
             to the right side of the expression. Should be :obj:`None`
             if and only if `bool_op` is :obj:`BoolOp.NOT`.
     """
+
     left: Union['Condition', 'LogicalOperation', None] = None
     bool_op: BoolOp = field(default=BoolOp.NOT)
-    right: Optional[Union['Condition', 'LogicalOperation']] = None
+    right: Union['Condition', 'LogicalOperation'] | None = None
 
     def __post_init__(self) -> None:
         if self.left is None:
-            raise ValueError(f"Class '{self.__class__.__name__}' is missing a "
-                             f"left-hand side (argument 'left').")
+            raise ValueError(
+                f"Class '{self.__class__.__name__}' is missing a "
+                f"left-hand side (argument 'left')."
+            )
         if self.bool_op != BoolOp.NOT and self.right is None:
             raise ValueError(
                 f"Nested '{self.__class__.__name__}' is missing a "
                 f"right-hand side '{self.__class__.__name__}' since "
-                "the boolean operator is 'AND' or 'OR'.")
+                "the boolean operator is 'AND' or 'OR'."
+            )
         if self.bool_op == BoolOp.NOT and self.right is not None:
             raise ValueError(
                 f"Nested '{self.__class__.__name__}' shouldn't have a "
                 f"right-hand side '{self.__class__.__name__}' since "
-                "boolean operator is 'NOT'.")
+                "boolean operator is 'NOT'."
+            )
         super().__post_init__()
 
     @property
-    def children(self) -> List['ASTNode']:
+    def children(self) -> list['ASTNode']:
         assert self.left is not None
         if self.right is not None:
             return [self.left, self.right]
-        else:
-            return [self.left]
+        return [self.left]
 
     def __and__(
-            self, f2: Union['Condition',
-                            'LogicalOperation']) -> 'LogicalOperation':
+        self, f2: Union['Condition', 'LogicalOperation']
+    ) -> 'LogicalOperation':
         return type(self)(left=self, bool_op=BoolOp.AND, right=f2)
 
     def __or__(
-            self, f2: Union['Condition',
-                            'LogicalOperation']) -> 'LogicalOperation':
+        self, f2: Union['Condition', 'LogicalOperation']
+    ) -> 'LogicalOperation':
         return type(self)(left=self, bool_op=BoolOp.OR, right=f2)
 
     def __invert__(self) -> 'LogicalOperation':
@@ -78,13 +82,16 @@ class LogicalOperation(ASTNode):
         r"""Creates a predictive query statement from the filter."""
         assert self.left is not None
         if self.bool_op == BoolOp.NOT:
-            return (f'{maybe_bold("NOT", rich)} '
-                    f'({self.left.to_string(rich=rich)})')
+            return (
+                f'{maybe_bold("NOT", rich)} ({self.left.to_string(rich=rich)})'
+            )
 
         assert self.right is not None
-        return (f'({self.left.to_string(rich=rich)}) '
-                f'{maybe_bold(self.bool_op.value, rich)} '
-                f'({self.right.to_string(rich=rich)})')
+        return (
+            f'({self.left.to_string(rich=rich)}) '
+            f'{maybe_bold(self.bool_op.value, rich)} '
+            f'({self.right.to_string(rich=rich)})'
+        )
 
 
 from kumorfm.api.pquery.AST.condition import Condition  # noqa: E402

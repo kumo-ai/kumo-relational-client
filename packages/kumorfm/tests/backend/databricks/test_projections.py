@@ -16,8 +16,7 @@ import pytest
 try:
     from kumorfm.rfm.backend.databricks.sampler import DatabricksSampler
 except ImportError:
-    pytest.skip("'databricks' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'databricks' extension not installed", allow_module_level=True)
 
 _PROJ = {
     'users': {
@@ -37,22 +36,28 @@ def _sampler() -> Any:
     return sampler
 
 
-@pytest.mark.parametrize('columns', [
-    {'user_id', 'ts', 'age'},
-    {'age', 'user_id', 'ts'},
-    ['ts', 'age', 'user_id'],
-])
+@pytest.mark.parametrize(
+    'columns',
+    [
+        {'user_id', 'ts', 'age'},
+        {'age', 'user_id', 'ts'},
+        ['ts', 'age', 'user_id'],
+    ],
+)
 def test_projection_order_follows_the_table_not_the_request(
     columns: Any,
 ) -> None:
     assert _sampler()._projections('users', columns) == [
-        '"user_id"', '"ts"', '"age"'
+        '"user_id"',
+        '"ts"',
+        '"age"',
     ]
 
 
 def test_a_subset_keeps_the_table_order() -> None:
     assert _sampler()._projections('users', {'age', 'user_id'}) == [
-        '"user_id"', '"age"'
+        '"user_id"',
+        '"age"',
     ]
 
 

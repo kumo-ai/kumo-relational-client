@@ -11,14 +11,14 @@ and these fix the two properties that make it safe to call while another
 caller is still pointed at the same endpoint: the configuration survives, and
 the next use rebuilds rather than fails.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
-import pytest
-
 import kumorfm
 import kumorfm.rfm as rfm_engine
+import pytest
 from kumorfm.rfm import close_client, init_client
 
 
@@ -40,10 +40,12 @@ def token() -> object:
 def nim() -> Any:
     r"""A NIM that answers the two probes ``authenticate`` makes."""
     import requests_mock
+
     with requests_mock.Mocker() as mock:
         mock.get('http://nim.test/v1/health/ready', json={'status': 'ready'})
-        mock.get('http://nim.test/v1/models',
-                 json={'data': [{'id': 'kumo-rfm'}]})
+        mock.get(
+            'http://nim.test/v1/models', json={'data': [{'id': 'kumo-rfm'}]}
+        )
         yield mock
 
 
@@ -74,7 +76,9 @@ def test_close_client_closes_the_pool(token: object, nim: Any) -> None:
     assert closed == [True]
 
 
-def test_the_configuration_survives_the_release(token: object, nim: Any) -> None:
+def test_the_configuration_survives_the_release(
+    token: object, nim: Any
+) -> None:
     _configured(token)
 
     close_client(_token=token)
@@ -83,7 +87,9 @@ def test_the_configuration_survives_the_release(token: object, nim: Any) -> None
     assert kumorfm.global_state._url == 'http://nim.test'
 
 
-def test_the_next_use_rebuilds_rather_than_fails(token: object, nim: Any) -> None:
+def test_the_next_use_rebuilds_rather_than_fails(
+    token: object, nim: Any
+) -> None:
     r"""What makes an early release safe: another client still pointed here
     reconnects instead of erroring.
     """
@@ -102,15 +108,18 @@ def test_a_release_is_idempotent(token: object, nim: Any) -> None:
     close_client(_token=token)
 
 
-def test_a_failing_close_still_evicts(token: object, nim: Any,
-                                      monkeypatch) -> None:
+def test_a_failing_close_still_evicts(
+    token: object, nim: Any, monkeypatch
+) -> None:
     r"""A client that cannot be closed must not stay cached: it would be
     handed to the next prediction after the caller was told it was gone.
     """
     client = _configured(token)
     monkeypatch.setattr(
-        type(client), 'close',
-        lambda self: (_ for _ in ()).throw(RuntimeError('socket')))
+        type(client),
+        'close',
+        lambda self: (_ for _ in ()).throw(RuntimeError('socket')),
+    )
 
     with pytest.raises(RuntimeError, match='socket'):
         close_client(_token=token)

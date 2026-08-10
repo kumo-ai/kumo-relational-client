@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from kumorfm.api.pquery import ValidatedPredictiveQuery
 
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.rfm.backend.duckdb import DuckDBTable
 from kumorfm.rfm.base import DataBackend, SQLSampler, Table
 from kumorfm.rfm.base.utils import Timestamp
@@ -67,8 +67,9 @@ class DuckDBSampler(SQLSampler):
 
         if len(index_dict) > 0:
             with self._connection.cursor() as cursor:
-                cursor.execute("SELECT table_name, expressions "
-                               "FROM duckdb_indexes()")
+                cursor.execute(
+                    'SELECT table_name, expressions FROM duckdb_indexes()'
+                )
                 for source_name, expressions in cursor.fetchall():
                     for table_name, table in graph.tables.items():
                         if source_name != table.source_name:
@@ -90,9 +91,11 @@ class DuckDBSampler(SQLSampler):
             for table_name, columns in index_dict.items():
                 source_name = self.source_name_dict[table_name]
                 for column in columns:
-                    name = f"kumo_index_{table_name}_{column}"
-                    sql = (f"CREATE INDEX IF NOT EXISTS {quote_ident(name)}\n"
-                           f"ON {source_name}({quote_ident(column)})")
+                    name = f'kumo_index_{table_name}_{column}'
+                    sql = (
+                        f'CREATE INDEX IF NOT EXISTS {quote_ident(name)}\n'
+                        f'ON {source_name}({quote_ident(column)})'
+                    )
                     cursor.execute(sql)
             self._connection.commit()
 
@@ -118,13 +121,13 @@ class DuckDBSampler(SQLSampler):
         random_seed: int | None = None,
     ) -> str:
         # NOTE DuckDB's sampling avoids SQLite's ORDER BY RANDOM() full sort.
-        sql = f"SELECT {', '.join(projections)}\n"
-        sql += f"FROM (SELECT * FROM {self.source_name_dict[table_name]}"
+        sql = f'SELECT {", ".join(projections)}\n'
+        sql += f'FROM (SELECT * FROM {self.source_name_dict[table_name]}'
         if len(filters) > 0:
-            sql += f"\nWHERE{' AND'.join(filters)}"
-        sql += f")\nUSING SAMPLE reservoir({num_rows} ROWS)"
+            sql += f'\nWHERE{" AND".join(filters)}'
+        sql += f')\nUSING SAMPLE reservoir({num_rows} ROWS)'
         if random_seed is not None:
-            sql += f" REPEATABLE ({random_seed})"
+            sql += f' REPEATABLE ({random_seed})'
         return sql
 
     def _by_pkey(
@@ -143,15 +146,17 @@ class DuckDBSampler(SQLSampler):
         tmp = self._key_table(index)
         tmp_name = f'tmp_{table_name}_{key}_{id(tmp)}'
 
-        sql = (f"SELECT "
-               f"tmp.__kumo_batch__, "
-               f"{', '.join(projections)}\n"
-               f"FROM {quote_ident(tmp_name)} tmp\n"
-               f"JOIN {self.source_name_dict[table_name]}\n"
-               f"  ON {key_ref} = tmp.__kumo_id__\n"
-               f"QUALIFY ROW_NUMBER() OVER (\n"
-               f"  PARTITION BY tmp.__kumo_batch__\n"
-               f") = 1")
+        sql = (
+            f'SELECT '
+            f'tmp.__kumo_batch__, '
+            f'{", ".join(projections)}\n'
+            f'FROM {quote_ident(tmp_name)} tmp\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = tmp.__kumo_id__\n'
+            f'QUALIFY ROW_NUMBER() OVER (\n'
+            f'  PARTITION BY tmp.__kumo_batch__\n'
+            f') = 1'
+        )
 
         with self._connection.cursor() as cursor:
             cursor.register(tmp_name, tmp)
@@ -189,22 +194,28 @@ class DuckDBSampler(SQLSampler):
             self.table_column_proj_dict[table_name][column]
             for column in self._ordered_columns(table_name, columns)
         ]
-        sql = (f"SELECT "
-               f"tmp.__kumo_batch__, "
-               f"{', '.join(projections)}\n"
-               f"FROM {quote_ident(tmp_name)} tmp\n"
-               f"JOIN {self.source_name_dict[table_name]}\n"
-               f"  ON {key_ref} = tmp.__kumo_id__\n")
+        sql = (
+            f'SELECT '
+            f'tmp.__kumo_batch__, '
+            f'{", ".join(projections)}\n'
+            f'FROM {quote_ident(tmp_name)} tmp\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = tmp.__kumo_id__\n'
+        )
         if time_column is not None and anchor_time is not None:
             time_ref = self._time_ref(table_name, time_column)
-            sql += f" AND {time_ref} <= tmp.__kumo_time__\n"
-        sql += ("QUALIFY ROW_NUMBER() OVER (\n"
-                "  PARTITION BY tmp.__kumo_batch__\n")
-        time_ref = (None if time_column is None else self._time_ref(
-            table_name, time_column))
+            sql += f' AND {time_ref} <= tmp.__kumo_time__\n'
+        sql += (
+            'QUALIFY ROW_NUMBER() OVER (\n  PARTITION BY tmp.__kumo_batch__\n'
+        )
+        time_ref = (
+            None
+            if time_column is None
+            else self._time_ref(table_name, time_column)
+        )
         order_by = self._neighbor_order_by(table_name, time_ref, key_ref)
-        sql += f"  ORDER BY {order_by}\n"
-        sql += f") <= {num_neighbors}"
+        sql += f'  ORDER BY {order_by}\n'
+        sql += f') <= {num_neighbors}'
 
         with self._connection.cursor() as cursor:
             cursor.register(tmp_name, tmp)
@@ -249,15 +260,17 @@ class DuckDBSampler(SQLSampler):
             self.table_column_proj_dict[table_name][column]
             for column in self._ordered_columns(table_name, columns)
         ]
-        sql = (f"SELECT "
-               f"tmp.__kumo_batch__, "
-               f"{', '.join(projections)}\n"
-               f"FROM {quote_ident(tmp_name)} tmp\n"
-               f"JOIN {self.source_name_dict[table_name]}\n"
-               f"  ON {key_ref} = tmp.__kumo_id__\n"
-               f" AND {time_ref} <= tmp.__kumo_end__")
+        sql = (
+            f'SELECT '
+            f'tmp.__kumo_batch__, '
+            f'{", ".join(projections)}\n'
+            f'FROM {quote_ident(tmp_name)} tmp\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = tmp.__kumo_id__\n'
+            f' AND {time_ref} <= tmp.__kumo_end__'
+        )
         if min_offset is not None:
-            sql += f"\n AND {time_ref} > tmp.__kumo_start__"
+            sql += f'\n AND {time_ref} > tmp.__kumo_start__'
 
         with self._connection.cursor() as cursor:
             cursor.register(tmp_name, tmp)
@@ -275,16 +288,16 @@ class DuckDBSampler(SQLSampler):
         ), batch
 
     def _key_table(self, index: pd.Series) -> pa.Table:
-        return pa.table({
-            '__kumo_batch__':
-            pa.array(range(len(index)), type=pa.int64()),
-            '__kumo_id__':
-            pa.array(index),
-        })
+        return pa.table(
+            {
+                '__kumo_batch__': pa.array(range(len(index)), type=pa.int64()),
+                '__kumo_id__': pa.array(index),
+            }
+        )
 
     def _time_ref(self, table_name: str, column: str) -> str:
         column_ref = self.table_column_ref_dict[table_name][column]
-        return f"CAST({column_ref} AS TIMESTAMP)"
+        return f'CAST({column_ref} AS TIMESTAMP)'
 
     def _warn_missing_indices(
         self,
@@ -294,12 +307,14 @@ class DuckDBSampler(SQLSampler):
         index_repr = '1 index' if num == 1 else f'{num} indices'
         num = len(index_dict)
         table_repr = '1 table' if num == 1 else f'{num} tables'
-        warnings.warn(f"Missing {index_repr} in {table_repr} for optimal "
-                      f"database querying. For improving runtime, we "
-                      f"strongly suggest to create indices for primary "
-                      f"and foreign keys, e.g., automatically by "
-                      f"instantiating KumoRFM via "
-                      f"`KumoRFM(graph, optimize=True)`.")
+        warnings.warn(
+            f'Missing {index_repr} in {table_repr} for optimal '
+            f'database querying. For improving runtime, we '
+            f'strongly suggest to create indices for primary '
+            f'and foreign keys, e.g., automatically by '
+            f'instantiating KumoRFM via '
+            f'`KumoRFM(graph, optimize=True)`.'
+        )
 
     def _get_min_max_time_dict(
         self,
@@ -309,13 +324,15 @@ class DuckDBSampler(SQLSampler):
         for index, table_name in enumerate(table_names):
             column = self.time_column_dict[table_name]
             time_ref = self._time_ref(table_name, column)
-            select = (f"SELECT\n"
-                      f"  {index} as table_index,\n"
-                      f"  MIN({time_ref}) as min_date,\n"
-                      f"  MAX({time_ref}) as max_date\n"
-                      f"FROM {self.source_name_dict[table_name]}")
+            select = (
+                f'SELECT\n'
+                f'  {index} as table_index,\n'
+                f'  MIN({time_ref}) as min_date,\n'
+                f'  MAX({time_ref}) as max_date\n'
+                f'FROM {self.source_name_dict[table_name]}'
+            )
             selects.append(select)
-        sql = "\nUNION ALL\n".join(selects)
+        sql = '\nUNION ALL\n'.join(selects)
 
         out_dict: dict[str, tuple[pd.Timestamp, pd.Timestamp]] = {}
         with self._connection.cursor() as cursor:
@@ -342,14 +359,14 @@ class DuckDBSampler(SQLSampler):
         key = self.primary_key_dict[table_name]
         if key not in source_table or source_table[key].is_nullable:
             key_ref = self.table_column_ref_dict[table_name][key]
-            filters.append(f" {key_ref} IS NOT NULL")
+            filters.append(f' {key_ref} IS NOT NULL')
 
         column = self.time_column_dict.get(table_name)
         if column is None:
             pass
         elif column not in source_table or source_table[column].is_nullable:
             column_ref = self.table_column_ref_dict[table_name][column]
-            filters.append(f" {column_ref} IS NOT NULL")
+            filters.append(f' {column_ref} IS NOT NULL')
 
         # A specific set of entities: bind the ids as parameters rather than
         # interpolating them into the SQL, so that string keys containing
@@ -358,7 +375,7 @@ class DuckDBSampler(SQLSampler):
         if entity_ids is not None:
             key_ref = self.table_column_ref_dict[table_name][key]
             placeholders = ', '.join(['?'] * len(entity_ids))
-            filters.append(f" {key_ref} IN ({placeholders})")
+            filters.append(f' {key_ref} IN ({placeholders})')
             parameters = list(entity_ids)
 
         projections = [
@@ -396,10 +413,12 @@ class DuckDBSampler(SQLSampler):
         projections: list[str],
         filters: list[str],
     ) -> str:
-        sql = (f"SELECT {', '.join(projections)}\n"
-               f"FROM {self.source_name_dict[table_name]}")
+        sql = (
+            f'SELECT {", ".join(projections)}\n'
+            f'FROM {self.source_name_dict[table_name]}'
+        )
         if len(filters) > 0:
-            sql += f"\nWHERE{' AND'.join(filters)}"
+            sql += f'\nWHERE{" AND".join(filters)}'
         return sql
 
     def _sample_target(
@@ -459,12 +478,12 @@ class DuckDBSampler(SQLSampler):
         ys: list[pd.Series] = []
         mask = np.full(len(index), False, dtype=bool)
         for start in range(0, len(index), batch_size):
-            df = entity_df.iloc[index[start:start + batch_size]]
+            df = entity_df.iloc[index[start : start + batch_size]]
             entity_pkey = df[self.primary_key_dict[query.entity_table]]
             feat_dict, time_dict, batch_dict = self._sample_query_data(
                 entity_table_name=query.entity_table,
                 entity_pkey=entity_pkey,
-                anchor_time=anchor_time.iloc[start:start + batch_size],
+                anchor_time=anchor_time.iloc[start : start + batch_size],
                 columns_dict={
                     key: columns
                     for key, columns in columns_dict.items()
@@ -482,10 +501,10 @@ class DuckDBSampler(SQLSampler):
                 feat_dict=feat_dict,
                 time_dict=time_dict,
                 batch_dict=batch_dict,
-                anchor_time=anchor_time.iloc[start:start + batch_size],
+                anchor_time=anchor_time.iloc[start : start + batch_size],
             )
             ys.append(y)
-            mask[start:start + batch_size] = _mask
+            mask[start : start + batch_size] = _mask
 
             count += len(y)
             if count >= num_examples:

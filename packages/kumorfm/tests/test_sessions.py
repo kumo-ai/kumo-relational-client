@@ -5,6 +5,7 @@
 from typing import Any
 
 import pytest
+from conftest import MOCK_URL
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.rfm import RFMPredictResponse
 from kumorfm.client import KumoClient
@@ -17,8 +18,6 @@ from kumorfm.rfm.payload import (
     session_predict_payload,
 )
 from kumorfm.utils.progress_logger import PlainProgressLogger
-
-from conftest import MOCK_URL
 
 _FULL_PAYLOAD = {
     'model': 'kumo-rfm',
@@ -36,6 +35,7 @@ class RecordingAPI:
     r"""Fake RFMAPI that records the create/session_predict/delete sequence and
     can simulate an unsupported NIM, an expired session, or a failing predict.
     """
+
     def __init__(
         self,
         *,
@@ -52,14 +52,21 @@ class RecordingAPI:
 
     def _response(self, entity_ids: Any) -> RFMPredictResponse:
         ids = list(entity_ids) if entity_ids is not None else [0]
-        return RFMPredictResponse(prediction={
-            'columns': ['ENTITY', 'TRUE_PROB'],
-            'data': [[entity, 0.5] for entity in ids],
-        })
+        return RFMPredictResponse(
+            prediction={
+                'columns': ['ENTITY', 'TRUE_PROB'],
+                'data': [[entity, 0.5] for entity in ids],
+            }
+        )
 
-    def predict(self, request: Any, *, entity_ids: Any = None,
-                instance_ids: Any = None,
-                anchor_times: Any = None) -> RFMPredictResponse:
+    def predict(
+        self,
+        request: Any,
+        *,
+        entity_ids: Any = None,
+        instance_ids: Any = None,
+        anchor_times: Any = None,
+    ) -> RFMPredictResponse:
         self.calls.append(('predict', None))
         return self._response(entity_ids)
 
@@ -72,9 +79,15 @@ class RecordingAPI:
         self.calls.append(('create', session_id))
         return session_id
 
-    def session_predict(self, session_id: str, request: Any, *,
-                        entity_ids: Any = None, instance_ids: Any = None,
-                        anchor_times: Any = None) -> RFMPredictResponse:
+    def session_predict(
+        self,
+        session_id: str,
+        request: Any,
+        *,
+        entity_ids: Any = None,
+        instance_ids: Any = None,
+        anchor_times: Any = None,
+    ) -> RFMPredictResponse:
         self._n_session_predict += 1
         self.calls.append(('session_predict', session_id))
         if self._expire_first and self._n_session_predict == 1:
@@ -160,8 +173,9 @@ def test_random_seed_none_disables_sessions(
     api = RecordingAPI()
     model = _model(user_store_graph, api)
     with model.batch_mode(batch_size=2):
-        model.predict(ltv, indices=[0, 1, 2, 3], random_seed=None,
-                      verbose=False)
+        model.predict(
+            ltv, indices=[0, 1, 2, 3], random_seed=None, verbose=False
+        )
     kinds = _kinds(api)
     assert 'create' not in kinds
     assert kinds.count('predict') == 2
@@ -175,10 +189,12 @@ def test_random_seed_none_says_the_context_is_re_uploaded(
     model = _model(user_store_graph, api)
     logger = PlainProgressLogger('Predicting', verbose=False)
     with model.batch_mode(batch_size=2):
-        model.predict(ltv, indices=[0, 1, 2, 3], random_seed=None,
-                      verbose=logger)
-    assert any('random_seed=None' in msg and 're-uploads' in msg
-               for msg in logger.logs)
+        model.predict(
+            ltv, indices=[0, 1, 2, 3], random_seed=None, verbose=logger
+        )
+    assert any(
+        'random_seed=None' in msg and 're-uploads' in msg for msg in logger.logs
+    )
 
 
 def test_env_kill_switch_says_the_context_is_re_uploaded(
@@ -268,8 +284,10 @@ def test_session_is_deleted_even_when_a_batch_fails(
 
 
 def test_rfmapi_create_session_returns_id(mock_api: Any) -> None:
-    mock_api.post(f'{MOCK_URL}/v1/sessions',
-                  json={'session_id': 'sess_x', 'ttl_seconds': 3600})
+    mock_api.post(
+        f'{MOCK_URL}/v1/sessions',
+        json={'session_id': 'sess_x', 'ttl_seconds': 3600},
+    )
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
     assert api.create_session({'model': 'kumo-rfm'}) == 'sess_x'
 
@@ -318,12 +336,18 @@ def test_rfmapi_session_predict_targets_session_path(mock_api: Any) -> None:
         }
 
     matcher = mock_api.post(
-        f'{MOCK_URL}/v1/sessions/sess_x/predictions', json=_response)
+        f'{MOCK_URL}/v1/sessions/sess_x/predictions', json=_response
+    )
     api = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))
-    request = {'predict': {'instance_table': {
-        'columns': [INSTANCE_ID], 'rows': [[0]]}}, 'output': {}}
+    request = {
+        'predict': {
+            'instance_table': {'columns': [INSTANCE_ID], 'rows': [[0]]}
+        },
+        'output': {},
+    }
     response = api.session_predict(
-        'sess_x', request, entity_ids=[7], instance_ids=[0])
+        'sess_x', request, entity_ids=[7], instance_ids=[0]
+    )
     assert matcher.called
     assert 'sessions/sess_x/predictions' in matcher.last_request.url
     assert response.prediction['data'][0][0] == 7

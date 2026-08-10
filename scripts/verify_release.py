@@ -52,18 +52,20 @@ def normalize(name: str) -> str:
 
 
 def fetch_filenames(index: str, distribution: str) -> list[str]:
-    url = f"{index.rstrip('/')}/{normalize(distribution)}/"
+    url = f'{index.rstrip("/")}/{normalize(distribution)}/'
     with urllib.request.urlopen(url, timeout=30) as response:
         parser = _AnchorTextParser()
         parser.feed(response.read().decode('utf-8', errors='replace'))
         return parser.filenames
 
 
-def release_files(filenames: list[str], distribution: str,
-                  version: str) -> list[str]:
-    prefix = f"{distribution.replace('-', '_')}-{version}"
+def release_files(
+    filenames: list[str], distribution: str, version: str
+) -> list[str]:
+    prefix = f'{distribution.replace("-", "_")}-{version}'
     return [
-        name for name in filenames
+        name
+        for name in filenames
         if name.startswith(f'{prefix}-') or name == f'{prefix}.tar.gz'
     ]
 
@@ -83,7 +85,8 @@ def main() -> None:
         try:
             filenames = fetch_filenames(options.index, options.distribution)
             found = release_files(
-                filenames, options.distribution, options.version)
+                filenames, options.distribution, options.version
+            )
         except urllib.error.URLError as error:
             print(f'attempt {attempt}: index not readable yet ({error})')
         else:

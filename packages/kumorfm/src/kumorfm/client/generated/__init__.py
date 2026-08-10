@@ -2,5 +2,4 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generated client metadata."""
-
+r"""Generated client metadata."""

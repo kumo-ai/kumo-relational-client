@@ -18,6 +18,7 @@ class _Conn:
 class _SlottedConn:
     r"""Weakref-able but rejects arbitrary attribute writes (like a borrowed
     Snowpark session that only exposes a fixed API)."""
+
     __slots__ = ('__weakref__',)
 
 
@@ -73,7 +74,7 @@ def test_connect_rejects_unknown_kwargs(backend, module, typo, intended):
     with pytest.raises(ConnectorError) as excinfo:
         connect(backend, **{typo: 'X'})
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
-    assert f"did you mean {intended!r}" in excinfo.value.message
+    assert f'did you mean {intended!r}' in excinfo.value.message
 
 
 def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
@@ -82,8 +83,10 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
 
     seen = {}
     monkeypatch.setattr(
-        backend.databricks_sql, 'connect',
-        lambda **kwargs: seen.update(kwargs) or _Conn())
+        backend.databricks_sql,
+        'connect',
+        lambda **kwargs: seen.update(kwargs) or _Conn(),
+    )
     monkeypatch.setattr(backend.os, 'getenv', lambda name: None)
 
     backend.connect(catalog='c', driver_options={'use_cloud_fetch': True})
@@ -99,7 +102,8 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
     ],
 )
 def test_driver_options_cannot_restate_a_validated_argument(
-        backend, module, argument):
+    backend, module, argument
+):
     r"""The escape hatch must not override a validated argument.
 
     ``driver_options`` bypasses the allow-list by design, so silently letting
@@ -108,8 +112,11 @@ def test_driver_options_cannot_restate_a_validated_argument(
     """
     pytest.importorskip(module)
     with pytest.raises(ConnectorError) as excinfo:
-        connect(backend, driver_options={argument: 'from-options'},
-                **{argument: 'from-caller'})
+        connect(
+            backend,
+            driver_options={argument: 'from-options'},
+            **{argument: 'from-caller'},
+        )
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
     assert excinfo.value.details['arguments'] == [argument]
     assert 'driver_options' in excinfo.value.message
@@ -125,14 +132,16 @@ def test_snowflake_driver_options_credentials_suppress_borrowing(monkeypatch):
     from sdfm_connectors.backends import snowflake as backend
 
     opened, seen = _Conn(), {}
+    monkeypatch.setattr(backend, '_active_snowpark_connection', lambda: _Conn())
     monkeypatch.setattr(
-        backend, '_active_snowpark_connection', lambda: _Conn())
-    monkeypatch.setattr(
-        backend.snowflake_connector, 'connect',
-        lambda **kwargs: seen.update(kwargs) or opened)
+        backend.snowflake_connector,
+        'connect',
+        lambda **kwargs: seen.update(kwargs) or opened,
+    )
 
     result = backend.connect(
-        driver_options={'account': 'a', 'user': 'u', 'password': 'p'})
+        driver_options={'account': 'a', 'user': 'u', 'password': 'p'}
+    )
 
     assert result is opened
     assert seen == {'account': 'a', 'user': 'u', 'password': 'p'}
@@ -145,7 +154,8 @@ def test_snowflake_borrows_session_when_no_auth_arguments(monkeypatch):
 
     borrowed = _Conn()
     monkeypatch.setattr(
-        backend, '_active_snowpark_connection', lambda: borrowed)
+        backend, '_active_snowpark_connection', lambda: borrowed
+    )
 
     assert backend.connect() is borrowed
     assert owns_connection(borrowed) is False
@@ -160,8 +170,7 @@ def test_snowflake_rejects_session_arguments_on_a_borrowed_session(monkeypatch):
     pytest.importorskip('snowflake.connector')
     from sdfm_connectors.backends import snowflake as backend
 
-    monkeypatch.setattr(
-        backend, '_active_snowpark_connection', lambda: _Conn())
+    monkeypatch.setattr(backend, '_active_snowpark_connection', lambda: _Conn())
 
     with pytest.raises(ConnectorError) as excinfo:
         backend.connect(schema='OTHER')
@@ -175,24 +184,26 @@ def test_snowflake_credentials_still_open_their_own_connection(monkeypatch):
     from sdfm_connectors.backends import snowflake as backend
 
     opened = _Conn()
+    monkeypatch.setattr(backend, '_active_snowpark_connection', lambda: _Conn())
     monkeypatch.setattr(
-        backend, '_active_snowpark_connection', lambda: _Conn())
-    monkeypatch.setattr(
-        backend.snowflake_connector, 'connect', lambda **kwargs: opened)
+        backend.snowflake_connector, 'connect', lambda **kwargs: opened
+    )
 
     assert backend.connect(account='a', user='u', password='p') is opened
     assert owns_connection(opened) is True
 
 
 def test_snowflake_no_arguments_and_no_session_explains_requirements(
-        monkeypatch):
+    monkeypatch,
+):
     r"""connectors-snowflake-session-borrowing-all-or-nothing.md"""
     pytest.importorskip('snowflake.connector')
     from sdfm_connectors.backends import snowflake as backend
 
     def _fail(**kwargs):
         raise RuntimeError(
-            "Default connection with name 'default' cannot be found")
+            "Default connection with name 'default' cannot be found"
+        )
 
     monkeypatch.setattr(backend, '_active_snowpark_connection', lambda: None)
     monkeypatch.setattr(backend.snowflake_connector, 'connect', _fail)
@@ -204,8 +215,9 @@ def test_snowflake_no_arguments_and_no_session_explains_requirements(
     assert "'account'" in excinfo.value.message
 
 
-@pytest.mark.parametrize('argument', ['connection_name',
-                                      'connections_file_path'])
+@pytest.mark.parametrize(
+    'argument', ['connection_name', 'connections_file_path']
+)
 def test_snowflake_allows_named_connection_arguments(argument):
     r"""connectors-connect-allowlist-rejects-valid-driver-args.md
 
@@ -229,14 +241,22 @@ def test_snowflake_still_rejects_a_misspelled_argument():
     r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
     snowflake = pytest.importorskip('sdfm_connectors.backends.snowflake')
     with pytest.raises(ConnectorError) as excinfo:
-        check_connect_args('snowflake', {'accont': 'x'},
-                           snowflake._CONNECT_ARGS)
+        check_connect_args(
+            'snowflake', {'accont': 'x'}, snowflake._CONNECT_ARGS
+        )
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
     assert 'account' in str(excinfo.value)
 
 
-@pytest.mark.parametrize('argument', ['auth_type', 'credentials_provider',
-                                      'use_cloud_fetch', 'user_agent_entry'])
+@pytest.mark.parametrize(
+    'argument',
+    [
+        'auth_type',
+        'credentials_provider',
+        'use_cloud_fetch',
+        'user_agent_entry',
+    ],
+)
 def test_databricks_allows_kwargs_routed_arguments(argument):
     r"""connectors-connect-allowlist-rejects-valid-driver-args.md
 
@@ -245,15 +265,15 @@ def test_databricks_allows_kwargs_routed_arguments(argument):
     allow-list rejected the whole non-PAT auth path.
     """
     databricks = pytest.importorskip('sdfm_connectors.backends.databricks')
-    check_connect_args('databricks', {argument: 'x'},
-                       databricks._CONNECT_ARGS)
+    check_connect_args('databricks', {argument: 'x'}, databricks._CONNECT_ARGS)
 
 
 def test_databricks_still_rejects_a_misspelled_argument():
     r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
     databricks = pytest.importorskip('sdfm_connectors.backends.databricks')
     with pytest.raises(ConnectorError) as excinfo:
-        check_connect_args('databricks', {'cattalog': 'x'},
-                           databricks._CONNECT_ARGS)
+        check_connect_args(
+            'databricks', {'cattalog': 'x'}, databricks._CONNECT_ARGS
+        )
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
     assert 'catalog' in str(excinfo.value)

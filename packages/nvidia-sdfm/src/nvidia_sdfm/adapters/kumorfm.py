@@ -8,10 +8,10 @@ import contextlib
 from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from nvidia_sdfm.base import (ModelAdapter, ModelCapabilities,
-                              request_type_names)
+
+from nvidia_sdfm.base import ModelAdapter, ModelCapabilities, request_type_names
 from nvidia_sdfm.core.serving import ServingTarget
-from nvidia_sdfm.core.transport import Transport
+from nvidia_sdfm.core.transport import Transport, redact_url
 from nvidia_sdfm.errors import MissingExtraError, NimRequestError, SdfmError
 from nvidia_sdfm.requests import KumoRFMRequest, KumoRFMTaskRequest
 
@@ -88,7 +88,8 @@ def _init_serving(rfm_engine: Any, target: ServingTarget) -> None:
         )
     except ImportError as error:
         raise MissingExtraError(
-            'databricks-serving', 'databricks-sdk') from error
+            'databricks-serving', 'databricks-sdk'
+        ) from error
     except ValueError as error:
         raise SdfmError(str(error), code='INVALID_CONFIGURATION') from error
     except _engine_http_error_types() as error:
@@ -114,20 +115,26 @@ def _resolve_explain(field_value: Any, options: dict[str, Any]) -> Any:
     option_value = options.pop('explain', _UNSET)
     explain = field_value
     if option_value is not _UNSET:
-        if (field_value is True or isinstance(field_value, dict)
-                or _is_explain_config(field_value)):
+        if (
+            field_value is True
+            or isinstance(field_value, dict)
+            or _is_explain_config(field_value)
+        ):
             raise SdfmError(
-                "explain is set both as a request field and in options; "
-                "specify it once (prefer the request field)",
+                'explain is set both as a request field and in options; '
+                'specify it once (prefer the request field)',
                 code='INVALID_REQUEST',
             )
         explain = option_value
-    if (explain is not True and explain is not False
-            and not isinstance(explain, dict)
-            and not _is_explain_config(explain)):
+    if (
+        explain is not True
+        and explain is not False
+        and not isinstance(explain, dict)
+        and not _is_explain_config(explain)
+    ):
         raise SdfmError(
-            "explain must be a bool, an ExplainConfig, or an ExplainConfig "
-            f"dict; got {type(explain).__name__}",
+            'explain must be a bool, an ExplainConfig, or an ExplainConfig '
+            f'dict; got {type(explain).__name__}',
             code='INVALID_REQUEST',
         )
     return explain
@@ -153,6 +160,44 @@ def _driver_error_types() -> tuple[Any, Any]:
     return NimFailureError, InvalidResponseError
 
 
+def _engine_init_error_types() -> tuple[type[BaseException], ...]:
+    r"""The engine's connection-time error types, widened if it is too old.
+
+    ``ClientInitializationError`` subclasses :class:`ValueError`, which is what
+    the engine raised before it grew a root exception, so falling back to
+    ``ValueError`` keeps this boundary working against either version.
+    """
+    try:
+        from kumorfm.exceptions import ClientInitializationError
+    except Exception:
+        return (ValueError,)
+    return (ClientInitializationError,)
+
+
+def _translate_init_error(error: BaseException) -> SdfmError:
+    r"""Map a connection-time engine failure onto this SDK's hierarchy.
+
+    Establishing the connection happens outside the prediction call, so these
+    failures used to escape as the engine's bare ``ValueError`` and no
+    ``except SdfmError`` could catch a wrong API key or an unreachable NIM.
+    The codes separate what a caller can act on: credentials are not worth a
+    retry, an unreachable or slow endpoint may be.
+    """
+    try:
+        from kumorfm.exceptions import (
+            AuthenticationError,
+            NimTimeoutError,
+            NimUnreachableError,
+        )
+    except Exception:
+        return SdfmError(str(error), code='TRANSPORT_ERROR')
+    if isinstance(error, AuthenticationError):
+        return SdfmError(str(error), code='AUTHENTICATION_FAILED')
+    if isinstance(error, NimTimeoutError | NimUnreachableError):
+        return SdfmError(str(error), code='TRANSPORT_ERROR')
+    return SdfmError(str(error), code='INVALID_CONFIGURATION')
+
+
 def _describe(transport: Transport | ServingTarget) -> str:
     r"""Name the deployment for an error message, whichever transport it is.
 
@@ -161,10 +206,13 @@ def _describe(transport: Transport | ServingTarget) -> str:
     the raise replaced the failure being reported. Every engine error on the
     serving path surfaced as 'the serving endpoint has no URL' with the real
     cause discarded.
+
+    The URL is redacted because a caller may carry the credential in it, and
+    this name is spliced into an error message.
     """
     if isinstance(transport, ServingTarget):
         return f'serving endpoint {transport.endpoint!r}'
-    return transport.url
+    return str(redact_url(transport.url))
 
 
 def _translate_engine_error(error: Exception, url: str) -> SdfmError:
@@ -196,15 +244,21 @@ def _translate_engine_error(error: Exception, url: str) -> SdfmError:
     """
     failure_type, invalid_response_type = _driver_error_types()
     if failure_type is not None and isinstance(error, failure_type):
-        details = ({'invalid_params': error.invalid_params}
-                   if error.invalid_params else {})
+        details = (
+            {'invalid_params': error.invalid_params}
+            if error.invalid_params
+            else {}
+        )
         if error.status_code is None:
-            return SdfmError(str(error), code='TRANSPORT_ERROR',
-                             details=details)
-        return NimRequestError(error.status_code, code=None,
-                               message=str(error), details=details)
-    if (invalid_response_type is not None
-            and isinstance(error, invalid_response_type)):
+            return SdfmError(
+                str(error), code='TRANSPORT_ERROR', details=details
+            )
+        return NimRequestError(
+            error.status_code, code=None, message=str(error), details=details
+        )
+    if invalid_response_type is not None and isinstance(
+        error, invalid_response_type
+    ):
         return SdfmError(str(error), code='INVALID_RESPONSE')
     if isinstance(error, KeyError):
         message = str(error.args[0]) if error.args else str(error)
@@ -219,30 +273,38 @@ def _translate_engine_error(error: Exception, url: str) -> SdfmError:
 
 
 def _validate_num_retries(num_retries: Any) -> None:
-    if (not isinstance(num_retries, int) or isinstance(num_retries, bool)
-            or num_retries < 0):
+    if (
+        not isinstance(num_retries, int)
+        or isinstance(num_retries, bool)
+        or num_retries < 0
+    ):
         raise SdfmError(
-            'num_retries must be a non-negative int; got '
-            f'{num_retries!r}',
+            f'num_retries must be a non-negative int; got {num_retries!r}',
             code='INVALID_REQUEST',
         )
 
 
 def _validate_batch_size(batch_size: Any) -> None:
-    if (batch_size is not None and batch_size != 'max'
-            and not (isinstance(batch_size, int)
-                     and not isinstance(batch_size, bool)
-                     and batch_size > 0)):
+    if (
+        batch_size is not None
+        and batch_size != 'max'
+        and not (
+            isinstance(batch_size, int)
+            and not isinstance(batch_size, bool)
+            and batch_size > 0
+        )
+    ):
         raise SdfmError(
             "batch_size must be a positive int or the literal 'max'; got "
-            f"{batch_size!r}",
+            f'{batch_size!r}',
             code='INVALID_REQUEST',
         )
 
 
 def _require_columns(frame: pd.DataFrame, name: str, columns: set[str]) -> None:
-    missing = [column for column in sorted(columns)
-               if column not in frame.columns]
+    missing = [
+        column for column in sorted(columns) if column not in frame.columns
+    ]
     if missing:
         raise SdfmError(
             f'{name} table is missing required column(s) {missing}; '
@@ -273,7 +335,7 @@ def _validate_task_request(request: KumoRFMTaskRequest) -> None:
         )
 
     if isinstance(request.entity_table, str):
-        entity_tables: tuple[str, ...] = (request.entity_table, )
+        entity_tables: tuple[str, ...] = (request.entity_table,)
     else:
         entity_tables = tuple(request.entity_table)
         if not 1 <= len(entity_tables) <= 2:
@@ -298,11 +360,16 @@ def _validate_task_request(request: KumoRFMTaskRequest) -> None:
     _require_columns(request.predict, 'predict', {request.entity_column})
 
     reserved = set(context_columns)
-    reserved.add(request.time_column if request.time_column is not None
-                 else 'ANCHOR_TIMESTAMP')
-    context_only = [column for column in request.context.columns
-                    if column not in reserved
-                    and column not in set(request.predict.columns)]
+    reserved.add(
+        request.time_column
+        if request.time_column is not None
+        else 'ANCHOR_TIMESTAMP'
+    )
+    context_only = [
+        column
+        for column in request.context.columns
+        if column not in reserved and column not in set(request.predict.columns)
+    ]
     if context_only:
         raise SdfmError(
             f'context carries feature column(s) {context_only} that predict '
@@ -322,9 +389,13 @@ def _build_task_table(engine: Any, request: KumoRFMTaskRequest) -> Any:
     if time_column is None:
         has_anchor_timestamp = (
             'ANCHOR_TIMESTAMP' in request.context.columns
-            or 'ANCHOR_TIMESTAMP' in request.predict.columns)
-        time_column = ('ANCHOR_TIMESTAMP' if has_anchor_timestamp
-                       else engine.TaskTable.ENTITY_TIME)
+            or 'ANCHOR_TIMESTAMP' in request.predict.columns
+        )
+        time_column = (
+            'ANCHOR_TIMESTAMP'
+            if has_anchor_timestamp
+            else engine.TaskTable.ENTITY_TIME
+        )
     return engine.TaskTable(
         task_type=request.task_type,
         context_df=request.context,
@@ -338,9 +409,12 @@ def _build_task_table(engine: Any, request: KumoRFMTaskRequest) -> Any:
     )
 
 
-def _coerce_result(result: Any, wants_explanation: bool) -> 'pd.DataFrame | Explanation':
+def _coerce_result(
+    result: Any, wants_explanation: bool
+) -> pd.DataFrame | Explanation:
     if wants_explanation:
         from kumorfm.rfm.rfm import Explanation
+
         if not isinstance(result, Explanation):
             raise TypeError(
                 'expected an Explanation result for explain=True; got '
@@ -373,8 +447,8 @@ class KumoRFMAdapter(ModelAdapter):
     def predict(
         self,
         transport: Transport | ServingTarget,
-        request: 'KumoRFMRequest | KumoRFMTaskRequest',
-    ) -> 'pd.DataFrame | Explanation':
+        request: KumoRFMRequest | KumoRFMTaskRequest,
+    ) -> pd.DataFrame | Explanation:
         engine = _load_engine()
 
         _validate_batch_size(request.batch_size)
@@ -395,25 +469,34 @@ class KumoRFMAdapter(ModelAdapter):
             self._opened_engine_client = True
             api_client = None
         else:
-            api_client = engine.init_client(
-                url=transport.url,
-                api_key=transport.api_key,
-                verify_ssl=transport.verify_ssl,
-                timeout=transport.timeout,
-                max_retries=transport.max_retries,
-                _token=engine._SDFM_CLIENT_TOKEN)
+            try:
+                api_client = engine.init_client(
+                    url=transport.url,
+                    api_key=transport.api_key,
+                    verify_ssl=transport.verify_ssl,
+                    timeout=transport.timeout,
+                    max_retries=transport.max_retries,
+                    _token=engine._SDFM_CLIENT_TOKEN,
+                )
+            except _engine_init_error_types() as error:
+                raise _translate_init_error(error) from error
             self._opened_engine_client = True
         # `verbose` has to reach the constructor as well as the call: it owns
         # the graph-materialization output, and a handle builds a fresh engine
         # model per prediction, so that banner is printed on every predict.
         # Only overridden when the caller actually asked, so the engine keeps
         # its own default otherwise.
-        model = (engine.KumoRFM(request.graph, verbose=options['verbose'],
-                                _client=api_client) if 'verbose' in options
-                 else engine.KumoRFM(request.graph, _client=api_client))
+        model = (
+            engine.KumoRFM(
+                request.graph, verbose=options['verbose'], _client=api_client
+            )
+            if 'verbose' in options
+            else engine.KumoRFM(request.graph, _client=api_client)
+        )
         if request.batch_size is not None:
-            batch_ctx = model.batch_mode(request.batch_size,
-                                         num_retries=request.num_retries)
+            batch_ctx = model.batch_mode(
+                request.batch_size, num_retries=request.num_retries
+            )
         elif request.num_retries:
             # Without a batch context the retry count used to be dropped, so
             # 'num_retries' was a silent no-op on the default path.
@@ -441,7 +524,8 @@ class KumoRFMAdapter(ModelAdapter):
             raise
         except Exception as error:
             raise _translate_engine_error(
-                error, _describe(transport)) from error
+                error, _describe(transport)
+            ) from error
         return _coerce_result(result, explain is not False)
 
     def close(self) -> None:

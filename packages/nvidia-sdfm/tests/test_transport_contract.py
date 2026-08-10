@@ -15,11 +15,10 @@ import pytest
 from urllib3.util.retry import Retry
 
 from nvidia_sdfm import SDFMClient
-from nvidia_sdfm.requests import TabICLRequest
 from nvidia_sdfm.core import transport as transport_module
 from nvidia_sdfm.core.transport import _PREDICTIONS_PATH, Transport
 from nvidia_sdfm.errors import NimRequestError, SdfmError
-from nvidia_sdfm.requests import ModelRequest
+from nvidia_sdfm.requests import ModelRequest, TabICLRequest
 
 _URL = 'http://nim.example.com:8000'
 
@@ -29,10 +28,16 @@ def _canned_response(request_id: str = 'pred_123') -> dict:
         'id': request_id,
         'model': 'tabicl',
         'predictions': [
-            {'row_index': 0, 'prediction': 'yes',
-             'probabilities': {'yes': 0.8, 'no': 0.2}},
-            {'row_index': 1, 'prediction': 'no',
-             'probabilities': {'yes': 0.3, 'no': 0.7}},
+            {
+                'row_index': 0,
+                'prediction': 'yes',
+                'probabilities': {'yes': 0.8, 'no': 0.2},
+            },
+            {
+                'row_index': 1,
+                'prediction': 'no',
+                'probabilities': {'yes': 0.3, 'no': 0.7},
+            },
         ],
         'metadata': {'task_kind': 'classification'},
     }
@@ -42,13 +47,15 @@ def test_predict_end_to_end_round_trip(requests_mock, context_df, predict_df):
     requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
 
     with SDFMClient(url=_URL) as client:
-        frame = client._predict(TabICLRequest(
-            context=context_df,
-            predict=predict_df,
-            task='classification',
-            target='target_col',
-            outputs=['prediction', 'probabilities'],
-        ))
+        frame = client._predict(
+            TabICLRequest(
+                context=context_df,
+                predict=predict_df,
+                task='classification',
+                target='target_col',
+                outputs=['prediction', 'probabilities'],
+            )
+        )
 
     assert list(frame['row_index']) == [0, 1]
     assert list(frame['prediction']) == ['yes', 'no']
@@ -91,13 +98,15 @@ def test_predict_propagates_nim_error(requests_mock, context_df, predict_df):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        SDFMClient(url=_URL)._predict(TabICLRequest(
-            context=context_df,
-            predict=predict_df,
-            task='classification',
-            target='target_col',
-            outputs=['prediction'],
-        ))
+        SDFMClient(url=_URL)._predict(
+            TabICLRequest(
+                context=context_df,
+                predict=predict_df,
+                task='classification',
+                target='target_col',
+                outputs=['prediction'],
+            )
+        )
     assert excinfo.value.status_code == 422
     assert excinfo.value.code == 'INVALID_SCHEMA'
 
@@ -146,6 +155,13 @@ def test_non_http_scheme_is_rejected():
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
 
 
+def test_non_string_url_is_rejected_at_construction():
+    with pytest.raises(SdfmError) as excinfo:
+        Transport(123)  # type: ignore[arg-type]
+    assert excinfo.value.code == 'INVALID_CONFIGURATION'
+    assert 'url must be a string' in str(excinfo.value)
+
+
 def test_invalid_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', text='not json')
     client = Transport(_URL)
@@ -171,16 +187,19 @@ def test_non_object_json_error_body_is_handled(requests_mock):
 
 
 def test_session_endpoints_use_the_contract_routes(requests_mock):
-    requests_mock.post(_URL + '/v1/sessions', json={'session_id': 'sess-1'},
-                       status_code=201)
-    requests_mock.post(_URL + '/v1/sessions/sess-1/predictions',
-                       json={'predictions': []})
+    requests_mock.post(
+        _URL + '/v1/sessions', json={'session_id': 'sess-1'}, status_code=201
+    )
+    requests_mock.post(
+        _URL + '/v1/sessions/sess-1/predictions', json={'predictions': []}
+    )
     requests_mock.delete(_URL + '/v1/sessions/sess-1', status_code=204)
 
     transport = Transport(_URL)
     assert transport.create_session({'context': {}})['session_id'] == 'sess-1'
     assert transport.session_predict('sess-1', {'predict': {}}) == {
-        'predictions': []}
+        'predictions': []
+    }
     assert transport.delete_session('sess-1') is None
 
 
@@ -189,17 +208,22 @@ def test_session_id_cannot_escape_its_path_segment(requests_mock):
     ``../`` would send the next call to a different route entirely.
     """
     requests_mock.delete(
-        _URL + '/v1/sessions/..%2F..%2Fv1%2Fpredictions', status_code=204)
+        _URL + '/v1/sessions/..%2F..%2Fv1%2Fpredictions', status_code=204
+    )
 
     Transport(_URL).delete_session('../../v1/predictions')
 
     assert requests_mock.last_request.path.lower() == (
-        '/v1/sessions/..%2f..%2fv1%2fpredictions')
+        '/v1/sessions/..%2f..%2fv1%2fpredictions'
+    )
 
 
 def test_delete_session_reports_a_server_error(requests_mock):
-    requests_mock.delete(_URL + '/v1/sessions/sess-1', status_code=500,
-                         json={'code': 'INTERNAL_ERROR', 'detail': 'boom'})
+    requests_mock.delete(
+        _URL + '/v1/sessions/sess-1',
+        status_code=500,
+        json={'code': 'INTERNAL_ERROR', 'detail': 'boom'},
+    )
 
     with pytest.raises(NimRequestError) as excinfo:
         Transport(_URL).delete_session('sess-1')
@@ -222,10 +246,13 @@ def test_retry_policy_survives_urllib3_without_retry_after_max(monkeypatch):
     CI runs a urllib3 that accepts the keyword, so the fallback in
     ``_build_retry`` is only ever reached by forcing the ``TypeError`` here.
     """
+
     def _reject_cap(**options):
         if 'retry_after_max' in options:
-            raise TypeError("__init__() got an unexpected keyword argument "
-                            "'retry_after_max'")
+            raise TypeError(
+                '__init__() got an unexpected keyword argument '
+                "'retry_after_max'"
+            )
         return Retry(**options)
 
     monkeypatch.setattr(transport_module, 'Retry', _reject_cap)
@@ -243,8 +270,7 @@ def test_client_forwards_timeout_and_max_retries():
     assert transport._session.get_adapter(_URL).max_retries.total == 7
 
 
-# `X-API-Key` must not follow a redirect to another origin; see
-# bugs/security-api-key-follows-cross-origin-redirects.md. `requests_mock`
+# `X-API-Key` must not follow a redirect to another origin. `requests_mock`
 # cannot exercise redirect resolution, so these run over real sockets.
 
 
@@ -252,7 +278,7 @@ def _make_handler(state: dict) -> type[BaseHTTPRequestHandler]:
     class _Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
-        def do_POST(self) -> None:  # noqa: N802
+        def do_POST(self) -> None:
             state['headers'].append(dict(self.headers))
             self.rfile.read(int(self.headers.get('Content-Length') or 0))
             location = state.get('redirect_to')
@@ -325,6 +351,7 @@ def test_redirects_are_still_followed(servers):
     assert body == {'predictions': []}
     assert len(target['headers']) == 1
 
+
 def test_nim_error_string_carries_the_http_status(requests_mock):
     requests_mock.post(
         _URL + '/v1/predictions',
@@ -335,12 +362,14 @@ def test_nim_error_string_carries_the_http_status(requests_mock):
     with pytest.raises(NimRequestError) as excinfo:
         Transport(_URL).predict({'model': 'tabicl'})
     assert str(excinfo.value) == (
-        '[422 INVALID_SCHEMA] schema validation failed')
+        '[422 INVALID_SCHEMA] schema validation failed'
+    )
 
 
 def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
-    requests_mock.post(_URL + '/v1/predictions', status_code=403,
-                       text='Forbidden')
+    requests_mock.post(
+        _URL + '/v1/predictions', status_code=403, text='Forbidden'
+    )
 
     with pytest.raises(NimRequestError) as excinfo:
         Transport(_URL).predict({'model': 'tabicl'})
@@ -348,8 +377,11 @@ def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
 
 
 def test_nim_error_truncates_a_huge_response_body(requests_mock):
-    requests_mock.post(_URL + '/v1/predictions', status_code=502,
-                       text='<html>' + 'x' * 3_000_000 + '</html>')
+    requests_mock.post(
+        _URL + '/v1/predictions',
+        status_code=502,
+        text='<html>' + 'x' * 3_000_000 + '</html>',
+    )
 
     with pytest.raises(NimRequestError) as excinfo:
         Transport(_URL).predict({'model': 'tabicl'})
@@ -359,8 +391,8 @@ def test_nim_error_truncates_a_huge_response_body(requests_mock):
 
 
 @pytest.mark.parametrize(
-    'timeout', [-1, 0, 'sixty', None, float('inf'), float('nan'),
-                float('-inf')])
+    'timeout', [-1, 0, 'sixty', None, float('inf'), float('nan'), float('-inf')]
+)
 def test_invalid_timeout_is_rejected_at_construction(timeout):
     r"""``inf`` and ``nan`` too: client-non-finite-timeout-escapes-the-limit-
     guard.md. Both compare ``False`` against ``<= 0``, so they used to be
@@ -394,20 +426,21 @@ def test_url_without_a_host_is_rejected_at_construction(api_key):
     assert 'missing a host' in str(excinfo.value)
 
 
-def test_predict_after_close_is_rejected(requests_mock, context_df,
-                                         predict_df):
+def test_predict_after_close_is_rejected(requests_mock, context_df, predict_df):
     requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
     client = SDFMClient(url=_URL)
     client.close()
 
     with pytest.raises(SdfmError) as excinfo:
-        client._predict(TabICLRequest(
-            context=context_df,
-            predict=predict_df,
-            task='classification',
-            target='target_col',
-            outputs=['prediction'],
-        ))
+        client._predict(
+            TabICLRequest(
+                context=context_df,
+                predict=predict_df,
+                task='classification',
+                target='target_col',
+                outputs=['prediction'],
+            )
+        )
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
     assert requests_mock.call_count == 0
 
@@ -423,8 +456,10 @@ def test_predict_after_close_is_rejected(requests_mock, context_df,
 # fails locally instead.
 # ---------------------------------------------------------------------------
 
+
 def _serving_target():
     from nvidia_sdfm.core.serving import ServingTarget
+
     return ServingTarget('an-endpoint', object())
 
 
@@ -445,7 +480,8 @@ def test_transport_exposes_what_predict_calls(build):
     target = build()
     for name in ('_require_open', 'close', 'health_ready', 'predict'):
         assert callable(getattr(target, name, None)), (
-            f'{type(target).__name__} is missing {name}()')
+            f'{type(target).__name__} is missing {name}()'
+        )
 
 
 @pytest.mark.parametrize('build', _TRANSPORTS)

@@ -11,7 +11,6 @@ must run everywhere.
 from __future__ import annotations
 
 import pytest
-
 from kumorfm.rfm.graph import (
     _mask_literals,
     _qualifier_pattern,
@@ -19,23 +18,31 @@ from kumorfm.rfm.graph import (
 )
 
 
-
-
-@pytest.mark.parametrize(('expr', 'expected'), [
-    ('USERS.USER_ID', 'USER_ID'),
-    ('UPPER(USERS.NAME)', 'UPPER(NAME)'),
-    ('"USERS".NAME', 'NAME'),
-    ('users.name', 'name'),
-    ("CONCAT('src: USERS.', NAME)", "CONCAT('src: USERS.', NAME)"),
-    ("CASE WHEN NAME = 'USERS.WEB' THEN 1 ELSE 0 END",
-     "CASE WHEN NAME = 'USERS.WEB' THEN 1 ELSE 0 END"),
-    ("CONCAT(USERS.NAME, 'USERS.B', USERS.USER_ID)",
-     "CONCAT(NAME, 'USERS.B', USER_ID)"),
-    ("CASE WHEN NAME = 'it''s USERS.X' THEN USERS.NAME END",
-     "CASE WHEN NAME = 'it''s USERS.X' THEN NAME END"),
-])
-def test_own_table_qualifier_is_stripped_outside_string_literals(expr,
-                                                                 expected):
+@pytest.mark.parametrize(
+    ('expr', 'expected'),
+    [
+        ('USERS.USER_ID', 'USER_ID'),
+        ('UPPER(USERS.NAME)', 'UPPER(NAME)'),
+        ('"USERS".NAME', 'NAME'),
+        ('users.name', 'name'),
+        ("CONCAT('src: USERS.', NAME)", "CONCAT('src: USERS.', NAME)"),
+        (
+            "CASE WHEN NAME = 'USERS.WEB' THEN 1 ELSE 0 END",
+            "CASE WHEN NAME = 'USERS.WEB' THEN 1 ELSE 0 END",
+        ),
+        (
+            "CONCAT(USERS.NAME, 'USERS.B', USERS.USER_ID)",
+            "CONCAT(NAME, 'USERS.B', USER_ID)",
+        ),
+        (
+            "CASE WHEN NAME = 'it''s USERS.X' THEN USERS.NAME END",
+            "CASE WHEN NAME = 'it''s USERS.X' THEN NAME END",
+        ),
+    ],
+)
+def test_own_table_qualifier_is_stripped_outside_string_literals(
+    expr, expected
+):
     r"""graph-semantic-view-qualifier-stripped-inside-string-literal.md
 
     ``ORDERS.`` inside a literal is data. Stripping it rewrote the expression
@@ -48,14 +55,17 @@ def test_own_table_qualifier_is_stripped_outside_string_literals(expr,
     assert _sub_outside_literals(pattern, expr) == expected
 
 
-@pytest.mark.parametrize(('expr', 'is_cross_table'), [
-    ('ORDERS.TOTAL', True),
-    ('"ORDERS".TOTAL', True),
-    ('SUM(ORDERS.TOTAL)', True),
-    ("CONCAT('ORDERS.X', NAME)", False),
-    ("CASE WHEN NAME = 'ORDERS.WEB' THEN 1 ELSE 0 END", False),
-    ('NAME', False),
-])
+@pytest.mark.parametrize(
+    ('expr', 'is_cross_table'),
+    [
+        ('ORDERS.TOTAL', True),
+        ('"ORDERS".TOTAL', True),
+        ('SUM(ORDERS.TOTAL)', True),
+        ("CONCAT('ORDERS.X', NAME)", False),
+        ("CASE WHEN NAME = 'ORDERS.WEB' THEN 1 ELSE 0 END", False),
+        ('NAME', False),
+    ],
+)
 def test_cross_table_detection_ignores_string_literals(expr, is_cross_table):
     r"""The mirror-image defect: another table's name inside a literal is data,
     and dropping the column for it reported "references other tables"
@@ -63,5 +73,3 @@ def test_cross_table_detection_ignores_string_literals(expr, is_cross_table):
     """
     pattern = _qualifier_pattern('ORDERS')
     assert bool(pattern.search(_mask_literals(expr))) is is_cross_table
-
-

@@ -6,9 +6,8 @@ import warnings
 from typing import Any
 
 from kumorfm.api.graph import GraphDefinition
-from kumorfm.rfm.base import composite_key
 from kumorfm.api.pquery import ValidatedPredictiveQuery
-
+from kumorfm.rfm.base import composite_key
 
 
 def _name_the_identity(
@@ -38,6 +37,7 @@ def _name_the_identity(
         return
     entity.fqn = f'{table_name}.{table.pkey}'
 
+
 def parse_query_locally(
     query: str,
     graph_definition: GraphDefinition,
@@ -47,9 +47,10 @@ def parse_query_locally(
         from kumorfm.pql.validator import PredictiveQueryValidator
     except ImportError as exc:
         raise ValueError(
-            "String predictive queries require the vendored parser runtime "
-            "dependencies. Install the SDK with its runtime dependencies, "
-            "or pass a ValidatedPredictiveQuery instead.") from exc
+            'String predictive queries require the vendored parser runtime '
+            'dependencies. Install the SDK with its runtime dependencies, '
+            'or pass a ValidatedPredictiveQuery instead.'
+        ) from exc
 
     query_validation_type = QueryValidationType.RFM_SDK
     try:
@@ -62,21 +63,26 @@ def parse_query_locally(
             query_validation_type=query_validation_type,
         )
         validated_query, response = validator.validate_predictive_query(
-            parsed_query)
+            parsed_query
+        )
     except Exception as exc:
         raise ValueError(f"Failed to parse query '{query}'. {exc}") from None
 
     if validated_query is None or not response.ok:
         raise ValueError(
-            f"Failed to parse query '{query}'. {_response_message(response)}")
+            f"Failed to parse query '{query}'. {_response_message(response)}"
+        )
 
     if len(response.warnings) > 0:
-        msg = '\n'.join([
-            f'{i+1}. {warning.title}: {warning.message}'
-            for i, warning in enumerate(response.warnings)
-        ])
-        warnings.warn(f"Encountered the following warnings during "
-                      f"parsing:\n{msg}")
+        msg = '\n'.join(
+            [
+                f'{i + 1}. {warning.title}: {warning.message}'
+                for i, warning in enumerate(response.warnings)
+            ]
+        )
+        warnings.warn(
+            f'Encountered the following warnings during parsing:\n{msg}'
+        )
 
     return validated_query
 

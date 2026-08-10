@@ -4,7 +4,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Generator
+from collections.abc import Generator
+from typing import TYPE_CHECKING
 
 import pandas as pd
 import pytest
@@ -25,36 +26,39 @@ from kumorfm.api.typing import (
     RelOp,
     Stype,
 )
-
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
 
 if TYPE_CHECKING:
     import kumorfm.rfm as rfm
 
 # Not mock:// due to https://stackoverflow.com/a/76056002
-MOCK_URL = "https://nim.test"
+MOCK_URL = 'https://nim.test'
 
 
 def pytest_addoption(parser):
-    parser.addoption('--runintegration', action='store_true', default=False,
-                     help="run integration tests")
+    parser.addoption(
+        '--runintegration',
+        action='store_true',
+        default=False,
+        help='run integration tests',
+    )
 
 
 def pytest_collection_modifyitems(config, items):
     # check if you got an option like --key=snowflake
-    if not config.getoption("--runintegration"):
-        skip_integ = pytest.mark.skip(reason="integration test")
+    if not config.getoption('--runintegration'):
+        skip_integ = pytest.mark.skip(reason='integration test')
         for item in items:
-            if "integration" in item.keywords:
+            if 'integration' in item.keywords:
                 item.add_marker(skip_integ)
     else:
-        skip_integ = pytest.mark.skip(reason="no integration test")
+        skip_integ = pytest.mark.skip(reason='no integration test')
         for item in items:
-            if ("integration" not in item.keywords):
+            if 'integration' not in item.keywords:
                 item.add_marker(skip_integ)
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope='class')
 def mock_api() -> Generator[requests_mock.Mocker, None, None]:
     with requests_mock.Mocker() as m:
         yield m
@@ -65,40 +69,72 @@ def user_store_graph() -> rfm.Graph:
     import kumorfm.rfm as rfm
 
     df_dict = {}
-    df_dict['USERS'] = pd.DataFrame({
-        'USER_ID': [0, 1, 2, 3],
-        'AGE': [20, 30, 40, float('NaN')],
-        'GENDER': ['male', 'female', 'female', None],
-        'STATUS': ['A', 'B', 'A', 'C'],
-    })
-    df_dict['ORDERS'] = pd.DataFrame({
-        'ORDER_ID': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-        'USER_ID': [0, 0, 0, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3],
-        'STORE_ID': [0, 1, 0, 1, 2, 2, 0, 1, 2, 0, 1, 1, 2],
-        'AMOUNT':
-        [10, 15, float('NaN'), 20, 25, 30, 10, 25, 20, 10, 15, 15, 20],
-        'CAT': [10, 15,
-                float('NaN'), 20, 25, 30, 11, 26, 27, 28, 29, 32, 33],
-        'TIME': [
-            '2025-01-01',
-            '2024-12-20',
-            '2025-01-03',
-            '2025-01-02',
-            '2025-01-03',
-            '2025-01-04',
-            '2025-01-09',
-            '2025-01-02',
-            '2025-01-02',
-            '2025-01-01',
-            '2025-01-02',
-            '2025-01-03',
-            '2025-01-04',
-        ],
-    })
-    df_dict['STORES'] = pd.DataFrame({
-        'STORE_ID': [0, 1, 2],
-        'CAT': ['burger', 'pizza', 'fries'],
-    })
+    df_dict['USERS'] = pd.DataFrame(
+        {
+            'USER_ID': [0, 1, 2, 3],
+            'AGE': [20, 30, 40, float('NaN')],
+            'GENDER': ['male', 'female', 'female', None],
+            'STATUS': ['A', 'B', 'A', 'C'],
+        }
+    )
+    df_dict['ORDERS'] = pd.DataFrame(
+        {
+            'ORDER_ID': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            'USER_ID': [0, 0, 0, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3],
+            'STORE_ID': [0, 1, 0, 1, 2, 2, 0, 1, 2, 0, 1, 1, 2],
+            'AMOUNT': [
+                10,
+                15,
+                float('NaN'),
+                20,
+                25,
+                30,
+                10,
+                25,
+                20,
+                10,
+                15,
+                15,
+                20,
+            ],
+            'CAT': [
+                10,
+                15,
+                float('NaN'),
+                20,
+                25,
+                30,
+                11,
+                26,
+                27,
+                28,
+                29,
+                32,
+                33,
+            ],
+            'TIME': [
+                '2025-01-01',
+                '2024-12-20',
+                '2025-01-03',
+                '2025-01-02',
+                '2025-01-03',
+                '2025-01-04',
+                '2025-01-09',
+                '2025-01-02',
+                '2025-01-02',
+                '2025-01-01',
+                '2025-01-02',
+                '2025-01-03',
+                '2025-01-04',
+            ],
+        }
+    )
+    df_dict['STORES'] = pd.DataFrame(
+        {
+            'STORE_ID': [0, 1, 2],
+            'CAT': ['burger', 'pizza', 'fries'],
+        }
+    )
 
     graph = rfm.Graph.from_data(df_dict, verbose=False)
     graph['USERS']['AGE'].stype = Stype.numerical
@@ -111,21 +147,25 @@ def string_user_graph() -> rfm.Graph:
     import kumorfm.rfm as rfm
 
     df_dict = {}
-    df_dict['USERS'] = pd.DataFrame({
-        'USER_ID': ['user_a', 'user_b', 'user_c', 'user_d'],
-        'NAME': ['Alice', 'Bob', 'Charlie', 'David'],
-    })
-    df_dict['ORDERS'] = pd.DataFrame({
-        'ORDER_ID': [0, 1, 2, 3, 4],
-        'USER_ID': ['user_a', 'user_a', 'user_b', 'user_c', 'user_d'],
-        'TIME': [
-            '2024-01-01',
-            '2025-01-02',
-            '2025-01-03',
-            '2025-01-04',
-            '2025-01-05',
-        ],
-    })
+    df_dict['USERS'] = pd.DataFrame(
+        {
+            'USER_ID': ['user_a', 'user_b', 'user_c', 'user_d'],
+            'NAME': ['Alice', 'Bob', 'Charlie', 'David'],
+        }
+    )
+    df_dict['ORDERS'] = pd.DataFrame(
+        {
+            'ORDER_ID': [0, 1, 2, 3, 4],
+            'USER_ID': ['user_a', 'user_a', 'user_b', 'user_c', 'user_d'],
+            'TIME': [
+                '2024-01-01',
+                '2025-01-02',
+                '2025-01-03',
+                '2025-01-04',
+                '2025-01-05',
+            ],
+        }
+    )
 
     return rfm.Graph.from_data(df_dict, verbose=False)
 
@@ -272,6 +312,6 @@ def get_mock_method(mock_api, endpoint: Endpoint):
         HTTPMethod.DELETE: mock_api.delete,
     }
     if endpoint.method not in method_map:
-        raise ValueError(f"Unsupported HTTP method: {endpoint.method}")
+        raise ValueError(f'Unsupported HTTP method: {endpoint.method}')
 
     return method_map[endpoint.method]

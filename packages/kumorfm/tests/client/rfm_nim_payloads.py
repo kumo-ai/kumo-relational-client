@@ -60,11 +60,13 @@ _NIM_V1_SMOKE_PAYLOAD: dict[str, Any] = {
                 'primary_key': 'instance_id',
             },
         },
-        'relationships': [{
-            'source_columns': ['instance_id'],
-            'target_table': 'accounts',
-            'target_columns': ['instance_id'],
-        }],
+        'relationships': [
+            {
+                'source_columns': ['instance_id'],
+                'target_table': 'accounts',
+                'target_columns': ['instance_id'],
+            }
+        ],
     },
     'context': {
         'instance_table': {

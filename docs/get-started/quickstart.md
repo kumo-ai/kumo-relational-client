@@ -15,7 +15,7 @@ typed handle.
 Before you start, you must complete the following prerequisites:
 
 1. Install the SDK. For the relational example, install the KumoRFM extra:
-   `pip install "nvidia-sdfm[kumorfm]" --index-url https://pypi.org/simple`.
+   `pip install "nvidia-sdfm[kumorfm]"`.
 2. Identify the URL of a running Universal TFM API NIM.
 
 ## Quickstart Steps
@@ -34,11 +34,13 @@ Provide labeled context rows and rows to predict:
 from nvidia_sdfm import SDFMClient
 
 # Connect to the NIM; the client is a context manager.
-with SDFMClient(url="http://localhost:8000") as client:
+with SDFMClient(url='http://localhost:8000') as client:
     # Build a TabICL handle bound to the labeled context table.
-    model = client.tabicl(context_df, target="label", task="classification")
+    model = client.tabicl(context_df, target='label', task='classification')
     # Score the unlabeled rows.
-    predictions = model.predict(predict_df, outputs=["prediction", "probabilities"])
+    predictions = model.predict(
+        predict_df, outputs=['prediction', 'probabilities']
+    )
 
 print(predictions.head())
 ```
@@ -52,13 +54,13 @@ requires the `[kumorfm]` extra:
 from nvidia_sdfm import SDFMClient, kumorfm
 
 # Build a graph from related DataFrames; links are inferred.
-graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
+graph = kumorfm.Graph.from_data({'users': df1, 'items': df2, 'orders': df3})
 
-with SDFMClient(url="http://localhost:8000") as client:
+with SDFMClient(url='http://localhost:8000') as client:
     # Predict a per-item quantity over the next 30 days.
     predictions = client.kumorfm(graph).predict(
-        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
-        run_mode="fast",
+        'PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1',
+        run_mode='fast',
     )
 
 print(predictions.head())
@@ -73,9 +75,9 @@ serving only one of these models still reports both.
 ```python
 from nvidia_sdfm import SDFMClient
 
-with SDFMClient(url="http://localhost:8000") as client:
-    print(client.models())                # ['kumo-rfm', 'tabicl']
-    print(client.capabilities("tabicl"))  # tasks and outputs the model supports
+with SDFMClient(url='http://localhost:8000') as client:
+    print(client.models())  # ['kumo-rfm', 'tabicl']
+    print(client.capabilities('tabicl'))  # tasks and outputs the model supports
 ```
 
 To check the endpoint itself, call `client.health_ready()`. It returns whether

@@ -13,28 +13,34 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from itertools import chain
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Union
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
-from kumorfm.api.graph import ColumnKey, ColumnKeyGroup, GraphDefinition
-from kumorfm.api.table import TableDefinition
-from kumorfm.api.typing import Stype
 from typing_extensions import Self
 
 from kumorfm import in_jupyter_notebook, in_streamlit_notebook, in_tmux
+from kumorfm.api.graph import ColumnKey, ColumnKeyGroup, GraphDefinition
+from kumorfm.api.table import TableDefinition
+from kumorfm.api.typing import Stype
+from kumorfm.exceptions import GraphConstructionError, KumoRFMError
 from kumorfm.graph.graph import Edge, EdgeLike
 from kumorfm.mixin import CastMixin
-from kumorfm.rfm.base import Column, ColumnSpec, DataBackend, Table
-from kumorfm.rfm.base import composite_key
+from kumorfm.rfm.base import (
+    Column,
+    ColumnSpec,
+    DataBackend,
+    Table,
+    composite_key,
+)
 from kumorfm.rfm.base.utils import Timedelta
 from kumorfm.rfm.infer import infer_time_column
 from kumorfm.utils import display, quote_ident
 
 if TYPE_CHECKING:
     from adbc_driver_sqlite.dbapi import AdbcSqliteConnection
+    from databricks.sql.client import Connection as DatabricksConnection
     from duckdb import DuckDBPyConnection
     from snowflake.connector import SnowflakeConnection
-    from databricks.sql.client import Connection as DatabricksConnection
 
 
 @dataclass
@@ -80,7 +86,7 @@ def _sub_outside_literals(pattern: re.Pattern[str], expr: str) -> str:
     out: list[str] = []
     last = 0
     for match in _STRING_LITERAL.finditer(expr):
-        out.append(pattern.sub('', expr[last:match.start()]))
+        out.append(pattern.sub('', expr[last : match.start()]))
         out.append(match.group())
         last = match.end()
     out.append(pattern.sub('', expr[last:]))
@@ -104,12 +110,16 @@ def _qualifier_pattern(table_name: str) -> re.Pattern[str]:
 
 _UNSAFE_EXPR_TOKENS = (';', '--', '/*', '*/')
 _EXPR_QUOTE_DELIMITERS = ('$$', "'", '"', '`')
-_QUOTED_EXPR_TEXT = re.compile('|'.join([
-    r'\$\$[\s\S]*?\$\$',
-    r"'(?:''|\\[\s\S]|[^'\\])*'",
-    r'"(?:""|\\[\s\S]|[^"\\])*"',
-    r'`(?:``|[^`])*`',
-]))
+_QUOTED_EXPR_TEXT = re.compile(
+    '|'.join(
+        [
+            r'\$\$[\s\S]*?\$\$',
+            r"'(?:''|\\[\s\S]|[^'\\])*'",
+            r'"(?:""|\\[\s\S]|[^"\\])*"',
+            r'`(?:``|[^`])*`',
+        ]
+    )
+)
 _UNSAFE_EXPR_KEYWORDS = re.compile(
     r'(?<![\w.])'
     r'(?:(?:select|update|delete|merge|create|alter|drop|grant|revoke'
@@ -159,12 +169,14 @@ def _unsafe_expr_reason(expr: str) -> str | None:
     """
     for token in _UNSAFE_EXPR_TOKENS:
         if token in expr:
-            return f"it contains {token!r}"
+            return f'it contains {token!r}'
     unquoted = _QUOTED_EXPR_TEXT.sub(' ', expr)
     for delimiter in _EXPR_QUOTE_DELIMITERS:
         if delimiter in unquoted:
-            return (f"it leaves {delimiter!r} unpaired, so which part of it "
-                    f"is quoted text cannot be established")
+            return (
+                f'it leaves {delimiter!r} unpaired, so which part of it '
+                f'is quoted text cannot be established'
+            )
     if match := _UNSAFE_EXPR_KEYWORDS.search(unquoted):
         return f"it contains the SQL keyword '{match.group()}'"
     return None
@@ -205,6 +217,31 @@ def _warn_view_conversion(message: str, owned_connection: Any) -> None:
         raise
 
 
+def _reraise_as_graph_error(error: BaseException, source: str) -> None:
+    r"""Raise :class:`GraphConstructionError` for a foreign driver failure.
+
+    Returns without raising for anything this package owns, for a built-in,
+    and for a :class:`Warning` the caller's filters escalated into an error, so
+    the caller's bare ``raise`` re-raises those unchanged with their original
+    traceback. Only a third-party driver's exception is translated, which is
+    the one class of failure that otherwise escapes graph construction with no
+    base in common with the rest of this SDK.
+
+    Deliberately called from the existing cleanup handler rather than applied
+    as a decorator: a wrapper frame shifts the stack depth that
+    :func:`_warn_view_conversion` relies on, which silently re-attributes every
+    conversion warning to this module instead of to the caller.
+    """
+    if isinstance(error, KumoRFMError | Warning):
+        return
+    if type(error).__module__ == 'builtins':
+        return
+    raise GraphConstructionError(
+        f'Reading the {source} source failed while building the graph: '
+        f'{type(error).__name__}: {error}'
+    ) from error
+
+
 def _require_discovered_tables(tables: Sequence[Any], where: str) -> None:
     r"""Rejects a discovery query that found nothing.
 
@@ -219,17 +256,17 @@ def _require_discovered_tables(tables: Sequence[Any], where: str) -> None:
         where: What was searched, for the message.
     """
     if len(tables) == 0:
-        raise ValueError(f"No tables found in {where}. Check the name, or "
-                         f"pass `tables=[...]` explicitly.")
+        raise ValueError(
+            f'No tables found in {where}. Check the name, or '
+            f'pass `tables=[...]` explicitly.'
+        )
 
 
 class Graph:
-    r"""A graph of :class:`Table` objects, akin to relationships between
-    tables in a relational database.
+    r"""A relational graph of :class:`Table` objects and links.
 
-    Creating a graph is the final step of data definition; after a
-    :class:`Graph` is created, you can use it to initialize the
-    Kumo Relational Foundation Model (:class:`KumoRFM`).
+    Creating a graph is the final data-definition step; after a :class:`Graph`
+    is created, use it to initialize :class:`KumoRFM`.
 
     .. code-block:: python
 
@@ -299,14 +336,18 @@ class Graph:
         self._tables: dict[str, Table] = {}
         self._edges: list[Edge] = []
         self._conversion_messages: tuple[str, ...] = ()
-        self._connection: (AdbcSqliteConnection | DuckDBPyConnection
-                           | SnowflakeConnection | DatabricksConnection
-                           | None) = None
+        self._connection: (
+            AdbcSqliteConnection
+            | DuckDBPyConnection
+            | SnowflakeConnection
+            | DatabricksConnection
+            | None
+        ) = None
 
         for table in tables:
             self.add_table(table)
 
-        for table in (tables if edges is None else ()):  # Source metadata:
+        for table in tables if edges is None else ():  # Source metadata:
             if not any(column.is_source for column in table.columns):
                 continue
             for fkey in table._source_foreign_key_dict.values():
@@ -315,7 +356,8 @@ class Graph:
                 if not table[fkey.name].is_source:
                     continue
                 dst_table_names = [
-                    table.name for table in self.tables.values()
+                    table.name
+                    for table in self.tables.values()
                     if table.source_name == fkey.dst_table
                 ]
                 if len(dst_table_names) != 1:
@@ -327,7 +369,7 @@ class Graph:
                     continue
                 self.link(table.name, fkey.name, dst_table.name)
 
-        for edge in (edges or []):
+        for edge in edges or []:
             _edge = Edge._cast(edge)
             assert _edge is not None
             if _edge not in self._edges:
@@ -399,13 +441,11 @@ class Graph:
     @classmethod
     def from_sqlite(
         cls,
-        connection: Union[
-            'AdbcSqliteConnection',
-            SqliteConnectionConfig,
-            str,
-            Path,
-            dict[str, Any],
-        ],
+        connection: AdbcSqliteConnection
+        | SqliteConnectionConfig
+        | str
+        | Path
+        | dict[str, Any],
         tables: Sequence[str | dict[str, Any]] | None = None,
         edges: Sequence[EdgeLike] | None = None,
         infer_metadata: bool = True,
@@ -474,25 +514,32 @@ class Graph:
             internal_connection = True
         assert isinstance(connection, Connection)
 
-        if tables is None:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT name FROM sqlite_master "
-                               "WHERE type='table'")
-                tables = [row[0] for row in cursor.fetchall()]
-            _require_discovered_tables(tables, 'the SQLite database')
+        try:
+            if tables is None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                    tables = [row[0] for row in cursor.fetchall()]
+                _require_discovered_tables(tables, 'the SQLite database')
 
-        table_kwargs: list[dict[str, Any]] = []
-        for table in tables:
-            kwargs = dict(name=table) if isinstance(table, str) else table
-            table_kwargs.append(kwargs)
+            table_kwargs: list[dict[str, Any]] = []
+            for table in tables:
+                kwargs = dict(name=table) if isinstance(table, str) else table
+                table_kwargs.append(kwargs)
 
-        graph = cls(
-            tables=[
-                SQLiteTable(connection=connection, **kwargs)
-                for kwargs in table_kwargs
-            ],
-            edges=edges,
-        )
+            graph = cls(
+                tables=[
+                    SQLiteTable(connection=connection, **kwargs)
+                    for kwargs in table_kwargs
+                ],
+                edges=edges,
+            )
+        except BaseException as error:
+            if internal_connection:
+                connection.close()
+            _reraise_as_graph_error(error, 'SQLite')
+            raise
 
         if internal_connection:
             graph._connection = connection
@@ -512,14 +559,12 @@ class Graph:
     @classmethod
     def from_duckdb(
         cls,
-        connection: Union[
-            'DuckDBPyConnection',
-            DuckDBConnectionConfig,
-            str,
-            Path,
-            dict[str, Any],
-            None,
-        ] = None,
+        connection: DuckDBPyConnection
+        | DuckDBConnectionConfig
+        | str
+        | Path
+        | dict[str, Any]
+        | None = None,
         tables: Sequence[str | dict[str, Any]] | None = None,
         edges: Sequence[EdgeLike] | None = None,
         infer_metadata: bool = True,
@@ -561,25 +606,33 @@ class Graph:
             internal_connection = True
         assert isinstance(connection, Connection)
 
-        if tables is None:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT table_name FROM duckdb_tables() "
-                               "WHERE NOT temporary AND NOT internal")
-                tables = [row[0] for row in cursor.fetchall()]
-            _require_discovered_tables(tables, 'the DuckDB database')
+        try:
+            if tables is None:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        'SELECT table_name FROM duckdb_tables() '
+                        'WHERE NOT temporary AND NOT internal'
+                    )
+                    tables = [row[0] for row in cursor.fetchall()]
+                _require_discovered_tables(tables, 'the DuckDB database')
 
-        table_kwargs: list[dict[str, Any]] = []
-        for table in tables:
-            kwargs = dict(name=table) if isinstance(table, str) else table
-            table_kwargs.append(kwargs)
+            table_kwargs: list[dict[str, Any]] = []
+            for table in tables:
+                kwargs = dict(name=table) if isinstance(table, str) else table
+                table_kwargs.append(kwargs)
 
-        graph = cls(
-            tables=[
-                DuckDBTable(connection=connection, **kwargs)
-                for kwargs in table_kwargs
-            ],
-            edges=edges,
-        )
+            graph = cls(
+                tables=[
+                    DuckDBTable(connection=connection, **kwargs)
+                    for kwargs in table_kwargs
+                ],
+                edges=edges,
+            )
+        except BaseException as error:
+            if internal_connection:
+                connection.close()
+            _reraise_as_graph_error(error, 'DuckDB')
+            raise
 
         if internal_connection:
             graph._connection = connection
@@ -599,7 +652,7 @@ class Graph:
     @classmethod
     def from_snowflake(
         cls,
-        connection: Union['SnowflakeConnection', dict[str, Any], None] = None,
+        connection: SnowflakeConnection | dict[str, Any] | None = None,
         tables: Sequence[str | dict[str, Any]] | None = None,
         database: str | None = None,
         schema: str | None = None,
@@ -689,7 +742,8 @@ class Graph:
             if database is None or schema is None:
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        "SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()")
+                        'SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()'
+                    )
                     result = cursor.fetchone()
                     assert result is not None
                     database = database or result[0]
@@ -698,8 +752,10 @@ class Graph:
 
             if tables is None:
                 if schema is None:
-                    raise ValueError("No current 'schema' set. Please specify "
-                                     "the Snowflake schema manually")
+                    raise ValueError(
+                        "No current 'schema' set. Please specify "
+                        'the Snowflake schema manually'
+                    )
 
                 with paramstyle(connection), connection.cursor() as cursor:
                     cursor.execute(
@@ -707,10 +763,13 @@ class Graph:
                     SELECT TABLE_NAME
                     FROM {quote_ident(database)}.INFORMATION_SCHEMA.TABLES
                     WHERE TABLE_SCHEMA = ?
-                    """, (schema, ))
+                    """,
+                        (schema,),
+                    )
                     tables = [row[0] for row in cursor.fetchall()]
                 _require_discovered_tables(
-                    tables, f"schema '{schema}' of database '{database}'")
+                    tables, f"schema '{schema}' of database '{database}'"
+                )
 
             table_kwargs: list[dict[str, Any]] = []
             for table in tables:
@@ -729,9 +788,10 @@ class Graph:
                 ],
                 edges=edges,
             )
-        except BaseException:
+        except BaseException as error:
             if internal_connection:
                 connection.close()
+            _reraise_as_graph_error(error, 'Snowflake')
             raise
 
         if internal_connection:
@@ -752,7 +812,7 @@ class Graph:
     @classmethod
     def from_databricks(
         cls,
-        connection: Union['DatabricksConnection', dict[str, Any], None] = None,
+        connection: DatabricksConnection | dict[str, Any] | None = None,
         tables: Sequence[str | dict[str, Any]] | None = None,
         catalog: str | None = None,
         schema: str | None = None,
@@ -829,8 +889,7 @@ class Graph:
         try:
             if catalog is None or schema is None:
                 with connection.cursor() as cursor:
-                    cursor.execute(
-                        "SELECT current_catalog(), current_schema()")
+                    cursor.execute('SELECT current_catalog(), current_schema()')
                     result = cursor.fetchone()
                     assert result is not None
                     catalog = catalog or result[0]
@@ -839,8 +898,10 @@ class Graph:
 
             if tables is None:
                 if schema is None:
-                    raise ValueError("No current 'schema' set. Please specify "
-                                     "the Databricks schema manually")
+                    raise ValueError(
+                        "No current 'schema' set. Please specify "
+                        'the Databricks schema manually'
+                    )
 
                 quoted_catalog = quote_ident(catalog, char='`')
                 with connection.cursor() as cursor:
@@ -850,10 +911,13 @@ class Graph:
                     FROM {quoted_catalog}.information_schema.tables
                     WHERE table_schema = ?
                       AND table_type != 'METRIC_VIEW'
-                    """, parameters=[schema])
+                    """,
+                        parameters=[schema],
+                    )
                     tables = [row[0] for row in cursor.fetchall()]
                 _require_discovered_tables(
-                    tables, f"schema '{schema}' of catalog '{catalog}'")
+                    tables, f"schema '{schema}' of catalog '{catalog}'"
+                )
 
             table_kwargs: list[dict[str, Any]] = []
             for table in tables:
@@ -872,9 +936,10 @@ class Graph:
                 ],
                 edges=edges,
             )
-        except BaseException:
+        except BaseException as error:
             if internal_connection:
                 connection.close()
+            _reraise_as_graph_error(error, 'Databricks')
             raise
 
         if internal_connection:
@@ -896,8 +961,7 @@ class Graph:
     def from_databricks_metric_view(
         cls,
         metric_view_name: str,
-        connection: Union['DatabricksConnection', dict[str, Any],
-                          None] = None,
+        connection: DatabricksConnection | dict[str, Any] | None = None,
         catalog: str | None = None,
         schema: str | None = None,
         verbose: bool = True,
@@ -974,17 +1038,20 @@ class Graph:
         try:
             name_parts = parse_table_reference(metric_view_name)
             if name_parts is None:
-                raise ValueError(f"Invalid metric view name "
-                                 f"'{metric_view_name}'")
+                raise ValueError(
+                    f"Invalid metric view name '{metric_view_name}'"
+                )
             if len(name_parts) == 1 and schema is not None:
                 name_parts = (schema, *name_parts)
             if len(name_parts) == 2 and catalog is not None:
                 name_parts = (catalog, *name_parts)
             quoted_name = '.'.join(
-                quote_ident(part, char='`') for part in name_parts)
+                quote_ident(part, char='`') for part in name_parts
+            )
 
             definition, dtype_names, view_catalog, view_schema = (
-                read_metric_view_definition(connection, quoted_name))
+                read_metric_view_definition(connection, quoted_name)
+            )
             spec = parse_metric_view(definition)
             msgs = list(spec.messages)
 
@@ -994,9 +1061,11 @@ class Graph:
                 elif len(parts) == 1 and view_catalog and view_schema:
                     parts = (view_catalog, view_schema, *parts)
                 if len(parts) != 3:
-                    raise ValueError(f"Could not fully qualify table "
-                                     f"'{'.'.join(parts)}' referenced by "
-                                     f"metric view '{metric_view_name}'")
+                    raise ValueError(
+                        f'Could not fully qualify table '
+                        f"'{'.'.join(parts)}' referenced by "
+                        f"metric view '{metric_view_name}'"
+                    )
                 return parts[0], parts[1], parts[2]
 
             dtypes = {
@@ -1008,31 +1077,37 @@ class Graph:
             for column_spec in spec.columns:
                 if unquote_ident(column_spec.expr) == column_spec.name:
                     columns_by_alias[column_spec.alias].append(
-                        ColumnSpec(name=column_spec.name))
+                        ColumnSpec(name=column_spec.name)
+                    )
                 elif reason := _unsafe_expr_reason(column_spec.expr):
-                    msgs.append(f"Failed to add column '{column_spec.name}' "
-                                f"since {reason}, and expressions taken from "
-                                f"the metric view are executed as SQL under "
-                                f"your warehouse credentials")
+                    msgs.append(
+                        f"Failed to add column '{column_spec.name}' "
+                        f'since {reason}, and expressions taken from '
+                        f'the metric view are executed as SQL under '
+                        f'your warehouse credentials'
+                    )
                 else:
                     columns_by_alias[column_spec.alias].append(
                         ColumnSpec(
                             name=column_spec.name,
                             expr=column_spec.expr,
                             dtype=dtypes.get(column_spec.name),
-                        ))
+                        )
+                    )
 
             fact_catalog, fact_schema, fact_source = _table_parts(spec.source)
             if any(join.alias == fact_source for join in spec.joins):
                 raise ValueError(
                     f"Cannot convert metric view '{metric_view_name}' into a "
                     f"graph since the join name '{fact_source}' collides with "
-                    f"the name of the source table")
+                    f'the name of the source table'
+                )
 
             graph = cls(tables=[])
-        except BaseException:
+        except BaseException as error:
             if internal_connection:
                 connection.close()
+            _reraise_as_graph_error(error, 'Databricks')
             raise
 
         if internal_connection:
@@ -1053,9 +1128,11 @@ class Graph:
         for join in spec.joins:
             parent_table = table_dict.get(join.parent_alias)
             if parent_table is None:
-                msgs.append(f"Failed to add join '{join.alias}' since its "
-                            f"parent join '{join.parent_alias}' was not "
-                            f"added")
+                msgs.append(
+                    f"Failed to add join '{join.alias}' since its "
+                    f"parent join '{join.parent_alias}' was not "
+                    f'added'
+                )
                 continue
 
             join_catalog, join_schema, join_source = _table_parts(join.table)
@@ -1091,15 +1168,20 @@ class Graph:
                     one_table, one_key = other_table, other_key
                     many_table, many_key = table, child_key
 
-                if (one_table._primary_key is not None
-                        and one_table._primary_key != one_key):
+                if (
+                    one_table._primary_key is not None
+                    and one_table._primary_key != one_key
+                ):
                     raise UnsupportedJoinError(
                         f"Failed to add join '{join.alias}' since table "
                         f"'{one_table.name}' already uses "
-                        f"'{one_table._primary_key}' as its primary key")
+                        f"'{one_table._primary_key}' as its primary key"
+                    )
 
-                for key_table, key in ((one_table, one_key),
-                                       (many_table, many_key)):
+                for key_table, key in (
+                    (one_table, one_key),
+                    (many_table, many_key),
+                ):
                     if not key_table.has_column(key):
                         key_table.add_column(key)
                         undo_columns.append((key_table, key, None))
@@ -1111,11 +1193,15 @@ class Graph:
                             f"Replaced the derived column '{key}' of table "
                             f"'{key_table.name}' with its physical source "
                             f"column since join '{join.alias}' references "
-                            f"it as a key")
+                            f'it as a key'
+                        )
 
                 if one_table._primary_key is None:
-                    undo_primary_key = (one_table, one_key,
-                                        one_table[one_key].stype)
+                    undo_primary_key = (
+                        one_table,
+                        one_key,
+                        one_table[one_key].stype,
+                    )
                     one_table.primary_key = one_key
 
                 graph.add_table(table)
@@ -1130,8 +1216,7 @@ class Graph:
                     undo_table, undo_key, undo_stype = undo_primary_key
                     undo_table.primary_key = None
                     undo_table[undo_key].stype = undo_stype
-                for undo_table, undo_key, undo_column in reversed(
-                        undo_columns):
+                for undo_table, undo_key, undo_column in reversed(undo_columns):
                     if undo_table.has_column(undo_key):
                         undo_table.remove_column(undo_key)
                     if undo_column is not None:
@@ -1139,19 +1224,22 @@ class Graph:
                 if isinstance(error, UnsupportedJoinError):
                     msgs.append(str(error))
                 else:
-                    msgs.append(f"Failed to add join '{join.alias}' since "
-                                f"its keys could not be linked: {error}")
+                    msgs.append(
+                        f"Failed to add join '{join.alias}' since "
+                        f'its keys could not be linked: {error}'
+                    )
 
         for table in graph.tables.values():
             candidates = [
-                column.name for column in table.columns
+                column.name
+                for column in table.columns
                 if column.stype == Stype.timestamp
             ]
             if len(candidates) == 0:
                 continue
             if time_column := infer_time_column(
-                    df=table._get_sample_df(),
-                    candidates=candidates,
+                df=table._get_sample_df(),
+                candidates=candidates,
             ):
                 table.time_column = time_column
 
@@ -1164,11 +1252,14 @@ class Graph:
 
         graph._conversion_messages = tuple(msgs)
         if len(msgs) > 0:
-            title = (f"Could not fully convert the metric view definition "
-                     f"'{metric_view_name}' into a graph:\n")
+            title = (
+                f'Could not fully convert the metric view definition '
+                f"'{metric_view_name}' into a graph:\n"
+            )
             _warn_view_conversion(
                 title + '\n'.join(f'- {msg}' for msg in msgs),
-                connection if internal_connection else None)
+                connection if internal_connection else None,
+            )
 
         return graph
 
@@ -1176,7 +1267,7 @@ class Graph:
     def from_snowflake_semantic_view(
         cls,
         semantic_view_name: str,
-        connection: Union['SnowflakeConnection', dict[str, Any], None] = None,
+        connection: SnowflakeConnection | dict[str, Any] | None = None,
         verbose: bool = True,
     ) -> Self:
         r"""Creates a :class:`Graph` from a Snowflake semantic view.
@@ -1253,16 +1344,17 @@ class Graph:
 
         try:
             with paramstyle(connection), connection.cursor() as cursor:
-                sql = "SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW(?)"
-                cursor.execute(sql, (semantic_view_name, ))
+                sql = 'SELECT SYSTEM$READ_YAML_FROM_SEMANTIC_VIEW(?)'
+                cursor.execute(sql, (semantic_view_name,))
                 result = cursor.fetchone()
                 assert result is not None
                 cfg = yaml.safe_load(result[0])
 
             graph = cls(tables=[])
-        except BaseException:
+        except BaseException as error:
             if internal_connection:
                 connection.close()
+            _reraise_as_graph_error(error, 'Snowflake')
             raise
 
         if internal_connection:
@@ -1282,22 +1374,25 @@ class Graph:
                 if len(primary_key_cfg['columns']) == 1:
                     primary_key = primary_key_cfg['columns'][0]
                 elif len(primary_key_cfg['columns']) > 1:
-                    msgs.append(f"Failed to add primary key for table "
-                                f"'{table_name}' since composite primary keys "
-                                f"are not yet supported")
+                    msgs.append(
+                        f'Failed to add primary key for table '
+                        f"'{table_name}' since composite primary keys "
+                        f'are not yet supported'
+                    )
 
             self_pattern = _qualifier_pattern(table_name)
             other_patterns = [
-                _qualifier_pattern(name) for name in table_names
+                _qualifier_pattern(name)
+                for name in table_names
                 if name != table_name
             ]
 
             columns: list[ColumnSpec] = []
             unsupported_columns: list[str] = []
             for column_cfg in chain(
-                    table_cfg.get('dimensions', []),
-                    table_cfg.get('time_dimensions', []),
-                    table_cfg.get('facts', []),
+                table_cfg.get('dimensions', []),
+                table_cfg.get('time_dimensions', []),
+                table_cfg.get('facts', []),
             ):
                 column_name = column_cfg['name']
                 column_expr = column_cfg.get('expr', None)
@@ -1307,8 +1402,9 @@ class Graph:
                     columns.append(ColumnSpec(name=column_name))
                     continue
 
-                column_expr = _sub_outside_literals(self_pattern,
-                                                    column_expr).strip()
+                column_expr = _sub_outside_literals(
+                    self_pattern, column_expr
+                ).strip()
 
                 if column_expr == column_name:
                     columns.append(ColumnSpec(name=column_name))
@@ -1316,17 +1412,20 @@ class Graph:
 
                 # Drop expressions that reference other tables (for now):
                 masked_expr = _mask_literals(column_expr)
-                if any(pattern.search(masked_expr)
-                       for pattern in other_patterns):
+                if any(
+                    pattern.search(masked_expr) for pattern in other_patterns
+                ):
                     unsupported_columns.append(column_name)
                     continue
 
                 if reason := _unsafe_expr_reason(column_expr):
-                    msgs.append(f"Failed to add column '{column_name}' of "
-                                f"table '{table_name}' since {reason}, and "
-                                f"expressions taken from the semantic view "
-                                f"are executed as SQL under your warehouse "
-                                f"credentials")
+                    msgs.append(
+                        f"Failed to add column '{column_name}' of "
+                        f"table '{table_name}' since {reason}, and "
+                        f'expressions taken from the semantic view '
+                        f'are executed as SQL under your warehouse '
+                        f'credentials'
+                    )
                     continue
 
                 column = ColumnSpec(
@@ -1337,13 +1436,17 @@ class Graph:
                 columns.append(column)
 
             if len(unsupported_columns) == 1:
-                msgs.append(f"Failed to add column '{unsupported_columns[0]}' "
-                            f"of table '{table_name}' since its expression "
-                            f"references other tables")
+                msgs.append(
+                    f"Failed to add column '{unsupported_columns[0]}' "
+                    f"of table '{table_name}' since its expression "
+                    f'references other tables'
+                )
             elif len(unsupported_columns) > 1:
-                msgs.append(f"Failed to add columns '{unsupported_columns}' "
-                            f"of table '{table_name}' since their expressions "
-                            f"reference other tables")
+                msgs.append(
+                    f"Failed to add columns '{unsupported_columns}' "
+                    f"of table '{table_name}' since their expressions "
+                    f'reference other tables'
+                )
 
             table = SnowTable(
                 connection,
@@ -1355,7 +1458,8 @@ class Graph:
                 primary_key=primary_key,
             )
 
-            # TODO Add a way to register time columns without heuristic usage.
+            # TODO: allow registering time columns explicitly, without the
+            # heuristic.
             time_candidates = [  # Prioritize columns in `time_dimensions`:
                 column_cfg['name']
                 for column_cfg in table_cfg.get('time_dimensions', [])
@@ -1364,13 +1468,14 @@ class Graph:
             ]
             if len(time_candidates) == 0:
                 time_candidates = [
-                    column.name for column in table.columns
+                    column.name
+                    for column in table.columns
                     if column.stype == Stype.timestamp
                 ]
             if len(time_candidates) > 0:
                 if time_column := infer_time_column(
-                        df=table._get_sample_df(),
-                        candidates=time_candidates,
+                    df=table._get_sample_df(),
+                    candidates=time_candidates,
                 ):
                     table.time_column = time_column
 
@@ -1379,8 +1484,10 @@ class Graph:
         for relation_cfg in cfg.get('relationships', []):
             name = relation_cfg['name']
             if len(relation_cfg['relationship_columns']) != 1:
-                msgs.append(f"Failed to add relationship '{name}' since "
-                            f"composite key references are not yet supported")
+                msgs.append(
+                    f"Failed to add relationship '{name}' since "
+                    f'composite key references are not yet supported'
+                )
                 continue
 
             left_table = relation_cfg['left_table']
@@ -1391,15 +1498,19 @@ class Graph:
             added_column = False
             try:
                 if graph[right_table]._primary_key != right_key:
-                    msgs.append(f"Failed to add relationship '{name}' since "
-                                f"the referenced key '{right_key}' of table "
-                                f"'{right_table}' is not a primary key")
+                    msgs.append(
+                        f"Failed to add relationship '{name}' since "
+                        f"the referenced key '{right_key}' of table "
+                        f"'{right_table}' is not a primary key"
+                    )
                     continue
 
                 if graph[left_table]._primary_key == left_key:
-                    msgs.append(f"Failed to add relationship '{name}' since "
-                                f"the referencing key '{left_key}' of table "
-                                f"'{left_table}' is a primary key")
+                    msgs.append(
+                        f"Failed to add relationship '{name}' since "
+                        f"the referencing key '{left_key}' of table "
+                        f"'{left_table}' is a primary key"
+                    )
                     continue
 
                 if left_key not in graph[left_table]:
@@ -1410,8 +1521,10 @@ class Graph:
             except (ValueError, KeyError) as error:
                 if added_column:
                     graph[left_table].remove_column(left_key)
-                msgs.append(f"Failed to add relationship '{name}' since its "
-                            f"keys could not be linked: {error}")
+                msgs.append(
+                    f"Failed to add relationship '{name}' since its "
+                    f'keys could not be linked: {error}'
+                )
 
         msgs.extend(graph._drop_invalid_edges())
         graph.validate()
@@ -1422,11 +1535,14 @@ class Graph:
 
         graph._conversion_messages = tuple(msgs)
         if len(msgs) > 0:
-            title = (f"Could not fully convert the semantic view definition "
-                     f"'{semantic_view_name}' into a graph:\n")
+            title = (
+                f'Could not fully convert the semantic view definition '
+                f"'{semantic_view_name}' into a graph:\n"
+            )
             _warn_view_conversion(
                 title + '\n'.join(f'- {msg}' for msg in msgs),
-                connection if internal_connection else None)
+                connection if internal_connection else None,
+            )
 
         return graph
 
@@ -1451,6 +1567,7 @@ class Graph:
             verbose: Whether to print verbose output.
         """
         from kumorfm.rfm.relbench import from_relbench
+
         graph = from_relbench(dataset, verbose=verbose)
 
         if verbose:
@@ -1549,45 +1666,49 @@ class Graph:
         """
         from kumorfm.rfm.backend.local import LocalTable
 
-        target_table_name = "target"
-        entity_table_name = "entity"
-        value_col_name = "value"
-        timestamp_col_name = "timestamp"
+        target_table_name = 'target'
+        entity_table_name = 'entity'
+        value_col_name = 'value'
+        timestamp_col_name = 'timestamp'
 
         if timeseries_col not in df.columns:
             raise ValueError(
-                f"timeseries_col '{timeseries_col}' not found in the "
-                f"DataFrame")
+                f"timeseries_col '{timeseries_col}' not found in the DataFrame"
+            )
 
         if timestamps_col is not None and timestamps_col not in df.columns:
             raise ValueError(
-                f"timestamps_col '{timestamps_col}' not found in the "
-                f"DataFrame")
+                f"timestamps_col '{timestamps_col}' not found in the DataFrame"
+            )
 
         if timestamps_col is None and time_delta is None:
             raise ValueError(
                 "Either 'timestamps_col' or 'time_delta' must be provided. "
-                "Supply a column of per-row timestamp lists via "
+                'Supply a column of per-row timestamp lists via '
                 "'timestamps_col', or a constant step size via 'time_delta' "
-                "to generate synthetic timestamps.")
+                'to generate synthetic timestamps.'
+            )
 
         if timestamps_col is None and anchor_time is None:
             raise ValueError(
                 "'anchor_time' is required when 'timestamps_col' is not "
-                "provided.  Pass the forecast cutoff timestamp so that "
-                "synthetic timestamps can be placed correctly.")
+                'provided.  Pass the forecast cutoff timestamp so that '
+                'synthetic timestamps can be placed correctly.'
+            )
 
         if entity_col is not None and entity_col not in df.columns:
             raise ValueError(
-                f"entity_col '{entity_col}' not found in the DataFrame")
+                f"entity_col '{entity_col}' not found in the DataFrame"
+            )
 
         pk_col = entity_col if entity_col is not None else 'entity_id'
 
         if entity_col is None and pk_col in df.columns:
             raise ValueError(
                 f"entity_id '{pk_col}' conflicts with an existing "
-                f"column in the DataFrame.  Rename the existing column or "
-                f"pass a custom 'entity_col'.")
+                f'column in the DataFrame.  Rename the existing column or '
+                f"pass a custom 'entity_col'."
+            )
 
         if time_delta is not None:
             td = time_delta
@@ -1613,30 +1734,31 @@ class Graph:
             timestamps_list = df[timestamps_col].tolist()
         else:
             assert anchor_time is not None
-            timestamps_list = [[
-                anchor_time - (len(s) - i) * td for i in range(len(s))
-            ] for s in series_list]
+            timestamps_list = [
+                [anchor_time - (len(s) - i) * td for i in range(len(s))]
+                for s in series_list
+            ]
 
         fk_vals: list = []
         ts_vals: list = []
         val_vals: list = []
         entity_ids = entity_df[pk_col].tolist()
 
-        for eid, series, timestamps in zip(entity_ids, series_list,
-                                           timestamps_list):
+        for eid, series, timestamps in zip(
+            entity_ids, series_list, timestamps_list
+        ):
             n = len(series)
             fk_vals.extend([eid] * n)
             ts_vals.extend(timestamps)
             val_vals.extend(series)
 
-        target_df = pd.DataFrame({
-            pk_col:
-            fk_vals,
-            timestamp_col_name:
-            pd.to_datetime(ts_vals),
-            value_col_name:
-            pd.array(val_vals, dtype=float),
-        })
+        target_df = pd.DataFrame(
+            {
+                pk_col: fk_vals,
+                timestamp_col_name: pd.to_datetime(ts_vals),
+                value_col_name: pd.array(val_vals, dtype=float),
+            }
+        )
 
         entity_table = LocalTable(
             entity_df,
@@ -1653,10 +1775,12 @@ class Graph:
         graph = cls([entity_table, target_table])
         graph.link(target_table_name, pk_col, entity_table_name)
 
-        pquery = (f"PREDICT MAX({target_table_name}.{value_col_name}, "
-                  f"0, {pquery_amount}, {pquery_unit}) "
-                  f"FORECAST {num_timeframes} TIMEFRAMES "
-                  f"FOR EACH {entity_table_name}.{pk_col}")
+        pquery = (
+            f'PREDICT MAX({target_table_name}.{value_col_name}, '
+            f'0, {pquery_amount}, {pquery_unit}) '
+            f'FORECAST {num_timeframes} TIMEFRAMES '
+            f'FOR EACH {entity_table_name}.{pk_col}'
+        )
 
         return graph, pquery
 
@@ -1703,13 +1827,17 @@ class Graph:
                 rest of the tables in the graph.
         """
         if table.name in self._tables:
-            raise KeyError(f"Cannot add table with name '{table.name}' to "
-                           f"this graph; table names must be globally unique.")
+            raise KeyError(
+                f"Cannot add table with name '{table.name}' to "
+                f'this graph; table names must be globally unique.'
+            )
 
         if self.backend is not None and table.backend != self.backend:
-            raise ValueError(f"Cannot register a table with backend "
-                             f"'{table.backend}' to this graph since other "
-                             f"tables have backend '{self.backend}'.")
+            raise ValueError(
+                f'Cannot register a table with backend '
+                f"'{table.backend}' to this graph since other "
+                f"tables have backend '{self.backend}'."
+            )
 
         self._tables[table.name] = table
 
@@ -1730,7 +1858,8 @@ class Graph:
         del self._tables[name]
 
         self._edges = [
-            edge for edge in self._edges
+            edge
+            for edge in self._edges
             if edge.src_table != name and edge.dst_table != name
         ]
 
@@ -1755,25 +1884,27 @@ class Graph:
         """
         tables = list(self.tables.values())
 
-        return pd.DataFrame({
-            'Name':
-            pd.Series(dtype=str, data=[t.name for t in tables]),
-            'Primary Key':
-            pd.Series(dtype=str, data=[t._primary_key or '-' for t in tables]),
-            'Time Column':
-            pd.Series(dtype=str, data=[t._time_column or '-' for t in tables]),
-            'End Time Column':
-            pd.Series(
-                dtype=str,
-                data=[t._end_time_column or '-' for t in tables],
-            ),
-        })
+        return pd.DataFrame(
+            {
+                'Name': pd.Series(dtype=str, data=[t.name for t in tables]),
+                'Primary Key': pd.Series(
+                    dtype=str, data=[t._primary_key or '-' for t in tables]
+                ),
+                'Time Column': pd.Series(
+                    dtype=str, data=[t._time_column or '-' for t in tables]
+                ),
+                'End Time Column': pd.Series(
+                    dtype=str,
+                    data=[t._end_time_column or '-' for t in tables],
+                ),
+            }
+        )
 
     def print_metadata(self) -> None:
         r"""Prints the :meth:`~Graph.metadata` of the graph."""
-        msg = "Graph Metadata"
+        msg = 'Graph Metadata'
         if not in_tmux():
-            msg = f"🗂️ {msg}"
+            msg = f'🗂️ {msg}'
         display.title(msg)
 
         display.dataframe(self.metadata)
@@ -1818,30 +1949,32 @@ class Graph:
 
     def print_links(self) -> None:
         r"""Prints the :meth:`~Graph.edges` of the graph."""
-        edges = sorted([(
-            edge.dst_table,
-            self[edge.dst_table]._primary_key,
-            edge.src_table,
-            edge.fkey,
-        ) for edge in self.edges])
+        edges = sorted(
+            [
+                (
+                    edge.dst_table,
+                    self[edge.dst_table]._primary_key,
+                    edge.src_table,
+                    edge.fkey,
+                )
+                for edge in self.edges
+            ]
+        )
 
         if in_tmux():
-            display.title("Graph Links (FK <> PK)")
+            display.title('Graph Links (FK <> PK)')
         else:
-            display.title("🕸️ Graph Links (FK ↔️ PK)")
+            display.title('🕸️ Graph Links (FK ↔️ PK)')
         if len(edges) > 0:
             items: list[str] = []
             for edge in edges:
-                fkey = f"`{edge[2]}.{edge[3]}`"
-                pkey = f"`{edge[0]}.{edge[1]}`"
-                if in_tmux():
-                    item = f"{fkey} <> {pkey}"
-                else:
-                    item = f"{fkey} ↔️ {pkey}"
-                items.append(item)
+                fkey = f'`{edge[2]}.{edge[3]}`'
+                pkey = f'`{edge[0]}.{edge[1]}`'
+                arrow = '<>' if in_tmux() else '↔️'
+                items.append(f'{fkey} {arrow} {pkey}')
             display.unordered_list(items)
         else:
-            display.italic("No links registered")
+            display.italic('No links registered')
 
     def _resolve_foreign_key(
         self,
@@ -1855,22 +1988,26 @@ class Graph:
         so a one-element sequence takes the ordinary path rather than folding
         a column that already identifies a row on its own.
         """
-        names = (fkey, ) if isinstance(fkey, str) else tuple(fkey)
+        names = (fkey,) if isinstance(fkey, str) else tuple(fkey)
         if len(names) > 1:
-            return self._derive_composite_foreign_key(src_table, names,
-                                                      dst_table)
+            return self._derive_composite_foreign_key(
+                src_table, names, dst_table
+            )
 
         name = names[0]
         if self.has_table(dst_table):
             destination = self[dst_table]
             identity = destination.primary_key_columns
-            if (destination.has_composite_primary_key
-                    and name != destination.primary_key.name):
+            if (
+                destination.has_composite_primary_key
+                and name != destination.primary_key.name
+            ):
                 raise ValueError(
                     f"Cannot link '{src_table}' to '{dst_table}' on "
                     f"'{name}': '{dst_table}' identifies a row by "
-                    f"{list(identity)} together, so one column cannot name "
-                    f"one of its rows. Reference every part of the identity.")
+                    f'{list(identity)} together, so one column cannot name '
+                    f'one of its rows. Reference every part of the identity.'
+                )
         return name
 
     def _derive_composite_foreign_key(
@@ -1889,11 +2026,13 @@ class Graph:
         """
         fkey = tuple(fkey)
         if not self.has_table(src_table):
-            raise ValueError(f"Source table '{src_table}' does not exist in "
-                             f"the graph")
+            raise ValueError(
+                f"Source table '{src_table}' does not exist in the graph"
+            )
         if not self.has_table(dst_table):
-            raise ValueError(f"Destination table '{dst_table}' does not exist "
-                             f"in the graph")
+            raise ValueError(
+                f"Destination table '{dst_table}' does not exist in the graph"
+            )
 
         source, destination = self[src_table], self[dst_table]
         expected = destination.primary_key_columns
@@ -1901,18 +2040,21 @@ class Graph:
             raise ValueError(
                 f"Cannot link '{src_table}' to '{dst_table}' on {list(fkey)}: "
                 f"the destination's identity is {list(expected)}, so the "
-                f"reference has to name {len(expected)} column(s), not "
-                f"{len(fkey)}")
+                f'reference has to name {len(expected)} column(s), not '
+                f'{len(fkey)}'
+            )
 
         missing = [name for name in fkey if not source.has_column(name)]
         if missing:
             raise ValueError(
                 f"Cannot link '{src_table}' to '{dst_table}': column(s) "
                 f"{missing} are not present in '{src_table}'. A table "
-                f"referencing a composite identity has to carry every part "
-                f"of it.")
-        composite_key.refuse_unfoldable_dtypes([(name, source[name].dtype)
-                                                for name in fkey])
+                f'referencing a composite identity has to carry every part '
+                f'of it.'
+            )
+        composite_key.refuse_unfoldable_dtypes(
+            [(name, source[name].dtype) for name in fkey]
+        )
 
         self._assert_composite_link_meets(source, destination, fkey)
 
@@ -1949,12 +2091,13 @@ class Graph:
             return
         raise ValueError(
             f"Linking '{source.name}' to '{destination.name}' on "
-            f"{list(fkey)} matches no rows: no value of {list(fkey)} in "
+            f'{list(fkey)} matches no rows: no value of {list(fkey)} in '
             f"'{source.name}' identifies a row of '{destination.name}'. "
-            f"Check that the columns are named in the same order as "
+            f'Check that the columns are named in the same order as '
             f"'{destination.name}' declares its identity "
-            f"({list(destination.primary_key_columns)}), and that they hold "
-            f"the same values.")
+            f'({list(destination.primary_key_columns)}), and that they hold '
+            f'the same values.'
+        )
 
     def link(
         self,
@@ -1996,26 +2139,32 @@ class Graph:
         edge = Edge(src_table, fkey, dst_table)
 
         if edge in self.edges:
-            raise ValueError(f"{edge} already exists in the graph")
+            raise ValueError(f'{edge} already exists in the graph')
 
         if not self.has_table(src_table):
-            raise ValueError(f"Source table '{src_table}' does not exist in "
-                             f"the graph")
+            raise ValueError(
+                f"Source table '{src_table}' does not exist in the graph"
+            )
 
         if not self.has_table(dst_table):
-            raise ValueError(f"Destination table '{dst_table}' does not exist "
-                             f"in the graph")
+            raise ValueError(
+                f"Destination table '{dst_table}' does not exist in the graph"
+            )
 
         if not self[src_table].has_column(fkey):
-            raise ValueError(f"Source key '{fkey}' does not exist as a column "
-                             f"in source table '{src_table}'")
+            raise ValueError(
+                f"Source key '{fkey}' does not exist as a column "
+                f"in source table '{src_table}'"
+            )
 
         if not Stype.ID.supports_dtype(self[src_table][fkey].dtype):
-            raise ValueError(f"Cannot use '{fkey}' in source table "
-                             f"'{src_table}' as a foreign key due to its "
-                             f"incompatible data type. Foreign keys must have "
-                             f"data type 'int', 'float' or 'string' "
-                             f"(got '{self[src_table][fkey].dtype}')")
+            raise ValueError(
+                f"Cannot use '{fkey}' in source table "
+                f"'{src_table}' as a foreign key due to its "
+                f'incompatible data type. Foreign keys must have '
+                f"data type 'int', 'float' or 'string' "
+                f"(got '{self[src_table][fkey].dtype}')"
+            )
 
         self[src_table][fkey].stype = Stype.ID
         self._edges.append(edge)
@@ -2043,8 +2192,11 @@ class Graph:
         assert isinstance(src_table, str)
         if not isinstance(fkey, str):
             names = tuple(fkey)
-            fkey = (names[0] if len(names) == 1 else
-                    self[src_table]._derived_key_column_name(names))
+            fkey = (
+                names[0]
+                if len(names) == 1
+                else self[src_table]._derived_key_column_name(names)
+            )
 
         if isinstance(dst_table, Table):
             dst_table = dst_table.name
@@ -2053,7 +2205,7 @@ class Graph:
         edge = Edge(src_table, fkey, dst_table)
 
         if edge not in self.edges:
-            raise ValueError(f"{edge} is not present in the graph")
+            raise ValueError(f'{edge} is not present in the graph')
 
         self._edges.remove(edge)
 
@@ -2079,7 +2231,8 @@ class Graph:
                 if (table.name, fkey.name) in known_edges:
                     continue
                 dst_table_names = [
-                    table.name for table in self.tables.values()
+                    table.name
+                    for table in self.tables.values()
                     if table.source_name == fkey.dst_table
                 ]
                 if len(dst_table_names) != 1:
@@ -2119,14 +2272,15 @@ class Graph:
                         continue
 
                     if src_key in {
-                            src_table.primary_key,
-                            src_table.time_column,
-                            src_table.end_time_column,
+                        src_table.primary_key,
+                        src_table.time_column,
+                        src_table.end_time_column,
                     }:
                         continue  # Cannot link to special columns.
 
-                    src_number = (src_key.dtype.is_int()
-                                  or src_key.dtype.is_float())
+                    src_number = (
+                        src_key.dtype.is_int() or src_key.dtype.is_float()
+                    )
                     src_string = src_key.dtype.is_string()
 
                     if src_number != dst_number or src_string != dst_string:
@@ -2139,41 +2293,55 @@ class Graph:
                     # Name similarity:
                     if src_key_name == dst_key_name:
                         score += 7.0
-                    elif (dst_key_name != 'id'
-                          and src_key_name.endswith(dst_key_name)):
-                        score += 4.0
-                    elif src_key_name.endswith(  # e.g., user.id -> user_id
-                            f'{dst_table_name}_{dst_key_name}'):
-                        score += 4.0
-                    elif src_key_name.endswith(  # e.g., user.id -> userid
-                            f'{dst_table_name}{dst_key_name}'):
-                        score += 4.0
-                    elif (dst_table_name.endswith('s') and
-                          src_key_name.endswith(  # e.g., users.id -> user_id
-                              f'{dst_table_name[:-1]}_{dst_key_name}')):
-                        score += 4.0
-                    elif (dst_table_name.endswith('s') and
-                          src_key_name.endswith(  # e.g., users.id -> userid
-                              f'{dst_table_name[:-1]}{dst_key_name}')):
+                    elif (
+                        (
+                            dst_key_name != 'id'
+                            and src_key_name.endswith(dst_key_name)
+                        )
+                        or src_key_name.endswith(  # e.g., user.id -> user_id
+                            f'{dst_table_name}_{dst_key_name}'
+                        )
+                        or src_key_name.endswith(  # e.g., user.id -> userid
+                            f'{dst_table_name}{dst_key_name}'
+                        )
+                        or (
+                            dst_table_name.endswith('s')
+                            and src_key_name.endswith(  # e.g., users.id -> user_id
+                                f'{dst_table_name[:-1]}_{dst_key_name}'
+                            )
+                        )
+                        or (
+                            dst_table_name.endswith('s')
+                            and src_key_name.endswith(  # e.g., users.id -> userid
+                                f'{dst_table_name[:-1]}{dst_key_name}'
+                            )
+                        )
+                    ):
                         score += 4.0
                     elif src_key_name.endswith(dst_table_name):
                         score += 4.0  # e.g., users -> users
-                    elif (dst_table_name.endswith('s')  # e.g., users -> user
-                          and src_key_name.endswith(dst_table_name[:-1])):
+                    elif (
+                        dst_table_name.endswith('s')  # e.g., users -> user
+                        and src_key_name.endswith(dst_table_name[:-1])
+                    ):
                         score += 4.0
-                    elif ((src_key_name == 'parentid'
-                           or src_key_name == 'parent_id')
-                          and src_table_name == dst_table_name):
+                    elif (
+                        (
+                            src_key_name == 'parentid'
+                            or src_key_name == 'parent_id'
+                        )
+                        and src_table_name == dst_table_name
+                    ) or (
+                        src_table.name == 'posts'
+                        and src_key.name == 'AcceptedAnswerId'
+                        and dst_table.name == 'posts'
+                    ):
                         score += 2.0
-
-                    # `rel-bench` hard-coding :(
-                    elif (src_table.name == 'posts'
-                          and src_key.name == 'AcceptedAnswerId'
-                          and dst_table.name == 'posts'):
-                        score += 2.0
-                    elif (src_table.name == 'user_friends'
-                          and src_key.name == 'friend'
-                          and dst_table.name == 'users'):
+                    elif (
+                        src_table.name == 'user_friends'
+                        and src_key.name == 'friend'
+                        and dst_table.name == 'users'
+                    ):
                         score += 3.0
 
                     # For non-exact matching, at least one additional
@@ -2187,16 +2355,19 @@ class Graph:
                         score += 1.0
 
                     # Cardinality ratio:
-                    if (src_table._num_rows is not None
-                            and dst_table._num_rows is not None
-                            and src_table._num_rows > dst_table._num_rows):
+                    if (
+                        src_table._num_rows is not None
+                        and dst_table._num_rows is not None
+                        and src_table._num_rows > dst_table._num_rows
+                    ):
                         score += 1.0
 
                     if score < 5.0:
                         continue
 
                     candidate_dict[(src_table.name, src_key.name)].append(
-                        (dst_table.name, score))
+                        (dst_table.name, score)
+                    )
 
         for (src_table_name, src_key_name), scores in candidate_dict.items():
             scores.sort(key=lambda x: x[-1], reverse=True)
@@ -2232,28 +2403,32 @@ class Graph:
         has since claimed as a foreign key is explained, so only the rest are
         reported.
         """
-        fkeys: set[tuple[str, str]] = {(edge.src_table, edge.fkey)
-                                       for edge in self.edges}
+        fkeys: set[tuple[str, str]] = {
+            (edge.src_table, edge.fkey) for edge in self.edges
+        }
         for table in self.tables.values():
             if table.has_primary_key():
                 continue
             declined = [
-                name for name in table._declined_primary_keys
-                if table.has_column(name)
-                and (table.name, name) not in fkeys
+                name
+                for name in table._declined_primary_keys
+                if table.has_column(name) and (table.name, name) not in fkeys
             ]
             if len(declined) == 0:
                 continue
             sampled = table._declined_primary_key_rows
             evidence = (
-                "hold a unique value per row" if sampled is None else
-                f"hold a unique value in each of the {sampled:,} rows sampled "
-                f"from it, and may or may not be unique overall")
+                'hold a unique value per row'
+                if sampled is None
+                else f'hold a unique value in each of the {sampled:,} rows sampled '
+                f'from it, and may or may not be unique overall'
+            )
             warnings.warn(
                 f"No primary key was inferred for table '{table.name}', so no "
-                f"other table can link to it. Column(s) {declined} {evidence}; "
-                f"pass `primary_key=` explicitly to use one of them.",
-                stacklevel=2)
+                f'other table can link to it. Column(s) {declined} {evidence}; '
+                f'pass `primary_key=` explicitly to use one of them.',
+                stacklevel=2,
+            )
 
     # Metadata ################################################################
 
@@ -2270,12 +2445,13 @@ class Graph:
             ValueError: if validation fails.
         """
         if len(self.tables) == 0:
-            raise ValueError("At least one table needs to be added to the "
-                             "graph")
+            raise ValueError(
+                'At least one table needs to be added to the graph'
+            )
 
         backends = {table.backend for table in self._tables.values()}
         if len(backends) != 1:
-            raise ValueError("Found multiple table backends in the graph")
+            raise ValueError('Found multiple table backends in the graph')
 
         for edge in self.edges:
             if (reason := self._edge_error(edge)) is not None:
@@ -2299,25 +2475,31 @@ class Graph:
         # here rather than as a `KeyError` out of the lookup below, which
         # names neither the edge nor the fix.
         if not self[src_table].has_column(fkey):
-            return (f"Edge {edge} is invalid since table '{src_table}' no "
-                    f"longer has a column '{fkey}'. Remove the link with "
-                    f"`unlink()` before removing the column.")
+            return (
+                f"Edge {edge} is invalid since table '{src_table}' no "
+                f"longer has a column '{fkey}'. Remove the link with "
+                f'`unlink()` before removing the column.'
+            )
 
         src_key = self[src_table][fkey]
         dst_key = self[dst_table].primary_key
 
         # Check that the destination table defines a primary key:
         if dst_key is None:
-            return (f"Edge {edge} is invalid since table '{dst_table}' does "
-                    f"not have a primary key. Add either a primary key or "
-                    f"remove the link before proceeding.")
+            return (
+                f"Edge {edge} is invalid since table '{dst_table}' does "
+                f'not have a primary key. Add either a primary key or '
+                f'remove the link before proceeding.'
+            )
 
         # Ensure that foreign key is not a primary key:
         src_pkey = self[src_table].primary_key
         if src_pkey is not None and src_pkey.name == fkey:
-            return (f"Cannot treat the primary key of table '{src_table}' as "
-                    f"a foreign key. Remove either the primary key or the "
-                    f"link before proceeding.")
+            return (
+                f"Cannot treat the primary key of table '{src_table}' as "
+                f'a foreign key. Remove either the primary key or the '
+                f'link before proceeding.'
+            )
 
         # Check that fkey/pkey have valid and consistent data types. Every
         # backend populates data types from its own catalog, so this check
@@ -2330,14 +2512,18 @@ class Graph:
         dst_string = dst_key.dtype.is_string()
 
         if not src_number and not src_string:
-            return (f"{edge} is invalid as foreign key must be a number or "
-                    f"string (got '{src_key.dtype}')")
+            return (
+                f'{edge} is invalid as foreign key must be a number or '
+                f"string (got '{src_key.dtype}')"
+            )
 
         if src_number != dst_number or src_string != dst_string:
-            return (f"{edge} is invalid as foreign key '{fkey}' and primary "
-                    f"key '{dst_key.name}' have incompatible data types (got "
-                    f"foreign key data type '{src_key.dtype}' and primary key "
-                    f"data type '{dst_key.dtype}')")
+            return (
+                f"{edge} is invalid as foreign key '{fkey}' and primary "
+                f"key '{dst_key.name}' have incompatible data types (got "
+                f"foreign key data type '{src_key.dtype}' and primary key "
+                f"data type '{dst_key.dtype}')"
+            )
 
         return None
 
@@ -2355,9 +2541,11 @@ class Graph:
         for edge in list(self.edges):
             if (reason := self._edge_error(edge)) is not None:
                 self.unlink(*edge)
-                msgs.append(f"Failed to add the relationship between "
-                            f"'{edge.src_table}' and '{edge.dst_table}' "
-                            f"since {reason}")
+                msgs.append(
+                    f'Failed to add the relationship between '
+                    f"'{edge.src_table}' and '{edge.dst_table}' "
+                    f'since {reason}'
+                )
         return msgs
 
     # Visualization ###########################################################
@@ -2377,19 +2565,19 @@ class Graph:
         for src_table_name, fkey_name, _ in self.edges:
             fkeys_dict[src_table_name].append(fkey_name)
 
-        lines = ["erDiagram"]
+        lines = ['erDiagram']
 
         for table_name, table in self.tables.items():
-            lines.append(f"{' ' * 4}{table_name} {{")
+            lines.append(f'{" " * 4}{table_name} {{')
             if pkey := table.primary_key:
-                lines.append(f"{' ' * 8}{pkey.stype} {pkey.name} PK")
+                lines.append(f'{" " * 8}{pkey.stype} {pkey.name} PK')
             for fkey_name in fkeys_dict[table_name]:
                 fkey = table[fkey_name]
-                lines.append(f"{' ' * 8}{fkey.stype} {fkey.name} FK")
+                lines.append(f'{" " * 8}{fkey.stype} {fkey.name} FK')
             if time_col := table.time_column:
-                lines.append(f"{' ' * 8}{time_col.stype} {time_col.name}")
+                lines.append(f'{" " * 8}{time_col.stype} {time_col.name}')
             if time_col := table.end_time_column:
-                lines.append(f"{' ' * 8}{time_col.dtype} {time_col.name}")
+                lines.append(f'{" " * 8}{time_col.dtype} {time_col.name}')
 
             if show_columns:
                 for column in table.columns:
@@ -2401,15 +2589,15 @@ class Graph:
                         continue
                     if column.name == table._end_time_column:
                         continue
-                    lines.append(f"{' ' * 8}{column.stype} {column.name}")
+                    lines.append(f'{" " * 8}{column.stype} {column.name}')
 
-            lines.append(f"{' ' * 4}}}")
+            lines.append(f'{" " * 4}}}')
 
         if len(self.edges) > 0:
-            lines.append("")
+            lines.append('')
 
         for src_table, fkey, dst_table in self.edges:
-            lines.append(f"{' ' * 4}{dst_table} o|--o{{ {src_table} : {fkey}")
+            lines.append(f'{" " * 4}{dst_table} o|--o{{ {src_table} : {fkey}')
 
         return '\n'.join(lines)
 
@@ -2458,15 +2646,18 @@ class Graph:
             elif suffix in ('png', 'svg'):
                 path.write_bytes(viz.render_image(source, suffix))
             else:
-                raise ValueError(f"File extension '{suffix}' not supported "
-                                 f"for visualization. Expected one of "
-                                 f"'html', 'mmd', 'png' or 'svg'.")
+                raise ValueError(
+                    f"File extension '{suffix}' not supported "
+                    f'for visualization. Expected one of '
+                    f"'html', 'mmd', 'png' or 'svg'."
+                )
 
         elif isinstance(path, io.BytesIO):
             path.write(viz.render_image(source, 'png'))
 
         elif in_streamlit_notebook():
             import streamlit as st
+
             try:
                 st.components.v1.html(
                     viz.to_html(source),
@@ -2479,13 +2670,16 @@ class Graph:
         elif in_jupyter_notebook():
             from IPython.display import HTML
             from IPython.display import display as ipython_display
+
             ipython_display(HTML(viz.to_iframe(source, height=height)))
 
         else:
-            warnings.warn("Cannot display the rendered graph outside of a "
-                          "notebook environment - printing the Mermaid "
-                          "source instead. Use `visualize(path='graph.html')`"
-                          " to write a standalone offline rendering.")
+            warnings.warn(
+                'Cannot display the rendered graph outside of a '
+                'notebook environment - printing the Mermaid '
+                "source instead. Use `visualize(path='graph.html')`"
+                ' to write a standalone offline rendering.'
+            )
             print(source)
 
     # Helpers #################################################################
@@ -2511,8 +2705,12 @@ class Graph:
 
     def update_connection(
         self,
-        connection: (AdbcSqliteConnection | DuckDBPyConnection
-                     | SnowflakeConnection | DatabricksConnection),
+        connection: (
+            AdbcSqliteConnection
+            | DuckDBPyConnection
+            | SnowflakeConnection
+            | DatabricksConnection
+        ),
     ) -> None:
         r"""Updates the connection to a database."""
         if self._connection is not None:
@@ -2525,11 +2723,13 @@ class Graph:
                 from adbc_driver_sqlite.dbapi import AdbcSqliteConnection
 
                 from kumorfm.rfm.backend.sqlite import SQLiteTable
+
                 assert isinstance(table, SQLiteTable)
                 assert isinstance(connection, AdbcSqliteConnection)
                 table._connection = connection
             if table.backend == DataBackend.DUCKDB:
                 from kumorfm.rfm.backend.duckdb import Connection, DuckDBTable
+
                 assert isinstance(table, DuckDBTable)
                 assert isinstance(connection, Connection)
                 table._connection = connection
@@ -2537,6 +2737,7 @@ class Graph:
                 from snowflake.connector import SnowflakeConnection
 
                 from kumorfm.rfm.backend.snow import SnowTable
+
                 assert isinstance(table, SnowTable)
                 assert isinstance(connection, SnowflakeConnection)
                 table._connection = connection
@@ -2546,6 +2747,7 @@ class Graph:
                     Connection,
                     DatabricksTable,
                 )
+
                 assert isinstance(table, DatabricksTable)
                 assert isinstance(connection, Connection)
                 table._connection = connection
@@ -2570,12 +2772,15 @@ class Graph:
         edges = '\n'.join(
             f'    {edge.src_table}.{edge.fkey}'
             f' ⇔ {edge.dst_table}.{self[edge.dst_table]._primary_key},'
-            for edge in self.edges)
+            for edge in self.edges
+        )
         edges = f'[\n{edges}\n  ]' if len(edges) > 0 else '[]'
-        return (f'{self.__class__.__name__}(\n'
-                f'  tables={tables},\n'
-                f'  edges={edges},\n'
-                f')')
+        return (
+            f'{self.__class__.__name__}(\n'
+            f'  tables={tables},\n'
+            f'  edges={edges},\n'
+            f')'
+        )
 
     def __del__(self) -> None:
         if self._connection is not None:
@@ -2583,12 +2788,12 @@ class Graph:
 
 
 def _timedelta_to_pquery(td: pd.Timedelta) -> tuple[int, str]:
-    """Convert a positive Timedelta to a ``(amount, unit)`` pair for a
+    r"""Convert a positive Timedelta to a ``(amount, unit)`` pair for a
     pquery time range.
     """
     total_seconds = int(td.total_seconds())
     if total_seconds <= 0:
-        raise ValueError(f"time_delta must be positive, got {td}")
+        raise ValueError(f'time_delta must be positive, got {td}')
     if total_seconds % (24 * 3600) == 0:
         return total_seconds // (24 * 3600), 'days'
     if total_seconds % 3600 == 0:
@@ -2596,12 +2801,14 @@ def _timedelta_to_pquery(td: pd.Timedelta) -> tuple[int, str]:
     if total_seconds % 60 == 0:
         return total_seconds // 60, 'minutes'
     raise ValueError(
-        f"time_delta {td} must be a whole number of minutes, hours, or days")
+        f'time_delta {td} must be a whole number of minutes, hours, or days'
+    )
 
 
 def _infer_timedelta_from_timestamps(
-        timestamps_series: pd.Series) -> pd.Timedelta:
-    """Infer the median step size from a Series of per-entity timestamp lists.
+    timestamps_series: pd.Series,
+) -> pd.Timedelta:
+    r"""Infer the median step size from a Series of per-entity timestamp lists.
 
     Emits a warning when the observed step sizes are not all equal.
     """
@@ -2614,13 +2821,14 @@ def _infer_timedelta_from_timestamps(
         raise ValueError(
             "Cannot infer 'time_delta' from 'timestamps_col': all series "
             "have fewer than 2 observations. Please provide 'time_delta' "
-            "explicitly.")
+            'explicitly.'
+        )
     delta_series = pd.Series(deltas)
     median_td = Timedelta(delta_series.median())
     if delta_series.nunique() > 1:
         warnings.warn(
             f"Observed step sizes in 'timestamps_col' are not all equal "
-            f"(found {delta_series.nunique()} distinct intervals). "
+            f'(found {delta_series.nunique()} distinct intervals). '
             f"Using the median ({median_td}) as 'time_delta' for the "
             f"predictive query. Pass 'time_delta' explicitly to override.",
             stacklevel=3,

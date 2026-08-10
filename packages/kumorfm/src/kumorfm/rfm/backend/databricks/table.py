@@ -8,9 +8,8 @@ from collections.abc import Sequence
 from typing import cast
 
 import pandas as pd
-from kumorfm.runmode import MissingType
-from kumorfm.api.typing import Dtype
 
+from kumorfm.api.typing import Dtype
 from kumorfm.rfm.backend.databricks import Connection
 from kumorfm.rfm.base import (
     Column,
@@ -21,6 +20,7 @@ from kumorfm.rfm.base import (
     SourceForeignKey,
     Table,
 )
+from kumorfm.runmode import MissingType
 from kumorfm.utils import quote_ident
 
 # Databricks quotes SQL identifiers with backticks rather than double quotes:
@@ -43,6 +43,7 @@ class DatabricksTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+
     _SQL_TEXT_TYPE = 'STRING'
 
     def _quote_key_column(self, name: str) -> str:
@@ -63,7 +64,7 @@ class DatabricksTable(Table):
 
         if catalog is None or schema is None:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT current_catalog(), current_schema()")
+                cursor.execute('SELECT current_catalog(), current_schema()')
                 result = cursor.fetchone()
                 assert result is not None
                 catalog = catalog or result[0]
@@ -71,9 +72,11 @@ class DatabricksTable(Table):
                 schema = schema or result[1]
 
         if schema is None:
-            raise ValueError(f"Unspecified 'schema' for table "
-                             f"'{source_name or name}' in catalog "
-                             f"'{catalog}'")
+            raise ValueError(
+                f"Unspecified 'schema' for table "
+                f"'{source_name or name}' in catalog "
+                f"'{catalog}'"
+            )
 
         self._connection = connection
         self._catalog = catalog
@@ -123,19 +126,22 @@ class DatabricksTable(Table):
         31s per table against 0.5s, and it grows with catalog size.
         """
         with self._connection.cursor() as cursor:
-            sql = (f"SELECT column_name, full_data_type, is_nullable,\n"
-                   f"       table_catalog, table_schema, table_name\n"
-                   f"FROM {self._quoted_catalog}.information_schema.columns\n"
-                   f"WHERE table_schema = lower(?)\n"
-                   f"  AND table_name = lower(?)\n"
-                   f"ORDER BY ordinal_position")
-            cursor.execute(sql,
-                           parameters=[self._schema, self._source_name])
+            sql = (
+                f'SELECT column_name, full_data_type, is_nullable,\n'
+                f'       table_catalog, table_schema, table_name\n'
+                f'FROM {self._quoted_catalog}.information_schema.columns\n'
+                f'WHERE table_schema = lower(?)\n'
+                f'  AND table_name = lower(?)\n'
+                f'ORDER BY ordinal_position'
+            )
+            cursor.execute(sql, parameters=[self._schema, self._source_name])
             rows = cursor.fetchall()
 
             if len(rows) == 0:
-                raise ValueError(f"Table '{self.source_name}' does not exist "
-                                 f"in the remote data backend")
+                raise ValueError(
+                    f"Table '{self.source_name}' does not exist "
+                    f'in the remote data backend'
+                )
 
             self._catalog, self._schema, self._source_name = rows[0][3:6]
 
@@ -147,20 +153,22 @@ class DatabricksTable(Table):
             unique_keys: set[str] = set()
             try:
                 sql = (
-                    f"SELECT tc.constraint_type, tc.constraint_name,\n"
-                    f"       kcu.column_name\n"
-                    f"FROM {self._quoted_catalog}.information_schema."
-                    f"table_constraints tc\n"
-                    f"JOIN {self._quoted_catalog}.information_schema."
-                    f"key_column_usage kcu\n"
-                    f"  ON tc.constraint_catalog = kcu.constraint_catalog\n"
-                    f" AND tc.constraint_schema = kcu.constraint_schema\n"
-                    f" AND tc.constraint_name = kcu.constraint_name\n"
-                    f"WHERE tc.table_schema = lower(?)\n"
-                    f"  AND tc.table_name = lower(?)\n"
-                    f"  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')")
-                cursor.execute(sql,
-                               parameters=[self._schema, self._source_name])
+                    f'SELECT tc.constraint_type, tc.constraint_name,\n'
+                    f'       kcu.column_name\n'
+                    f'FROM {self._quoted_catalog}.information_schema.'
+                    f'table_constraints tc\n'
+                    f'JOIN {self._quoted_catalog}.information_schema.'
+                    f'key_column_usage kcu\n'
+                    f'  ON tc.constraint_catalog = kcu.constraint_catalog\n'
+                    f' AND tc.constraint_schema = kcu.constraint_schema\n'
+                    f' AND tc.constraint_name = kcu.constraint_name\n'
+                    f'WHERE tc.table_schema = lower(?)\n'
+                    f'  AND tc.table_name = lower(?)\n'
+                    f"  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')"
+                )
+                cursor.execute(
+                    sql, parameters=[self._schema, self._source_name]
+                )
                 constraint_rows = cursor.fetchall()
                 # Only consider single-column keys (no composite support yet).
                 # Count columns per constraint (by name), so that two distinct
@@ -194,33 +202,35 @@ class DatabricksTable(Table):
         with self._connection.cursor() as cursor:
             try:
                 sql = (
-                    f"SELECT tc.constraint_name, kcu.column_name,\n"
-                    f"       ccu.table_catalog, ccu.table_schema,\n"
-                    f"       ccu.table_name, ccu.column_name\n"
-                    f"FROM {self._quoted_catalog}.information_schema."
-                    f"table_constraints tc\n"
-                    f"JOIN {self._quoted_catalog}.information_schema."
-                    f"referential_constraints rc\n"
-                    f"  ON tc.constraint_catalog = rc.constraint_catalog\n"
-                    f" AND tc.constraint_schema = rc.constraint_schema\n"
-                    f" AND tc.constraint_name = rc.constraint_name\n"
-                    f"JOIN {self._quoted_catalog}.information_schema."
-                    f"key_column_usage kcu\n"
-                    f"  ON tc.constraint_catalog = kcu.constraint_catalog\n"
-                    f" AND tc.constraint_schema = kcu.constraint_schema\n"
-                    f" AND tc.constraint_name = kcu.constraint_name\n"
-                    f"JOIN {self._quoted_catalog}.information_schema."
-                    f"constraint_column_usage ccu\n"
-                    f"  ON rc.unique_constraint_catalog = "
-                    f"ccu.constraint_catalog\n"
-                    f" AND rc.unique_constraint_schema = "
-                    f"ccu.constraint_schema\n"
-                    f" AND rc.unique_constraint_name = ccu.constraint_name\n"
+                    f'SELECT tc.constraint_name, kcu.column_name,\n'
+                    f'       ccu.table_catalog, ccu.table_schema,\n'
+                    f'       ccu.table_name, ccu.column_name\n'
+                    f'FROM {self._quoted_catalog}.information_schema.'
+                    f'table_constraints tc\n'
+                    f'JOIN {self._quoted_catalog}.information_schema.'
+                    f'referential_constraints rc\n'
+                    f'  ON tc.constraint_catalog = rc.constraint_catalog\n'
+                    f' AND tc.constraint_schema = rc.constraint_schema\n'
+                    f' AND tc.constraint_name = rc.constraint_name\n'
+                    f'JOIN {self._quoted_catalog}.information_schema.'
+                    f'key_column_usage kcu\n'
+                    f'  ON tc.constraint_catalog = kcu.constraint_catalog\n'
+                    f' AND tc.constraint_schema = kcu.constraint_schema\n'
+                    f' AND tc.constraint_name = kcu.constraint_name\n'
+                    f'JOIN {self._quoted_catalog}.information_schema.'
+                    f'constraint_column_usage ccu\n'
+                    f'  ON rc.unique_constraint_catalog = '
+                    f'ccu.constraint_catalog\n'
+                    f' AND rc.unique_constraint_schema = '
+                    f'ccu.constraint_schema\n'
+                    f' AND rc.unique_constraint_name = ccu.constraint_name\n'
                     f"WHERE tc.constraint_type = 'FOREIGN KEY'\n"
-                    f"  AND tc.table_schema = lower(?)\n"
-                    f"  AND tc.table_name = lower(?)")
-                cursor.execute(sql,
-                               parameters=[self._schema, self._source_name])
+                    f'  AND tc.table_schema = lower(?)\n'
+                    f'  AND tc.table_name = lower(?)'
+                )
+                cursor.execute(
+                    sql, parameters=[self._schema, self._source_name]
+                )
                 rows = cursor.fetchall()
             except Exception:
                 return []
@@ -246,9 +256,11 @@ class DatabricksTable(Table):
             columns = [
                 quote_ident(col, BACKTICK) for col in self._source_column_dict
             ]
-            sql = (f"SELECT {', '.join(columns)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(columns)} '
+                f'FROM {self._quoted_source_name} '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.fetchall_arrow()
 
@@ -266,7 +278,7 @@ class DatabricksTable(Table):
 
     def _get_num_rows(self) -> int | None:
         with self._connection.cursor() as cursor:
-            sql = f"SELECT COUNT(*) FROM {self._quoted_source_name}"
+            sql = f'SELECT COUNT(*) FROM {self._quoted_source_name}'
             cursor.execute(sql)
             result = cursor.fetchone()
             assert result is not None
@@ -283,12 +295,14 @@ class DatabricksTable(Table):
     ) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             projections = [
-                f"{column.expr} AS {quote_ident(column.name, BACKTICK)}"
+                f'{column.expr} AS {quote_ident(column.name, BACKTICK)}'
                 for column in columns
             ]
-            sql = (f"SELECT {', '.join(projections)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(projections)} '
+                f'FROM {self._quoted_source_name} '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.fetchall_arrow()
 
@@ -297,8 +311,7 @@ class DatabricksTable(Table):
 
         return self._sanitize(
             df=table.to_pandas(types_mapper=pd.ArrowDtype),
-            dtype_dict={column.name: column.dtype
-                        for column in columns},
+            dtype_dict={column.name: column.dtype for column in columns},
             stype_dict=None,
         )
 
@@ -309,15 +322,21 @@ class DatabricksTable(Table):
             return None
         dtype = dtype.strip().lower()
         if dtype in {
-                'tinyint', 'byte', 'smallint', 'short', 'int', 'integer',
-                'bigint', 'long'
+            'tinyint',
+            'byte',
+            'smallint',
+            'short',
+            'int',
+            'integer',
+            'bigint',
+            'long',
         }:
             return Dtype.int
         if dtype in {'float', 'real', 'double'}:
             return Dtype.float
         if dtype.startswith(('decimal', 'numeric', 'dec')):
             try:  # Parse `scale` from 'decimal(precision, scale)':
-                inside = dtype[dtype.index('(') + 1:dtype.index(')')]
+                inside = dtype[dtype.index('(') + 1 : dtype.index(')')]
                 parts = inside.split(',')
                 scale = int(parts[1]) if len(parts) > 1 else 0
                 return Dtype.int if scale == 0 else Dtype.float
@@ -335,20 +354,20 @@ class DatabricksTable(Table):
             return Dtype.date
         if dtype.startswith('array'):
             try:  # Parse element data type from 'array<dtype>':
-                inner = dtype[dtype.index('<') + 1:dtype.rindex('>')]
+                inner = dtype[dtype.index('<') + 1 : dtype.rindex('>')]
                 _dtype = DatabricksTable._to_dtype(inner)
                 if _dtype is not None and _dtype.is_int():
                     return Dtype.intlist
-                elif _dtype is not None and _dtype.is_float():
+                if _dtype is not None and _dtype.is_float():
                     return Dtype.floatlist
-                elif _dtype is not None and _dtype.is_string():
+                if _dtype is not None and _dtype.is_string():
                     return Dtype.stringlist
             except Exception:
                 pass
             return Dtype.unsupported
         # Unsupported data types:
         if re.search(
-                'interval|map|struct|variant|object|geography|geometry'
-                '|void', dtype):
+            'interval|map|struct|variant|object|geography|geometry|void', dtype
+        ):
             return Dtype.unsupported
         return None

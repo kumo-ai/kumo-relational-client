@@ -9,15 +9,13 @@ from typing import Any
 
 import pytest
 import requests
-
 from kumorfm.client import KumoClient
 from kumorfm.client.endpoints import HTTPMethod
 from kumorfm.client.generated.tfm_api import (
-    TFMOperations,
     TFM_ENDPOINTS_BY_OPERATION_ID,
+    TFMOperations,
 )
 from kumorfm.client.rfm import RFMAPI
-
 from rfm_nim_payloads import (
     NIM_HEALTH_READY_PATH,
     NIM_V1_PREDICTION_PATH,
@@ -52,15 +50,17 @@ def test_rfm_api_predict_posts_current_v1_payload_and_parses_response(
         json={
             'id': 'pred-contract-test',
             'model': 'kumo-rfm',
-            'predictions': [{
-                'id': '601',
-                'row_index': 0,
-                'prediction': True,
-                'probabilities': {
-                    'True': 0.65,
-                    'False': 0.35,
-                },
-            }],
+            'predictions': [
+                {
+                    'id': '601',
+                    'row_index': 0,
+                    'prediction': True,
+                    'probabilities': {
+                        'True': 0.65,
+                        'False': 0.35,
+                    },
+                }
+            ],
             'metadata': {
                 'adapter': 'mock',
             },
@@ -90,15 +90,17 @@ def test_rfm_api_predict_reattaches_anchor_times(mock_api: Any) -> None:
         json={
             'id': 'pred-anchor-test',
             'model': 'kumo-rfm',
-            'predictions': [{
-                'id': '601',
-                'row_index': 0,
-                'prediction': True,
-                'probabilities': {
-                    'True': 0.65,
-                    'False': 0.35,
-                },
-            }],
+            'predictions': [
+                {
+                    'id': '601',
+                    'row_index': 0,
+                    'prediction': True,
+                    'probabilities': {
+                        'True': 0.65,
+                        'False': 0.35,
+                    },
+                }
+            ],
             'metadata': {
                 'adapter': 'mock',
             },
@@ -133,11 +135,13 @@ def test_rfm_api_predict_rejects_misaligned_anchor_times(
         json={
             'id': 'pred-anchor-mismatch-test',
             'model': 'kumo-rfm',
-            'predictions': [{
-                'id': '601',
-                'row_index': 0,
-                'prediction': True,
-            }],
+            'predictions': [
+                {
+                    'id': '601',
+                    'row_index': 0,
+                    'prediction': True,
+                }
+            ],
             'metadata': {
                 'adapter': 'mock',
             },
@@ -160,7 +164,8 @@ def test_sdk_prediction_endpoint_matches_current_nim_v1_route() -> None:
 
     assert endpoint.get_path() == NIM_V1_PREDICTION_PATH
     assert client._format_endpoint_url(endpoint.get_path()) == (
-        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}')
+        f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}'
+    )
 
 
 def test_sdk_health_endpoint_matches_current_nim_route() -> None:
@@ -168,7 +173,8 @@ def test_sdk_health_endpoint_matches_current_nim_route() -> None:
 
     assert NIM_HEALTH_READY_PATH == '/v1/health/ready'
     assert client._format_endpoint_url(NIM_HEALTH_READY_PATH) == (
-        f'{MOCK_URL}{NIM_HEALTH_READY_PATH}')
+        f'{MOCK_URL}{NIM_HEALTH_READY_PATH}'
+    )
 
 
 @pytest.mark.parametrize(
@@ -197,7 +203,8 @@ def test_sdk_generated_session_endpoints_match_current_nim_routes(
 
     assert endpoint.method == method
     assert client._format_endpoint_url(endpoint.get_path()) == (
-        f'{MOCK_URL}{current_nim_path}')
+        f'{MOCK_URL}{current_nim_path}'
+    )
 
 
 def test_sdk_rest_authenticate_accepts_current_nim_surface(
@@ -206,9 +213,13 @@ def test_sdk_rest_authenticate_accepts_current_nim_surface(
     mock_api.get(f'{MOCK_URL}{NIM_HEALTH_READY_PATH}', json={'status': 'ready'})
     mock_api.get(
         f'{MOCK_URL}{SDK_V1_MODELS_PATH}',
-        json={'data': [{
-            'id': 'kumo-rfm',
-        }]},
+        json={
+            'data': [
+                {
+                    'id': 'kumo-rfm',
+                }
+            ]
+        },
     )
 
     client = KumoClient(MOCK_URL)
@@ -223,10 +234,12 @@ def test_rfm_api_predict_does_not_mutate_request_payload(
         json={
             'id': 'pred-contract-test',
             'model': 'kumo-rfm',
-            'predictions': [{
-                'id': '601',
-                'row_index': 0,
-            }],
+            'predictions': [
+                {
+                    'id': '601',
+                    'row_index': 0,
+                }
+            ],
         },
     )
     payload = nim_v1_smoke_payload()
@@ -256,10 +269,12 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
                     'row_index': 0,
                     'prediction': 'gold',
                     'scores': ['0.5', 1],
-                    'rankings': [{
-                        'entity_id': 'item-1',
-                        'score': 0.9,
-                    }],
+                    'rankings': [
+                        {
+                            'entity_id': 'item-1',
+                            'score': 0.9,
+                        }
+                    ],
                     'embeddings': ['0.1', 0.2],
                     'quantiles': {
                         'p50': '12.5',
@@ -318,10 +333,12 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
                 'account-a',
                 'gold',
                 [0.5, 1.0],
-                [{
-                    'entity_id': 'item-1',
-                    'score': 0.9,
-                }],
+                [
+                    {
+                        'entity_id': 'item-1',
+                        'score': 0.9,
+                    }
+                ],
                 [0.1, 0.2],
                 12.5,
                 {
@@ -331,11 +348,25 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
                 None,
             ],
             [
-                'account-a', 3.14, None, None, None, None, None, None,
+                'account-a',
+                3.14,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
                 None,
             ],
             [
-                'account-b', None, None, None, None, None, None, 0.25,
+                'account-b',
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                0.25,
                 0.75,
             ],
         ],
@@ -350,17 +381,19 @@ def test_rfm_api_predict_renders_multiclass_long_format(
         json={
             'id': 'pred-multiclass-test',
             'model': 'kumo-rfm',
-            'predictions': [{
-                'id': '601',
-                'row_index': 0,
-                'prediction': 'pro',
-                'probabilities': {
-                    'free': 0.1,
-                    'pro': 0.6,
-                    'enterprise': 0.2,
-                    'trial': 0.1,
-                },
-            }],
+            'predictions': [
+                {
+                    'id': '601',
+                    'row_index': 0,
+                    'prediction': 'pro',
+                    'probabilities': {
+                        'free': 0.1,
+                        'pro': 0.6,
+                        'enterprise': 0.2,
+                        'trial': 0.1,
+                    },
+                }
+            ],
             'metadata': {
                 'adapter': 'mock',
                 'task_kind': 'multiclass_classification',
@@ -377,8 +410,13 @@ def test_rfm_api_predict_renders_multiclass_long_format(
     )
 
     assert result.prediction == {
-        'columns': ['ENTITY', 'ANCHOR_TIMESTAMP', 'CLASS', 'SCORE',
-                    'PREDICTED'],
+        'columns': [
+            'ENTITY',
+            'ANCHOR_TIMESTAMP',
+            'CLASS',
+            'SCORE',
+            'PREDICTED',
+        ],
         'data': [
             [601, '2025-02-01T00:00:00Z', 'pro', 0.6, True],
             [601, '2025-02-01T00:00:00Z', 'enterprise', 0.2, False],
@@ -396,10 +434,12 @@ def test_prediction_response_rejects_bad_probability_shape(
         json={
             'id': 'pred-bad-probabilities',
             'model': 'kumo-rfm',
-            'predictions': [{
-                'id': '1',
-                'probabilities': ['not', 'a', 'mapping'],
-            }],
+            'predictions': [
+                {
+                    'id': '1',
+                    'probabilities': ['not', 'a', 'mapping'],
+                }
+            ],
         },
     )
 
@@ -409,8 +449,9 @@ def test_prediction_response_rejects_bad_probability_shape(
     # A mis-shaped *response* is the server's error, not the caller's, so it
     # surfaces as InvalidResponseError with the driver reason preserved rather
     # than as a bare TypeError from deep inside the parser.
-    with pytest.raises(InvalidResponseError,
-                       match='does not match the contract') as excinfo:
+    with pytest.raises(
+        InvalidResponseError, match='does not match the contract'
+    ) as excinfo:
         api.predict(
             nim_v1_smoke_payload(),
             entity_ids=[601],
@@ -426,11 +467,16 @@ def test_payload_factories_return_isolated_deep_copies() -> None:
 
     first['context']['instance_table']['rows'][0][1] = False
     first['schema']['related_tables']['accounts']['columns']['segment'][
-        'dtype'] = 'mutated'
+        'dtype'
+    ] = 'mutated'
 
     assert second['context']['instance_table']['rows'][0][1] is True
-    assert second['schema']['related_tables']['accounts']['columns'][
-        'segment']['dtype'] == 'string'
+    assert (
+        second['schema']['related_tables']['accounts']['columns']['segment'][
+            'dtype'
+        ]
+        == 'string'
+    )
 
 
 def test_container_smoke_payload_tracks_current_v1_wire_shape() -> None:
@@ -468,6 +514,7 @@ def test_session_payload_helpers_match_current_v1_session_contract() -> None:
 
 class _StubResponse:
     r"""Minimal stand-in for the ``requests`` response the parser reads."""
+
     def __init__(self, body: Any, error: Exception | None = None) -> None:
         self._body = body
         self._error = error
@@ -486,12 +533,15 @@ def test_non_json_prediction_body_is_an_invalid_response_error() -> None:
     """
     from kumorfm.exceptions import InvalidResponseError
 
-    response = _StubResponse(None, requests.exceptions.JSONDecodeError(
-        'Expecting value', '<html>', 0))
+    response = _StubResponse(
+        None,
+        requests.exceptions.JSONDecodeError('Expecting value', '<html>', 0),
+    )
 
     with pytest.raises(InvalidResponseError) as excinfo:
         RFMAPI._parse_predict_response(
-            response, entity_ids=[1], instance_ids=['1'], anchor_times=None)
+            response, entity_ids=[1], instance_ids=['1'], anchor_times=None
+        )
     assert 'does not match the contract' in str(excinfo.value)
     assert isinstance(excinfo.value, ValueError)
 
@@ -500,15 +550,18 @@ def test_prediction_item_missing_id_is_an_invalid_response_error() -> None:
     r"""client-rfm-path-never-raises-sdfmerror.md: no bare KeyError escapes."""
     from kumorfm.exceptions import InvalidResponseError
 
-    response = _StubResponse({
-        'id': 'pred-1',
-        'model': 'kumo-rfm',
-        'predictions': [{'row_index': 0, 'prediction': True}],
-    })
+    response = _StubResponse(
+        {
+            'id': 'pred-1',
+            'model': 'kumo-rfm',
+            'predictions': [{'row_index': 0, 'prediction': True}],
+        }
+    )
 
     with pytest.raises(InvalidResponseError):
         RFMAPI._parse_predict_response(
-            response, entity_ids=[1], instance_ids=['1'], anchor_times=None)
+            response, entity_ids=[1], instance_ids=['1'], anchor_times=None
+        )
 
 
 def test_identity_mapping_mismatch_stays_a_caller_error() -> None:
@@ -528,15 +581,21 @@ def test_identity_mapping_mismatch_stays_a_caller_error() -> None:
 
     with pytest.raises(ValueError) as excinfo:
         RFMAPI._parse_predict_response(
-            _StubResponse(body), entity_ids=[1, 2], instance_ids=['1'],
-            anchor_times=None)
+            _StubResponse(body),
+            entity_ids=[1, 2],
+            instance_ids=['1'],
+            anchor_times=None,
+        )
     assert not isinstance(excinfo.value, InvalidResponseError)
     assert 'identity mappings have different lengths' in str(excinfo.value)
 
     with pytest.raises(ValueError) as excinfo:
         RFMAPI._parse_predict_response(
-            _StubResponse(body), entity_ids=[1], instance_ids=['1'],
-            anchor_times=[None, None])
+            _StubResponse(body),
+            entity_ids=[1],
+            instance_ids=['1'],
+            anchor_times=[None, None],
+        )
     assert not isinstance(excinfo.value, InvalidResponseError)
     assert 'anchor times' in str(excinfo.value)
 
@@ -545,12 +604,15 @@ def test_response_count_mismatch_is_still_an_invalid_response() -> None:
     r"""The neighbouring response-side check keeps its class."""
     from kumorfm.exceptions import InvalidResponseError
 
-    response = _StubResponse({
-        'id': 'pred-1',
-        'model': 'kumo-rfm',
-        'predictions': [],
-    })
+    response = _StubResponse(
+        {
+            'id': 'pred-1',
+            'model': 'kumo-rfm',
+            'predictions': [],
+        }
+    )
 
     with pytest.raises(InvalidResponseError):
         RFMAPI._parse_predict_response(
-            response, entity_ids=[1], instance_ids=['1'], anchor_times=None)
+            response, entity_ids=[1], instance_ids=['1'], anchor_times=None
+        )

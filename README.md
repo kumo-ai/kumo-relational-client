@@ -34,7 +34,7 @@ Two extras stay outside `[all]` and have to be asked for by name. `[explain]` fi
 is a deliberate act; `[relbench]` pulls the RelBench datasets in for `Graph.from_relbench()`.
 
 `[kumorfm]` is a native build. Prebuilt wheels are published for Linux x86-64
-(`manylinux_2_28`) on CPython 3.10-3.12 only, and no source distribution is published, so
+(`manylinux_2_28`) on CPython 3.10-3.13 only, and no source distribution is published, so
 `pip install "nvidia-sdfm[kumorfm]"` resolves on that platform alone. The base client and
 the connectors are pure Python and install anywhere.
 

@@ -1,5 +1,60 @@
 # Changelog
 
+## nvidia-sdfm 0.3.0 · kumorfm 2.28.0 · sdfm-connectors 0.4.0
+
+Prepares the SDK for release as open source. Alongside the licensing and
+contribution scaffolding, this closes the defects found by testing the SDK
+end to end against a live NIM, and by a file-by-file review of every
+first-party module.
+
+### Fixed — read this before upgrading
+
+- **Python 3.10 was broken.** `kumorfm` imported `typing.assert_never`, which
+  is 3.11+, so `import kumorfm` failed on the floor all three packages declare.
+- **A credential in the endpoint URL reached `nvidia-sdfm`'s error messages,
+  logs and reprs.** `https://user:token@host` is a supported way to address a
+  deployment; the userinfo is now stripped everywhere the URL is rendered, as
+  `kumorfm` already did.
+- `sample_rows` accepted any value: its bound returned the `ValueError` instead
+  of raising it, so the exception was stored as the field.
+- `Graph.from_relbench` could not name 22 of the 33 published RelBench
+  datasets. A fixed-width prefix strip mangled every name without a `rel-`
+  prefix, so no `dbinfer-`, `tgbl-`, `tgbn-` or `thgl-` dataset could be
+  listed or fetched.
+- Snowflake `SHOW`, `DESC` and `LIST` failed as `QUERY_FAILED: Unknown error`.
+- A 15-table graph was refused by a guard whose message said the limit was
+  "more than 15", which made RelBench `rel-trial` unusable.
+- A negative `lag_timesteps` was ignored rather than rejected.
+
+### Added
+
+- **A root exception per package.** `kumorfm.KumoRFMError` and
+  `sdfm_connectors.ConnectorError` are now the single base each package raises
+  from; `MissingBackendError` joins the latter. Every class keeps the built-in
+  it derived from, so existing `except ValueError` / `except RuntimeError`
+  keeps working.
+- Connection-time failures are typed (`AuthenticationError`,
+  `NimUnreachableError`, `NimTimeoutError`) and translated at the
+  `nvidia-sdfm` boundary, so a wrong API key or an unreachable NIM is caught by
+  `except SdfmError` instead of escaping as a bare `ValueError`.
+- Reading a warehouse raises `GraphConstructionError` rather than the driver's
+  own exception, which shared no base with anything else the SDK raises.
+- **Python 3.13 wheels.** `kumorfm` builds and tests cp310 through cp313.
+- Composite primary keys, and quoted identifiers in predictive queries.
+
+### Changed
+
+- `import kumorfm` no longer reconfigures logging for the whole process. It had
+  raised `matplotlib`, `urllib3` and `snowflake` to `ERROR`, and installed a
+  handler even where the application had already configured one.
+- Errors that reported a caller's mistake through an interpreter's internals
+  now name the argument: `indices` says which element and what key type is
+  expected, the file-backed connectors name `database`/`uri` rather than
+  letting the driver complain about `path`, and an unsupported time unit is
+  named instead of being blamed on the `PREDICT` clause.
+- Multiclass classification is reachable from `predict()`; the reference said
+  otherwise.
+
 ## nvidia-sdfm 0.2.1 · kumorfm 2.24.1 · sdfm-connectors 0.3.0
 
 Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and

@@ -186,7 +186,9 @@ def test_close_failure_does_not_mask_result(monkeypatch):
             raise RuntimeError('close exploded')
 
     monkeypatch.setattr(
-        reader_module, 'connect', lambda source, *a, **k: _Connection(),
+        reader_module,
+        'connect',
+        lambda source, *a, **k: _Connection(),
     )
     frame = read('sqlite', database='ignored', table='items')
     assert list(frame['a']) == [1, 2]

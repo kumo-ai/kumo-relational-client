@@ -34,7 +34,8 @@ class _CapturingAdapter(ModelAdapter):
 
     def capabilities(self):
         return ModelCapabilities(
-            model=self.name, request_type=self.request_type.__name__)
+            model=self.name, request_type=self.request_type.__name__
+        )
 
     def predict(self, transport, request):
         self.captured = request
@@ -59,8 +60,11 @@ def test_rfm_handle_end_to_end_through_client():
     client = _client_with(adapter)
 
     out = client.kumorfm('my-graph').predict(
-        'PREDICT x FOR EACH t.id', [1, 2, 3],
-        run_mode='best', anchor_time='2025-01-01')
+        'PREDICT x FOR EACH t.id',
+        [1, 2, 3],
+        run_mode='best',
+        anchor_time='2025-01-01',
+    )
 
     assert out is result
     req = adapter.captured
@@ -92,7 +96,8 @@ def test_rfm_handle_only_forwards_set_options():
     client.kumorfm('g').predict(
         'PREDICT x',
         inference_config={'num_estimators': 2},
-        return_embeddings=True)
+        return_embeddings=True,
+    )
 
     assert adapter.captured.options == {
         'inference_config': {'num_estimators': 2},
@@ -147,21 +152,27 @@ def test_rfm_handle_matches_typed_request():
     adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
     client = _client_with(adapter)
 
-    client.kumorfm('g').predict('PREDICT x', [1], run_mode='normal',
-                            anchor_time='2025-06-01')
+    client.kumorfm('g').predict(
+        'PREDICT x', [1], run_mode='normal', anchor_time='2025-06-01'
+    )
     via_handle = adapter.captured
 
-    typed = KumoRFMRequest(graph='g', query='PREDICT x', indices=[1],
-                           run_mode='normal',
-                           options={'anchor_time': '2025-06-01'})
+    typed = KumoRFMRequest(
+        graph='g',
+        query='PREDICT x',
+        indices=[1],
+        run_mode='normal',
+        options={'anchor_time': '2025-06-01'},
+    )
 
     assert via_handle == typed
 
 
 def test_tabicl_returns_bound_handle():
     client = SDFMClient(url='http://nim.test')
-    handle = client.tabicl(pd.DataFrame({'y': [0, 1]}),
-                           target='y', task='classification')
+    handle = client.tabicl(
+        pd.DataFrame({'y': [0, 1]}), target='y', task='classification'
+    )
     assert isinstance(handle, TabICLModel)
 
 
@@ -173,7 +184,8 @@ def test_tabicl_handle_end_to_end_through_client():
     ctx = pd.DataFrame({'x': [1, 2], 'y': [0, 1]})
     rows = pd.DataFrame({'x': [3]})
     out = client.tabicl(ctx, target='y', task='classification').predict(
-        rows, positive_class='1')
+        rows, positive_class='1'
+    )
 
     assert out is result
     req = adapter.captured
@@ -192,7 +204,8 @@ def test_tabicl_handle_defaults_are_minimal():
 
     ctx = pd.DataFrame({'x': [1], 'y': [0]})
     client.tabicl(ctx, target='y', task='regression').predict(
-        pd.DataFrame({'x': [2]}))
+        pd.DataFrame({'x': [2]})
+    )
 
     req = adapter.captured
     assert req.outputs == ['prediction']
@@ -205,6 +218,7 @@ def test_handle_still_dispatches_by_request_type():
     client = _client_with(adapter)
 
     from nvidia_sdfm import SdfmError
+
     with pytest.raises(SdfmError):
         client.kumorfm('g').predict('PREDICT x')
 
@@ -254,7 +268,8 @@ def test_tabicl_handle_forwards_request_id():
 
     ctx = pd.DataFrame({'x': [1], 'y': [0]})
     client.tabicl(ctx, target='y', task='classification').predict(
-        pd.DataFrame({'x': [2]}), request_id='trace-123')
+        pd.DataFrame({'x': [2]}), request_id='trace-123'
+    )
 
     assert adapter.captured.request_id == 'trace-123'
 
@@ -263,9 +278,12 @@ def test_rfm_handle_forwards_batch_size():
     adapter = _CapturingAdapter('kumo-rfm', KumoRFMRequest, pd.DataFrame())
     client = _client_with(adapter)
 
-    client.kumorfm('g').predict('PREDICT x FOR EACH t.id',
-                                list(range(1500)),
-                                batch_size='max', num_retries=2)
+    client.kumorfm('g').predict(
+        'PREDICT x FOR EACH t.id',
+        list(range(1500)),
+        batch_size='max',
+        num_retries=2,
+    )
 
     req = adapter.captured
     assert req.batch_size == 'max'
@@ -294,9 +312,13 @@ def test_rfm_handle_predict_task_end_to_end_through_client():
     context = pd.DataFrame({'ENTITY': [1, 2], 'TARGET': ['free', 'pro']})
     predict = pd.DataFrame({'ENTITY': [3]})
     out = client.kumorfm('my-graph').predict_task(
-        context=context, predict=predict,
-        task_type='multiclass_classification', entity_table='users',
-        run_mode='best', num_neighbors=[8, 8])
+        context=context,
+        predict=predict,
+        task_type='multiclass_classification',
+        entity_table='users',
+        run_mode='best',
+        num_neighbors=[8, 8],
+    )
 
     assert out is result
     req = adapter.captured
@@ -318,7 +340,9 @@ def test_rfm_handle_predict_task_defaults_are_minimal():
     client.kumorfm('g').predict_task(
         context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
         predict=pd.DataFrame({'ENTITY': [2]}),
-        task_type='regression', entity_table='users')
+        task_type='regression',
+        entity_table='users',
+    )
 
     req = adapter.captured
     assert req.entity_column == 'ENTITY'
@@ -337,8 +361,10 @@ def test_rfm_handle_predict_task_only_forwards_set_options():
     client.kumorfm('g').predict_task(
         context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
         predict=pd.DataFrame({'ENTITY': [2]}),
-        task_type='regression', entity_table='users',
-        inference_config={'num_estimators': 2})
+        task_type='regression',
+        entity_table='users',
+        inference_config={'num_estimators': 2},
+    )
 
     assert adapter.captured.options == {
         'inference_config': {'num_estimators': 2},
@@ -375,8 +401,9 @@ def test_tabicl_handle_rejects_a_non_frame_context(value):
 def test_tabicl_handle_rejects_a_non_frame_predict(value):
     adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
     client = _client_with(adapter)
-    handle = client.tabicl(pd.DataFrame({'a': [1.0], 'y': [0]}), target='y',
-                           task='classification')
+    handle = client.tabicl(
+        pd.DataFrame({'a': [1.0], 'y': [0]}), target='y', task='classification'
+    )
 
     with pytest.raises(SdfmError) as excinfo:
         handle.predict(value)
@@ -396,7 +423,8 @@ def test_rfm_handle_predict_task_rejects_a_non_frame(argument):
 
     with pytest.raises(SdfmError) as excinfo:
         client.kumorfm('g').predict_task(
-            **frames, task_type='regression', entity_table='users')
+            **frames, task_type='regression', entity_table='users'
+        )
     assert excinfo.value.code == 'INVALID_REQUEST'
     assert f'{argument} must be a pandas DataFrame' in str(excinfo.value)
 
@@ -422,5 +450,6 @@ def test_frames_and_subclasses_are_still_accepted():
     context = _MyFrame({'a': [1.0, 2.0], 'y': [0, 1]})
 
     client.tabicl(context, target='y', task='classification').predict(
-        _MyFrame({'a': [3.0]}))
+        _MyFrame({'a': [3.0]})
+    )
     assert adapter.captured is not None

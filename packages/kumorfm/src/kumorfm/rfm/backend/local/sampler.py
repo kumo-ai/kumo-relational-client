@@ -6,8 +6,8 @@ from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
 import pandas as pd
-from kumorfm.api.pquery import ValidatedPredictiveQuery
 
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.rfm.backend.local import LocalGraphStore
 from kumorfm.rfm.base import DataBackend, Sampler, SamplerOutput
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
@@ -115,9 +115,10 @@ class LocalSampler(Sampler):
         for table_name, node in node_dict.items():
             df = self._graph_store.df_dict[table_name]
             columns = columns_dict[table_name]
-            if self.end_time_column_dict.get(table_name, None) in columns:
-                df = df.iloc[node]
-            elif len(columns) == 0:
+            if (
+                self.end_time_column_dict.get(table_name, None) in columns
+                or len(columns) == 0
+            ):
                 df = df.iloc[node]
             else:
                 # Only store unique rows in `df` above a certain threshold:
@@ -133,8 +134,7 @@ class LocalSampler(Sampler):
 
         num_sampled_nodes_dict = {
             table_name: num_sampled_nodes.tolist()
-            for table_name, num_sampled_nodes in
-            num_sampled_nodes_dict.items()
+            for table_name, num_sampled_nodes in num_sampled_nodes_dict.items()
         }
 
         row_dict = {
@@ -185,8 +185,9 @@ class LocalSampler(Sampler):
                 ignore_index=True,
             )
         df = self._graph_store.df_dict[table_name]
-        df = df.iloc[pkey_map['arange']][sorted(
-            columns, key=df.columns.get_loc)]
+        df = df.iloc[pkey_map['arange']][
+            sorted(columns, key=df.columns.get_loc)
+        ]
         return df
 
     def _sample_query_data(
@@ -200,18 +201,22 @@ class LocalSampler(Sampler):
             tuple[pd.DateOffset | None, pd.DateOffset],
         ],
     ) -> tuple[
-            dict[str, pd.DataFrame],
-            dict[str, pd.Series],
-            dict[str, np.ndarray],
+        dict[str, pd.DataFrame],
+        dict[str, pd.Series],
+        dict[str, np.ndarray],
     ]:
         num_hops = 1 if len(time_offset_dict) > 0 else 0
         num_neighbors_dict: dict[str, list[int]] = {}
         unix_time_offset_dict: dict[str, list[list[int | None]]] = {}
         for edge_type, (start, end) in time_offset_dict.items():
-            unix_time_offset_dict['__'.join(edge_type)] = [[
-                date_offset_to_seconds(start) if start is not None else None,
-                date_offset_to_seconds(end),
-            ]]
+            unix_time_offset_dict['__'.join(edge_type)] = [
+                [
+                    date_offset_to_seconds(start)
+                    if start is not None
+                    else None,
+                    date_offset_to_seconds(end),
+                ]
+            ]
         for edge_type in set(self.edge_types) - set(time_offset_dict.keys()):
             num_neighbors_dict['__'.join(edge_type)] = [0] * num_hops
 
@@ -299,8 +304,8 @@ class LocalSampler(Sampler):
         for start in range(0, len(index), batch_size):
             feat_dict, time_dict, batch_dict = self._sample_query_data(
                 entity_table_name=query.entity_table,
-                entity_pkey=entity_pkey.iloc[index[start:start + batch_size]],
-                anchor_time=anchor_time.iloc[start:start + batch_size],
+                entity_pkey=entity_pkey.iloc[index[start : start + batch_size]],
+                anchor_time=anchor_time.iloc[start : start + batch_size],
                 columns_dict=columns_dict,
                 time_offset_dict=time_offset_dict,
             )
@@ -310,10 +315,10 @@ class LocalSampler(Sampler):
                 feat_dict=feat_dict,
                 time_dict=time_dict,
                 batch_dict=batch_dict,
-                anchor_time=anchor_time.iloc[start:start + batch_size],
+                anchor_time=anchor_time.iloc[start : start + batch_size],
             )
             ys.append(y)
-            mask[start:start + batch_size] = _mask
+            mask[start : start + batch_size] = _mask
 
             count += len(y)
             if count >= num_examples:
@@ -331,6 +336,14 @@ class LocalSampler(Sampler):
 
 # Helper Functions ############################################################
 
+# Months and years are taken at their maximum, deliberately: the surplus is
+# dropped again in label computation, where the actual dates are known.
+_MAX_DAYS_IN_MONTH = 31
+_MAX_DAYS_IN_YEAR = 366
+_SECONDS_IN_MINUTE = 60
+_SECONDS_IN_HOUR = 60 * _SECONDS_IN_MINUTE
+_SECONDS_IN_DAY = 24 * _SECONDS_IN_HOUR
+
 
 def date_offset_to_seconds(offset: pd.DateOffset) -> int:
     r"""Convert a :class:`pandas.DateOffset` into a number of seconds.
@@ -340,13 +353,6 @@ def date_offset_to_seconds(offset: pd.DateOffset) -> int:
         Additional values are then dropped in label computation where we know
         the actual dates.
     """
-    MAX_DAYS_IN_MONTH = 31
-    MAX_DAYS_IN_YEAR = 366
-
-    SECONDS_IN_MINUTE = 60
-    SECONDS_IN_HOUR = 60 * SECONDS_IN_MINUTE
-    SECONDS_IN_DAY = 24 * SECONDS_IN_HOUR
-
     total_sec = 0
     multiplier = getattr(offset, 'n', 1)  # The multiplier (if present).
 
@@ -355,15 +361,15 @@ def date_offset_to_seconds(offset: pd.DateOffset) -> int:
             continue
         scaled_value = value * multiplier
         if attr == 'years':
-            total_sec += scaled_value * MAX_DAYS_IN_YEAR * SECONDS_IN_DAY
+            total_sec += scaled_value * _MAX_DAYS_IN_YEAR * _SECONDS_IN_DAY
         elif attr == 'months':
-            total_sec += scaled_value * MAX_DAYS_IN_MONTH * SECONDS_IN_DAY
+            total_sec += scaled_value * _MAX_DAYS_IN_MONTH * _SECONDS_IN_DAY
         elif attr == 'days':
-            total_sec += scaled_value * SECONDS_IN_DAY
+            total_sec += scaled_value * _SECONDS_IN_DAY
         elif attr == 'hours':
-            total_sec += scaled_value * SECONDS_IN_HOUR
+            total_sec += scaled_value * _SECONDS_IN_HOUR
         elif attr == 'minutes':
-            total_sec += scaled_value * SECONDS_IN_MINUTE
+            total_sec += scaled_value * _SECONDS_IN_MINUTE
         elif attr == 'seconds':
             total_sec += scaled_value
 

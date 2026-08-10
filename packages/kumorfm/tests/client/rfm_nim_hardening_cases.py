@@ -18,6 +18,7 @@ from rfm_nim_payloads import (
     nim_v1_smoke_payload,
 )
 
+
 @dataclass(frozen=True)
 class RejectionCase:
     case_id: str
@@ -29,10 +30,12 @@ class RejectionCase:
     def __post_init__(self) -> None:
         factory_count = sum(
             factory is not None
-            for factory in (self.payload_factory, self.raw_body_factory))
+            for factory in (self.payload_factory, self.raw_body_factory)
+        )
         if factory_count != 1:
             raise ValueError(
-                'rejection cases require exactly one request-body factory')
+                'rejection cases require exactly one request-body factory'
+            )
 
     def request_kwargs(self) -> dict[str, Any]:
         if self.payload_factory is not None:
@@ -224,8 +227,7 @@ def _empty_request() -> dict[str, Any]:
 
 def _oversized_string_request() -> dict[str, Any]:
     payload = nim_v1_smoke_payload()
-    payload['context']['related_tables']['accounts']['rows'][0][1] = (
-        'x' * 1025)
+    payload['context']['related_tables']['accounts']['rows'][0][1] = 'x' * 1025
     return {'json': payload}
 
 

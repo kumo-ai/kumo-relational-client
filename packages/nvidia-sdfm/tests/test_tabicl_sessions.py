@@ -33,11 +33,14 @@ def _predictions() -> dict:
 
 def _register_session_nim(requests_mock, session_id: str = _SESSION_ID):
     requests_mock.post(_URL + '/v1/predictions', json=_predictions())
-    requests_mock.post(_URL + '/v1/sessions',
-                       json={'session_id': session_id, 'ttl_seconds': 3600},
-                       status_code=201)
-    requests_mock.post(f'{_URL}/v1/sessions/{session_id}/predictions',
-                       json=_predictions())
+    requests_mock.post(
+        _URL + '/v1/sessions',
+        json={'session_id': session_id, 'ttl_seconds': 3600},
+        status_code=201,
+    )
+    requests_mock.post(
+        f'{_URL}/v1/sessions/{session_id}/predictions', json=_predictions()
+    )
     requests_mock.delete(f'{_URL}/v1/sessions/{session_id}', status_code=204)
 
 
@@ -46,12 +49,12 @@ def _paths(requests_mock) -> list[str]:
 
 
 def _handle(client, context_df):
-    return client.tabicl(context_df, target='target_col',
-                         task='classification')
+    return client.tabicl(context_df, target='target_col', task='classification')
 
 
-def test_repeated_predict_pins_the_context_once(requests_mock, context_df,
-                                                predict_df):
+def test_repeated_predict_pins_the_context_once(
+    requests_mock, context_df, predict_df
+):
     _register_session_nim(requests_mock)
 
     with SDFMClient(url=_URL) as client:
@@ -72,8 +75,9 @@ def test_repeated_predict_pins_the_context_once(requests_mock, context_df,
     assert len(json.dumps(bodies[2])) < len(json.dumps(bodies[0])) / 2
 
 
-def test_session_predictions_match_the_stateless_path(requests_mock,
-                                                      context_df, predict_df):
+def test_session_predictions_match_the_stateless_path(
+    requests_mock, context_df, predict_df
+):
     _register_session_nim(requests_mock)
 
     with SDFMClient(url=_URL) as client:
@@ -83,12 +87,14 @@ def test_session_predictions_match_the_stateless_path(requests_mock,
         via_session = model.predict(predict_df)
 
     assert requests_mock.request_history[-1].path.endswith(
-        f'/v1/sessions/{_SESSION_ID}/predictions')
+        f'/v1/sessions/{_SESSION_ID}/predictions'
+    )
     pd.testing.assert_frame_equal(stateless, via_session)
 
 
-def test_single_predict_never_opens_a_session(requests_mock, context_df,
-                                              predict_df):
+def test_single_predict_never_opens_a_session(
+    requests_mock, context_df, predict_df
+):
     _register_session_nim(requests_mock)
 
     with SDFMClient(url=_URL) as client:
@@ -97,11 +103,15 @@ def test_single_predict_never_opens_a_session(requests_mock, context_df,
     assert _paths(requests_mock) == ['POST /v1/predictions']
 
 
-def test_nim_without_session_routes_stays_stateless(requests_mock, context_df,
-                                                    predict_df):
+def test_nim_without_session_routes_stays_stateless(
+    requests_mock, context_df, predict_df
+):
     requests_mock.post(_URL + '/v1/predictions', json=_predictions())
-    requests_mock.post(_URL + '/v1/sessions', status_code=404,
-                       json={'code': 'NOT_FOUND', 'detail': 'no such route'})
+    requests_mock.post(
+        _URL + '/v1/sessions',
+        status_code=404,
+        json={'code': 'NOT_FOUND', 'detail': 'no such route'},
+    )
 
     with SDFMClient(url=_URL) as client:
         model = _handle(client, context_df)
@@ -117,7 +127,8 @@ def test_nim_without_session_routes_stays_stateless(requests_mock, context_df,
 
 
 def test_create_session_failure_falls_back_to_the_stateless_path(
-        requests_mock, context_df, predict_df):
+    requests_mock, context_df, predict_df
+):
     r"""client-retried-session-create-orphans-sessions.md
 
     A session is an optimisation. Failing the caller's prediction because the
@@ -127,8 +138,11 @@ def test_create_session_failure_falls_back_to_the_stateless_path(
     tries again.
     """
     requests_mock.post(_URL + '/v1/predictions', json=_predictions())
-    requests_mock.post(_URL + '/v1/sessions', status_code=507,
-                       json={'code': 'INSUFFICIENT_STORAGE', 'detail': 'full'})
+    requests_mock.post(
+        _URL + '/v1/sessions',
+        status_code=507,
+        json={'code': 'INSUFFICIENT_STORAGE', 'detail': 'full'},
+    )
 
     with SDFMClient(url=_URL) as client:
         model = _handle(client, context_df)
@@ -144,7 +158,8 @@ def test_create_session_failure_falls_back_to_the_stateless_path(
 
 
 def test_transport_failure_on_create_falls_back_to_the_stateless_path(
-        requests_mock, context_df, predict_df):
+    requests_mock, context_df, predict_df
+):
     r"""client-retried-session-create-orphans-sessions.md
 
     A ``TRANSPORT_ERROR`` on create used to propagate and fail the prediction
@@ -162,14 +177,17 @@ def test_transport_failure_on_create_falls_back_to_the_stateless_path(
     assert _paths(requests_mock)[-1] == 'POST /v1/predictions'
 
 
-def test_expired_session_is_repinned_and_retried(requests_mock, context_df,
-                                                 predict_df):
+def test_expired_session_is_repinned_and_retried(
+    requests_mock, context_df, predict_df
+):
     _register_session_nim(requests_mock)
     requests_mock.post(
         f'{_URL}/v1/sessions/{_SESSION_ID}/predictions',
         [
-            {'status_code': 404,
-             'json': {'code': 'SESSION_NOT_FOUND', 'detail': 'gone'}},
+            {
+                'status_code': 404,
+                'json': {'code': 'SESSION_NOT_FOUND', 'detail': 'gone'},
+            },
             {'json': _predictions()},
         ],
     )
@@ -190,7 +208,8 @@ def test_expired_session_is_repinned_and_retried(requests_mock, context_df,
 
 
 def test_a_changed_context_half_releases_the_old_session(
-        requests_mock, context_df, predict_df):
+    requests_mock, context_df, predict_df
+):
     _register_session_nim(requests_mock)
 
     with SDFMClient(url=_URL) as client:
@@ -207,8 +226,9 @@ def test_a_changed_context_half_releases_the_old_session(
     ]
 
 
-def test_dropping_the_handle_releases_the_session(requests_mock, context_df,
-                                                  predict_df):
+def test_dropping_the_handle_releases_the_session(
+    requests_mock, context_df, predict_df
+):
     _register_session_nim(requests_mock)
 
     client = SDFMClient(url=_URL)
@@ -227,7 +247,8 @@ def test_dropping_the_handle_releases_the_session(requests_mock, context_df,
 
 
 def test_pinned_state_does_not_retain_a_copy_of_the_context(
-        requests_mock, context_df, predict_df):
+    requests_mock, context_df, predict_df
+):
     r"""The handle only has to detect that the pinned half changed, so it holds
     a digest. Keeping the sections themselves would park a second copy of the
     context in client memory for the life of the handle.
@@ -252,10 +273,16 @@ def test_pinned_digest_changes_with_the_schema(context_df, predict_df):
     from nvidia_sdfm.adapters.tabicl import _pinned_digest, build_request
 
     def digest(predict):
-        return _pinned_digest(build_request(
-            context=context_df, predict=predict, task='classification',
-            target='target_col', outputs=['prediction'],
-            request_id='fixed'))
+        return _pinned_digest(
+            build_request(
+                context=context_df,
+                predict=predict,
+                task='classification',
+                target='target_col',
+                outputs=['prediction'],
+                request_id='fixed',
+            )
+        )
 
     baseline = digest(predict_df)
 
@@ -266,29 +293,51 @@ def test_pinned_digest_changes_with_the_schema(context_df, predict_df):
     # ... as does a different target class list, via a different context.
     other_context = context_df.copy()
     other_context.loc[0, 'target_col'] = 'maybe'
-    assert _pinned_digest(build_request(
-        context=other_context, predict=predict_df, task='classification',
-        target='target_col', outputs=['prediction'],
-        request_id='fixed')) != baseline
+    assert (
+        _pinned_digest(
+            build_request(
+                context=other_context,
+                predict=predict_df,
+                task='classification',
+                target='target_col',
+                outputs=['prediction'],
+                request_id='fixed',
+            )
+        )
+        != baseline
+    )
 
 
 def test_pinned_digest_ignores_the_per_call_sections(context_df, predict_df):
     r"""`predict` / `output` / `metadata` travel with every call, so they must
     not invalidate the pinned context.
     """
-    from nvidia_sdfm.adapters.tabicl import _pinned_digest, build_request
-
     import pandas as pd
 
-    first = _pinned_digest(build_request(
-        context=context_df, predict=predict_df, task='classification',
-        target='target_col', outputs=['prediction'], request_id='req-1'))
-    second = _pinned_digest(build_request(
-        context=context_df,
-        predict=pd.DataFrame({'row_id': ['q-9'], 'age': [41],
-                              'score': [0.5]}),
-        task='classification', target='target_col',
-        outputs=['prediction', 'probabilities'], request_id='req-2'))
+    from nvidia_sdfm.adapters.tabicl import _pinned_digest, build_request
+
+    first = _pinned_digest(
+        build_request(
+            context=context_df,
+            predict=predict_df,
+            task='classification',
+            target='target_col',
+            outputs=['prediction'],
+            request_id='req-1',
+        )
+    )
+    second = _pinned_digest(
+        build_request(
+            context=context_df,
+            predict=pd.DataFrame(
+                {'row_id': ['q-9'], 'age': [41], 'score': [0.5]}
+            ),
+            task='classification',
+            target='target_col',
+            outputs=['prediction', 'probabilities'],
+            request_id='req-2',
+        )
+    )
 
     assert first == second
 
@@ -324,8 +373,9 @@ class _CountingTransport:
         self.deleted.append(session_id)
 
 
-def test_concurrent_predicts_on_one_handle_open_one_session(context_df,
-                                                            predict_df):
+def test_concurrent_predicts_on_one_handle_open_one_session(
+    context_df, predict_df
+):
     r"""tabicl-concurrent-predicts-on-one-handle-leak-sessions.md
 
     ``TabICLSession`` is mutable state on a handle the docstring recommends
@@ -333,9 +383,13 @@ def test_concurrent_predicts_on_one_handle_open_one_session(context_df,
     create, the last writer wins, and the rest are pinned on the NIM with no id
     left to release them by -- silently, and paid for by whoever calls next.
     """
-    payload = build_request(context=context_df, predict=predict_df,
-                            task='classification', target='target_col',
-                            outputs=['prediction'])
+    payload = build_request(
+        context=context_df,
+        predict=predict_df,
+        task='classification',
+        target='target_col',
+        outputs=['prediction'],
+    )
     transport = _CountingTransport()
     session = TabICLSession()
 
@@ -346,7 +400,7 @@ def test_concurrent_predicts_on_one_handle_open_one_session(context_df,
     def score() -> None:
         try:
             _predict_with_session(transport, payload, session)
-        except BaseException as error:  # noqa: BLE001
+        except BaseException as error:
             errors.append(error)
 
     threads = [threading.Thread(target=score) for _ in range(6)]
@@ -361,19 +415,27 @@ def test_concurrent_predicts_on_one_handle_open_one_session(context_df,
     assert transport.deleted == []
 
 
-def test_a_concurrent_context_change_releases_exactly_one_session(context_df,
-                                                                  predict_df):
+def test_a_concurrent_context_change_releases_exactly_one_session(
+    context_df, predict_df
+):
     r"""The lock must not turn a re-pin into a leak of its own: the superseded
     id is handed back to be released once, outside the lock, and the next call
     opens a single replacement.
     """
-    payload = build_request(context=context_df, predict=predict_df,
-                            task='classification', target='target_col',
-                            outputs=['prediction'])
-    other = build_request(context=context_df,
-                          predict=predict_df.astype({'score': str}),
-                          task='classification', target='target_col',
-                          outputs=['prediction'])
+    payload = build_request(
+        context=context_df,
+        predict=predict_df,
+        task='classification',
+        target='target_col',
+        outputs=['prediction'],
+    )
+    other = build_request(
+        context=context_df,
+        predict=predict_df.astype({'score': str}),
+        task='classification',
+        target='target_col',
+        outputs=['prediction'],
+    )
     transport = _CountingTransport(create_delay=0.0)
     session = TabICLSession()
 

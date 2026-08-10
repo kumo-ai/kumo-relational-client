@@ -42,8 +42,12 @@ _SCRIPT = textwrap.dedent(
 
 
 def _payload_hash() -> str:
-    result = subprocess.run([sys.executable, '-c', _SCRIPT], capture_output=True,
-                            text=True, check=True)
+    result = subprocess.run(
+        [sys.executable, '-c', _SCRIPT],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     return result.stdout.strip().splitlines()[-1]
 
 
@@ -148,13 +152,18 @@ def _column_order(backend: str, hash_seed: str, tmp_path) -> dict:
     database = tmp_path / f'{backend}-{hash_seed}.db'
     result = subprocess.run(
         [sys.executable, '-c', _SQL_SCRIPT, backend, str(database)],
-        capture_output=True, text=True, check=True, env=environment)
+        capture_output=True,
+        text=True,
+        check=True,
+        env=environment,
+    )
     return json.loads(result.stdout.strip().splitlines()[-1])
 
 
 @pytest.mark.parametrize('backend', ['sqlite', 'duckdb'])
 def test_sql_payload_column_order_is_identical_across_processes(
-    backend, tmp_path,
+    backend,
+    tmp_path,
 ) -> None:
     r"""sampler-sql-payload-column-order-nondeterministic.md
 

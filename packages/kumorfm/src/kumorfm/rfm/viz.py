@@ -10,6 +10,7 @@ inlined into a standalone HTML document that the notebook front end renders
 locally. Only ``render_image`` (PNG/SVG export) talks to mermaid.ink, since
 rasterizing Mermaid requires a browser engine.
 """
+
 from __future__ import annotations
 
 import base64
@@ -68,8 +69,10 @@ def to_iframe(source: str, height: int = 540) -> str:
     the inlined mermaid.js reliably across all of them.
     """
     doc = html.escape(to_html(source), quote=True)
-    return (f'<iframe srcdoc="{doc}" width="100%" height="{height}" '
-            f'style="border:none;" sandbox="allow-scripts"></iframe>')
+    return (
+        f'<iframe srcdoc="{doc}" width="100%" height="{height}" '
+        f'style="border:none;" sandbox="allow-scripts"></iframe>'
+    )
 
 
 def render_image(source: str, format: str, timeout: int = 30) -> bytes:
@@ -77,14 +80,17 @@ def render_image(source: str, format: str, timeout: int = 30) -> bytes:
     mermaid.ink web service (requires network access).
     """
     if format not in ('png', 'svg'):
-        raise ValueError(f"Unsupported image format '{format}'. Expected "
-                         f"either 'png' or 'svg'.")
+        raise ValueError(
+            f"Unsupported image format '{format}'. Expected "
+            f"either 'png' or 'svg'."
+        )
 
     import requests
 
     state = {'code': source, 'mermaid': {'theme': 'neutral'}}
     encoded = base64.urlsafe_b64encode(
-        json.dumps(state).encode('utf-8')).decode('ascii')
+        json.dumps(state).encode('utf-8')
+    ).decode('ascii')
     route = 'img' if format == 'png' else 'svg'
     url = f'{MERMAID_INK_URL}/{route}/base64:{encoded}'
     if format == 'png':
@@ -96,8 +102,9 @@ def render_image(source: str, format: str, timeout: int = 30) -> bytes:
     except requests.RequestException as e:
         raise RuntimeError(
             f"Could not render the graph to '{format}' because the "
-            f"mermaid.ink web service is unreachable (image export requires "
+            f'mermaid.ink web service is unreachable (image export requires '
             f"network access). Use `visualize(path='graph.html')` for a "
-            f"fully offline rendering instead. Error: {e}") from e
+            f'fully offline rendering instead. Error: {e}'
+        ) from e
 
     return response.content

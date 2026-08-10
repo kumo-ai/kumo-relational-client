@@ -10,11 +10,10 @@ import pandas as pd
 from kumorfm import Dtype, Stype
 from kumorfm.rfm.infer import infer_stype
 
-
 NOTEBOOK = (
     Path(__file__).parents[3]
-    / "examples"
-    / "KumoRFM_quickstart_nvidia_sdfm.ipynb"
+    / 'examples'
+    / 'KumoRFM_quickstart_nvidia_sdfm.ipynb'
 )
 
 
@@ -36,21 +35,25 @@ class _Table:
 class _Graph:
     def __init__(self):
         self.tables = {
-            "customers": _Table(["CustomerID", "AccountNumber"]),
-            "products": _Table(["ProductID", "Name", "ProductNumber"]),
-            "sales_order_headers": _Table([
-                "SalesOrderID",
-                "OrderDate",
-                "SalesOrderNumber",
-                "PurchaseOrderNumber",
-                "AccountNumber",
-                "CreditCardApprovalCode",
-            ]),
-            "sales_order_details": _Table([
-                "SalesOrderDetailID",
-                "OrderDate",
-                "OrderQty",
-            ]),
+            'customers': _Table(['CustomerID', 'AccountNumber']),
+            'products': _Table(['ProductID', 'Name', 'ProductNumber']),
+            'sales_order_headers': _Table(
+                [
+                    'SalesOrderID',
+                    'OrderDate',
+                    'SalesOrderNumber',
+                    'PurchaseOrderNumber',
+                    'AccountNumber',
+                    'CreditCardApprovalCode',
+                ]
+            ),
+            'sales_order_details': _Table(
+                [
+                    'SalesOrderDetailID',
+                    'OrderDate',
+                    'OrderQty',
+                ]
+            ),
         }
 
     def __getitem__(self, name):
@@ -58,19 +61,19 @@ class _Graph:
 
 
 def _schema_correction_source():
-    notebook = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
+    notebook = json.loads(NOTEBOOK.read_text(encoding='utf-8'))
     return next(
-        "".join(cell["source"])
-        for cell in notebook["cells"]
-        if cell["cell_type"] == "code"
-        and "primary_keys =" in "".join(cell["source"])
+        ''.join(cell['source'])
+        for cell in notebook['cells']
+        if cell['cell_type'] == 'code'
+        and 'primary_keys =' in ''.join(cell['source'])
     )
 
 
 def test_adventureworks_identifier_like_strings_infer_as_text():
-    values = pd.Series([f"AW{index:08d}" for index in range(200)])
+    values = pd.Series([f'AW{index:08d}' for index in range(200)])
 
-    assert infer_stype(values, "AccountNumber", Dtype.string) == Stype.text
+    assert infer_stype(values, 'AccountNumber', Dtype.string) == Stype.text
 
 
 def _stype_value(value):
@@ -80,30 +83,30 @@ def _stype_value(value):
 def test_quickstart_applies_reviewed_adventureworks_semantic_types():
     graph = _Graph()
 
-    exec(_schema_correction_source(), {"graph": graph, "kumorfm": kumorfm})
+    exec(_schema_correction_source(), {'graph': graph, 'kumorfm': kumorfm})
 
     expected_ids = {
-        "customers": ["AccountNumber"],
-        "products": ["ProductNumber"],
-        "sales_order_headers": [
-            "SalesOrderNumber",
-            "PurchaseOrderNumber",
-            "AccountNumber",
-            "CreditCardApprovalCode",
+        'customers': ['AccountNumber'],
+        'products': ['ProductNumber'],
+        'sales_order_headers': [
+            'SalesOrderNumber',
+            'PurchaseOrderNumber',
+            'AccountNumber',
+            'CreditCardApprovalCode',
         ],
     }
     for table_name, column_names in expected_ids.items():
         for column_name in column_names:
-            assert _stype_value(graph[table_name][column_name].stype) == "ID"
-    assert _stype_value(graph["products"]["Name"].stype) == "text"
+            assert _stype_value(graph[table_name][column_name].stype) == 'ID'
+    assert _stype_value(graph['products']['Name'].stype) == 'text'
     assert (
-        _stype_value(graph["sales_order_details"]["OrderQty"].stype)
-        == "numerical"
+        _stype_value(graph['sales_order_details']['OrderQty'].stype)
+        == 'numerical'
     )
 
-    assert graph["customers"].primary_key == "CustomerID"
-    assert graph["products"].primary_key == "ProductID"
-    assert graph["sales_order_headers"].primary_key == "SalesOrderID"
-    assert graph["sales_order_details"].primary_key == "SalesOrderDetailID"
-    assert graph["sales_order_headers"].time_column == "OrderDate"
-    assert graph["sales_order_details"].time_column == "OrderDate"
+    assert graph['customers'].primary_key == 'CustomerID'
+    assert graph['products'].primary_key == 'ProductID'
+    assert graph['sales_order_headers'].primary_key == 'SalesOrderID'
+    assert graph['sales_order_details'].primary_key == 'SalesOrderDetailID'
+    assert graph['sales_order_headers'].time_column == 'OrderDate'
+    assert graph['sales_order_details'].time_column == 'OrderDate'

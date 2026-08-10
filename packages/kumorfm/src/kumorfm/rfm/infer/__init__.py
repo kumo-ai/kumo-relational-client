@@ -12,12 +12,12 @@ from .pkey import infer_primary_key
 from .time_col import infer_time_column
 
 __all__ = [
-    'infer_dtype',
-    'contains_id',
-    'contains_timestamp',
     'contains_categorical',
+    'contains_id',
     'contains_multicategorical',
-    'infer_stype',
+    'contains_timestamp',
+    'infer_dtype',
     'infer_primary_key',
+    'infer_stype',
     'infer_time_column',
 ]

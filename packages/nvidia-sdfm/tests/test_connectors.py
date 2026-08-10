@@ -20,12 +20,17 @@ def test_read_unknown_connector_raises():
     assert excinfo.value.code == 'UNKNOWN_CONNECTOR'
 
 
-@pytest.mark.parametrize('extra, driver', [
-    ('snowflake', 'snowflake-connector-python'),
-    ('s3', 's3fs'),
-])
+@pytest.mark.parametrize(
+    'extra, driver',
+    [
+        ('snowflake', 'snowflake-connector-python'),
+        ('s3', 's3fs'),
+    ],
+)
 def test_missing_backend_maps_to_missing_extra_error(
-    monkeypatch, extra, driver,
+    monkeypatch,
+    extra,
+    driver,
 ):
     from sdfm_connectors.sql import MissingBackendError
 
@@ -97,5 +102,13 @@ def test_read_sqlite_by_table_and_query(tmp_path):
     with sqlite3.connect(database) as connection:
         pd.DataFrame({'a': [1, 2, 3]}).to_sql('items', connection, index=False)
     assert len(read('sqlite', database=database, table='items')) == 3
-    assert len(read('sqlite', database=database,
-                    query='SELECT * FROM items WHERE a > 1')) == 2
+    assert (
+        len(
+            read(
+                'sqlite',
+                database=database,
+                query='SELECT * FROM items WHERE a > 1',
+            )
+        )
+        == 2
+    )

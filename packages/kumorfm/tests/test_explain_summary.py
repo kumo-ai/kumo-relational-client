@@ -9,7 +9,6 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-
 from kumorfm.rfm import explain_summary
 from kumorfm.rfm.explain_summary import (
     SUMMARY_ERROR_MESSAGE,
@@ -21,18 +20,23 @@ from kumorfm.rfm.explain_summary import (
 )
 
 _ENV_VARS = (
-    'OPENAI_API_KEY', 'KUMORFM_EXPLAIN_LLM_API_KEY', 'KUMORFM_EXPLAIN_LLM_BASE_URL',
-    'KUMORFM_EXPLAIN_LLM_MODEL', 'KUMORFM_EXPLAIN_LLM_TIMEOUT',
+    'OPENAI_API_KEY',
+    'KUMORFM_EXPLAIN_LLM_API_KEY',
+    'KUMORFM_EXPLAIN_LLM_BASE_URL',
+    'KUMORFM_EXPLAIN_LLM_MODEL',
+    'KUMORFM_EXPLAIN_LLM_TIMEOUT',
 )
 
 try:
     import openai  # noqa: F401
+
     _HAS_OPENAI = True
 except ImportError:
     _HAS_OPENAI = False
 
 requires_openai = pytest.mark.skipif(
-    not _HAS_OPENAI, reason='openai (kumorfm[explain]) is not installed')
+    not _HAS_OPENAI, reason='openai (kumorfm[explain]) is not installed'
+)
 
 
 @pytest.fixture(autouse=True)
@@ -42,9 +46,12 @@ def _clean_env(monkeypatch: Any) -> None:
 
 
 class _FakeCompletions:
-    def __init__(self, content: str | None = 'the summary',
-                 record: dict[str, Any] | None = None,
-                 error: Exception | None = None) -> None:
+    def __init__(
+        self,
+        content: str | None = 'the summary',
+        record: dict[str, Any] | None = None,
+        error: Exception | None = None,
+    ) -> None:
         self._content = content
         self._record = record
         self._error = error
@@ -92,7 +99,9 @@ def test_generate_summary_passes_context_and_returns_text() -> None:
     assert record['model'] == 'test-model'
     assert _system(record) == SYSTEM_PROMPT
     assert 'USER QUERY: PREDICT ... FOR users.user_id=1' in _user(record)
-    assert "MODEL PREDICTION: [{'ENTITY': 1, 'prediction': 0.5}]" in _user(record)
+    assert "MODEL PREDICTION: [{'ENTITY': 1, 'prediction': 0.5}]" in _user(
+        record
+    )
     assert "COLUMN ANALYSIS: [{'column_name': 'COUNT(*)'}]" in _user(record)
     assert 'SUBGRAPH EXPLANATION: SG0' in _user(record)
     assert 'SG1' not in _user(record)
@@ -101,18 +110,23 @@ def test_generate_summary_passes_context_and_returns_text() -> None:
 def test_missing_extra_message_when_openai_absent(monkeypatch: Any) -> None:
     monkeypatch.setitem(sys.modules, 'openai', None)
     monkeypatch.setenv('OPENAI_API_KEY', 'k')
-    assert generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_NEEDS_EXTRA_MESSAGE
+    assert (
+        generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_NEEDS_EXTRA_MESSAGE
+    )
 
 
 @requires_openai
 def test_needs_key_message_when_no_key() -> None:
-    assert generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_UNAVAILABLE_MESSAGE
+    assert (
+        generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_UNAVAILABLE_MESSAGE
+    )
 
 
 @requires_openai
 def test_custom_endpoint_without_model_message() -> None:
-    out = generate_summary('q', 'p', ['c'], ['s'],
-                           base_url='https://ep.example/v1', api_key='k')
+    out = generate_summary(
+        'q', 'p', ['c'], ['s'], base_url='https://ep.example/v1', api_key='k'
+    )
     assert out == SUMMARY_NEEDS_MODEL_MESSAGE
 
 
@@ -148,7 +162,9 @@ def test_generate_summary_uses_env_model(monkeypatch: Any) -> None:
     assert record['model'] == 'env-model'
 
 
-def test_generate_summary_explicit_model_overrides_env(monkeypatch: Any) -> None:
+def test_generate_summary_explicit_model_overrides_env(
+    monkeypatch: Any,
+) -> None:
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'env-model')
     record: dict[str, Any] = {}
     client = _FakeClient(record=record)
@@ -178,8 +194,9 @@ def test_make_client_targets_custom_endpoint() -> None:
 def _capture_make_client(monkeypatch: Any) -> dict[str, Any]:
     call: dict[str, Any] = {}
 
-    def fake_make_client(base_url: str | None, api_key: str | None,
-                         timeout: float) -> Any:
+    def fake_make_client(
+        base_url: str | None, api_key: str | None, timeout: float
+    ) -> Any:
         call.update(base_url=base_url, api_key=api_key, timeout=timeout)
         return _FakeClient(record=call)
 
@@ -189,7 +206,9 @@ def _capture_make_client(monkeypatch: Any) -> dict[str, Any]:
 
 @requires_openai
 def test_uses_openai_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_BASE_URL', 'https://openai.example/v1')
+    monkeypatch.setenv(
+        'KUMORFM_EXPLAIN_LLM_BASE_URL', 'https://openai.example/v1'
+    )
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'm')
     call = _capture_make_client(monkeypatch)
@@ -201,7 +220,8 @@ def test_uses_openai_env(monkeypatch: Any) -> None:
 
 @requires_openai
 def test_explain_api_key_takes_precedence_over_openai_key(
-        monkeypatch: Any) -> None:
+    monkeypatch: Any,
+) -> None:
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_API_KEY', 'explain-key')
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_MODEL', 'm')
@@ -219,8 +239,7 @@ def test_falls_back_to_openai_key(monkeypatch: Any) -> None:
 
 
 # The egress above is opt-out, so it has to be discoverable from the docstrings
-# a caller reads; see
-# bugs/security-explain-summary-sends-row-data-to-openai.md.
+# a caller reads.
 
 
 def test_explain_config_docstring_discloses_the_egress() -> None:
@@ -245,9 +264,16 @@ def test_explicit_args_override_env(monkeypatch: Any) -> None:
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_BASE_URL', 'https://env.example/v1')
     monkeypatch.setenv('OPENAI_API_KEY', 'env-key')
     call = _capture_make_client(monkeypatch)
-    generate_summary('q', 'p', ['c'], ['s'],
-                     base_url='https://explicit/v1', api_key='ekey',
-                     model='em', timeout=12.5)
+    generate_summary(
+        'q',
+        'p',
+        ['c'],
+        ['s'],
+        base_url='https://explicit/v1',
+        api_key='ekey',
+        model='em',
+        timeout=12.5,
+    )
     assert call['base_url'] == 'https://explicit/v1'
     assert call['api_key'] == 'ekey'
     assert call['model'] == 'em'
@@ -269,12 +295,13 @@ def test_timeout_defaults_to_20_and_reads_env(monkeypatch: Any) -> None:
 
 def test_env_float_invalid_falls_back(monkeypatch: Any) -> None:
     monkeypatch.setenv('KUMORFM_EXPLAIN_LLM_TIMEOUT', 'not-a-number')
-    assert explain_summary._env_float('KUMORFM_EXPLAIN_LLM_TIMEOUT', 20.0) == 20.0
+    assert (
+        explain_summary._env_float('KUMORFM_EXPLAIN_LLM_TIMEOUT', 20.0) == 20.0
+    )
 
 
 def test_explanation_accessors_ignore_malformed_details() -> None:
     import pandas as pd
-
     from kumorfm.rfm.rfm import Explanation
 
     empty = pd.DataFrame()
@@ -282,35 +309,49 @@ def test_explanation_accessors_ignore_malformed_details() -> None:
         None,
         {'format': 'natural_language_summary', 'summary': 'x'},
         {'format': 'kumo_rfm_v2_1', 'details': 'oops'},
-        {'format': 'kumo_rfm_v2_1',
-         'details': {'cohorts': 'x', 'subgraphs': {'a': 1}}},
+        {
+            'format': 'kumo_rfm_v2_1',
+            'details': {'cohorts': 'x', 'subgraphs': {'a': 1}},
+        },
     ):
         e = Explanation(prediction=empty, summary='', details=details)
         assert e.cohorts == []
         assert e.subgraphs == []
 
     good = Explanation(
-        prediction=empty, summary='',
-        details={'format': 'kumo_rfm_v2_1',
-                 'details': {'cohorts': [{'c': 1}], 'subgraphs': [{'s': 2}]}})
+        prediction=empty,
+        summary='',
+        details={
+            'format': 'kumo_rfm_v2_1',
+            'details': {'cohorts': [{'c': 1}], 'subgraphs': [{'s': 2}]},
+        },
+    )
     assert good.cohorts == [{'c': 1}]
     assert good.subgraphs == [{'s': 2}]
 
 
 def _explanation(subgraphs: Any) -> Any:
     import pandas as pd
-
     from kumorfm.rfm.rfm import Explanation
+
     return Explanation(
-        prediction=pd.DataFrame(), summary='',
-        details={'format': 'kumo_rfm_v2_1',
-                 'details': {'subgraphs': subgraphs}})
+        prediction=pd.DataFrame(),
+        summary='',
+        details={
+            'format': 'kumo_rfm_v2_1',
+            'details': {'subgraphs': subgraphs},
+        },
+    )
 
 
 def _subgraph(tables: dict[str, Any], **extra: Any) -> dict[str, Any]:
-    subgraph = {'seed_id': 0, 'seed_table': 'users',
-                'seed_time': '2025-04-30T00:00:00', 'tables': tables,
-                'context_examples': []}
+    subgraph = {
+        'seed_id': 0,
+        'seed_table': 'users',
+        'seed_time': '2025-04-30T00:00:00',
+        'tables': tables,
+        'context_examples': [],
+    }
     subgraph.update(extra)
     return subgraph
 
@@ -318,14 +359,30 @@ def _subgraph(tables: dict[str, Any], **extra: Any) -> dict[str, Any]:
 def test_feature_importance_aggregates_scores_by_table_column() -> None:
     from kumorfm.api.explain import GraphGradientScore
 
-    exp = _explanation([_subgraph({
-        'users': {'0': {'cells': {
-            'status': {'value': 'ACTIVE', 'score': 1.0},
-            'age': {'value': None, 'score': 0.089}}}},
-        'orders': {
-            '1': {'cells': {'amount': {'value': 5.0, 'score': 0.4}}},
-            '2': {'cells': {'amount': {'value': 2.0, 'score': 0.1}}}},
-    })])
+    exp = _explanation(
+        [
+            _subgraph(
+                {
+                    'users': {
+                        '0': {
+                            'cells': {
+                                'status': {'value': 'ACTIVE', 'score': 1.0},
+                                'age': {'value': None, 'score': 0.089},
+                            }
+                        }
+                    },
+                    'orders': {
+                        '1': {
+                            'cells': {'amount': {'value': 5.0, 'score': 0.4}}
+                        },
+                        '2': {
+                            'cells': {'amount': {'value': 2.0, 'score': 0.1}}
+                        },
+                    },
+                }
+            )
+        ]
+    )
     fi = exp.feature_importance
     assert isinstance(fi, GraphGradientScore)
     assert set(fi.tables) == {'users', 'orders'}
@@ -340,24 +397,48 @@ def test_feature_importance_aggregates_scores_by_table_column() -> None:
 
 
 def test_feature_importance_sums_across_multiple_subgraphs() -> None:
-    exp = _explanation([
-        _subgraph({'users': {'0': {'cells': {
-            'age': {'value': 30, 'score': 0.2}}}}}),
-        _subgraph({'users': {'0': {'cells': {
-            'age': {'value': 40, 'score': 0.5}}}}}),
-    ])
+    exp = _explanation(
+        [
+            _subgraph(
+                {
+                    'users': {
+                        '0': {'cells': {'age': {'value': 30, 'score': 0.2}}}
+                    }
+                }
+            ),
+            _subgraph(
+                {
+                    'users': {
+                        '0': {'cells': {'age': {'value': 40, 'score': 0.5}}}
+                    }
+                }
+            ),
+        ]
+    )
     assert exp.feature_importance['users']['age'] == pytest.approx(0.7)
 
 
 def test_feature_importance_ignores_context_examples_and_non_numeric() -> None:
-    exp = _explanation([
-        _subgraph(
-            {'orders': {'1': {'cells': {
-                'amount': {'value': 5.0, 'score': 0.3},
-                'note': {'value': 'x', 'score': None}}}}},
-            context_examples=[{'entity_id': 1, 'score': 0.9, 'label': True}]),
-        {'seed_id': 1},  # a subgraph without a 'tables' map is ignored
-    ])
+    exp = _explanation(
+        [
+            _subgraph(
+                {
+                    'orders': {
+                        '1': {
+                            'cells': {
+                                'amount': {'value': 5.0, 'score': 0.3},
+                                'note': {'value': 'x', 'score': None},
+                            }
+                        }
+                    }
+                },
+                context_examples=[
+                    {'entity_id': 1, 'score': 0.9, 'label': True}
+                ],
+            ),
+            {'seed_id': 1},  # a subgraph without a 'tables' map is ignored
+        ]
+    )
     fi = exp.feature_importance
     assert set(fi.tables) == {'orders'}
     assert fi['orders']['amount'] == pytest.approx(0.3)
@@ -366,9 +447,9 @@ def test_feature_importance_ignores_context_examples_and_non_numeric() -> None:
 
 def test_feature_importance_empty_when_no_subgraphs() -> None:
     import pandas as pd
-
     from kumorfm.api.explain import GraphGradientScore
     from kumorfm.rfm.rfm import Explanation
+
     exp = Explanation(prediction=pd.DataFrame(), summary='', details=None)
     fi = exp.feature_importance
     assert isinstance(fi, GraphGradientScore)
@@ -380,8 +461,11 @@ def test_nim_failure_error_explain_reports_gpu_pressure() -> None:
     from kumorfm.exceptions import HTTPException
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    msg = str(_nim_failure_error(HTTPException(503, 'Service Unavailable'),
-                                 explain=True))
+    msg = str(
+        _nim_failure_error(
+            HTTPException(503, 'Service Unavailable'), explain=True
+        )
+    )
     assert 'temporarily unavailable' in msg
     assert 'GPU memory pressure' in msg
     assert 'this explanation' in msg
@@ -400,21 +484,26 @@ def test_nim_failure_error_prediction_has_no_pacing_hint() -> None:
 
 def test_nim_failure_error_connection_drop_is_unavailable() -> None:
     import requests
-
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    msg = str(_nim_failure_error(
-        requests.exceptions.ConnectionError('connection reset'), explain=True))
+    msg = str(
+        _nim_failure_error(
+            requests.exceptions.ConnectionError('connection reset'),
+            explain=True,
+        )
+    )
     assert 'temporarily unavailable' in msg
 
 
 def test_nim_failure_error_timeout_points_at_the_timeout_setting() -> None:
     import requests
-
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    msg = str(_nim_failure_error(
-        requests.exceptions.ReadTimeout('read timed out'), explain=False))
+    msg = str(
+        _nim_failure_error(
+            requests.exceptions.ReadTimeout('read timed out'), explain=False
+        )
+    )
     assert 'timeout' in msg
     assert 'SDFMClient(url, timeout=...)' in msg
     assert 'GPU memory pressure' not in msg
@@ -430,7 +519,8 @@ def test_nim_failure_error_client_error_is_not_an_sdk_bug_report() -> None:
     from kumorfm.rfm.rfm import _nim_failure_error
 
     error = _nim_failure_error(
-        HTTPException(400, '{"detail": "bad predictive query"}'), explain=True)
+        HTTPException(400, '{"detail": "bad predictive query"}'), explain=True
+    )
     msg = str(error)
     assert 'bad predictive query' in msg
     assert 'create an issue' not in msg
@@ -450,16 +540,20 @@ def test_nim_failure_error_surfaces_invalid_params() -> None:
     from kumorfm.exceptions import HTTPException
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    body = json.dumps({
-        'type': '/problems/validation-failed',
-        'status': 422,
-        'detail': 'Request validation failed.',
-        'invalid_params': [{
-            'name': 'context.related_tables.users.rows[0][big_feature]',
-            'reason': 'int64 value 4611686018427387905 exceeds the JSON safe '
-                      'integer range and must be encoded as a base-10 string.',
-        }],
-    })
+    body = json.dumps(
+        {
+            'type': '/problems/validation-failed',
+            'status': 422,
+            'detail': 'Request validation failed.',
+            'invalid_params': [
+                {
+                    'name': 'context.related_tables.users.rows[0][big_feature]',
+                    'reason': 'int64 value 4611686018427387905 exceeds the JSON safe '
+                    'integer range and must be encoded as a base-10 string.',
+                }
+            ],
+        }
+    )
     error = _nim_failure_error(HTTPException(422, body), explain=False)
     msg = str(error)
     assert 'context.related_tables.users.rows[0][big_feature]' in msg
@@ -476,11 +570,15 @@ def test_nim_failure_error_caps_invalid_params() -> None:
     from kumorfm.exceptions import HTTPException
     from kumorfm.rfm.rfm import _MAX_INVALID_PARAMS, _nim_failure_error
 
-    body = json.dumps({
-        'detail': 'Request validation failed.',
-        'invalid_params': [{'name': f'col{index}', 'reason': 'bad'}
-                           for index in range(_MAX_INVALID_PARAMS + 3)],
-    })
+    body = json.dumps(
+        {
+            'detail': 'Request validation failed.',
+            'invalid_params': [
+                {'name': f'col{index}', 'reason': 'bad'}
+                for index in range(_MAX_INVALID_PARAMS + 3)
+            ],
+        }
+    )
     msg = str(_nim_failure_error(HTTPException(422, body), explain=False))
     assert 'col0: bad' in msg
     assert f'col{_MAX_INVALID_PARAMS}' not in msg
@@ -509,9 +607,11 @@ def test_nim_failure_error_is_a_runtime_error() -> None:
 
 def _cardinality_error(status: int = 422) -> Any:
     from kumorfm.exceptions import HTTPException
+
     return HTTPException(
         status,
-        '{"detail": "categorical cardinality 15001 exceeds limit 10000."}')
+        '{"detail": "categorical cardinality 15001 exceeds limit 10000."}',
+    )
 
 
 def _cardinality_payload() -> dict[str, Any]:
@@ -520,23 +620,32 @@ def _cardinality_payload() -> dict[str, Any]:
         'context': {
             'instance_table': {
                 'columns': ['USER_ID', 'EMAIL'],
-                'rows': [[index, f'u{index}@example.com']
-                         for index in range(15001)]},
+                'rows': [
+                    [index, f'u{index}@example.com'] for index in range(15001)
+                ],
+            },
             'related_tables': {
-                'ORDERS': {'columns': ['SKU'],
-                           'rows': [[f'sku-{index}'] for index in range(12000)]}
-            }},
+                'ORDERS': {
+                    'columns': ['SKU'],
+                    'rows': [[f'sku-{index}'] for index in range(12000)],
+                }
+            },
+        },
         'predict': {
             'instance_table': {'columns': ['USER_ID'], 'rows': [[1]]},
-            'related_tables': {}},
+            'related_tables': {},
+        },
     }
 
 
 def test_cardinality_rejection_names_column_and_remedy() -> None:
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    msg = str(_nim_failure_error(_cardinality_error(), explain=False,
-                                 payload=_cardinality_payload()))
+    msg = str(
+        _nim_failure_error(
+            _cardinality_error(), explain=False, payload=_cardinality_payload()
+        )
+    )
     assert 'categorical cardinality 15001 exceeds limit 10000' in msg
     assert "'USERS.EMAIL' holds 15,001" in msg
     assert "'ORDERS.SKU' holds 12,000" in msg
@@ -558,9 +667,13 @@ def test_non_cardinality_rejection_has_no_cardinality_hint() -> None:
     from kumorfm.exceptions import HTTPException
     from kumorfm.rfm.rfm import _nim_failure_error
 
-    msg = str(_nim_failure_error(
-        HTTPException(422, '{"detail": "N_cols 7 exceeds limit 5."}'),
-        explain=False, payload=_cardinality_payload()))
+    msg = str(
+        _nim_failure_error(
+            HTTPException(422, '{"detail": "N_cols 7 exceeds limit 5."}'),
+            explain=False,
+            payload=_cardinality_payload(),
+        )
+    )
     assert 'N_cols 7 exceeds limit 5' in msg
     assert 'stype' not in msg
 
@@ -589,15 +702,24 @@ def test_high_cardinality_columns_reports_worst_first_and_dedupes() -> None:
     payload = {
         'task': {'entity_table_names': ['USERS']},
         'context': {
-            'instance_table': {'columns': ['EMAIL'],
-                               'rows': [[f'{i}'] for i in range(30)]},
-            'related_tables': {'ORDERS': {
-                'columns': ['SKU', 'QTY'],
-                'rows': [[f's{i}', i] for i in range(25)]}}},
+            'instance_table': {
+                'columns': ['EMAIL'],
+                'rows': [[f'{i}'] for i in range(30)],
+            },
+            'related_tables': {
+                'ORDERS': {
+                    'columns': ['SKU', 'QTY'],
+                    'rows': [[f's{i}', i] for i in range(25)],
+                }
+            },
+        },
         'predict': {
-            'instance_table': {'columns': ['EMAIL'],
-                               'rows': [[f'{i}'] for i in range(12)]},
-            'related_tables': {}},
+            'instance_table': {
+                'columns': ['EMAIL'],
+                'rows': [[f'{i}'] for i in range(12)],
+            },
+            'related_tables': {},
+        },
     }
     found = high_cardinality_columns(payload, limit=10)
     assert found == [('USERS', 'EMAIL', 30), ('ORDERS', 'SKU', 25)]
@@ -613,13 +735,21 @@ def test_high_cardinality_columns_counts_tokenized_text_cells() -> None:
         'task': {'entity_table_names': ['USERS']},
         'context': {
             'instance_table': {'columns': ['ID'], 'rows': [[1]]},
-            'related_tables': {'ORDERS': {
-                'columns': ['SKU'],
-                'rows': [[[f'sku-{i}']] for i in range(25)]}}},
-        'predict': {'instance_table': {'columns': ['ID'], 'rows': [[1]]},
-                    'related_tables': {}},
+            'related_tables': {
+                'ORDERS': {
+                    'columns': ['SKU'],
+                    'rows': [[[f'sku-{i}']] for i in range(25)],
+                }
+            },
+        },
+        'predict': {
+            'instance_table': {'columns': ['ID'], 'rows': [[1]]},
+            'related_tables': {},
+        },
     }
-    assert high_cardinality_columns(payload, limit=10) == [('ORDERS', 'SKU', 25)]
+    assert high_cardinality_columns(payload, limit=10) == [
+        ('ORDERS', 'SKU', 25)
+    ]
 
 
 def test_high_cardinality_columns_ignores_non_string_and_within_limit() -> None:
@@ -628,10 +758,15 @@ def test_high_cardinality_columns_ignores_non_string_and_within_limit() -> None:
     payload = {
         'task': {'entity_table_names': ['USERS']},
         'context': {
-            'instance_table': {'columns': ['ID', 'TAG'],
-                               'rows': [[i, 'same'] for i in range(50)]},
-            'related_tables': {}},
-        'predict': {'instance_table': {'columns': ['ID'], 'rows': [[1]]},
-                    'related_tables': {}},
+            'instance_table': {
+                'columns': ['ID', 'TAG'],
+                'rows': [[i, 'same'] for i in range(50)],
+            },
+            'related_tables': {},
+        },
+        'predict': {
+            'instance_table': {'columns': ['ID'], 'rows': [[1]]},
+            'related_tables': {},
+        },
     }
     assert high_cardinality_columns(payload, limit=10) == []

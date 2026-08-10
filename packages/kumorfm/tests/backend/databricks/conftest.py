@@ -26,13 +26,13 @@ _REQUIRED_ENV = [
 @pytest.fixture(scope='session')
 def connection() -> Generator['Connection', None, None]:
     databricks = pytest.importorskip(
-        "kumorfm.testing.databricks",
+        'kumorfm.testing.databricks',
         reason="'databricks' extension not installed",
     )
 
     missing = [name for name in _REQUIRED_ENV if not os.getenv(name)]
     if missing:
-        pytest.skip(f"Missing Databricks credentials: {', '.join(missing)}")
+        pytest.skip(f'Missing Databricks credentials: {", ".join(missing)}')
 
     connection = databricks.connect()
     yield connection
@@ -73,8 +73,13 @@ def graph(
             dict(
                 name='order_lines',
                 columns=[
-                    'order_id', 'product_id', 'customer_id', 'order_date',
-                    'quantity', 'unit_price_usd', 'line_amount_usd'
+                    'order_id',
+                    'product_id',
+                    'customer_id',
+                    'order_date',
+                    'quantity',
+                    'unit_price_usd',
+                    'line_amount_usd',
                 ],
                 time_column='order_date',
             ),

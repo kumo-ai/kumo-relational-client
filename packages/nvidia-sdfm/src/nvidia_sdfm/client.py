@@ -8,10 +8,16 @@ from types import TracebackType
 from typing import Any
 
 import pandas as pd
-from nvidia_sdfm.base import (AdapterRegistry, ModelAdapter, ModelCapabilities,
-                              PredictResult, request_type_names)
+
+from nvidia_sdfm.base import (
+    AdapterRegistry,
+    ModelAdapter,
+    ModelCapabilities,
+    PredictResult,
+    request_type_names,
+)
 from nvidia_sdfm.core.serving import ServingTarget
-from nvidia_sdfm.core.transport import Transport
+from nvidia_sdfm.core.transport import Transport, redact_url
 from nvidia_sdfm.errors import SdfmError
 from nvidia_sdfm.models import RFMModel, TabICLModel, require_frame
 from nvidia_sdfm.requests import ModelRequest
@@ -108,7 +114,9 @@ class SDFMClient:
         client cannot be missing from clients built the other way.
         """
         self._transport = transport
-        self._registry = registry if registry is not None else _default_registry()
+        self._registry = (
+            registry if registry is not None else _default_registry()
+        )
 
     @classmethod
     def for_databricks_serving(
@@ -117,7 +125,7 @@ class SDFMClient:
         *,
         workspace_client: Any | None = None,
         registry: AdapterRegistry | None = None,
-    ) -> "SDFMClient":
+    ) -> SDFMClient:
         r"""A client for a model served by Databricks Model Serving.
 
         The counterpart to the constructor, which addresses a NIM by base URL.
@@ -146,7 +154,8 @@ class SDFMClient:
         ambient configuration as ``SdfmError``.
         """
         return cls._from_transport(
-            ServingTarget(endpoint, workspace_client), registry,
+            ServingTarget(endpoint, workspace_client),
+            registry,
         )
 
     @classmethod
@@ -154,7 +163,7 @@ class SDFMClient:
         cls,
         transport: Transport | ServingTarget,
         registry: AdapterRegistry | None = None,
-    ) -> 'SDFMClient':
+    ) -> SDFMClient:
         r"""Build a client around an already-constructed target.
 
         ``__init__`` takes the arguments a NIM needs and builds a
@@ -214,8 +223,9 @@ class SDFMClient:
 
         This is the supported way to run TabICL inference.
         """
-        return TabICLModel(self, require_frame(context, 'context'), task=task,
-                           target=target)
+        return TabICLModel(
+            self, require_frame(context, 'context'), task=task, target=target
+        )
 
     def _predict(self, request: ModelRequest) -> PredictResult:
         r"""Internal dispatch used by the model handles.
@@ -229,9 +239,9 @@ class SDFMClient:
         adapter = self._registry.get(request.model)
         if not isinstance(request, adapter.request_type):
             raise SdfmError(
-                f"model {request.model!r} expects a "
-                f"{request_type_names(adapter.request_type)}, got "
-                f"{type(request).__name__}",
+                f'model {request.model!r} expects a '
+                f'{request_type_names(adapter.request_type)}, got '
+                f'{type(request).__name__}',
                 code='INVALID_REQUEST',
             )
         return adapter.predict(self._transport, request)
@@ -267,8 +277,11 @@ class SDFMClient:
 
     def __repr__(self) -> str:
         target = getattr(self._transport, 'endpoint', None)
-        where = (f'endpoint={target!r}' if target is not None
-                 else f'url={self._transport.url!r}')
+        where = (
+            f'endpoint={target!r}'
+            if target is not None
+            else f'url={redact_url(self._transport.url)!r}'
+        )
         return f'SDFMClient({where}, models={self.models()})'
 
     def _register(self, adapter: ModelAdapter) -> None:

@@ -7,10 +7,8 @@ from typing import Any
 
 import pandas as pd
 import pytest
-from pytest_mock import MockerFixture
 from kumorfm.api.rfm import RFMPredictResponse
 from kumorfm.api.task import TaskType
-
 from kumorfm.rfm import (
     Explanation,
     Graph,
@@ -26,6 +24,7 @@ from kumorfm.rfm.payload import (
     MAX_TABLE_ROWS,
     validate_payload_table_rows,
 )
+from pytest_mock import MockerFixture
 
 
 class NoNetworkAPI:
@@ -614,8 +613,12 @@ def test_explain_guard_is_identical_on_both_entry_points(
     call = getattr(model, entry_point)
 
     with pytest.warns(UserWarning, match='only supported for run mode'):
-        call(_task().narrow_prediction(0, 1), explain=True, run_mode='best',
-             verbose=False)
+        call(
+            _task().narrow_prediction(0, 1),
+            explain=True,
+            run_mode='best',
+            verbose=False,
+        )
 
     with pytest.raises(ValueError, match='more than a single entity'):
         call(_task(), explain=True, verbose=False)
@@ -628,7 +631,11 @@ def test_explain_guard_warning_points_at_the_caller(
     model._client = ExplanationRecordingAPI()  # type: ignore
 
     with pytest.warns(UserWarning) as record:
-        model.predict_task(_task().narrow_prediction(0, 1), explain=True,
-                           run_mode='best', verbose=False)
+        model.predict_task(
+            _task().narrow_prediction(0, 1),
+            explain=True,
+            run_mode='best',
+            verbose=False,
+        )
 
     assert record[0].filename == __file__

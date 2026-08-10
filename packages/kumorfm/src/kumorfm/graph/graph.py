@@ -2,11 +2,11 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Dict, Iterator, Tuple, TypeAlias, Union
+from typing import TypeAlias
 
 import kumorfm.api.graph as api
-
 from kumorfm.mixin import CastMixin
 
 
@@ -24,9 +24,5 @@ class Edge(CastMixin, api.Edge):
     def __hash__(self) -> int:
         return hash((self.src_table, self.fkey, self.dst_table))
 
-    @property
-    def _fully_qualified_name(self) -> str:
-        return f"{self.src_table}.{self.fkey}.{self.dst_table}"
 
-
-EdgeLike: TypeAlias = Union[Edge, Dict[str, str], Tuple[str, str, str]]
+EdgeLike: TypeAlias = Edge | dict[str, str] | tuple[str, str, str]

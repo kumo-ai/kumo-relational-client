@@ -4,7 +4,6 @@
 
 import pandas as pd
 from kumorfm.api.typing import Dtype
-
 from kumorfm.rfm.infer import contains_timestamp
 
 

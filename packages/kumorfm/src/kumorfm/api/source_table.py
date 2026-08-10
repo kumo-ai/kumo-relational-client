@@ -3,11 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import field
-from typing import List, Optional, Union
+from typing import Literal, Union
 
 from pydantic import Field
 from pydantic.dataclasses import dataclass
-from typing_extensions import Literal
 
 from kumorfm.api.common import StrEnum
 from kumorfm.api.data_source import DataSourceType
@@ -20,28 +19,34 @@ TableName = str
 
 class FileType(StrEnum):
     r"""Supported file types for file-based source tables."""
-    CSV = "CSV"
-    PARQUET = "PARQUET"
+
+    CSV = 'CSV'
+    PARQUET = 'PARQUET'
 
 
 class LLMType(StrEnum):
     r"""Supported LLM types."""
+
     # Use LLM embeddings as features
-    FEATURE = "feature"
+    FEATURE = 'feature'
 
 
 @dataclass(frozen=True)
 class UnavailableSourceTable:
     r"""A source table not available during processing, e.g. because it is
-    processed by client-side."""
+    processed by client-side.
+    """
+
     table: TableName
-    data_source_type: Literal[
-        DataSourceType.UNAVAILABLE] = DataSourceType.UNAVAILABLE
+    data_source_type: Literal[DataSourceType.UNAVAILABLE] = (
+        DataSourceType.UNAVAILABLE
+    )
 
 
 @dataclass(frozen=True)
 class S3SourceTable:
     r"""A source table located on the Amazon S3 object store."""
+
     # We support two types of table file path:
     # 1. s3_path specifies the whole directory (prefix), ending with "/"
     # 2. s3_path specifies the full path of a single file, ending with file
@@ -50,24 +55,25 @@ class S3SourceTable:
 
     # Internal: S3 connector ID, if we are working with a Kumo-owned named S3
     # connector:
-    connector_id: Optional[str] = None
-    source_table_name: Optional[TableName] = None
+    connector_id: str | None = None
+    source_table_name: TableName | None = None
 
     # If not provided, then the file_path must either end in `.csv` or
     # `.parquet`, and we will parse the file type from there. Please use the
     # `validated_file_type` proper to access the parsed & validated file type.
-    file_type: Optional[FileType] = None
+    file_type: FileType | None = None
 
     data_source_type: Literal[DataSourceType.S3] = DataSourceType.S3
 
     @property
     def table(self) -> TableName:
-        if self.s3_path == "":
+        if self.s3_path == '':
             assert self.source_table_name is not None
             return self.source_table_name
         if self.s3_path.endswith('/'):
             return TableName(
-                self.s3_path.rstrip('/').rsplit('/', maxsplit=1)[1])
+                self.s3_path.rstrip('/').rsplit('/', maxsplit=1)[1]
+            )
         filename = self.s3_path.rsplit('/', maxsplit=1)[1]
         return TableName(filename.rsplit('.', maxsplit=1)[0])  # strip suffix
 
@@ -75,26 +81,31 @@ class S3SourceTable:
 @dataclass(frozen=True)
 class SnowflakeSourceTable:
     r"""A source table located in the Snowflake data warehouse."""
+
     snowflake_connector_id: str
     database: str
     schema_name: str
     table: TableName
-    data_source_type: Literal[
-        DataSourceType.SNOWFLAKE] = DataSourceType.SNOWFLAKE
+    data_source_type: Literal[DataSourceType.SNOWFLAKE] = (
+        DataSourceType.SNOWFLAKE
+    )
 
 
 @dataclass(frozen=True)
 class DatabricksSourceTable:
     r"""A source table located in the Databricks data warehouse."""
+
     databricks_connector_id: str
     table: TableName
-    data_source_type: Literal[
-        DataSourceType.DATABRICKS] = DataSourceType.DATABRICKS
+    data_source_type: Literal[DataSourceType.DATABRICKS] = (
+        DataSourceType.DATABRICKS
+    )
 
 
 @dataclass(frozen=True)
 class GlueSourceTable:
     r"""A source table located in the AWS Glue data warehouse."""
+
     glue_connector_id: str
     table: TableName
     account: str
@@ -106,17 +117,18 @@ class GlueSourceTable:
 @dataclass(frozen=True)
 class BigQuerySourceTable:
     r"""A source table loated in the BigQuery data warehouse."""
+
     bigquery_connector_id: str
     table_name: TableName
     project_id: str
     dataset_id: str
-    data_source_type: Literal[
-        DataSourceType.BIGQUERY] = DataSourceType.BIGQUERY
+    data_source_type: Literal[DataSourceType.BIGQUERY] = DataSourceType.BIGQUERY
 
 
 @dataclass(frozen=True)
 class GCSSourceTable:
     r"""A source table located on Google Cloud Storage (GCS)."""
+
     # We support two types of table file path:
     # 1. gcs_path specifies the whole directory (prefix), ending with "/"
     # 2. gcs_path specifies the full path of a single file, ending with file
@@ -125,23 +137,24 @@ class GCSSourceTable:
 
     # Internal: GCS connector ID, if we are working with a Kumo-owned named GCS
     # connector:
-    connector_id: Optional[str] = None
-    source_table_name: Optional[TableName] = None
+    connector_id: str | None = None
+    source_table_name: TableName | None = None
 
     # If not provided, then the file_path must either end in `.csv` or
     # `.parquet`, and we will parse the file type from there.
-    file_type: Optional[FileType] = None
+    file_type: FileType | None = None
 
     data_source_type: Literal[DataSourceType.GCS] = DataSourceType.GCS
 
     @property
     def table(self) -> TableName:
-        if self.gcs_path == "":
+        if self.gcs_path == '':
             assert self.source_table_name is not None
             return self.source_table_name
         if self.gcs_path.endswith('/'):
             return TableName(
-                self.gcs_path.rstrip('/').rsplit('/', maxsplit=1)[1])
+                self.gcs_path.rstrip('/').rsplit('/', maxsplit=1)[1]
+            )
         filename = self.gcs_path.rsplit('/', maxsplit=1)[1]
         return TableName(filename.rsplit('.', maxsplit=1)[0])  # strip suffix
 
@@ -149,6 +162,7 @@ class GCSSourceTable:
 @dataclass(frozen=True)
 class ADLSSourceTable:
     r"""A source table located on Azure Data Lake Storage (ADLS)."""
+
     # We support two types of table file path:
     # 1. adls_path specifies the whole directory (prefix), ending with "/"
     # 2. adls_path specifies the full path of a single file, ending with file
@@ -157,28 +171,33 @@ class ADLSSourceTable:
 
     # Internal: ADLS connector ID, if we are working with a Kumo-owned named
     # ADLS connector:
-    connector_id: Optional[str] = None
-    source_table_name: Optional[TableName] = None
+    connector_id: str | None = None
+    source_table_name: TableName | None = None
 
     # If not provided, then the file_path must either end in `.csv` or
     # `.parquet`, and we will parse the file type from there.
-    file_type: Optional[FileType] = None
+    file_type: FileType | None = None
 
     data_source_type: Literal[DataSourceType.ADLS] = DataSourceType.ADLS
 
     @property
     def table(self) -> TableName:
-        if self.adls_path == "":
+        if self.adls_path == '':
             assert self.source_table_name is not None
             return self.source_table_name
         if self.adls_path.endswith('/'):
             return TableName(
-                self.adls_path.rstrip('/').rsplit('/', maxsplit=1)[1])
+                self.adls_path.rstrip('/').rsplit('/', maxsplit=1)[1]
+            )
         filename = self.adls_path.rsplit('/', maxsplit=1)[1]
         return TableName(filename.rsplit('.', maxsplit=1)[0])  # strip suffix
 
 
-SourceTableType = Union[
+# Deliberately typing.Union rather than `X | Y`: this is the annotation pydantic
+# reads to build a *discriminated* union (see the Field(discriminator=...) uses
+# in this module and in api/table.py). It is a wire contract that works today,
+# and rewriting the spelling buys nothing a caller can see.
+SourceTableType = Union[  # noqa: UP007
     S3SourceTable,
     SnowflakeSourceTable,
     DatabricksSourceTable,
@@ -194,12 +213,12 @@ SourceTableType = Union[
 
 @dataclass
 class SourceTableConfigRequest:
-    connector_id: Optional[str]
+    connector_id: str | None
     table_name: str
     source_type: DataSourceType
 
-    root_dir: Optional[str] = None
-    file_type: Optional[FileType] = None
+    root_dir: str | None = None
+    file_type: FileType | None = None
 
 
 @dataclass
@@ -213,9 +232,9 @@ class SourceTableConfigResponse:
 @dataclass
 class SourceTableValidateRequest:
     table_name: str
-    connector_id: Optional[str]
+    connector_id: str | None
     source_type: DataSourceType
-    root_dir: Optional[str] = None
+    root_dir: str | None = None
 
 
 @dataclass
@@ -230,25 +249,28 @@ class SourceTableValidateResponse:
 
 @dataclass
 class SourceTableListRequest:
-    # TODO(manan): enforce one-of connector ID or root_dir
-    connector_id: Optional[str]
+    connector_id: str | None
     source_type: DataSourceType
 
     # Only for object store-based connectors:
-    root_dir: Optional[str] = None
+    root_dir: str | None = None
 
     def __post_init__(self):
         if self.connector_id is None and self.source_type not in (
-                DataSourceType.S3, DataSourceType.GCS, DataSourceType.ADLS):
+            DataSourceType.S3,
+            DataSourceType.GCS,
+            DataSourceType.ADLS,
+        ):
             raise ValueError(
                 "A 'None' connector ID is only supported for S3, GCS, or "
-                "ADLS-backed tables. Please specify a connector ID to "
-                "proceed.")
+                'ADLS-backed tables. Please specify a connector ID to '
+                'proceed.'
+            )
 
 
 @dataclass
 class SourceTableListResponse:
-    table_names: List[str]
+    table_names: list[str]
 
 
 # Method: Get Data ============================================================
@@ -271,8 +293,9 @@ class SourceColumn:
         dtype (Dtype): The data type of the column
         is_primary (bool): Whether the column refers to a primary key.
     """
+
     name: str
-    stype: Optional[Stype]  # Kumo-inferred.
+    stype: Stype | None  # Kumo-inferred.
     dtype: Dtype
     is_primary: bool
 
@@ -284,28 +307,25 @@ class S3SourceTableRequest:
         root_dir/table_name/*.(csv|parquet)
         root_dir/table_name.(csv|parquet)
     """
-    s3_root_dir: str  # TODO(manan): rename to `root_dir`
-    connector_id: Optional[str] = None
-    table_names: Optional[List[str]] = None
-    file_type: Optional[FileType] = None
+
+    s3_root_dir: str
+    connector_id: str | None = None
+    table_names: list[str] | None = None
+    file_type: FileType | None = None
     source_type: Literal[DataSourceType.S3] = DataSourceType.S3
 
 
 @dataclass
 class SnowflakeSourceTableRequest:
     connector_id: str
-    table_names: Optional[List[str]] = None
+    table_names: list[str] | None = None
     source_type: Literal[DataSourceType.SNOWFLAKE] = DataSourceType.SNOWFLAKE
-
-    # TODO(siyang): We should move database and schema out of SF connector.
-    # database: Optional[str] = None
-    # schema: Optional[str] = None
 
 
 @dataclass
 class BigQuerySourceTableRequest:
     connector_id: str
-    table_names: Optional[List[str]] = None
+    table_names: list[str] | None = None
 
     # Discriminator:
     source_type: Literal[DataSourceType.BIGQUERY] = DataSourceType.BIGQUERY
@@ -314,7 +334,7 @@ class BigQuerySourceTableRequest:
 @dataclass
 class DatabricksSourceTableRequest:
     connector_id: str
-    table_names: Optional[List[str]] = None
+    table_names: list[str] | None = None
 
     # Discriminator:
     source_type: Literal[DataSourceType.DATABRICKS] = DataSourceType.DATABRICKS
@@ -323,7 +343,7 @@ class DatabricksSourceTableRequest:
 @dataclass
 class GlueSourceTableRequest:
     connector_id: str
-    table_names: Optional[List[str]] = None
+    table_names: list[str] | None = None
     source_type: Literal[DataSourceType.GLUE] = DataSourceType.GLUE
 
 
@@ -334,10 +354,11 @@ class GCSSourceTableRequest:
         root_dir/table_name/*.(csv|parquet)
         root_dir/table_name.(csv|parquet)
     """
+
     gcs_root_dir: str
-    connector_id: Optional[str] = None
-    table_names: Optional[List[str]] = None
-    file_type: Optional[FileType] = None
+    connector_id: str | None = None
+    table_names: list[str] | None = None
+    file_type: FileType | None = None
     source_type: Literal[DataSourceType.GCS] = DataSourceType.GCS
 
 
@@ -348,25 +369,26 @@ class ADLSSourceTableRequest:
         root_dir/table_name/*.(csv|parquet)
         root_dir/table_name.(csv|parquet)
     """
+
     adls_root_dir: str
-    connector_id: Optional[str] = None
-    table_names: Optional[List[str]] = None
-    file_type: Optional[FileType] = None
+    connector_id: str | None = None
+    table_names: list[str] | None = None
+    file_type: FileType | None = None
     source_type: Literal[DataSourceType.ADLS] = DataSourceType.ADLS
 
 
 @dataclass
 class SourceTableDataRequest:
     # Table request (metadata needed to fetch a table from the connector):
-    source_table_request: Union[
-        S3SourceTableRequest,
-        BigQuerySourceTableRequest,
-        DatabricksSourceTableRequest,
-        SnowflakeSourceTableRequest,
-        GCSSourceTableRequest,
-        ADLSSourceTableRequest,
-        GlueSourceTableRequest,
-    ] = Field(discriminator='source_type')
+    source_table_request: (
+        S3SourceTableRequest
+        | BigQuerySourceTableRequest
+        | DatabricksSourceTableRequest
+        | SnowflakeSourceTableRequest
+        | GCSSourceTableRequest
+        | ADLSSourceTableRequest
+        | GlueSourceTableRequest
+    ) = Field(discriminator='source_type')
 
     # Whether to fetch and include sample rows in the response:
     sample_rows: int = 0
@@ -374,20 +396,19 @@ class SourceTableDataRequest:
     @compatible_field_validator('sample_rows')
     def _validate_sample_rows(cls, v: int):
         if v > 1000:
-            return ValueError('sample_rows cannot be greater than 1000.')
+            raise ValueError('sample_rows cannot be greater than 1000.')
         if v < 0:
-            return ValueError('sample_rows cannot be negative.')
+            raise ValueError('sample_rows cannot be negative.')
         return v
 
 
 @dataclass
 class SourceTableDataResponse:
     table_name: TableName
-    cols: List[SourceColumn] = field(default_factory=list)
+    cols: list[SourceColumn] = field(default_factory=list)
 
     # Serialized (json) data of sample rows dataframe, if requested:
-    # TODO(siyang,manan): figure out the ser/de protocol for pandas dataframe
-    sample_rows: Optional[str] = None
+    sample_rows: str | None = None
 
 
 # Other =======================================================================
@@ -401,9 +422,9 @@ class TableStats:
         size_bytes (int): The size of the table in bytes.
         num_rows (int): The number of rows in the table.
     """
+
     size_bytes: int
     num_rows: int
-    # TODO(siyang): add a flag to indicate if stats are exact or approx?
 
 
 @dataclass
@@ -415,7 +436,7 @@ class LLMRequest:
     output_dir: str
     output_column_name: str
     output_table_name: str
-    dimensions: Optional[int] = None
+    dimensions: int | None = None
     llm_type: LLMType = LLMType.FEATURE
 
 

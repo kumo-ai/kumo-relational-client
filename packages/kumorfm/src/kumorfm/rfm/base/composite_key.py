@@ -18,11 +18,11 @@ rather than an error. Every value is therefore rendered by one documented rule,
 and a part whose text a warehouse would render differently is refused outright
 rather than trusted.
 """
+
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-
 import math
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import pandas as pd
@@ -33,8 +33,7 @@ DERIVED_PREFIX = '__kumo_key_'
 SEPARATOR = '\x1f'
 ESCAPE = '\\'
 
-_REFUSED_DTYPES = (Dtype.float, Dtype.float32, Dtype.float64,
-                   Dtype.floatlist)
+_REFUSED_DTYPES = (Dtype.float, Dtype.float32, Dtype.float64, Dtype.floatlist)
 
 
 def escape_part(text: str) -> str:
@@ -90,8 +89,9 @@ def encode_frame(df: pd.DataFrame, columns: Sequence[str]) -> pd.Series:
     missing = [name for name in columns if name not in df.columns]
     if missing:
         raise ValueError(
-            f"composite key columns {missing} are not present; a table "
-            f"referencing this key must carry every one of {list(columns)}")
+            f'composite key columns {missing} are not present; a table '
+            f'referencing this key must carry every one of {list(columns)}'
+        )
 
     rendered = []
     for name in columns:
@@ -99,9 +99,11 @@ def encode_frame(df: pd.DataFrame, columns: Sequence[str]) -> pd.Series:
         if column.isna().any():
             raise ValueError(
                 f"composite key column '{name}' holds a null value; every "
-                f"part of a row's identity has to be present")
+                f"part of a row's identity has to be present"
+            )
         rendered.append(
-            column.map(lambda value: escape_part(_render(value))).astype(str))
+            column.map(lambda value: escape_part(_render(value))).astype(str)
+        )
 
     joined = rendered[0]
     for part in rendered[1:]:
@@ -142,12 +144,14 @@ def decode_value(encoded: str, arity: int) -> tuple[str, ...]:
     parts.append(''.join(current))
     if len(parts) != arity:
         raise ValueError(
-            f'expected a key of {arity} parts, got {len(parts)}: {encoded!r}')
+            f'expected a key of {arity} parts, got {len(parts)}: {encoded!r}'
+        )
     return tuple(parts)
 
 
 def refuse_unfoldable_dtypes(
-    dtypes: Sequence[tuple[str, Dtype | None]], ) -> None:
+    dtypes: Sequence[tuple[str, Dtype | None]],
+) -> None:
     r"""Rejects a key part a warehouse and pandas need not render alike.
 
     Raises:
@@ -158,14 +162,15 @@ def refuse_unfoldable_dtypes(
             raise ValueError(
                 f"composite key column '{name}' is {dtype}; a floating-point "
                 f"column cannot be part of a row's identity because its text "
-                f"is not reproducible. Use an exact column, or add a column "
-                f"holding the identity you intend.")
+                f'is not reproducible. Use an exact column, or add a column '
+                f'holding the identity you intend.'
+            )
 
 
 def sql_expression(
     columns: Sequence[str],
     *,
-    quote: 'Callable[[str], str]',
+    quote: Callable[[str], str],
     text_type: str,
     chr_function: str = 'CHR',
 ) -> str:
@@ -190,9 +195,11 @@ def sql_expression(
     parts = []
     for name in columns:
         rendered = f'CAST({quote(name)} AS {text_type})'
-        escaped = (f'REPLACE(REPLACE({rendered}, {backslash}, '
-                   f'{backslash} || {backslash}), {separator}, '
-                   f"{backslash} || 'u')")
+        escaped = (
+            f'REPLACE(REPLACE({rendered}, {backslash}, '
+            f'{backslash} || {backslash}), {separator}, '
+            f"{backslash} || 'u')"
+        )
         parts.append(escaped)
     return f' || {separator} || '.join(parts)
 
@@ -227,10 +234,11 @@ def encode_identity(columns: Sequence[str]) -> str:
     encoded = '_'.join(name.encode('utf-8').hex() for name in columns)
     if len(DERIVED_PREFIX) + len(encoded) > MAX_DERIVED_NAME:
         raise ValueError(
-            f"An identity over {list(columns)} needs a column name longer "
-            f"than {MAX_DERIVED_NAME} characters, which a warehouse will not "
-            f"accept. Add a column holding that identity and declare it "
-            f"instead.")
+            f'An identity over {list(columns)} needs a column name longer '
+            f'than {MAX_DERIVED_NAME} characters, which a warehouse will not '
+            f'accept. Add a column holding that identity and declare it '
+            f'instead.'
+        )
     return encoded
 
 
@@ -247,7 +255,7 @@ def decode_identity(derived: str) -> tuple[str, ...] | None:
     """
     if not derived.startswith(DERIVED_PREFIX):
         return None
-    rest = derived[len(DERIVED_PREFIX):]
+    rest = derived[len(DERIVED_PREFIX) :]
     if not rest:
         return None
     columns: list[str] = []

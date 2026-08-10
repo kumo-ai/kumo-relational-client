@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -38,25 +39,70 @@ _RESPONSE_CHUNK_BYTES = 1024 * 1024
 # it runs on cleanup paths where the caller is no longer waiting on a result.
 # The full request timeout would let an unreachable endpoint stall a teardown.
 _DELETE_TIMEOUT_SECONDS = 10.0
+_USERINFO_RE = re.compile(r'(?<=//)[^/@\s]+@')
+
+
+def redact_url(url: str | None) -> str | None:
+    r"""Strip any userinfo from ``url`` so it is safe to log or display.
+
+    ``https://user:token@host/path`` is a legal way to point this client at a
+    deployment, and the credential is then in the URL itself rather than in
+    ``api_key``. Anywhere a URL reaches an error message or a repr it goes
+    through here first, so the credential does not travel with the diagnosis
+    into a log aggregator or a bug report.
+
+    Mirrors ``kumorfm.client.client.redact_url``, which guards the same
+    credential on the KumoRFM path. The two cannot share one implementation:
+    this package must not import the optional driver, and the package both
+    depend on is a SQL-connector package with no URL handling. Keep them in
+    step.
+    """
+    if not url:
+        return url
+    parsed = urlparse(url)
+    if not parsed.username and not parsed.password:
+        return url
+    host = parsed.hostname or ''
+    if ':' in host:
+        host = f'[{host}]'
+    if parsed.port:
+        host = f'{host}:{parsed.port}'
+    return parsed._replace(netloc=host).geturl()
+
+
+def scrub_userinfo(text: str) -> str:
+    r"""Remove any ``user:secret@`` credential from free text.
+
+    The counterpart to :func:`redact_url` for strings that merely *contain* a
+    URL rather than being one -- chiefly the ``requests`` exception messages
+    quoted into transport errors, which echo back whatever URL was requested.
+    """
+    return _USERINFO_RE.sub('', text)
 
 
 def _validate_url(url: str, api_key: str | None) -> None:
+    if not isinstance(url, str):
+        raise SdfmError(
+            f'url must be a string, got {type(url).__name__}',
+            code='INVALID_CONFIGURATION',
+        )
     parsed = urlparse(url)
+    shown = redact_url(url)
     if parsed.scheme not in ('http', 'https'):
         raise SdfmError(
-            f'url must start with http:// or https://, got {url!r}',
+            f'url must start with http:// or https://, got {shown!r}',
             code='INVALID_CONFIGURATION',
         )
     if not parsed.hostname:
         raise SdfmError(
-            f'url is missing a host, got {url!r}',
+            f'url is missing a host, got {shown!r}',
             code='INVALID_CONFIGURATION',
         )
     host = parsed.hostname.lower()
     if api_key and parsed.scheme == 'http' and host not in _LOCAL_HOSTS:
         raise SdfmError(
             'refusing to send an API key over plaintext HTTP; use an https:// '
-            f'URL (or a localhost endpoint), got {url!r}',
+            f'URL (or a localhost endpoint), got {shown!r}',
             code='INVALID_CONFIGURATION',
         )
 
@@ -87,9 +133,13 @@ class _Session(requests.Session):
     ) -> None:
         super().rebuild_auth(prepared_request, response)
         previous_url = response.request.url
-        if previous_url and prepared_request.url and self.should_strip_auth(
-                previous_url, prepared_request.url):
+        if (
+            previous_url
+            and prepared_request.url
+            and self.should_strip_auth(previous_url, prepared_request.url)
+        ):
             prepared_request.headers.pop('X-API-Key', None)
+
 
 def _validate_limits(timeout: Any, max_retries: Any) -> None:
     r"""Reject unusable transport limits at construction.
@@ -103,15 +153,22 @@ def _validate_limits(timeout: Any, max_retries: Any) -> None:
     is the natural way to reach for "no timeout" here, since this constructor
     does not accept ``None``.
     """
-    if (isinstance(timeout, bool) or not isinstance(timeout, (int, float))
-            or not math.isfinite(timeout) or timeout <= 0):
+    if (
+        isinstance(timeout, bool)
+        or not isinstance(timeout, (int, float))
+        or not math.isfinite(timeout)
+        or timeout <= 0
+    ):
         raise SdfmError(
             f'timeout must be a positive, finite number of seconds, got '
             f'{timeout!r}',
             code='INVALID_CONFIGURATION',
         )
-    if (isinstance(max_retries, bool) or not isinstance(max_retries, int)
-            or max_retries < 0):
+    if (
+        isinstance(max_retries, bool)
+        or not isinstance(max_retries, int)
+        or max_retries < 0
+    ):
         raise SdfmError(
             f'max_retries must be a non-negative integer, got {max_retries!r}',
             code='INVALID_CONFIGURATION',
@@ -161,8 +218,7 @@ def _snippet(text: str) -> str:
     text = ' '.join(text.split())
     if len(text) <= _MAX_BODY_SNIPPET:
         return text
-    return (f'{text[:_MAX_BODY_SNIPPET]}... '
-            f'[truncated, {len(text)} chars total]')
+    return f'{text[:_MAX_BODY_SNIPPET]}... [truncated, {len(text)} chars total]'
 
 
 def _read_capped(response: requests.Response, url: str) -> bytes:
@@ -176,7 +232,7 @@ def _read_capped(response: requests.Response, url: str) -> bytes:
     for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
         if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
             raise SdfmError(
-                f'Response body from {url} exceeds the '
+                f'Response body from {redact_url(url)} exceeds the '
                 f'{_MAX_RESPONSE_BYTES} byte limit',
                 code='TRANSPORT_ERROR',
             )
@@ -215,14 +271,16 @@ def _build_session(
     session = _Session()
     if api_key:
         session.headers['X-API-Key'] = api_key
-    adapter = HTTPAdapter(max_retries=_build_retry(max_retries,
-                                                   backoff_factor))
+    adapter = HTTPAdapter(max_retries=_build_retry(max_retries, backoff_factor))
     session.mount('http://', adapter)
     session.mount('https://', adapter)
     session.mount(
         url + _SESSIONS_PATH,
-        HTTPAdapter(max_retries=_build_retry(max_retries, backoff_factor,
-                                             retry_post=False)),
+        HTTPAdapter(
+            max_retries=_build_retry(
+                max_retries, backoff_factor, retry_post=False
+            )
+        ),
     )
     session.mount(url + _SESSIONS_PATH + '/', adapter)
     return session
@@ -258,8 +316,9 @@ class Transport:
         self._timeout = timeout
         self._closed = False
         self._max_retries = max_retries
-        self._session = _build_session(self._url, api_key, max_retries,
-                                       backoff_factor)
+        self._session = _build_session(
+            self._url, api_key, max_retries, backoff_factor
+        )
 
     @property
     def url(self) -> str:
@@ -298,15 +357,17 @@ class Transport:
             # Streamed and closed unread: only the status matters, and the
             # body is attacker-controlled on a misconfigured endpoint.
             with self._session.get(
-                    self._url + _HEALTH_READY_PATH,
-                    timeout=self._timeout,
-                    verify=self._verify_ssl,
-                    stream=True,
+                self._url + _HEALTH_READY_PATH,
+                timeout=self._timeout,
+                verify=self._verify_ssl,
+                stream=True,
             ) as response:
                 return response.status_code == 200
         except requests.RequestException as error:
             raise SdfmError(
-                f'Request to {self._url + _HEALTH_READY_PATH} failed: {error}',
+                f'Request to '
+                f'{redact_url(self._url + _HEALTH_READY_PATH)} failed: '
+                f'{scrub_userinfo(str(error))}',
                 code='TRANSPORT_ERROR',
             ) from error
 
@@ -327,8 +388,9 @@ class Transport:
         r"""Scores rows against a pinned context; ``payload`` carries only the
         per-call sections.
         """
-        return self._post(f'{_SESSIONS_PATH}/{_path_segment(session_id)}'
-                          f'/predictions', payload)
+        return self._post(
+            f'{_SESSIONS_PATH}/{_path_segment(session_id)}/predictions', payload
+        )
 
     def delete_session(self, session_id: str) -> None:
         r"""Releases a pinned context. Idempotent server-side: the NIM answers
@@ -338,16 +400,17 @@ class Transport:
         url = f'{self._url}{_SESSIONS_PATH}/{_path_segment(session_id)}'
         try:
             with self._session.delete(
-                    url,
-                    timeout=min(self._timeout, _DELETE_TIMEOUT_SECONDS),
-                    verify=self._verify_ssl,
-                    stream=True,
+                url,
+                timeout=min(self._timeout, _DELETE_TIMEOUT_SECONDS),
+                verify=self._verify_ssl,
+                stream=True,
             ) as response:
                 status_code = response.status_code
                 content = _read_capped(response, url)
         except requests.RequestException as error:
             raise SdfmError(
-                f'Request to {url} failed: {error}',
+                f'Request to {redact_url(url)} failed: '
+                f'{scrub_userinfo(str(error))}',
                 code='TRANSPORT_ERROR',
             ) from error
         if status_code >= 400:
@@ -358,17 +421,18 @@ class Transport:
         url = self._url + path
         try:
             with self._session.post(
-                    url,
-                    json=payload,
-                    timeout=self._timeout,
-                    verify=self._verify_ssl,
-                    stream=True,
+                url,
+                json=payload,
+                timeout=self._timeout,
+                verify=self._verify_ssl,
+                stream=True,
             ) as response:
                 status_code = response.status_code
                 content = _read_capped(response, url)
         except requests.RequestException as error:
             raise SdfmError(
-                f'Request to {url} failed: {error}',
+                f'Request to {redact_url(url)} failed: '
+                f'{scrub_userinfo(str(error))}',
                 code='TRANSPORT_ERROR',
             ) from error
         if status_code >= 400:
@@ -379,13 +443,13 @@ class Transport:
             body = json.loads(content)
         except (ValueError, RecursionError) as error:
             raise SdfmError(
-                f'Invalid JSON response from {url}',
+                f'Invalid JSON response from {redact_url(url)}',
                 code='TRANSPORT_ERROR',
             ) from error
         if not isinstance(body, dict):
             raise SdfmError(
-                f'Expected a JSON object from {url}, '
-                f'got {type(body).__name__}',
+                f'Expected a JSON object from {redact_url(url)}, got '
+                f'{type(body).__name__}',
                 code='TRANSPORT_ERROR',
             )
         return body
@@ -399,10 +463,15 @@ def _to_nim_error(status_code: int, content: bytes) -> NimRequestError:
     if not isinstance(body, dict):
         body = {}
     code = body.get('code')
-    reported = (body.get('detail') or body.get('title')
-                or content.decode('utf-8', 'replace'))
-    message = _snippet(str(reported)) if reported else (
-        f'NIM request failed with status {status_code}'
+    reported = (
+        body.get('detail')
+        or body.get('title')
+        or content.decode('utf-8', 'replace')
+    )
+    message = (
+        _snippet(str(reported))
+        if reported
+        else (f'NIM request failed with status {status_code}')
     )
     # A validation failure's top-level detail is often only "Request validation
     # failed."; the per-field diagnosis is in invalid_params, so render it into

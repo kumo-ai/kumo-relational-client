@@ -12,7 +12,8 @@ class Mapper:
     Args:
         num_examples: The maximum number of examples to add/retrieve.
     """
-    def __init__(self, num_examples: int):
+
+    def __init__(self, num_examples: int) -> None:
         self._pkey: pd.Index | None = None
         self._indices: list[np.ndarray] = []
         self._index: pd.Index | None = None
@@ -26,10 +27,13 @@ class Mapper:
             batch: The batch vector.
         """
         if self._pkey is not None:
-            category = np.concatenate([
-                self._pkey.to_numpy(),
-                pkey.to_numpy(),
-            ], axis=0)
+            category = np.concatenate(
+                [
+                    self._pkey.to_numpy(),
+                    pkey.to_numpy(),
+                ],
+                axis=0,
+            )
             category = pd.unique(category)  # Preserves ordering.
             self._pkey = pd.Index(category)
         elif pd.api.types.is_string_dtype(pkey):

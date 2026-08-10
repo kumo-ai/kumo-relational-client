@@ -14,6 +14,7 @@ a stub is therefore not papering over a real dependency; it demonstrates that
 the dependency is not real for this path, which is the argument for making the
 import lazy.
 """
+
 from __future__ import annotations
 
 import sys
@@ -26,14 +27,14 @@ import pytest
 class _Endpoints:
     @staticmethod
     def query(**kwargs: Any) -> Any:
-        return {"predictions": [{"response_json": "{}"}]}
+        return {'predictions': [{'response_json': '{}'}]}
 
 
 class _Workspace:
     serving_endpoints = _Endpoints()
 
 
-def _init(rfm_engine: Any, endpoint: str = "kumo-rfm", **kwargs: Any) -> None:
+def _init(rfm_engine: Any, endpoint: str = 'kumo-rfm', **kwargs: Any) -> None:
     """Initialize the way ``SDFMClient`` does, token included.
 
     Every test below stands in for that caller; a bare call is refused, which
@@ -57,38 +58,40 @@ class _RecordingModule(types.ModuleType):
 
     def __init__(self, name: str) -> None:
         super().__init__(name)
-        object.__setattr__(self, "_accessed", [])
+        object.__setattr__(self, '_accessed', [])
 
     def __getattribute__(self, name: str) -> Any:
-        if not name.startswith("__"):
-            object.__getattribute__(self, "_accessed").append(name)
+        if not name.startswith('__'):
+            object.__getattribute__(self, '_accessed').append(name)
         return object.__getattribute__(self, name)
 
 
 @pytest.fixture()
 def stubbed_kumolib(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Only meaningful when the real extension is absent."""
-    if "kumorfm.kumolib" in sys.modules:
+    if 'kumorfm.kumolib' in sys.modules:
         pytest.skip(
-            "the real kumolib is present; stubbing it would mutate the real "
-            "module and the recording would not apply"
+            'the real kumolib is present; stubbing it would mutate the real '
+            'module and the recording would not apply'
         )
-    stub = _RecordingModule("kumorfm.kumolib")
-    monkeypatch.setitem(sys.modules, "kumorfm.kumolib", stub)
+    stub = _RecordingModule('kumorfm.kumolib')
+    monkeypatch.setitem(sys.modules, 'kumorfm.kumolib', stub)
     return stub
 
 
 @pytest.fixture()
 def rfm_engine(monkeypatch: pytest.MonkeyPatch) -> Any:
     """Import kumorfm.rfm with the local-sampler guard satisfied."""
-    if "kumorfm.kumolib" not in sys.modules:
+    if 'kumorfm.kumolib' not in sys.modules:
         monkeypatch.setitem(
-            sys.modules, "kumorfm.kumolib", types.ModuleType("kumorfm.kumolib")
+            sys.modules, 'kumorfm.kumolib', types.ModuleType('kumorfm.kumolib')
         )
     try:
         import kumorfm.rfm as engine
     except RuntimeError as error:  # pragma: no cover - environment dependent
-        pytest.skip(f"kumorfm.rfm unusable even with the guard stubbed: {error}")
+        pytest.skip(
+            f'kumorfm.rfm unusable even with the guard stubbed: {error}'
+        )
     yield engine
     engine.global_state.reset()
     import kumorfm
@@ -106,7 +109,7 @@ def test_records_the_endpoint_rather_than_a_stale_url(rfm_engine: Any) -> None:
     place would make the state read as if a NIM were still configured.
     """
     _init(rfm_engine)
-    assert rfm_engine.global_state._url == "databricks-serving:kumo-rfm"
+    assert rfm_engine.global_state._url == 'databricks-serving:kumo-rfm'
 
 
 def test_the_client_is_the_serving_transport(rfm_engine: Any) -> None:
@@ -125,14 +128,14 @@ def test_a_direct_call_is_refused(rfm_engine: Any) -> None:
     """
     with pytest.raises(RuntimeError):
         rfm_engine.init_databricks_serving(
-            "kumo-rfm", workspace_client=_Workspace()
+            'kumo-rfm', workspace_client=_Workspace()
         )
     assert not rfm_engine.global_state._initialized
 
 
 def test_a_url_shaped_endpoint_is_rejected(rfm_engine: Any) -> None:
     with pytest.raises(ValueError):
-        _init(rfm_engine, "https://workspace/serving-endpoints/kumo-rfm")
+        _init(rfm_engine, 'https://workspace/serving-endpoints/kumo-rfm')
     assert not rfm_engine.global_state._initialized
 
 
@@ -155,6 +158,7 @@ def test_the_serving_path_never_needs_the_native_sampler(
     _init(rfm_engine)
     _ = rfm_engine.global_state.client
 
-    during = [n for n in stubbed_kumolib._accessed[len(before):]
-              if n != "_accessed"]
-    assert during == [], f"the serving path reached into kumolib: {during}"
+    during = [
+        n for n in stubbed_kumolib._accessed[len(before) :] if n != '_accessed'
+    ]
+    assert during == [], f'the serving path reached into kumolib: {during}'

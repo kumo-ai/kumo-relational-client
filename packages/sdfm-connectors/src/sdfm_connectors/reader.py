@@ -106,7 +106,7 @@ def _query_handle(connection: Any) -> tuple[Any, bool]:
     rather than a cursor on the same session, so the caller's temp tables and
     registered DataFrames are invisible to it. A driver whose ``cursor()``
     yields an object of the connection's own type is duplicating the
-    connection, so the query runs on the handle the caller passed in — and only
+    connection, so the query runs on the handle the caller passed in, and only
     a genuine cursor we created is ours to close.
     """
     cursor = connection.cursor()
@@ -115,6 +115,25 @@ def _query_handle(connection: Any) -> tuple[Any, bool]:
             cursor.close()
         return connection, False
     return cursor, True
+
+
+def _columnar_fetch(cursor: Any, method: str) -> Any:
+    r"""Call a columnar fetch, or return ``None`` if it does not apply here.
+
+    Snowflake answers a metadata statement (``SHOW``, ``DESC``, ``LIST``) with
+    a result set it cannot render as Arrow or pandas, and *raises*
+    ``NotSupportedError`` rather than returning ``None``. Treating that as
+    "this strategy does not apply" lets the caller fall through to the
+    row-based fetch, which reads those statements fine; without it every such
+    query failed as ``QUERY_FAILED: Unknown error``, naming neither the cause
+    nor a way forward. Any other failure is a real one and propagates.
+    """
+    try:
+        return getattr(cursor, method)()
+    except Exception as error:
+        if type(error).__name__ == 'NotSupportedError':
+            return None
+        raise
 
 
 def read_table(
@@ -146,11 +165,13 @@ def read_table(
         try:
             cursor.execute(sql)
             if hasattr(cursor, 'fetch_arrow_all'):
-                arrow_table = cursor.fetch_arrow_all()
+                arrow_table = _columnar_fetch(cursor, 'fetch_arrow_all')
                 if arrow_table is not None:
                     return _arrow_to_pandas(arrow_table)
             if hasattr(cursor, 'fetch_pandas_all'):
-                return cursor.fetch_pandas_all()
+                frame = _columnar_fetch(cursor, 'fetch_pandas_all')
+                if frame is not None:
+                    return frame
             if hasattr(cursor, 'fetchdf'):
                 return cursor.fetchdf()
             if hasattr(cursor, 'fetch_arrow_table'):
@@ -176,8 +197,9 @@ def _arrow_to_pandas(arrow_table: Any) -> pd.DataFrame:
     """
     df = arrow_table.to_pandas(types_mapper=_NULLABLE_INTEGER_DTYPES.get)
     for position, dtype in enumerate(df.dtypes):
-        if (isinstance(dtype, pd.api.extensions.ExtensionDtype)
-                and pd.api.types.is_integer_dtype(dtype)):
+        if isinstance(
+            dtype, pd.api.extensions.ExtensionDtype
+        ) and pd.api.types.is_integer_dtype(dtype):
             column = df.iloc[:, position]
             if not column.isna().any():
                 df.isetitem(position, column.astype(dtype.numpy_dtype))
@@ -200,8 +222,7 @@ def _read_local(
         )
     if data is not None and path is not None:
         raise ConnectorError(
-            "local connector accepts exactly one of 'data' or 'path', "
-            "not both",
+            "local connector accepts exactly one of 'data' or 'path', not both",
             code='INVALID_CONNECTOR_ARGS',
         )
     if data is not None:
@@ -226,20 +247,12 @@ def _read_local(
 
 
 def _as_path_str(backend: str, path: Any) -> str:
-    r"""Coerce a filesystem path argument to :class:`str`.
+    r"""Coerce a filesystem path argument to ``str`` before validation.
 
-    A :class:`pathlib.Path` is the idiomatic way to name a file, and the
-    ``sqlite`` and ``duckdb`` connectors already accept one. Everything the
-    file readers do to a path first -- parsing its scheme, testing its prefix,
-    taking its suffix -- is a string operation, so an un-coerced ``Path``
-    raises :exc:`AttributeError` from inside ``urllib``, which is not a
-    :class:`ConnectorError` and so escapes the error contract the public
-    boundary promises. Coercing once, before any of those checks, both keeps
-    that contract and makes the valid input work.
-
-    Args:
-        backend: The connector name, for the error message.
-        path: The caller-supplied path.
+    File readers parse schemes, prefixes and suffixes as strings. Coercing
+    first makes valid ``PathLike`` inputs work and turns invalid path objects
+    into the public ``ConnectorError`` contract instead of an internal
+    ``AttributeError`` from ``urllib``.
     """
     if isinstance(path, bytes):
         return path.decode()
@@ -274,8 +287,10 @@ def _require_local_path(path: str) -> None:
             code='INVALID_CONNECTOR_ARGS',
             details={'path': path},
         )
-    if parsed.scheme == 'file' and parsed.netloc.lower() not in ('',
-                                                                'localhost'):
+    if parsed.scheme == 'file' and parsed.netloc.lower() not in (
+        '',
+        'localhost',
+    ):
         raise ConnectorError(
             f'the local connector reads local filesystem paths, got a '
             f'file:// URI naming the host {parsed.netloc!r}: {path!r}',
@@ -357,8 +372,12 @@ def _read_file(
             code='INVALID_CONNECTOR_ARGS',
             details={'format': format},
         )
-    with driver_guard('READ_FAILED', f'failed to read {path!r}',
-                      missing_as_not_found=True, path=path):
+    with driver_guard(
+        'READ_FAILED',
+        f'failed to read {path!r}',
+        missing_as_not_found=True,
+        path=path,
+    ):
         if resolved == 'parquet':
             return pd.read_parquet(path, storage_options=storage_options)
         return pd.read_csv(path, storage_options=storage_options)

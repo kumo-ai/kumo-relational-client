@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Union
 
 from pydantic.dataclasses import dataclass
 
@@ -15,8 +15,7 @@ from kumorfm.api.typing import Dtype, Stype
 
 @dataclass
 class ArrayDtype:
-    r"""Class for array typing. Used for internal predictive query validation.
-    """
+    r"""Class for array typing. Used for internal predictive query validation."""
 
     nested_dtype: Dtype
 
@@ -24,20 +23,25 @@ class ArrayDtype:
         if isinstance(self.nested_dtype, str):
             self.nested_dtype = Dtype(self.nested_dtype)
         if self.nested_dtype in [
-                Dtype.floatlist, Dtype.intlist, Dtype.stringlist
+            Dtype.floatlist,
+            Dtype.intlist,
+            Dtype.stringlist,
         ]:
             raise ValueError(
-                f'ArrayDtype not supported for Dtype {self.nested_dtype}.')
+                f'ArrayDtype not supported for Dtype {self.nested_dtype}.'
+            )
 
     def to_dtype(self) -> Dtype:
         if self.nested_dtype.is_float():
             return Dtype.floatlist
-        elif self.nested_dtype.is_int():
+        if self.nested_dtype.is_int():
             return Dtype.intlist
-        elif self.nested_dtype == Dtype.string:
+        if self.nested_dtype == Dtype.string:
             return Dtype.stringlist
-        raise ValueError(f'ArrayDtype.to_dtype() only supported for numerical '
-                         f'nested types, got {self.nested_dtype}.')
+        raise ValueError(
+            f'ArrayDtype.to_dtype() only supported for numerical '
+            f'nested types, got {self.nested_dtype}.'
+        )
 
     def is_bool(self) -> bool:
         return False
@@ -88,10 +92,11 @@ class ASTNode(ABC):
         location: Interval in the input
             query that corresponds to this AST subtree.
     """
-    date_offset_range: Optional[DateOffsetRange] = None
-    dtype_maybe: Optional[Union[Dtype, ArrayDtype, str]] = None
-    stype_maybe: Optional[Union[Stype, str]] = None
-    location: Optional[ASTQueryLocationInterval] = None
+
+    date_offset_range: DateOffsetRange | None = None
+    dtype_maybe: Dtype | ArrayDtype | str | None = None
+    stype_maybe: Stype | str | None = None
+    location: ASTQueryLocationInterval | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.dtype_maybe, str):
@@ -101,7 +106,7 @@ class ASTNode(ABC):
         self.date_offset_range = ASTNode.get_combined_time(self)
 
     @property
-    def children(self) -> List['ASTNode']:
+    def children(self) -> list['ASTNode']:
         return []
 
     def get_location(self) -> ASTQueryLocationInterval:
@@ -111,7 +116,7 @@ class ASTNode(ABC):
             location = ASTQueryLocationInterval(0, 0, 0, 0, False)
         return location
 
-    def _get_location(self) -> Optional[ASTQueryLocationInterval]:
+    def _get_location(self) -> ASTQueryLocationInterval | None:
         location = self.location
         for child in self.children:
             child_location = child._get_location()
@@ -119,25 +124,29 @@ class ASTNode(ABC):
                 location = child_location
             elif child_location is not None:
                 location = ASTQueryLocationInterval.merge(
-                    location, child_location)
+                    location, child_location
+                )
         return location
 
     @property
-    def end_date_offset(self) -> Optional[int]:
+    def end_date_offset(self) -> int | None:
         r"""The end of the time range of this subtree.
-        Returns :obj:`None` if there is no time range."""
+        Returns :obj:`None` if there is no time range.
+        """
         if self.date_offset_range is None:
             return None
         return self.date_offset_range.end
 
     @staticmethod
     def get_combined_time(
-            node: Union['ASTNode', Dict]) -> Optional[DateOffsetRange]:
-        r'''This is a mildly hacky method that combines date ranges of all
+        node: Union['ASTNode', dict],
+    ) -> DateOffsetRange | None:
+        r"""This is a mildly hacky method that combines date ranges of all
         children with the time range of the current node during the post_init.
         Since attributes of a pydantic dataclass sometimes aren't correctly
         loaded at the __post_init__ time, this method needs to be able to
-        handle uninitialized children that are still config dicts.'''
+        handle uninitialized children that are still config dicts.
+        """
         date_range = None
         if not isinstance(node, ASTNode):
             date_range = node.get('date_offset_range', None)
@@ -161,10 +170,11 @@ class ASTNode(ABC):
             date_range = date_range.merge_ranges(date_range, child_date_range)
         return date_range
 
-    def non_inf_date_offset_range(self) -> Optional[DateOffsetRange]:
+    def non_inf_date_offset_range(self) -> DateOffsetRange | None:
         r"""The full time range of this subtree, excluding any ranges with
         infinities, given as a `DateOffsetRange`.
-        Returns :obj:`None` if there is no time range."""
+        Returns :obj:`None` if there is no time range.
+        """
         result = None
         for child in self.children:
             child_range = child.non_inf_date_offset_range()
@@ -181,7 +191,7 @@ class ASTNode(ABC):
         pass
 
     @property
-    def dtype(self) -> Union[Dtype, ArrayDtype]:
+    def dtype(self) -> Dtype | ArrayDtype:
         r"""Dtype of the output of this expression, if known."""
         if self.dtype_maybe is None:
             raise ValueError('`dtype` has not been inferred yet.')
@@ -201,38 +211,43 @@ class ASTNode(ABC):
 
     @property
     def all_query_columns_with_locations(
-            self) -> List[Tuple[str, ASTQueryLocationInterval]]:
+        self,
+    ) -> list[tuple[str, ASTQueryLocationInterval]]:
         r"""List of all columns that explicitly appear in the query, given
         with in a fully-qualified name format: `table.column` and their
-        corresponding locations."""
+        corresponding locations.
+        """
         targets = []
         for child in self.children:
             targets.extend(child.all_query_columns_with_locations)
         return list(set(targets))
 
     @property
-    def all_query_columns(self) -> List[str]:
+    def all_query_columns(self) -> list[str]:
         r"""List of all columns that explicitly appear in the query, given
-        with in a fully-qualified name format: `table.column`."""
+        with in a fully-qualified name format: `table.column`.
+        """
         targets = []
         for child in self.children:
             targets.extend(child.all_query_columns)
         return list(set(targets))
 
     @property
-    def all_join_columns(self) -> List[str]:
+    def all_join_columns(self) -> list[str]:
         r"""List of all columns that are needed for joins in the query, given
-        with in a fully-qualified name format: `table.column`."""
+        with in a fully-qualified name format: `table.column`.
+        """
         targets = []
         for child in self.children:
             targets.extend(child.all_join_columns)
         return list(set(targets))
 
     @property
-    def all_time_columns(self) -> List[str]:
+    def all_time_columns(self) -> list[str]:
         r"""List of all columns that are needed for temporal aggregations in
         the query, given with in a fully-qualified name format:
-        `table.column`."""
+        `table.column`.
+        """
         targets = []
         for child in self.children:
             targets.extend(child.all_time_columns)

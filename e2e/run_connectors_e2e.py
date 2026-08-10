@@ -9,9 +9,14 @@ import sys
 
 import pandas as pd
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'packages', 'nvidia-sdfm', 'src'))
-import nvidia_sdfm as sdfm  # noqa: E402
-from nvidia_sdfm import SDFMClient  # noqa: E402
+sys.path.insert(
+    0,
+    os.path.join(
+        os.path.dirname(__file__), '..', 'packages', 'nvidia-sdfm', 'src'
+    ),
+)
+import nvidia_sdfm as sdfm
+from nvidia_sdfm import SDFMClient
 
 _client: SDFMClient | None = None
 
@@ -23,15 +28,26 @@ def predict_tabicl(*, context, predict, task, target, **kwargs):
 
 
 BASE_URL = os.environ.get('SDFM_NIM_BASE_URL', '').rstrip('/')
-DATA_DIR = os.environ.get('SDFM_DATA_DIR', os.path.join(os.path.dirname(__file__), 'data'))
+DATA_DIR = os.environ.get(
+    'SDFM_DATA_DIR', os.path.join(os.path.dirname(__file__), 'data')
+)
 
 RESULTS: list[tuple[str, bool, str]] = []
 
 JOB_OUTCOME_FEATURES = [
-    'actual_runtime_hours', 'queue_wait_minutes', 'mean_mfu_pct',
-    'gpu_hours', 'preempted_count',
+    'actual_runtime_hours',
+    'queue_wait_minutes',
+    'mean_mfu_pct',
+    'gpu_hours',
+    'preempted_count',
 ]
-JOB_OUTCOME_CLASSES = {'completed', 'failed', 'preempted', 'timeout', 'cancelled'}
+JOB_OUTCOME_CLASSES = {
+    'completed',
+    'failed',
+    'preempted',
+    'timeout',
+    'cancelled',
+}
 
 
 def check(name: str, condition: bool, detail: str = '') -> None:
@@ -45,7 +61,9 @@ def section(title: str) -> None:
 
 
 def classify_job_outcomes(frame: pd.DataFrame, source: str) -> None:
-    columns = [c for c in JOB_OUTCOME_FEATURES if c in frame.columns] + ['status']
+    columns = [c for c in JOB_OUTCOME_FEATURES if c in frame.columns] + [
+        'status'
+    ]
     frame = frame[columns].dropna(subset=['status']).reset_index(drop=True)
     frame = frame.sample(frac=1.0, random_state=11).reset_index(drop=True)
     context = frame.iloc[:2000]
@@ -53,18 +71,26 @@ def classify_job_outcomes(frame: pd.DataFrame, source: str) -> None:
     predict = predict_full.drop(columns=['status']).reset_index(drop=True)
 
     result = predict_tabicl(
-        context=context, predict=predict,
-        task='classification', target='status',
+        context=context,
+        predict=predict,
+        task='classification',
+        target='status',
         outputs=['prediction', 'probabilities'],
     )
-    check(f'{source}: row count matches', len(result) == len(predict), f'got {len(result)}')
+    check(
+        f'{source}: row count matches',
+        len(result) == len(predict),
+        f'got {len(result)}',
+    )
     check(
         f'{source}: predictions are valid job statuses',
         set(result['prediction']).issubset(JOB_OUTCOME_CLASSES),
         str(set(result['prediction'])),
     )
     majority = predict_full['status'].value_counts(normalize=True).max()
-    accuracy = float((result['prediction'].values == predict_full['status'].values).mean())
+    accuracy = float(
+        (result['prediction'].values == predict_full['status'].values).mean()
+    )
     check(
         f'{source}: accuracy in classical-baseline band (>=0.5; RF gets ~0.62 here, '
         f'signal in this dataset is deliberately relational, not row-local)',
@@ -76,7 +102,11 @@ def classify_job_outcomes(frame: pd.DataFrame, source: str) -> None:
 def local_csv_connector() -> None:
     section('local connector: job_outcomes.csv -> tabicl classification')
     frame = sdfm.read('local', path=os.path.join(DATA_DIR, 'job_outcomes.csv'))
-    check('local: read returns DataFrame', isinstance(frame, pd.DataFrame), f'shape={frame.shape}')
+    check(
+        'local: read returns DataFrame',
+        isinstance(frame, pd.DataFrame),
+        f'shape={frame.shape}',
+    )
     classify_job_outcomes(frame, 'local')
 
 
@@ -86,24 +116,39 @@ def sqlite_connector() -> None:
         'sqlite',
         database=os.path.join(DATA_DIR, 'gpu_fleet.sqlite'),
         query='SELECT avg_util_pct, avg_sm_active_pct, avg_tensor_active_pct, '
-              'avg_mem_util_pct, avg_temp_c, avg_power_w FROM gpu_metrics_daily '
-              'WHERE avg_power_w IS NOT NULL',
+        'avg_mem_util_pct, avg_temp_c, avg_power_w FROM gpu_metrics_daily '
+        'WHERE avg_power_w IS NOT NULL',
     )
-    check('sqlite: read returns DataFrame', isinstance(frame, pd.DataFrame), f'shape={frame.shape}')
+    check(
+        'sqlite: read returns DataFrame',
+        isinstance(frame, pd.DataFrame),
+        f'shape={frame.shape}',
+    )
 
-    frame = frame.dropna().sample(frac=1.0, random_state=11).reset_index(drop=True)
+    frame = (
+        frame.dropna().sample(frac=1.0, random_state=11).reset_index(drop=True)
+    )
     context = frame.iloc[:2000]
     predict_full = frame.iloc[2000:2200]
     predict = predict_full.drop(columns=['avg_power_w']).reset_index(drop=True)
 
     result = predict_tabicl(
-        context=context, predict=predict,
-        task='regression', target='avg_power_w',
+        context=context,
+        predict=predict,
+        task='regression',
+        target='avg_power_w',
         outputs=['prediction'],
     )
-    check('sqlite: row count matches', len(result) == len(predict), f'got {len(result)}')
-    correlation = float(pd.Series(result['prediction'].values).corr(
-        pd.Series(predict_full['avg_power_w'].values)))
+    check(
+        'sqlite: row count matches',
+        len(result) == len(predict),
+        f'got {len(result)}',
+    )
+    correlation = float(
+        pd.Series(result['prediction'].values).corr(
+            pd.Series(predict_full['avg_power_w'].values)
+        )
+    )
     check(
         'sqlite: regression predictions correlate with actual power',
         correlation > 0.5,
@@ -117,10 +162,14 @@ def duckdb_connector() -> None:
         'duckdb',
         database=os.path.join(DATA_DIR, 'gpu_fleet_smoke.duckdb'),
         query='SELECT gpu_hours, allocation_type, mig_profile, '
-              'EXTRACT(EPOCH FROM released_at - allocated_at) / 3600.0 AS wall_hours '
-              'FROM gpu_allocations WHERE released_at IS NOT NULL',
+        'EXTRACT(EPOCH FROM released_at - allocated_at) / 3600.0 AS wall_hours '
+        'FROM gpu_allocations WHERE released_at IS NOT NULL',
     )
-    check('duckdb: read returns DataFrame', isinstance(frame, pd.DataFrame), f'shape={frame.shape}')
+    check(
+        'duckdb: read returns DataFrame',
+        isinstance(frame, pd.DataFrame),
+        f'shape={frame.shape}',
+    )
 
     frame = frame.dropna(subset=['gpu_hours', 'wall_hours'])
     frame = frame.sample(frac=1.0, random_state=11).reset_index(drop=True)
@@ -129,25 +178,39 @@ def duckdb_connector() -> None:
     predict = predict_full.drop(columns=['gpu_hours']).reset_index(drop=True)
 
     result = predict_tabicl(
-        context=context, predict=predict,
-        task='regression', target='gpu_hours',
+        context=context,
+        predict=predict,
+        task='regression',
+        target='gpu_hours',
         outputs=['prediction', 'quantiles'],
-        prediction_statistic='mean', quantile_levels=[0.1, 0.5, 0.9],
+        prediction_statistic='mean',
+        quantile_levels=[0.1, 0.5, 0.9],
     )
-    check('duckdb: row count matches', len(result) == len(predict), f'got {len(result)}')
-    correlation = float(pd.Series(result['prediction'].values).corr(
-        pd.Series(predict_full['gpu_hours'].values)))
+    check(
+        'duckdb: row count matches',
+        len(result) == len(predict),
+        f'got {len(result)}',
+    )
+    correlation = float(
+        pd.Series(result['prediction'].values).corr(
+            pd.Series(predict_full['gpu_hours'].values)
+        )
+    )
     check(
         'duckdb: regression predictions correlate with actual gpu_hours',
         correlation > 0.5,
         f'pearson={correlation:.3f}',
     )
-    ordered = result['quantiles'].apply(lambda q: q['0.1'] <= q['0.5'] <= q['0.9'])
+    ordered = result['quantiles'].apply(
+        lambda q: q['0.1'] <= q['0.5'] <= q['0.9']
+    )
     check('duckdb: quantiles are ordered', bool(ordered.all()))
 
 
 def snowflake_connector() -> None:
-    section('snowflake connector: full-scale JOB_OUTCOMES -> tabicl classification')
+    section(
+        'snowflake connector: full-scale JOB_OUTCOMES -> tabicl classification'
+    )
     frame = sdfm.read(
         'snowflake',
         account=os.environ['SNOWFLAKE_ACCOUNT'],
@@ -156,10 +219,14 @@ def snowflake_connector() -> None:
         role=os.environ['SNOWFLAKE_ROLE'],
         warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
         query='SELECT ACTUAL_RUNTIME_HOURS, QUEUE_WAIT_MINUTES, MEAN_MFU_PCT, '
-              'GPU_HOURS, PREEMPTED_COUNT, STATUS '
-              'FROM MY_DATABASE.GPU_FLEET.JOB_OUTCOMES SAMPLE (5000 ROWS)',
+        'GPU_HOURS, PREEMPTED_COUNT, STATUS '
+        'FROM MY_DATABASE.GPU_FLEET.JOB_OUTCOMES SAMPLE (5000 ROWS)',
     )
-    check('snowflake: read returns DataFrame', isinstance(frame, pd.DataFrame), f'shape={frame.shape}')
+    check(
+        'snowflake: read returns DataFrame',
+        isinstance(frame, pd.DataFrame),
+        f'shape={frame.shape}',
+    )
     frame.columns = [c.lower() for c in frame.columns]
     classify_job_outcomes(frame, 'snowflake')
 
@@ -172,11 +239,18 @@ def main() -> None:
     global _client
     _client = SDFMClient(url=BASE_URL)
 
-    for step in (local_csv_connector, sqlite_connector, duckdb_connector, snowflake_connector):
+    for step in (
+        local_csv_connector,
+        sqlite_connector,
+        duckdb_connector,
+        snowflake_connector,
+    ):
         try:
             step()
-        except Exception as error:  # noqa: BLE001
-            check(step.__name__, False, f'raised {type(error).__name__}: {error}')
+        except Exception as error:
+            check(
+                step.__name__, False, f'raised {type(error).__name__}: {error}'
+            )
 
     section('summary')
     failed = [name for name, ok, _ in RESULTS if not ok]

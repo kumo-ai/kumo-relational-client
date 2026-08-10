@@ -5,7 +5,8 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 _INSTRUCTIONS = """ROLE: Explanation summary module
 INSTRUCTIONS: Your goal is to extract meaningful insight from structured explanations of a prediction. You will be given
@@ -134,39 +135,45 @@ Avoid jargon; explain in business terms.
   Not all columns have a cohort analysis since some semantic types are unsupported.
   For example, text and ID columns typically only appear in local view."""
 
-SYSTEM_PROMPT = _INSTRUCTIONS + "\n\n" + _EXPLAINABILITY + "\n\n"
+SYSTEM_PROMPT = _INSTRUCTIONS + '\n\n' + _EXPLAINABILITY + '\n\n'
 
-_DEFAULT_MODEL = "gpt-4.1-mini-2025-04-14"
+_DEFAULT_MODEL = 'gpt-4.1-mini-2025-04-14'
 _DEFAULT_TIMEOUT = 20.0
 
 _STRUCTURED_NOTE = (
-    "The structured explanation is still available on .cohorts and .subgraphs.")
+    'The structured explanation is still available on .cohorts and .subgraphs.'
+)
 
 # Names the extra on the distribution users install (`nvidia-sdfm`), not on this
 # engine package, which the SDK documents as an implementation detail.
 SUMMARY_NEEDS_EXTRA_MESSAGE = (
     "Natural-language explanation summary needs the 'explain' extra: "
-    "pip install 'nvidia-sdfm[explain]'. " + _STRUCTURED_NOTE)
+    "pip install 'nvidia-sdfm[explain]'. " + _STRUCTURED_NOTE
+)
 
 SUMMARY_UNAVAILABLE_MESSAGE = (
-    "Natural-language explanation summary needs an API key. Set OPENAI_API_KEY "
-    "(the default is OpenAI gpt-4.1-mini); for another OpenAI-compatible "
-    "endpoint set KUMORFM_EXPLAIN_LLM_API_KEY, KUMORFM_EXPLAIN_LLM_BASE_URL and "
-    "KUMORFM_EXPLAIN_LLM_MODEL. " + _STRUCTURED_NOTE)
+    'Natural-language explanation summary needs an API key. Set OPENAI_API_KEY '
+    '(the default is OpenAI gpt-4.1-mini); for another OpenAI-compatible '
+    'endpoint set KUMORFM_EXPLAIN_LLM_API_KEY, KUMORFM_EXPLAIN_LLM_BASE_URL and '
+    'KUMORFM_EXPLAIN_LLM_MODEL. ' + _STRUCTURED_NOTE
+)
 
 SUMMARY_NEEDS_MODEL_MESSAGE = (
-    "Natural-language explanation summary: a custom endpoint is set "
-    "(KUMORFM_EXPLAIN_LLM_BASE_URL) but no model. Set KUMORFM_EXPLAIN_LLM_MODEL to a "
-    "model that endpoint serves. " + _STRUCTURED_NOTE)
+    'Natural-language explanation summary: a custom endpoint is set '
+    '(KUMORFM_EXPLAIN_LLM_BASE_URL) but no model. Set KUMORFM_EXPLAIN_LLM_MODEL to a '
+    'model that endpoint serves. ' + _STRUCTURED_NOTE
+)
 
 SUMMARY_ERROR_MESSAGE = (
-    "Natural-language explanation summary could not be generated. Check the "
-    "endpoint URL, API key, and model.")
+    'Natural-language explanation summary could not be generated. Check the '
+    'endpoint URL, API key, and model.'
+)
 
 SUMMARY_TIMEOUT_MESSAGE = (
-    "Natural-language explanation summary timed out after {timeout:g}s. Raise "
-    "KUMORFM_EXPLAIN_LLM_TIMEOUT (or point KUMORFM_EXPLAIN_LLM_MODEL at a faster model) "
-    "and retry. " + _STRUCTURED_NOTE)
+    'Natural-language explanation summary timed out after {timeout:g}s. Raise '
+    'KUMORFM_EXPLAIN_LLM_TIMEOUT (or point KUMORFM_EXPLAIN_LLM_MODEL at a faster model) '
+    'and retry. ' + _STRUCTURED_NOTE
+)
 
 
 def _build_input_message(
@@ -179,17 +186,18 @@ def _build_input_message(
     prompt input expected by the summary model, mirroring the fields described
     in the embedded explainability instructions.
     """
-    subgraph = subgraphs[0] if subgraphs else ""
+    subgraph = subgraphs[0] if subgraphs else ''
     return (
-        f"USER QUERY: {query}\n\n"
-        f"MODEL PREDICTION: {prediction}\n\n"
-        f"COLUMN ANALYSIS: {cohorts}\n\n"
-        f"SUBGRAPH EXPLANATION: {subgraph}"
+        f'USER QUERY: {query}\n\n'
+        f'MODEL PREDICTION: {prediction}\n\n'
+        f'COLUMN ANALYSIS: {cohorts}\n\n'
+        f'SUBGRAPH EXPLANATION: {subgraph}'
     )
 
 
-def _make_client(base_url: str | None, api_key: str | None,
-                 timeout: float) -> Any:
+def _make_client(
+    base_url: str | None, api_key: str | None, timeout: float
+) -> Any:
     r"""Build an OpenAI-compatible client for the given endpoint, or return
     ``None`` when the optional dependency or API key is missing so summary
     generation can degrade gracefully instead of raising.
@@ -204,9 +212,9 @@ def _make_client(base_url: str | None, api_key: str | None,
         from openai import OpenAI
     except ImportError:
         return None
-    kwargs: dict[str, Any] = {"api_key": api_key, "timeout": timeout}
+    kwargs: dict[str, Any] = {'api_key': api_key, 'timeout': timeout}
     if base_url:
-        kwargs["base_url"] = base_url
+        kwargs['base_url'] = base_url
     return OpenAI(**kwargs)
 
 
@@ -267,10 +275,10 @@ def generate_summary(
     ``.subgraphs``) is available regardless.
     """
     if timeout is None:
-        timeout = _env_float("KUMORFM_EXPLAIN_LLM_TIMEOUT", _DEFAULT_TIMEOUT)
-    base_url = base_url or _env("KUMORFM_EXPLAIN_LLM_BASE_URL")
-    api_key = api_key or _env("KUMORFM_EXPLAIN_LLM_API_KEY", "OPENAI_API_KEY")
-    model_set = model or _env("KUMORFM_EXPLAIN_LLM_MODEL")
+        timeout = _env_float('KUMORFM_EXPLAIN_LLM_TIMEOUT', _DEFAULT_TIMEOUT)
+    base_url = base_url or _env('KUMORFM_EXPLAIN_LLM_BASE_URL')
+    api_key = api_key or _env('KUMORFM_EXPLAIN_LLM_API_KEY', 'OPENAI_API_KEY')
+    model_set = model or _env('KUMORFM_EXPLAIN_LLM_MODEL')
     model = model_set or _DEFAULT_MODEL
 
     if client is None:
@@ -291,15 +299,15 @@ def generate_summary(
         response = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": message},
+                {'role': 'system', 'content': SYSTEM_PROMPT},
+                {'role': 'user', 'content': message},
             ],
         )
         content = response.choices[0].message.content
     except Exception as exc:
-        if type(exc).__name__ == "APITimeoutError":
+        if type(exc).__name__ == 'APITimeoutError':
             return SUMMARY_TIMEOUT_MESSAGE.format(timeout=timeout)
-        return f"{SUMMARY_ERROR_MESSAGE} (reason: {type(exc).__name__})"
+        return f'{SUMMARY_ERROR_MESSAGE} (reason: {type(exc).__name__})'
     if not content:
         return SUMMARY_ERROR_MESSAGE
     return content.strip()

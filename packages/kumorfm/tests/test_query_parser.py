@@ -4,19 +4,18 @@
 
 import io
 import logging
+from collections.abc import Iterator
 from contextlib import (
     contextmanager,
     redirect_stderr,
     redirect_stdout,
 )
 from dataclasses import dataclass
-from typing import Iterator
 from unittest.mock import patch
 
 import pytest
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.typing import ProblemType
-
 from kumorfm.rfm import Graph, KumoRFM
 from kumorfm.rfm.query_parser import parse_query_locally
 
@@ -68,7 +67,8 @@ def test_parse_query_locally_returns_validated_query(
 
     assert isinstance(query, ValidatedPredictiveQuery)
     assert query.to_string() == (
-        'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0')
+        'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0'
+    )
     assert query.get_rfm_entity_id_list() == [0]
 
 
@@ -84,7 +84,8 @@ def test_demo_prefix_offsets_assuming_location(
     ).to_parsed_predictive_query(
         prefix + 'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
         'FOR USERS.USER_ID = 0 '
-        'ASSUMING SUM(ORDERS.AMOUNT, 0, 7, days) >= 10')
+        'ASSUMING SUM(ORDERS.AMOUNT, 0, 7, days) >= 10'
+    )
     assert parsed.whatif_ast is not None
     original_start_col = parsed.whatif_ast.location.start_col
 
@@ -94,7 +95,8 @@ def test_demo_prefix_offsets_assuming_location(
     ).update_location_interval(parsed)
 
     assert parsed.whatif_ast.location.start_col == (
-        original_start_col + len(prefix))
+        original_start_col + len(prefix)
+    )
 
 
 @pytest.mark.parametrize(
@@ -103,19 +105,22 @@ def test_demo_prefix_offsets_assuming_location(
         pytest.param(
             'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID=0',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID = 0'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID = 0'
+                ),
                 entity_ids=[0],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 7, days)',
             ),
             id='single-numeric-entity-id',
         ),
         pytest.param(
-            'PREDICT SUM(ORDERS.AMOUNT, 0, 7) '
-            'FOR USERS.USER_ID IN (0, 1, 3)',
+            'PREDICT SUM(ORDERS.AMOUNT, 0, 7) FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 7, days)',
             ),
@@ -125,8 +130,10 @@ def test_demo_prefix_offsets_assuming_location(
             'predict sum(ORDERS.AMOUNT, 0, 7, days) # target\n'
             'for USERS.USER_ID in (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 7, days)',
             ),
@@ -136,8 +143,10 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT COUNT(ORDERS.*, 0, 7, days) '
             'FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.*, 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.*, 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='COUNT(ORDERS.*, 0, 7, days)',
             ),
@@ -147,9 +156,11 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT LIST_DISTINCT(ORDERS.STORE_ID, 0, 7, days) '
             'RANK TOP 2 FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT LIST_DISTINCT(ORDERS.STORE_ID, '
-                           '0, 7, days) RANK TOP 2 FOR USERS.USER_ID '
-                           'IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT LIST_DISTINCT(ORDERS.STORE_ID, '
+                    '0, 7, days) RANK TOP 2 FOR USERS.USER_ID '
+                    'IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='LIST_DISTINCT(ORDERS.STORE_ID, 0, 7, days)',
                 problem_type=ProblemType.RANK,
@@ -160,8 +171,10 @@ def test_demo_prefix_offsets_assuming_location(
         pytest.param(
             'PREDICT AVG(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0',
             ExpectedQuery(
-                canonical=('PREDICT AVG(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID = 0'),
+                canonical=(
+                    'PREDICT AVG(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID = 0'
+                ),
                 entity_ids=[0],
                 target_ast='AVG(ORDERS.AMOUNT, 0, 7, days)',
             ),
@@ -170,8 +183,10 @@ def test_demo_prefix_offsets_assuming_location(
         pytest.param(
             'PREDICT MIN(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0',
             ExpectedQuery(
-                canonical=('PREDICT MIN(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID = 0'),
+                canonical=(
+                    'PREDICT MIN(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID = 0'
+                ),
                 entity_ids=[0],
                 target_ast='MIN(ORDERS.AMOUNT, 0, 7, days)',
             ),
@@ -180,8 +195,10 @@ def test_demo_prefix_offsets_assuming_location(
         pytest.param(
             'PREDICT MAX(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0',
             ExpectedQuery(
-                canonical=('PREDICT MAX(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID = 0'),
+                canonical=(
+                    'PREDICT MAX(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID = 0'
+                ),
                 entity_ids=[0],
                 target_ast='MAX(ORDERS.AMOUNT, 0, 7, days)',
             ),
@@ -191,12 +208,15 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT COUNT(ORDERS.* WHERE ORDERS.AMOUNT > 10.5, '
             '0, 7, days) FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.* WHERE ORDERS.AMOUNT > '
-                           '10.5, 0, 7, days) FOR USERS.USER_ID IN '
-                           '(0, 1, 3)'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.* WHERE ORDERS.AMOUNT > '
+                    '10.5, 0, 7, days) FOR USERS.USER_ID IN '
+                    '(0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
-                target_ast=('COUNT(ORDERS.* WHERE ORDERS.AMOUNT > 10.5, '
-                            '0, 7, days)'),
+                target_ast=(
+                    'COUNT(ORDERS.* WHERE ORDERS.AMOUNT > 10.5, 0, 7, days)'
+                ),
             ),
             id='target-filter-decimal',
         ),
@@ -204,12 +224,16 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT COUNT(ORDERS.* WHERE ORDERS.AMOUNT IN (10, 15), '
             '0, 7, days) FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.* WHERE ORDERS.AMOUNT IN '
-                           '(10, 15), 0, 7, days) FOR USERS.USER_ID IN '
-                           '(0, 1, 3)'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.* WHERE ORDERS.AMOUNT IN '
+                    '(10, 15), 0, 7, days) FOR USERS.USER_ID IN '
+                    '(0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
-                target_ast=('COUNT(ORDERS.* WHERE ORDERS.AMOUNT IN '
-                            '(10, 15), 0, 7, days)'),
+                target_ast=(
+                    'COUNT(ORDERS.* WHERE ORDERS.AMOUNT IN '
+                    '(10, 15), 0, 7, days)'
+                ),
             ),
             id='target-filter-membership',
         ),
@@ -217,12 +241,16 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT COUNT(ORDERS.* WHERE NOT ORDERS.AMOUNT IS NULL, '
             '0, 7, days) FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.* WHERE NOT '
-                           '(ORDERS.AMOUNT IS NULL), 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.* WHERE NOT '
+                    '(ORDERS.AMOUNT IS NULL), 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
-                target_ast=('COUNT(ORDERS.* WHERE NOT '
-                            '(ORDERS.AMOUNT IS NULL), 0, 7, days)'),
+                target_ast=(
+                    'COUNT(ORDERS.* WHERE NOT '
+                    '(ORDERS.AMOUNT IS NULL), 0, 7, days)'
+                ),
             ),
             id='target-filter-null-negation',
         ),
@@ -231,13 +259,17 @@ def test_demo_prefix_offsets_assuming_location(
             'AND ORDERS.AMOUNT <= 25, 0, 7, days) '
             'FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.* WHERE '
-                           '(ORDERS.AMOUNT >= 10) AND '
-                           '(ORDERS.AMOUNT <= 25), 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.* WHERE '
+                    '(ORDERS.AMOUNT >= 10) AND '
+                    '(ORDERS.AMOUNT <= 25), 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
-                target_ast=('COUNT(ORDERS.* WHERE (ORDERS.AMOUNT >= 10) '
-                            'AND (ORDERS.AMOUNT <= 25), 0, 7, days)'),
+                target_ast=(
+                    'COUNT(ORDERS.* WHERE (ORDERS.AMOUNT >= 10) '
+                    'AND (ORDERS.AMOUNT <= 25), 0, 7, days)'
+                ),
             ),
             id='target-filter-logical-and',
         ),
@@ -245,8 +277,10 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) > 25 '
             'FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) > 25 '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) > 25 '
+                    'FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 7, days) > 25',
             ),
@@ -264,8 +298,9 @@ def test_demo_prefix_offsets_assuming_location(
         pytest.param(
             'PREDICT USERS.STATUS = "A" FOR USERS.USER_ID IN (0, 1, 3)',
             ExpectedQuery(
-                canonical=('PREDICT USERS.STATUS = "A" '
-                           'FOR USERS.USER_ID IN (0, 1, 3)'),
+                canonical=(
+                    'PREDICT USERS.STATUS = "A" FOR USERS.USER_ID IN (0, 1, 3)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='USERS.STATUS = "A"',
             ),
@@ -276,13 +311,17 @@ def test_demo_prefix_offsets_assuming_location(
             'FOR USERS.USER_ID IN (0, 1, 3) '
             'WHERE USERS.STATUS = "A" OR USERS.AGE >= 30',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.*, 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3) WHERE '
-                           '(USERS.STATUS = "A") OR (USERS.AGE >= 30)'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.*, 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3) WHERE '
+                    '(USERS.STATUS = "A") OR (USERS.AGE >= 30)'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='COUNT(ORDERS.*, 0, 7, days)',
-                entity_ast=('USERS.USER_ID WHERE (USERS.STATUS = "A") '
-                            'OR (USERS.AGE >= 30)'),
+                entity_ast=(
+                    'USERS.USER_ID WHERE (USERS.STATUS = "A") '
+                    'OR (USERS.AGE >= 30)'
+                ),
             ),
             id='entity-filter-static-or',
         ),
@@ -291,13 +330,16 @@ def test_demo_prefix_offsets_assuming_location(
             'FOR USERS.USER_ID IN (0, 1, 3) '
             'WHERE COUNT(ORDERS.*, -7, 0, days) > 0',
             ExpectedQuery(
-                canonical=('PREDICT COUNT(ORDERS.*, 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3) WHERE '
-                           'COUNT(ORDERS.*, -7, 0, days) > 0'),
+                canonical=(
+                    'PREDICT COUNT(ORDERS.*, 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3) WHERE '
+                    'COUNT(ORDERS.*, -7, 0, days) > 0'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='COUNT(ORDERS.*, 0, 7, days)',
-                entity_ast=('USERS.USER_ID WHERE COUNT(ORDERS.*, '
-                            '-7, 0, days) > 0'),
+                entity_ast=(
+                    'USERS.USER_ID WHERE COUNT(ORDERS.*, -7, 0, days) > 0'
+                ),
             ),
             id='entity-filter-temporal-aggregation',
         ),
@@ -306,9 +348,11 @@ def test_demo_prefix_offsets_assuming_location(
             'FOR USERS.USER_ID IN (0, 1, 3) '
             'ASSUMING SUM(ORDERS.AMOUNT, 0, 7, days) >= 10',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR USERS.USER_ID IN (0, 1, 3) ASSUMING '
-                           'SUM(ORDERS.AMOUNT, 0, 7, days) >= 10'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR USERS.USER_ID IN (0, 1, 3) ASSUMING '
+                    'SUM(ORDERS.AMOUNT, 0, 7, days) >= 10'
+                ),
                 entity_ids=[0, 1, 3],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 7, days)',
                 whatif_ast='SUM(ORDERS.AMOUNT, 0, 7, days) >= 10',
@@ -319,8 +363,10 @@ def test_demo_prefix_offsets_assuming_location(
             'PREDICT SUM(ORDERS.AMOUNT, 0, 1, days) '
             'FORECAST 4 TIMEFRAMES FOR USERS.USER_ID = 0',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 1, days) '
-                           'FORECAST 4 TIMEFRAMES FOR USERS.USER_ID = 0'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 1, days) '
+                    'FORECAST 4 TIMEFRAMES FOR USERS.USER_ID = 0'
+                ),
                 entity_ids=[0],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 1, days)',
                 problem_type=ProblemType.FORECAST,
@@ -331,8 +377,10 @@ def test_demo_prefix_offsets_assuming_location(
         pytest.param(
             'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR EACH USERS.USER_ID',
             ExpectedQuery(
-                canonical=('PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-                           'FOR EACH USERS.USER_ID'),
+                canonical=(
+                    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
+                    'FOR EACH USERS.USER_ID'
+                ),
                 entity_ids=[],
                 target_ast='SUM(ORDERS.AMOUNT, 0, 7, days)',
             ),
@@ -379,7 +427,7 @@ def test_parse_valid_queries_against_rfm_graph(
             id='double-quoted-string-id-list',
         ),
         pytest.param(
-            "PREDICT COUNT(ORDERS.*, 0, 365, days) "
+            'PREDICT COUNT(ORDERS.*, 0, 365, days) '
             "FOR USERS.USER_ID IN ('user_a', 'user_c')",
             ['user_a', 'user_c'],
             'COUNT(ORDERS.*, 0, 365, days)',
@@ -415,14 +463,12 @@ def test_parse_string_entity_ids(
             id='missing-predict',
         ),
         pytest.param(
-            'PREDICT SUM(ORDERS.MISSING, 0, 7, days) '
-            'FOR USERS.USER_ID = 0',
+            'PREDICT SUM(ORDERS.MISSING, 0, 7, days) FOR USERS.USER_ID = 0',
             "Column 'MISSING' does not exist in table 'ORDERS'",
             id='unknown-column',
         ),
         pytest.param(
-            'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-            'FOR USERSS.USER_ID = 0',
+            'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERSS.USER_ID = 0',
             "Table 'USERSS' does not exist in the graph",
             id='unknown-table',
         ),
@@ -447,8 +493,7 @@ def test_parse_string_entity_ids(
             id='invalid-time-range',
         ),
         pytest.param(
-            'PREDICT FIRST(ORDERS.AMOUNT, 0, 7, days) '
-            'FOR USERS.USER_ID = 0',
+            'PREDICT FIRST(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0',
             'Aggregation FIRST type is not supported',
             id='unsupported-aggregation',
         ),
@@ -494,8 +539,7 @@ def test_parse_string_entity_ids(
             id='forecast-static-target',
         ),
         pytest.param(
-            'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-            'FOR USERS.USER_ID IN ("0")',
+            'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID IN ("0")',
             'Array with single element is not supported',
             id='single-element-in-list',
         ),
@@ -550,8 +594,10 @@ def _restored_logging() -> Iterator[None]:
     r"""Restore every logger ``initialize_logging`` touches."""
     names = ['kumorfm', 'matplotlib', 'urllib3', 'snowflake']
     loggers = [logging.getLogger(name) for name in names]
-    saved = [(logger, list(logger.handlers), logger.propagate, logger.level)
-             for logger in loggers]
+    saved = [
+        (logger, list(logger.handlers), logger.propagate, logger.level)
+        for logger in loggers
+    ]
     root = logging.getLogger()
     saved_root = (list(root.handlers), root.propagate, root.level)
     try:
@@ -571,8 +617,10 @@ def test_parse_failure_does_not_log_the_raw_query_at_warning(
     # typically shipped to a central log store; the raised ValueError already
     # quotes the query, so the log record must not repeat it.
     secret = 'ssn-123-45-6789'
-    query = (f"PREDICT SUM(ORDERS.AMOUNT, 0, 30, dayz) FOR EACH USERS.USER_ID "
-             f"WHERE USERS.STATUS = '{secret}'")
+    query = (
+        f'PREDICT SUM(ORDERS.AMOUNT, 0, 30, dayz) FOR EACH USERS.USER_ID '
+        f"WHERE USERS.STATUS = '{secret}'"
+    )
 
     with _capture_kumorfm_logs() as captured:
         with pytest.raises(ValueError, match=secret):
@@ -582,8 +630,10 @@ def test_parse_failure_does_not_log_the_raw_query_at_warning(
     assert captured.records, 'the parser must still log the translated error'
     assert [r for r in captured.records if r.levelno >= logging.WARNING] == []
     assert not any(secret in r.getMessage() for r in captured.records)
-    assert any('was translated to' in r.getMessage()
-               and r.levelno == logging.DEBUG for r in captured.records)
+    assert any(
+        'was translated to' in r.getMessage() and r.levelno == logging.DEBUG
+        for r in captured.records
+    )
 
 
 def test_importing_and_using_the_driver_leaves_the_root_logger_alone() -> None:
@@ -607,13 +657,16 @@ def test_importing_and_using_the_driver_leaves_the_root_logger_alone() -> None:
         assert len(logger.handlers) == count
 
 
-@pytest.mark.parametrize('query', [
-    'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1)',
-    'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1,)',
-    'SELECT * FROM USERS',
-    'PREDICT COUNT(ORDERS.* 0, 7, days) FOR EACH USERS.USER_ID',
-    'PREDICT ((( USERS.STATUS FOR EACH USERS.USER_ID',
-])
+@pytest.mark.parametrize(
+    'query',
+    [
+        'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1)',
+        'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1,)',
+        'SELECT * FROM USERS',
+        'PREDICT COUNT(ORDERS.* 0, 7, days) FOR EACH USERS.USER_ID',
+        'PREDICT ((( USERS.STATUS FOR EACH USERS.USER_ID',
+    ],
+)
 def test_a_rejected_query_writes_nothing_to_stdout(
     user_store_graph: Graph,
     query: str,
@@ -642,7 +695,8 @@ def test_the_rejection_still_explains_itself(user_store_graph: Graph) -> None:
     """
     with pytest.raises(ValueError) as excinfo:
         KumoRFM(user_store_graph, verbose=False)._parse_query(
-            'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1)')
+            'PREDICT USERS.STATUS FOR USERS.USER_ID IN (1)'
+        )
 
     message = str(excinfo.value)
     assert 'Array with single element is not supported' in message
@@ -653,6 +707,23 @@ def test_a_valid_query_still_parses(user_store_graph: Graph) -> None:
     stdout = io.StringIO()
     with redirect_stdout(stdout):
         parsed = KumoRFM(user_store_graph, verbose=False)._parse_query(
-            'PREDICT COUNT(ORDERS.*, 0, 30, days) FOR EACH USERS.USER_ID')
+            'PREDICT COUNT(ORDERS.*, 0, 30, days) FOR EACH USERS.USER_ID'
+        )
     assert parsed is not None
     assert stdout.getvalue() == ''
+
+
+@pytest.mark.parametrize('unit', ['weeks', 'seconds', 'day', 'year'])
+def test_an_unsupported_time_unit_is_named(
+    unit: str, user_store_graph: Graph
+) -> None:
+    r"""The rejected unit is named, not the clause that happens to contain it."""
+    with pytest.raises(ValueError) as excinfo:
+        KumoRFM(user_store_graph, verbose=False)._parse_query(
+            f'PREDICT COUNT(ORDERS.*, 0, 4, {unit}) FOR EACH USERS.USER_ID'
+        )
+
+    message = str(excinfo.value)
+    assert f"'{unit}' is not a time unit" in message
+    assert 'Supported units are minutes, hours, days, months.' in message
+    assert 'target (PREDICT) clause' not in message

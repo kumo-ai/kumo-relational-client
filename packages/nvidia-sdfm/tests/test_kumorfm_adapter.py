@@ -8,6 +8,7 @@ import contextlib
 
 import pandas as pd
 import pytest
+
 from nvidia_sdfm.adapters.kumorfm import KumoRFMAdapter
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import MissingExtraError, NimRequestError, SdfmError
@@ -36,7 +37,7 @@ class _FakeGraph:
     r"""Minimal stand-in exposing the ``tables`` mapping the adapter reads."""
 
     def __init__(self, *table_names: str) -> None:
-        self.tables = {name: None for name in table_names}
+        self.tables = dict.fromkeys(table_names)
 
 
 class _FakeEngineModel:
@@ -51,7 +52,8 @@ class _FakeEngineModel:
 def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
     captured = {}
     monkeypatch.setattr(
-        rfm_engine, 'init_client',
+        rfm_engine,
+        'init_client',
         lambda **kwargs: captured.update(init=kwargs),
     )
 
@@ -65,9 +67,14 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='fake-graph', query='PREDICT target FOR entity=1',
-        indices=[1, 2, 3]))
+    result = KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='fake-graph',
+            query='PREDICT target FOR entity=1',
+            indices=[1, 2, 3],
+        ),
+    )
 
     assert captured['init'] == {
         'url': client.url,
@@ -94,13 +101,15 @@ def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
         def predict(self, query, **kwargs):
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(rfm_engine, 'init_client',
-                        lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(
+        rfm_engine, 'init_client', lambda **kwargs: captured.update(kwargs)
+    )
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     transport = Transport('https://nim.example.com:8000', timeout=3.5)
     KumoRFMAdapter().predict(
-        transport, KumoRFMRequest(graph='g', query='PREDICT x'))
+        transport, KumoRFMRequest(graph='g', query='PREDICT x')
+    )
 
     assert captured['timeout'] == 3.5
 
@@ -120,9 +129,16 @@ def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='g', query='PREDICT x', indices=[1], run_mode='best',
-        options={'num_hops': 3}))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='g',
+            query='PREDICT x',
+            indices=[1],
+            run_mode='best',
+            options={'num_hops': 3},
+        ),
+    )
 
     assert captured['run_mode'] == 'best'
     assert captured['num_hops'] == 3
@@ -131,11 +147,18 @@ def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
 @requires_engine
 def test_predict_rejects_reserved_option_keys(monkeypatch, client):
     called = {}
-    monkeypatch.setattr(rfm_engine, 'init_client',
-                        lambda **kwargs: called.setdefault('init', True))
+    monkeypatch.setattr(
+        rfm_engine,
+        'init_client',
+        lambda **kwargs: called.setdefault('init', True),
+    )
     with pytest.raises(SdfmError) as excinfo:
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='g', query='PREDICT x', options={'run_mode': 'best'}))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(
+                graph='g', query='PREDICT x', options={'run_mode': 'best'}
+            ),
+        )
     assert excinfo.value.code == 'INVALID_REQUEST'
     assert 'init' not in called
 
@@ -154,14 +177,16 @@ def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
 
     with pytest.raises(TypeError):
         KumoRFMAdapter().predict(
-            client, KumoRFMRequest(graph='g', query='PREDICT x'))
+            client, KumoRFMRequest(graph='g', query='PREDICT x')
+        )
 
 
 @requires_engine
 def test_adapter_authorizes_engine_init(monkeypatch, client):
     captured = {}
-    monkeypatch.setattr(rfm_engine, 'init_client',
-                        lambda **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(
+        rfm_engine, 'init_client', lambda **kwargs: captured.update(kwargs)
+    )
 
     class FakeKumoRFM(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
@@ -172,7 +197,8 @@ def test_adapter_authorizes_engine_init(monkeypatch, client):
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
     KumoRFMAdapter().predict(
-        client, KumoRFMRequest(graph='g', query='PREDICT x'))
+        client, KumoRFMRequest(graph='g', query='PREDICT x')
+    )
 
     assert captured['_token'] is rfm_engine._SDFM_CLIENT_TOKEN
 
@@ -214,8 +240,13 @@ def test_kumorfm_shim_withholds_names_the_supported_api_cannot_reach():
     """
     from nvidia_sdfm import kumorfm as kumorfm_shim
 
-    for name in ('MaterializedPredictionRequest', 'TaskTable', 'KumoRFM',
-                 'init', 'LocalGraph'):
+    for name in (
+        'MaterializedPredictionRequest',
+        'TaskTable',
+        'KumoRFM',
+        'init',
+        'LocalGraph',
+    ):
         assert not hasattr(kumorfm_shim, name), name
 
 
@@ -238,6 +269,7 @@ def test_kumorfm_shim_exposes_stype_documented_by_the_quickstart():
 
 def _patch_engine_import(monkeypatch, error: BaseException) -> None:
     import builtins
+
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
@@ -249,7 +281,8 @@ def _patch_engine_import(monkeypatch, error: BaseException) -> None:
 
 
 def test_predict_raises_missing_extra_error_when_engine_not_installed(
-    monkeypatch, client,
+    monkeypatch,
+    client,
 ):
     _patch_engine_import(
         monkeypatch,
@@ -257,15 +290,18 @@ def test_predict_raises_missing_extra_error_when_engine_not_installed(
     )
     with pytest.raises(MissingExtraError):
         KumoRFMAdapter().predict(
-            client, KumoRFMRequest(graph='g', query='PREDICT x'))
+            client, KumoRFMRequest(graph='g', query='PREDICT x')
+        )
 
 
 def test_predict_propagates_broken_driver_error(monkeypatch, client):
     _patch_engine_import(
-        monkeypatch, RuntimeError('kumolib native extension failed to load'))
+        monkeypatch, RuntimeError('kumolib native extension failed to load')
+    )
     with pytest.raises(RuntimeError, match='native extension'):
         KumoRFMAdapter().predict(
-            client, KumoRFMRequest(graph='g', query='PREDICT x'))
+            client, KumoRFMRequest(graph='g', query='PREDICT x')
+        )
 
 
 def test_predict_propagates_transitive_import_error(monkeypatch, client):
@@ -275,7 +311,8 @@ def test_predict_propagates_transitive_import_error(monkeypatch, client):
     )
     with pytest.raises(ModuleNotFoundError, match='some_dep'):
         KumoRFMAdapter().predict(
-            client, KumoRFMRequest(graph='g', query='PREDICT x'))
+            client, KumoRFMRequest(graph='g', query='PREDICT x')
+        )
 
 
 @requires_engine
@@ -301,8 +338,12 @@ def test_predict_explain_field_returns_explanation(monkeypatch, client):
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='fake-graph', query='PREDICT t FOR e=1', explain=True))
+    result = KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='fake-graph', query='PREDICT t FOR e=1', explain=True
+        ),
+    )
 
     assert isinstance(result, Explanation)
     assert result.summary == 'Price drove the prediction.'
@@ -330,9 +371,14 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='fake-graph', query='PREDICT t FOR e=1',
-        options={'explain': {'skip_summary': True}}))
+    result = KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='fake-graph',
+            query='PREDICT t FOR e=1',
+            options={'explain': {'skip_summary': True}},
+        ),
+    )
 
     assert isinstance(result, Explanation)
     assert captured['explain'] == {'skip_summary': True}
@@ -352,8 +398,10 @@ def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     with pytest.raises(TypeError, match='expected a DataFrame result'):
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='fake-graph', query='PREDICT t FOR e=1'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(graph='fake-graph', query='PREDICT t FOR e=1'),
+        )
 
 
 @requires_engine
@@ -370,8 +418,12 @@ def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     with pytest.raises(TypeError, match='expected an Explanation result'):
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='fake-graph', query='PREDICT t FOR e=1', explain=True))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(
+                graph='fake-graph', query='PREDICT t FOR e=1', explain=True
+            ),
+        )
 
 
 def test_capabilities_advertise_explanation():
@@ -380,14 +432,22 @@ def test_capabilities_advertise_explanation():
 
 @requires_engine
 @pytest.mark.parametrize('field_value', [True, {}, {'skip_summary': True}])
-def test_predict_rejects_explain_specified_twice(monkeypatch, client, field_value):
+def test_predict_rejects_explain_specified_twice(
+    monkeypatch, client, field_value
+):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='fake-graph', query='PREDICT t FOR e=1',
-            explain=field_value, options={'explain': False}))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(
+                graph='fake-graph',
+                query='PREDICT t FOR e=1',
+                explain=field_value,
+                options={'explain': False},
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
 
 
@@ -398,9 +458,14 @@ def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='fake-graph', query='PREDICT t FOR e=1',
-            options={'explain': bad}))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(
+                graph='fake-graph',
+                query='PREDICT t FOR e=1',
+                options={'explain': bad},
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
 
 
@@ -408,6 +473,7 @@ def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
 def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
     """Exercise issue #19: client.kumorfm(graph).predict(explain=True)."""
     from kumorfm.rfm.rfm import Explanation
+
     from nvidia_sdfm import SDFMClient
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
@@ -427,10 +493,12 @@ def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     monkeypatch.setattr(
-        'nvidia_sdfm.core.transport.Transport.health_ready', lambda self: True)
+        'nvidia_sdfm.core.transport.Transport.health_ready', lambda self: True
+    )
     with SDFMClient(url='http://127.0.0.1:18001') as sdfm:
         result = sdfm.kumorfm('fake-graph').predict(
-            'PREDICT t FOR e=1', explain=True)
+            'PREDICT t FOR e=1', explain=True
+        )
 
     assert isinstance(result, Explanation)
     assert result.details['format'] == 'kumo_rfm_v2_1'
@@ -453,13 +521,20 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
             captured['explain'] = kwargs['explain']
             return Explanation(
                 prediction=pd.DataFrame({'ENTITY': [1]}),
-                summary='', details={}, warning=None)
+                summary='',
+                details={},
+                warning=None,
+            )
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
     cfg = ExplainConfig(skip_summary=True)
-    result = KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='fake-graph', query='PREDICT t FOR e=1', explain=cfg))
+    result = KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='fake-graph', query='PREDICT t FOR e=1', explain=cfg
+        ),
+    )
 
     assert isinstance(result, Explanation)
     assert captured['explain'] is cfg
@@ -483,9 +558,16 @@ def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
             return pd.DataFrame({'ENTITY': [1]})
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
-    KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='g', query='PREDICT x FOR EACH t.id',
-        indices=list(range(1500)), batch_size='max', num_retries=3))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='g',
+            query='PREDICT x FOR EACH t.id',
+            indices=list(range(1500)),
+            batch_size='max',
+            num_retries=3,
+        ),
+    )
 
     assert calls['batch_mode'] == ('max', 3)
     assert calls.get('predicted')
@@ -508,8 +590,9 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
             return pd.DataFrame({'ENTITY': [1]})
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
-    KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='g', query='PREDICT x FOR t.id=1'))
+    KumoRFMAdapter().predict(
+        client, KumoRFMRequest(graph='g', query='PREDICT x FOR t.id=1')
+    )
 
     assert 'batch_mode' not in calls
 
@@ -520,8 +603,12 @@ def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='g', query='PREDICT x FOR t.id=1', batch_size='auto'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(
+                graph='g', query='PREDICT x FOR t.id=1', batch_size='auto'
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
 
 
@@ -539,7 +626,8 @@ def _failing_engine(monkeypatch, error: BaseException) -> None:
 
 def _predict(client):
     return KumoRFMAdapter().predict(
-        client, KumoRFMRequest(graph='g', query='PREDICT x FOR t.id=1'))
+        client, KumoRFMRequest(graph='g', query='PREDICT x FOR t.id=1')
+    )
 
 
 @requires_engine
@@ -548,11 +636,21 @@ def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
     rfm-nim-validation-details-discarded.md"""
     from kumorfm.exceptions import NimFailureError
 
-    params = [{'name': 'context.related_tables.users.rows[0][big]',
-               'reason': 'exceeds the JSON safe integer range'}]
-    _failing_engine(monkeypatch, NimFailureError(
-        'The KumoRFM NIM rejected this prediction (HTTP 422): bad data.',
-        status_code=422, detail='bad data', invalid_params=params))
+    params = [
+        {
+            'name': 'context.related_tables.users.rows[0][big]',
+            'reason': 'exceeds the JSON safe integer range',
+        }
+    ]
+    _failing_engine(
+        monkeypatch,
+        NimFailureError(
+            'The KumoRFM NIM rejected this prediction (HTTP 422): bad data.',
+            status_code=422,
+            detail='bad data',
+            invalid_params=params,
+        ),
+    )
 
     with pytest.raises(NimRequestError) as excinfo:
         _predict(client)
@@ -564,12 +662,17 @@ def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
 
 @requires_engine
 def test_nim_failure_without_a_status_becomes_a_transport_error(
-        monkeypatch, client):
+    monkeypatch, client
+):
     r"""client-rfm-path-never-raises-sdfmerror.md"""
     from kumorfm.exceptions import NimFailureError
 
-    _failing_engine(monkeypatch, NimFailureError(
-        'did not answer within the configured timeout', transient=True))
+    _failing_engine(
+        monkeypatch,
+        NimFailureError(
+            'did not answer within the configured timeout', transient=True
+        ),
+    )
 
     with pytest.raises(SdfmError) as excinfo:
         _predict(client)
@@ -615,9 +718,13 @@ def test_malformed_response_becomes_invalid_response(monkeypatch, client):
     """
     from kumorfm.exceptions import InvalidResponseError
 
-    _failing_engine(monkeypatch, InvalidResponseError(
-        'The KumoRFM NIM returned a prediction response that does not match '
-        'the contract (KeyError: id)'))
+    _failing_engine(
+        monkeypatch,
+        InvalidResponseError(
+            'The KumoRFM NIM returned a prediction response that does not match '
+            'the contract (KeyError: id)'
+        ),
+    )
 
     with pytest.raises(SdfmError) as excinfo:
         _predict(client)
@@ -632,8 +739,10 @@ def test_engine_validation_error_keeps_its_message(monkeypatch, client):
     Client-side validation the engine performs is already actionable, so it
     must not be relabelled as an internal SDK failure.
     """
-    _failing_engine(monkeypatch, ValueError(
-        'Context anchor timestamp is too early for the given graph'))
+    _failing_engine(
+        monkeypatch,
+        ValueError('Context anchor timestamp is too early for the given graph'),
+    )
 
     with pytest.raises(SdfmError) as excinfo:
         _predict(client)
@@ -669,8 +778,10 @@ def test_num_retries_applies_without_batch_size(monkeypatch, client):
             return pd.DataFrame({'ENTITY': [1]})
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
-    KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='g', query='PREDICT x FOR t.id=1', num_retries=5))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(graph='g', query='PREDICT x FOR t.id=1', num_retries=5),
+    )
 
     assert calls['retry'] == 5
 
@@ -693,8 +804,10 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
             return pd.DataFrame({'ENTITY': [1]})
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
-    KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='g', query='PREDICT x FOR t.id=1', num_retries=0))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(graph='g', query='PREDICT x FOR t.id=1', num_retries=0),
+    )
 
     assert 'retry' not in calls
 
@@ -706,8 +819,12 @@ def test_adapter_rejects_negative_num_retries(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'KumoRFM', lambda graph: None)
 
     with pytest.raises(SdfmError) as excinfo:
-        KumoRFMAdapter().predict(client, KumoRFMRequest(
-            graph='g', query='PREDICT x FOR t.id=1', num_retries=-1))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMRequest(
+                graph='g', query='PREDICT x FOR t.id=1', num_retries=-1
+            ),
+        )
     assert excinfo.value.code == 'INVALID_REQUEST'
 
 
@@ -733,16 +850,25 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    context = pd.DataFrame({
-        'ENTITY': [1, 2],
-        'TARGET': ['a', 'b'],
-        'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-01', '2025-01-02']),
-    })
+    context = pd.DataFrame(
+        {
+            'ENTITY': [1, 2],
+            'TARGET': ['a', 'b'],
+            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-01', '2025-01-02']),
+        }
+    )
     predict = pd.DataFrame({'ENTITY': [3]})
 
-    out = KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-        graph=_FakeGraph('users'), context=context, predict=predict,
-        task_type='multiclass_classification', entity_table='users'))
+    out = KumoRFMAdapter().predict(
+        client,
+        KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=context,
+            predict=predict,
+            task_type='multiclass_classification',
+            entity_table='users',
+        ),
+    )
 
     assert isinstance(out, pd.DataFrame)
     assert isinstance(captured['predict_task']['task'], FakeTaskTable)
@@ -760,7 +886,8 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
 
 @requires_engine
 def test_predict_task_uses_anchor_timestamp_from_predict_only(
-        monkeypatch, client):
+    monkeypatch, client
+):
     captured = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
@@ -780,14 +907,21 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-        graph=_FakeGraph('users'),
-        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-        predict=pd.DataFrame({
-            'ENTITY': [2],
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-02-01']),
-        }),
-        task_type='multiclass_classification', entity_table='users'))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame(
+                {
+                    'ENTITY': [2],
+                    'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-02-01']),
+                }
+            ),
+            task_type='multiclass_classification',
+            entity_table='users',
+        ),
+    )
 
     assert captured['task_table']['time_column'] == 'ANCHOR_TIMESTAMP'
 
@@ -813,18 +947,24 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-        graph=_FakeGraph('users'),
-        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-        predict=pd.DataFrame({'ENTITY': [2]}),
-        task_type='multiclass_classification', entity_table='users'))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame({'ENTITY': [2]}),
+            task_type='multiclass_classification',
+            entity_table='users',
+        ),
+    )
 
     assert captured['task_table']['time_column'] == FakeTaskTable.ENTITY_TIME
 
 
 @requires_engine
 def test_predict_task_returns_explanation_and_forwards_options(
-        monkeypatch, client):
+    monkeypatch, client
+):
     from kumorfm.rfm.rfm import Explanation
 
     captured = {}
@@ -850,12 +990,18 @@ def test_predict_task_returns_explanation_and_forwards_options(
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    out = KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-        graph=_FakeGraph('users'),
-        context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-        predict=pd.DataFrame({'ENTITY': [1]}),
-        task_type='multiclass_classification', entity_table='users',
-        explain=True, options={'num_neighbors': [4, 4]}))
+    out = KumoRFMAdapter().predict(
+        client,
+        KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+            predict=pd.DataFrame({'ENTITY': [1]}),
+            task_type='multiclass_classification',
+            entity_table='users',
+            explain=True,
+            options={'num_neighbors': [4, 4]},
+        ),
+    )
 
     assert out is explanation
     assert captured['explain'] is True
@@ -865,37 +1011,55 @@ def test_predict_task_returns_explanation_and_forwards_options(
 @requires_engine
 def test_predict_task_rejects_reserved_option_keys(monkeypatch, client):
     called = {}
-    monkeypatch.setattr(rfm_engine, 'init_client',
-                        lambda **kwargs: called.setdefault('init', True))
+    monkeypatch.setattr(
+        rfm_engine,
+        'init_client',
+        lambda **kwargs: called.setdefault('init', True),
+    )
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-            graph=_FakeGraph('users'),
-            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-            predict=pd.DataFrame({'ENTITY': [1]}),
-            task_type='regression', entity_table='users',
-            options={'run_mode': 'best'}))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMTaskRequest(
+                graph=_FakeGraph('users'),
+                context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+                predict=pd.DataFrame({'ENTITY': [1]}),
+                task_type='regression',
+                entity_table='users',
+                options={'run_mode': 'best'},
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
     assert 'init' not in called
 
 
 def test_capabilities_list_both_request_types():
-    assert (KumoRFMAdapter().capabilities().request_type
-            == 'KumoRFMRequest | KumoRFMTaskRequest')
+    assert (
+        KumoRFMAdapter().capabilities().request_type
+        == 'KumoRFMRequest | KumoRFMTaskRequest'
+    )
 
 
 @requires_engine
 def test_predict_task_rejects_unknown_task_type(monkeypatch, client):
     called = {}
-    monkeypatch.setattr(rfm_engine, 'init_client',
-                        lambda **kwargs: called.setdefault('init', True))
+    monkeypatch.setattr(
+        rfm_engine,
+        'init_client',
+        lambda **kwargs: called.setdefault('init', True),
+    )
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-            graph=_FakeGraph('users'),
-            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-            predict=pd.DataFrame({'ENTITY': [2]}),
-            task_type='__unknown_task_type__', entity_table='users'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMTaskRequest(
+                graph=_FakeGraph('users'),
+                context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+                predict=pd.DataFrame({'ENTITY': [2]}),
+                task_type='__unknown_task_type__',
+                entity_table='users',
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
     assert 'task_type' in str(err.value)
     assert 'init' not in called
@@ -903,15 +1067,21 @@ def test_predict_task_rejects_unknown_task_type(monkeypatch, client):
 
 @requires_engine
 def test_predict_task_rejects_entity_table_absent_from_graph(
-        monkeypatch, client):
+    monkeypatch, client
+):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-            graph=_FakeGraph('users', 'orders'),
-            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-            predict=pd.DataFrame({'ENTITY': [2]}),
-            task_type='regression', entity_table='customers'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMTaskRequest(
+                graph=_FakeGraph('users', 'orders'),
+                context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+                predict=pd.DataFrame({'ENTITY': [2]}),
+                task_type='regression',
+                entity_table='customers',
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
     assert 'customers' in str(err.value)
 
@@ -921,11 +1091,16 @@ def test_predict_task_rejects_missing_target_column(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-            graph=_FakeGraph('users'),
-            context=pd.DataFrame({'ENTITY': [1]}),
-            predict=pd.DataFrame({'ENTITY': [2]}),
-            task_type='regression', entity_table='users'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMTaskRequest(
+                graph=_FakeGraph('users'),
+                context=pd.DataFrame({'ENTITY': [1]}),
+                predict=pd.DataFrame({'ENTITY': [2]}),
+                task_type='regression',
+                entity_table='users',
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
     assert 'context' in str(err.value)
     assert 'TARGET' in str(err.value)
@@ -933,21 +1108,28 @@ def test_predict_task_rejects_missing_target_column(monkeypatch, client):
 
 @requires_engine
 def test_predict_task_rejects_missing_entity_column_in_predict(
-        monkeypatch, client):
+    monkeypatch, client
+):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(SdfmError) as err:
-        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-            graph=_FakeGraph('users'),
-            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
-            predict=pd.DataFrame({'WRONG': [2]}),
-            task_type='regression', entity_table='users'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMTaskRequest(
+                graph=_FakeGraph('users'),
+                context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a']}),
+                predict=pd.DataFrame({'WRONG': [2]}),
+                task_type='regression',
+                entity_table='users',
+            ),
+        )
     assert err.value.code == 'INVALID_REQUEST'
     assert 'predict' in str(err.value)
 
 
 def test_capabilities_advertise_supported_task_types():
     from nvidia_sdfm.adapters.kumorfm import RFM_TASK_TYPES
+
     tasks = KumoRFMAdapter().capabilities().tasks
     assert tasks == RFM_TASK_TYPES
     assert 'multiclass_classification' in tasks
@@ -956,6 +1138,7 @@ def test_capabilities_advertise_supported_task_types():
 def test_task_types_match_engine_task_type_enum():
     task_module = pytest.importorskip('kumorfm.api.task')
     from nvidia_sdfm.adapters.kumorfm import RFM_TASK_TYPES
+
     for name in RFM_TASK_TYPES:
         assert task_module.TaskType(name).value == name
 
@@ -1010,8 +1193,12 @@ def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    KumoRFMAdapter().predict(client, KumoRFMRequest(
-        graph='g', query='PREDICT x', options={'verbose': False}))
+    KumoRFMAdapter().predict(
+        client,
+        KumoRFMRequest(
+            graph='g', query='PREDICT x', options={'verbose': False}
+        ),
+    )
 
     assert captured['init_verbose'] is False
     assert captured['predict_verbose'] is False
@@ -1032,8 +1219,9 @@ def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    KumoRFMAdapter().predict(client, KumoRFMRequest(graph='g',
-                                                    query='PREDICT x'))
+    KumoRFMAdapter().predict(
+        client, KumoRFMRequest(graph='g', query='PREDICT x')
+    )
 
     assert captured['init_verbose'] is True
     assert captured['predict_verbose'] is False
@@ -1041,7 +1229,8 @@ def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
 
 @requires_engine
 def test_concurrent_clients_predict_against_their_own_endpoint(
-        monkeypatch) -> None:
+    monkeypatch,
+) -> None:
     r"""Regression test for `quality-clients-share-process-global-engine-state`.
 
     The engine's endpoint and credential are process-global, and the adapter
@@ -1072,12 +1261,15 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
         def __init__(self, graph, **kwargs):
             barrier.wait()
             bound = kwargs.get('_client')
-            self._resolved = (bound if bound is not None
-                              else kumorfm.global_state.client)
+            self._resolved = (
+                bound if bound is not None else kumorfm.global_state.client
+            )
 
         def predict(self, query, **kwargs):
-            seen[threading.current_thread().name] = (self._resolved._url,
-                                                     self._resolved._api_key)
+            seen[threading.current_thread().name] = (
+                self._resolved._url,
+                self._resolved._api_key,
+            )
             return pd.DataFrame({'entity': []})
 
     monkeypatch.setattr(rfm_engine, 'KumoRFM', RecordingKumoRFM)
@@ -1089,11 +1281,14 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
 
     def run(name: str) -> None:
         clients[name].kumorfm(_FakeGraph('users')).predict(
-            'PREDICT COUNT(o.*, 0, 30) FOR u.id=1', indices=[1])
+            'PREDICT COUNT(o.*, 0, 30) FOR u.id=1', indices=[1]
+        )
 
     try:
-        threads = [threading.Thread(target=run, args=(name, ), name=name)
-                   for name in ('A', 'B')]
+        threads = [
+            threading.Thread(target=run, args=(name,), name=name)
+            for name in ('A', 'B')
+        ]
         for thread in threads:
             thread.start()
         for thread in threads:
@@ -1117,12 +1312,18 @@ def test_predict_task_names_a_feature_column_missing_from_predict(client):
     constraint, which the classifier could only report as an internal failure.
     """
     with pytest.raises(SdfmError) as excinfo:
-        KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-            graph=_FakeGraph('users'),
-            context=pd.DataFrame({'ENTITY': [1], 'TARGET': ['a'],
-                                  'EXTRA': [1]}),
-            predict=pd.DataFrame({'ENTITY': [2]}),
-            task_type='regression', entity_table='users'))
+        KumoRFMAdapter().predict(
+            client,
+            KumoRFMTaskRequest(
+                graph=_FakeGraph('users'),
+                context=pd.DataFrame(
+                    {'ENTITY': [1], 'TARGET': ['a'], 'EXTRA': [1]}
+                ),
+                predict=pd.DataFrame({'ENTITY': [2]}),
+                task_type='regression',
+                entity_table='users',
+            ),
+        )
 
     assert excinfo.value.code == 'INVALID_REQUEST'
     assert "['EXTRA']" in str(excinfo.value)
@@ -1130,21 +1331,33 @@ def test_predict_task_names_a_feature_column_missing_from_predict(client):
 
 
 @requires_engine
-@pytest.mark.parametrize(('context_columns', 'predict_columns'), [
-    ({'ENTITY': [1], 'TARGET': ['a']}, {'ENTITY': [2]}),
-    ({'ENTITY': [1], 'TARGET': ['a'], 'EXTRA': [1]},
-     {'ENTITY': [2], 'EXTRA': [3]}),
-    ({'ENTITY': [1], 'TARGET': ['a']}, {'ENTITY': [2], 'EXTRA': [3]}),
-    ({'ENTITY': [1], 'TARGET': ['a'],
-      'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-01'])},
-     {'ENTITY': [2]}),
-])
+@pytest.mark.parametrize(
+    ('context_columns', 'predict_columns'),
+    [
+        ({'ENTITY': [1], 'TARGET': ['a']}, {'ENTITY': [2]}),
+        (
+            {'ENTITY': [1], 'TARGET': ['a'], 'EXTRA': [1]},
+            {'ENTITY': [2], 'EXTRA': [3]},
+        ),
+        ({'ENTITY': [1], 'TARGET': ['a']}, {'ENTITY': [2], 'EXTRA': [3]}),
+        (
+            {
+                'ENTITY': [1],
+                'TARGET': ['a'],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-01']),
+            },
+            {'ENTITY': [2]},
+        ),
+    ],
+)
 def test_predict_task_still_accepts_the_supported_frame_shapes(
-        monkeypatch, client, context_columns, predict_columns):
+    monkeypatch, client, context_columns, predict_columns
+):
     r"""The guard must not reject what already worked: a feature in both
     frames, a feature in ``predict`` alone (ignored), and an anchor timestamp
     in ``context`` alone.
     """
+
     class FakeTaskTable:
         ENTITY_TIME = '__entity_time__'
 
@@ -1162,9 +1375,14 @@ def test_predict_task_still_accepts_the_supported_frame_shapes(
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
     monkeypatch.setattr(rfm_engine, 'KumoRFM', FakeKumoRFM)
 
-    out = KumoRFMAdapter().predict(client, KumoRFMTaskRequest(
-        graph=_FakeGraph('users'),
-        context=pd.DataFrame(context_columns),
-        predict=pd.DataFrame(predict_columns),
-        task_type='regression', entity_table='users'))
+    out = KumoRFMAdapter().predict(
+        client,
+        KumoRFMTaskRequest(
+            graph=_FakeGraph('users'),
+            context=pd.DataFrame(context_columns),
+            predict=pd.DataFrame(predict_columns),
+            task_type='regression',
+            entity_table='users',
+        ),
+    )
     assert isinstance(out, pd.DataFrame)

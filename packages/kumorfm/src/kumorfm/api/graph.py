@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, List, Optional, Tuple
 
 from pydantic.dataclasses import dataclass
 
@@ -13,20 +12,23 @@ TableName = str
 
 @dataclass(frozen=True)
 class ColumnKey:
-    """Reference to a column within a PQuery/Graph definition."""
+    r"""Reference to a column within a PQuery/Graph definition."""
+
     table_name: TableName
     col_name: str
 
 
 @dataclass(frozen=True)
 class ColumnKeyGroup:
-    """Group of column keys to be linked together in a graph."""
-    columns: Tuple[ColumnKey, ...]  # Always sorted and deduped, immutable
+    r"""Group of column keys to be linked together in a graph."""
+
+    columns: tuple[ColumnKey, ...]  # Always sorted and deduped, immutable
 
 
 @dataclass(frozen=True, eq=True)
 class Edge:
     r"""A representation of an edge between tables in Kumo."""
+
     src_table: str
     fkey: str
     dst_table: str
@@ -34,10 +36,10 @@ class Edge:
 
 @dataclass(frozen=True)
 class EdgeMatches:
-    r"""
-    Stats (either absolute values or percentages) about an edge relating to
+    r"""Stats (either absolute values or percentages) about an edge relating to
     how many rows in the source have edges to the destination and vice versa.
     """
+
     src_in_dst: float
     dst_in_src: float
 
@@ -45,6 +47,7 @@ class EdgeMatches:
 @dataclass(frozen=True)
 class EdgeHealthStatistics:
     r"""Information about the health of an edge."""
+
     absolute_match_stats: EdgeMatches
     percent_match_stats: EdgeMatches
     total_num_edges: int
@@ -52,15 +55,16 @@ class EdgeHealthStatistics:
 
 @dataclass
 class EdgeHealthResponse:
-    """Statistics about the health of each edge in a graph"""
+    r"""Statistics about the health of each edge in a graph."""
+
     is_ready: bool
-    statistics: Dict[str, EdgeHealthStatistics]
+    statistics: dict[str, EdgeHealthStatistics]
 
 
 @dataclass
 class GraphDefinition:
-    tables: Dict[TableName, TableDefinition]
-    col_groups: List[ColumnKeyGroup]
+    tables: dict[TableName, TableDefinition]
+    col_groups: list[ColumnKeyGroup]
 
 
 @dataclass
@@ -81,7 +85,7 @@ class GraphResource:
     # graph resource by either id or alias, e.g.:
     #   GET /graphs/<GraphResource.id>
     #   GET /graphs/<name_alias>
-    name_alias: Optional[str] = None
+    name_alias: str | None = None
 
 
 # Method: Validate ============================================================

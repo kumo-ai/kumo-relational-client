@@ -3,8 +3,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
-from kumorfm.api.typing import Dtype, Stype
 
+from kumorfm.api.typing import Dtype, Stype
 from kumorfm.rfm.infer import (
     contains_categorical,
     contains_id,
@@ -14,7 +14,7 @@ from kumorfm.rfm.infer import (
 
 
 def infer_stype(ser: pd.Series, column_name: str, dtype: Dtype) -> Stype:
-    """Infers the :class:`Stype` from a :class:`pandas.Series`.
+    r"""Infers the :class:`Stype` from a :class:`pandas.Series`.
 
     Args:
         ser: A :class:`pandas.Series` to analyze.

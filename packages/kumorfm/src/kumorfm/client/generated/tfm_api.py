@@ -6,8 +6,9 @@
 # Source: nim-sd.openapi.yaml
 # Source SHA256: 89327ab9d317e6e4ab0188c03f12645e07916cf3735c5f3097937a1ec73741fd
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Final, Mapping
+from typing import Any, Final
 
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
 
@@ -46,7 +47,9 @@ TFM_OUTPUT_FIELD_VALUES: Final[tuple[str, ...]] = (
 TFM_TASK_KIND_BINARY_CLASSIFICATION: Final[str] = 'binary_classification'
 TFM_TASK_KIND_CLASSIFICATION: Final[str] = 'classification'
 TFM_TASK_KIND_FORECASTING: Final[str] = 'forecasting'
-TFM_TASK_KIND_MULTICLASS_CLASSIFICATION: Final[str] = 'multiclass_classification'
+TFM_TASK_KIND_MULTICLASS_CLASSIFICATION: Final[str] = (
+    'multiclass_classification'
+)
 TFM_TASK_KIND_RANKING: Final[str] = 'ranking'
 TFM_TASK_KIND_REGRESSION: Final[str] = 'regression'
 TFM_TASK_KIND_TEMPORAL_LINK_PREDICTION: Final[str] = 'temporal_link_prediction'
@@ -76,7 +79,7 @@ class PredictionItem:
     metadata: dict[str, Any] | None = None
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionItem":
+    def from_dict(cls, data: Mapping[str, Any]) -> 'PredictionItem':
         return cls(
             id=str(data['id']) if 'id' in data else None,
             row_index=_int_or_none(data.get('row_index')),
@@ -100,7 +103,7 @@ class PredictionResponse:
     metadata: dict[str, Any]
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionResponse":
+    def from_dict(cls, data: Mapping[str, Any]) -> 'PredictionResponse':
         return cls(
             id=str(data['id']),
             model=str(data['model']),
@@ -228,12 +231,7 @@ TFM_ENDPOINTS_BY_OPERATION_ID: Final[dict[str, Endpoint]] = {
 
 
 __all__ = [
-    'TFMOperation',
-    'TFMOperations',
     'TFM_ENDPOINTS_BY_OPERATION_ID',
-    'TFM_SCHEMA_NAMES',
-    'PredictionItem',
-    'PredictionResponse',
     'TFM_MODEL_KUMO_RFM',
     'TFM_MODEL_TABICL',
     'TFM_MODEL_VALUES',
@@ -245,6 +243,7 @@ __all__ = [
     'TFM_OUTPUT_FIELD_RANKINGS',
     'TFM_OUTPUT_FIELD_SCORES',
     'TFM_OUTPUT_FIELD_VALUES',
+    'TFM_SCHEMA_NAMES',
     'TFM_TASK_KIND_BINARY_CLASSIFICATION',
     'TFM_TASK_KIND_CLASSIFICATION',
     'TFM_TASK_KIND_FORECASTING',
@@ -253,4 +252,8 @@ __all__ = [
     'TFM_TASK_KIND_REGRESSION',
     'TFM_TASK_KIND_TEMPORAL_LINK_PREDICTION',
     'TFM_TASK_KIND_VALUES',
+    'PredictionItem',
+    'PredictionResponse',
+    'TFMOperation',
+    'TFMOperations',
 ]

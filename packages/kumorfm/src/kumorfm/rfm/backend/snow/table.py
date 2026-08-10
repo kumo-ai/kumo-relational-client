@@ -8,9 +8,8 @@ from collections.abc import Sequence
 from typing import cast
 
 import pandas as pd
-from kumorfm.runmode import MissingType
-from kumorfm.api.typing import Dtype
 
+from kumorfm.api.typing import Dtype
 from kumorfm.rfm.backend.snow import Connection
 from kumorfm.rfm.backend.snow.binding import paramstyle
 from kumorfm.rfm.base import (
@@ -22,6 +21,7 @@ from kumorfm.rfm.base import (
     SourceForeignKey,
     Table,
 )
+from kumorfm.runmode import MissingType
 from kumorfm.utils import quote_ident
 
 # Snowflake reports an object it cannot resolve as SQL compilation error
@@ -59,6 +59,7 @@ class SnowTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+
     _SQL_TEXT_TYPE = 'VARCHAR'
 
     def __init__(
@@ -76,7 +77,7 @@ class SnowTable(Table):
 
         if database is None or schema is None:
             with connection.cursor() as cursor:
-                cursor.execute("SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()")
+                cursor.execute('SELECT CURRENT_DATABASE(), CURRENT_SCHEMA()')
                 result = cursor.fetchone()
                 assert result is not None
                 database = database or result[0]
@@ -84,9 +85,11 @@ class SnowTable(Table):
                 schema = schema or result[1]
 
         if schema is None:
-            raise ValueError(f"Unspecified 'schema' for table "
-                             f"'{source_name or name}' in database "
-                             f"'{database}'")
+            raise ValueError(
+                f"Unspecified 'schema' for table "
+                f"'{source_name or name}' in database "
+                f"'{database}'"
+            )
 
         self._connection = connection
         self._database = database
@@ -120,10 +123,16 @@ class SnowTable(Table):
         # unquoted ones resolve to their upper-case form. Try the given
         # spelling first, then its folded form, and adopt whichever resolves
         # for all subsequent look-ups:
-        names: tuple[str, str, str] = (self._database, self._schema,
-                                       self._source_name)
-        folded: tuple[str, str, str] = (names[0].upper(), names[1].upper(),
-                                        names[2].upper())
+        names: tuple[str, str, str] = (
+            self._database,
+            self._schema,
+            self._source_name,
+        )
+        folded: tuple[str, str, str] = (
+            names[0].upper(),
+            names[1].upper(),
+            names[2].upper(),
+        )
         candidates = [names] if names == folded else [names, folded]
 
         source_columns: list[SourceColumn] = []
@@ -132,7 +141,7 @@ class SnowTable(Table):
             for candidate in candidates:
                 quoted = '.'.join(quote_ident(name) for name in candidate)
                 try:
-                    cursor.execute(f"DESCRIBE TABLE {quoted}")
+                    cursor.execute(f'DESCRIBE TABLE {quoted}')
                 except Exception as e:
                     if not _is_missing_object_error(e):
                         raise
@@ -141,8 +150,10 @@ class SnowTable(Table):
                 self._database, self._schema, self._source_name = candidate
                 break
             else:
-                raise ValueError(f"Table '{self.source_name}' does not exist "
-                                 f"in the remote data backend") from error
+                raise ValueError(
+                    f"Table '{self.source_name}' does not exist "
+                    f'in the remote data backend'
+                ) from error
 
             for row in cursor.fetchall():
                 column, dtype, _, null, _, is_pkey, is_unique, *_ = row
@@ -161,7 +172,7 @@ class SnowTable(Table):
     def _get_source_foreign_keys(self) -> list[SourceForeignKey]:
         source_foreign_keys: list[SourceForeignKey] = []
         with self._connection.cursor() as cursor:
-            sql = f"SHOW IMPORTED KEYS IN TABLE {self._quoted_source_name}"
+            sql = f'SHOW IMPORTED KEYS IN TABLE {self._quoted_source_name}'
             cursor.execute(sql)
             rows = cursor.fetchall()
             counts = Counter(row[13] for row in rows)
@@ -178,9 +189,11 @@ class SnowTable(Table):
     def _get_source_sample_df(self) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             columns = [quote_ident(col) for col in self._source_column_dict]
-            sql = (f"SELECT {', '.join(columns)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(columns)} '
+                f'FROM {self._quoted_source_name} '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.fetch_arrow_all(force_return_table=False)
 
@@ -198,10 +211,12 @@ class SnowTable(Table):
 
     def _get_num_rows(self) -> int | None:
         with paramstyle(self._connection), self._connection.cursor() as cursor:
-            sql = (f"SHOW TABLES LIKE ? "
-                   f"IN SCHEMA {quote_ident(self._database)}."
-                   f"{quote_ident(self._schema)}")
-            cursor.execute(sql, (self._source_name, ))
+            sql = (
+                f'SHOW TABLES LIKE ? '
+                f'IN SCHEMA {quote_ident(self._database)}.'
+                f'{quote_ident(self._schema)}'
+            )
+            cursor.execute(sql, (self._source_name,))
             result = cursor.fetchone()
             assert result is not None
             num_rows = result[7]
@@ -217,12 +232,14 @@ class SnowTable(Table):
     ) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             projections = [
-                f"{column.expr} AS {quote_ident(column.name)}"
+                f'{column.expr} AS {quote_ident(column.name)}'
                 for column in columns
             ]
-            sql = (f"SELECT {', '.join(projections)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(projections)} '
+                f'FROM {self._quoted_source_name} '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.fetch_arrow_all(force_return_table=False)
 
@@ -231,8 +248,7 @@ class SnowTable(Table):
 
         return self._sanitize(
             df=table.to_pandas(types_mapper=pd.ArrowDtype),
-            dtype_dict={column.name: column.dtype
-                        for column in columns},
+            dtype_dict={column.name: column.dtype for column in columns},
             stype_dict=None,
         )
 
@@ -264,7 +280,7 @@ class SnowTable(Table):
                 dtype = dtype.split(',')[0].split('(')[1].strip()
                 if dtype == 'INT':
                     return Dtype.intlist
-                elif dtype == 'FLOAT':
+                if dtype == 'FLOAT':
                     return Dtype.floatlist
             except Exception:
                 pass
@@ -276,17 +292,17 @@ class SnowTable(Table):
                 _dtype = SnowTable._to_dtype(dtype)
                 if _dtype is not None and _dtype.is_int():
                     return Dtype.intlist
-                elif _dtype is not None and _dtype.is_float():
+                if _dtype is not None and _dtype.is_float():
                     return Dtype.floatlist
-                elif _dtype is not None and _dtype.is_string():
+                if _dtype is not None and _dtype.is_string():
                     return Dtype.stringlist
             except Exception:
                 pass
             return Dtype.unsupported
         # Unsupported data types:
         if re.search(
-                'DECFLOAT|VARIANT|OBJECT|MAP|FILE|GEOGRAPHY|GEOMETRY',
-                dtype,
+            'DECFLOAT|VARIANT|OBJECT|MAP|FILE|GEOGRAPHY|GEOMETRY',
+            dtype,
         ):
             return Dtype.unsupported
         return None

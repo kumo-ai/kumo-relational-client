@@ -21,16 +21,16 @@ from .sampler import SamplerOutput, Sampler  # noqa: E402
 from .sql_sampler import SQLSampler  # noqa: E402
 
 __all__ = [
-    'DataBackend',
-    'SourceColumn',
-    'SourceForeignKey',
-    'Expression',
-    'LocalExpression',
+    'Column',
     'ColumnSpec',
     'ColumnSpecType',
-    'Column',
-    'Table',
-    'SamplerOutput',
-    'Sampler',
+    'DataBackend',
+    'Expression',
+    'LocalExpression',
     'SQLSampler',
+    'Sampler',
+    'SamplerOutput',
+    'SourceColumn',
+    'SourceForeignKey',
+    'Table',
 ]

@@ -45,5 +45,6 @@ class ClassificationInferenceConfig(InferenceConfig):
 @dataclass(config=_CONFIG)
 class RegressionInferenceConfig(InferenceConfig):
     target_transforms: list[TargetTransform | None] = field(
-        default_factory=lambda: ['quantile'])
+        default_factory=lambda: ['quantile']
+    )
     output_type: RegressionOutput = 'median'

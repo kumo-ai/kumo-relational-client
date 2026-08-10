@@ -7,12 +7,12 @@ r"""Guards on what the RFM transport accepts back from a NIM.
 Both cases here are about a response the SDK does not control: an error body
 large enough to be unreadable, and a session id chosen by the server.
 """
+
 from __future__ import annotations
 
 from typing import Any
 
 import pytest
-
 from kumorfm.client.client import _MAX_BODY_SNIPPET, capped_body
 from kumorfm.client.endpoints import Endpoint
 from kumorfm.client.rfm import RFMAPI, _path_segment
@@ -68,15 +68,19 @@ def test_capped_body_collapses_whitespace() -> None:
     assert capped_body('') == ''
 
 
-@pytest.mark.parametrize('session_id,expected', [
-    ('sess-123', 'sess-123'),
-    ('../v1/predictions', '..%2Fv1%2Fpredictions'),
-    ('a/b', 'a%2Fb'),
-    ('a?b=c', 'a%3Fb%3Dc'),
-    ('a b', 'a%20b'),
-])
-def test_path_segment_escapes_server_chosen_ids(session_id: str,
-                                                expected: str) -> None:
+@pytest.mark.parametrize(
+    'session_id,expected',
+    [
+        ('sess-123', 'sess-123'),
+        ('../v1/predictions', '..%2Fv1%2Fpredictions'),
+        ('a/b', 'a%2Fb'),
+        ('a?b=c', 'a%3Fb%3Dc'),
+        ('a b', 'a%20b'),
+    ],
+)
+def test_path_segment_escapes_server_chosen_ids(
+    session_id: str, expected: str
+) -> None:
     assert _path_segment(session_id) == expected
 
 
@@ -87,8 +91,9 @@ def test_session_predict_escapes_the_session_id() -> None:
     client = _RecordingClient()
     api = RFMAPI(client)  # type: ignore[arg-type]
     try:
-        api.session_predict('../predictions', {'predict': {}},
-                            entity_ids=[1], instance_ids=[0])
+        api.session_predict(
+            '../predictions', {'predict': {}}, entity_ids=[1], instance_ids=[0]
+        )
     except Exception:  # the fake returns no usable body; the path is the point
         pass
     assert client.paths == ['/v1/sessions/..%2Fpredictions/predictions']

@@ -7,36 +7,44 @@ import warnings
 from pathlib import Path
 
 import pytest
-
 from kumorfm.rfm import Graph
 
-pytest.importorskip('adbc_driver_sqlite', reason="'sqlite' extension "
-                    "not installed")
+pytest.importorskip(
+    'adbc_driver_sqlite', reason="'sqlite' extension not installed"
+)
 
-from kumorfm.rfm.backend.sqlite import SQLiteSampler  # noqa: E402
+from kumorfm.rfm.backend.sqlite import SQLiteSampler
 
 
 def _create_database(path: Path, foreign_key_type: str) -> Path:
     connection = sqlite3.connect(path)
-    connection.execute("CREATE TABLE users ("
-                       "  user_id INTEGER PRIMARY KEY,"
-                       "  age INTEGER)")
-    connection.execute(f"CREATE TABLE orders ("
-                       f"  order_id INTEGER PRIMARY KEY,"
-                       f"  user_id {foreign_key_type},"
-                       f"  ts TEXT)")
+    connection.execute(
+        'CREATE TABLE users (  user_id INTEGER PRIMARY KEY,  age INTEGER)'
+    )
+    connection.execute(
+        f'CREATE TABLE orders ('
+        f'  order_id INTEGER PRIMARY KEY,'
+        f'  user_id {foreign_key_type},'
+        f'  ts TEXT)'
+    )
     connection.executemany(
-        "INSERT INTO users VALUES (?, ?)",
+        'INSERT INTO users VALUES (?, ?)',
         [(i, 20 + i % 40) for i in range(50)],
     )
     connection.executemany(
-        "INSERT INTO orders VALUES (?, ?, ?)",
-        [(i, str(i % 50) if foreign_key_type == 'TEXT' else i % 50,
-          f'2024-01-{i % 28 + 1:02d}') for i in range(200)],
+        'INSERT INTO orders VALUES (?, ?, ?)',
+        [
+            (
+                i,
+                str(i % 50) if foreign_key_type == 'TEXT' else i % 50,
+                f'2024-01-{i % 28 + 1:02d}',
+            )
+            for i in range(200)
+        ],
     )
-    connection.execute("CREATE UNIQUE INDEX users_pkey ON users (user_id)")
-    connection.execute("CREATE UNIQUE INDEX orders_pkey ON orders (order_id)")
-    connection.execute("CREATE INDEX orders_fkey ON orders (user_id)")
+    connection.execute('CREATE UNIQUE INDEX users_pkey ON users (user_id)')
+    connection.execute('CREATE UNIQUE INDEX orders_pkey ON orders (order_id)')
+    connection.execute('CREATE INDEX orders_fkey ON orders (user_id)')
     connection.commit()
     connection.close()
     return path
@@ -96,12 +104,13 @@ def test_random_seed_does_not_warn_without_seed(tmp_path: Path) -> None:
     with warnings.catch_warnings():
         warnings.simplefilter('error')
         sampler._sample_entity_table('users', {'user_id'}, 5)
-        sampler._sample_entity_table('users', {'user_id'}, 5, random_seed=42,
-                                     entity_ids=[1, 2, 3])
+        sampler._sample_entity_table(
+            'users', {'user_id'}, 5, random_seed=42, entity_ids=[1, 2, 3]
+        )
 
 
 def test_discovery_on_an_empty_database_names_what_it_searched(
-        tmp_path: Path,  #
+    tmp_path: Path,  #
 ) -> None:
     r"""graph-empty-graph-on-bad-path-or-schema.md
 

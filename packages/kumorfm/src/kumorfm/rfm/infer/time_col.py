@@ -24,7 +24,8 @@ def infer_time_column(
         The name of the detected time column, or ``None`` if not found.
     """
     candidates = [  # Exclude all candidates with `*last*` in column names:
-        col_name for col_name in candidates
+        col_name
+        for col_name in candidates
         if not re.search(r'(^|_)last(_|$)', col_name, re.IGNORECASE)
     ]
 
@@ -36,7 +37,8 @@ def infer_time_column(
 
     # If there exists a dedicated `create*` column, use it as time column:
     create_candidates = [
-        candidate for candidate in candidates
+        candidate
+        for candidate in candidates
         if candidate.lower().startswith('create')
     ]
     if len(create_candidates) == 1:
@@ -57,16 +59,15 @@ def infer_time_column(
     with warnings.catch_warnings():
         warnings.filterwarnings('ignore', message='Could not infer format')
         min_timestamp_dict = {
-            key: to_datetime(df[key].iloc[:10_000])
-            for key in candidates
+            key: to_datetime(df[key].iloc[:10_000]) for key in candidates
         }
     min_timestamp_dict = {
-        key: value.min()
-        for key, value in min_timestamp_dict.items()
+        key: value.min() for key, value in min_timestamp_dict.items()
     }
     min_timestamp_dict = {
         key: value
-        for key, value in min_timestamp_dict.items() if not pd.isna(value)
+        for key, value in min_timestamp_dict.items()
+        if not pd.isna(value)
     }
 
     if len(min_timestamp_dict) == 0:

@@ -6,16 +6,16 @@ import base64
 import datetime
 import json
 import math
+from collections.abc import Iterator
 from dataclasses import dataclass
 from decimal import Decimal
 from numbers import Real
-from typing import Any, Iterator
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from kumorfm.runmode import RunMode
 from kumorfm.api.rfm import RFMPredictRequest
 from kumorfm.api.rfm.context import REV_REL, Context, EdgeLayout
 from kumorfm.api.rfm.inference import (
@@ -34,6 +34,7 @@ from kumorfm.client.generated.tfm_api import (
     TFM_OUTPUT_FIELD_QUANTILES,
     TFM_OUTPUT_FIELD_RANKINGS,
 )
+from kumorfm.runmode import RunMode
 
 INSTANCE_ID = 'instance_id'
 SYNTHETIC_NODE_ID = '__node_id'
@@ -43,8 +44,10 @@ ANCHOR_TIME_PREFIX = '__kumo_anchor_time'
 JSON_SAFE_INT_MAX = 9007199254740991
 JSON_SAFE_INT_MIN = -9007199254740991
 
-_NON_FINITE_MSG = ("encountered a non-finite value ({value}); NIM requests "
-                   "must contain finite numbers or nulls")
+_NON_FINITE_MSG = (
+    'encountered a non-finite value ({value}); NIM requests '
+    'must contain finite numbers or nulls'
+)
 
 # What `pandas.api.types.infer_dtype` reports for the contents of an `object`
 # column, mapped to the wire dtype that represents those values. A content kind
@@ -75,6 +78,7 @@ class PayloadTables:
     the context or predict half alone, so that the two splits of one table
     always declare the same dtype.
     """
+
     context_instance_table: pd.DataFrame
     predict_instance_table: pd.DataFrame
     related_table_frames: dict[str, pd.DataFrame]
@@ -129,8 +133,9 @@ def session_create_payload(payload: dict[str, Any]) -> dict[str, Any]:
     keeps exactly those sections (plus ``metadata``) from a full prediction
     payload and drops the per-call ``predict`` / ``output`` / ``inference``.
     """
-    return {key: payload[key]
-            for key in _SESSION_CREATE_SECTIONS if key in payload}
+    return {
+        key: payload[key] for key in _SESSION_CREATE_SECTIONS if key in payload
+    }
 
 
 def session_predict_payload(payload: dict[str, Any]) -> dict[str, Any]:
@@ -140,8 +145,9 @@ def session_predict_payload(payload: dict[str, Any]) -> dict[str, Any]:
     so only ``predict`` + ``output`` + ``inference`` (plus ``metadata``) travel
     with each prediction.
     """
-    return {key: payload[key]
-            for key in _SESSION_PREDICT_SECTIONS if key in payload}
+    return {
+        key: payload[key] for key in _SESSION_PREDICT_SECTIONS if key in payload
+    }
 
 
 def payload_size_bytes(payload: dict[str, Any]) -> int:
@@ -150,7 +156,8 @@ def payload_size_bytes(payload: dict[str, Any]) -> int:
             payload,
             allow_nan=False,
             separators=(',', ':'),
-        ).encode('utf-8'))
+        ).encode('utf-8')
+    )
 
 
 def validate_payload_table_rows(
@@ -171,7 +178,8 @@ def validate_payload_table_rows(
             path = f'{section_name}.instance_table'
             raise ValueError(
                 f"Request batch {batch_index} table '{path}' contains "
-                f"{num_rows:,} rows, exceeding the {limit:,}-row limit")
+                f'{num_rows:,} rows, exceeding the {limit:,}-row limit'
+            )
 
 
 def _payload_tables_with_names(
@@ -184,10 +192,14 @@ def _payload_tables_with_names(
     every name reported is one the caller can look up on their graph.
     """
     task = payload.get('task')
-    entity_names = task.get('entity_table_names') if isinstance(task,
-                                                               dict) else None
-    instance_name = (entity_names[0] if isinstance(entity_names, list)
-                     and entity_names else 'instance_table')
+    entity_names = (
+        task.get('entity_table_names') if isinstance(task, dict) else None
+    )
+    instance_name = (
+        entity_names[0]
+        if isinstance(entity_names, list) and entity_names
+        else 'instance_table'
+    )
     for section_name in ('context', 'predict'):
         section = payload.get(section_name)
         if not isinstance(section, dict):
@@ -211,7 +223,7 @@ def _string_values(cell: Any) -> tuple[str, ...]:
     unwrapped to arrive at the count it reports.
     """
     if isinstance(cell, str):
-        return (cell, )
+        return (cell,)
     if isinstance(cell, (list, tuple)):
         return tuple(value for value in cell if isinstance(value, str))
     return ()
@@ -259,14 +271,18 @@ def context_size_stats(context: Context) -> str:
     table_stats = sorted(table_stats, key=lambda item: item[2], reverse=True)
     num_nodes = sum(num_nodes for _, num_nodes, _ in table_stats)
     num_edges = sum(
-        link.num_edges for link in context.subgraph.link_dict.values())
+        link.num_edges for link in context.subgraph.link_dict.values()
+    )
     top = table_stats[:5]
     top_repr = ', '.join(
-        f'{name}: {size / (1024 * 1024):.2f}MB' for name, _, size in top)
-    return (f"Current context contains {num_nodes:,} nodes and "
-            f"{num_edges:,} edges across {len(table_stats)} tables. "
-            f"Top-{len(top)} tables contributing most to the context size: "
-            f"{top_repr}")
+        f'{name}: {size / (1024 * 1024):.2f}MB' for name, _, size in top
+    )
+    return (
+        f'Current context contains {num_nodes:,} nodes and '
+        f'{num_edges:,} edges across {len(table_stats)} tables. '
+        f'Top-{len(top)} tables contributing most to the context size: '
+        f'{top_repr}'
+    )
 
 
 def _base_payload(
@@ -293,30 +309,36 @@ def _base_payload(
         'task': _task_spec(context, tables),
         'schema': _schema_spec(context, tables),
         'context': {
-            'instance_table':
-            _dataframe_table(
+            'instance_table': _dataframe_table(
                 _instance_payload_dataframe(
                     tables.context_instance_table,
-                    context,
-                ), instance_dtypes, 'instance_table'),
+                ),
+                instance_dtypes,
+                'instance_table',
+            ),
             'related_tables': {
                 table_name: _dataframe_table(
-                    df, tables.related_table_column_dtypes[table_name],
-                    table_name)
+                    df,
+                    tables.related_table_column_dtypes[table_name],
+                    table_name,
+                )
                 for table_name, df in tables.context_related_tables.items()
             },
         },
         'predict': {
-            'instance_table':
-            _dataframe_table(
+            'instance_table': _dataframe_table(
                 _instance_payload_dataframe(
                     tables.predict_instance_table,
-                    context,
-                ), instance_dtypes, 'instance_table'),
+                ),
+                instance_dtypes,
+                'instance_table',
+            ),
             'related_tables': {
                 table_name: _dataframe_table(
-                    df, tables.related_table_column_dtypes[table_name],
-                    table_name)
+                    df,
+                    tables.related_table_column_dtypes[table_name],
+                    table_name,
+                )
                 for table_name, df in tables.predict_related_tables.items()
             },
         },
@@ -347,14 +369,11 @@ def _payload_tables(context: Context) -> PayloadTables:
 
         related_table_frames[table_name] = df
         related_table_key_columns[table_name] = key_column
-        related_table_primary_keys[table_name] = (
-            [INSTANCE_ID, key_column]
-        )
+        related_table_primary_keys[table_name] = [INSTANCE_ID, key_column]
         related_table_stype_overrides[table_name] = stype_overrides
 
     relationships = _populate_relationship_columns(
         context,
-        instance_df,
         related_table_frames,
         related_table_key_columns,
         related_table_stype_overrides,
@@ -368,9 +387,11 @@ def _payload_tables(context: Context) -> PayloadTables:
         context_mask = instance_ids < context.num_train
         predict_mask = instance_ids >= context.num_train
         context_related_tables[table_name] = df.loc[context_mask].reset_index(
-            drop=True)
+            drop=True
+        )
         predict_related_tables[table_name] = df.loc[predict_mask].reset_index(
-            drop=True)
+            drop=True
+        )
 
     instance_column_dtypes = _column_dtypes(instance_df)
     instance_column_dtypes[context.y_train.name or 'TARGET'] = _target_dtype(
@@ -379,10 +400,12 @@ def _payload_tables(context: Context) -> PayloadTables:
     )
 
     return PayloadTables(
-        context_instance_table=instance_df.iloc[:context.num_train].
-        reset_index(drop=True),
-        predict_instance_table=instance_df.iloc[context.num_train:].
-        reset_index(drop=True).drop(
+        context_instance_table=instance_df.iloc[
+            : context.num_train
+        ].reset_index(drop=True),
+        predict_instance_table=instance_df.iloc[context.num_train :]
+        .reset_index(drop=True)
+        .drop(
             columns=[context.y_train.name or 'TARGET'],
             errors='ignore',
         ),
@@ -424,8 +447,9 @@ def _instance_dataframe(
         values = _entity_values(context, table_name)
         if values is None:
             raise ValueError(
-                f"Entity table {table_name!r} does not expose a primary key "
-                "for Universal payload materialization.")
+                f'Entity table {table_name!r} does not expose a primary key '
+                'for Universal payload materialization.'
+            )
         column_name = _unique_internal_column(
             occupied,
             f'{ENTITY_REFERENCE_PREFIX}_{i}',
@@ -437,7 +461,8 @@ def _instance_dataframe(
     anchor_values = np.asarray(context.subgraph.anchor_time, dtype=np.int64)
     anchor_time_column: str | None = None
     if len(anchor_values) and not np.all(
-            anchor_values == pd.Timestamp.min.value):
+        anchor_values == pd.Timestamp.min.value
+    ):
         anchor_time_column = _unique_internal_column(
             occupied,
             ANCHOR_TIME_PREFIX,
@@ -452,8 +477,9 @@ def _instance_dataframe(
         for value in context.y_train.tolist()
     ]
     if train_targets:
-        df.iloc[:context.num_train,
-                df.columns.get_loc(target_name)] = _object_array(train_targets)
+        df.iloc[: context.num_train, df.columns.get_loc(target_name)] = (
+            _object_array(train_targets)
+        )
     if context.y_test is not None:
         test_targets = [
             _target_json_value(context.task_type, value)
@@ -461,11 +487,11 @@ def _instance_dataframe(
         ]
         if test_targets:
             df.iloc[
-                context.num_train:context.num_train + len(test_targets),
+                context.num_train : context.num_train + len(test_targets),
                 df.columns.get_loc(target_name),
             ] = _object_array(test_targets)
     elif context.num_test > 0:
-        df.loc[context.num_train:, target_name] = None
+        df.loc[context.num_train :, target_name] = None
 
     if context.task_table is not None:
         for column_name in context.task_table.df.columns:
@@ -519,21 +545,25 @@ def _occurrence_dataframe(table: Any) -> tuple[pd.DataFrame, str]:
         if len(row) == len(batch) and len(row) > 0:
             if int(row.max()) >= len(df) or int(row.min()) < 0:
                 raise ValueError(
-                    "Sampled RFM context references rows outside the table "
-                    "frame.")
+                    'Sampled RFM context references rows outside the table '
+                    'frame.'
+                )
             df = df.iloc[row].reset_index(drop=True)
         elif len(row) == 0:
             df = df.iloc[0:0].copy()
         elif len(df) != len(batch):
             raise ValueError(
-                "Sampled RFM context has incompatible row and batch lengths.")
+                'Sampled RFM context has incompatible row and batch lengths.'
+            )
     elif len(df) != len(batch):
         raise ValueError(
-            "Sampled RFM context cannot be converted to table-oriented JSON "
-            "because rows are not aligned with batch instances.")
+            'Sampled RFM context cannot be converted to table-oriented JSON '
+            'because rows are not aligned with batch instances.'
+        )
     if len(df) != len(batch):
         raise ValueError(
-            "Sampled RFM context has incompatible table and batch lengths.")
+            'Sampled RFM context has incompatible table and batch lengths.'
+        )
 
     df = df.copy(deep=False)
     df.insert(0, INSTANCE_ID, batch)
@@ -550,7 +580,6 @@ def _occurrence_dataframe(table: Any) -> tuple[pd.DataFrame, str]:
 
 def _populate_relationship_columns(
     context: Context,
-    instance_df: pd.DataFrame,
     related_table_frames: dict[str, pd.DataFrame],
     related_table_key_columns: dict[str, str],
     related_table_stype_overrides: dict[str, dict[str, Stype]],
@@ -563,18 +592,22 @@ def _populate_relationship_columns(
         target_column = related_table_key_columns.get(table_name)
         if target_column is None:
             raise ValueError(
-                f"Entity table {table_name!r} is missing from the sampled "
-                "subgraph.")
+                f'Entity table {table_name!r} is missing from the sampled '
+                'subgraph.'
+            )
         table = context.subgraph.table_dict[table_name]
         if table.primary_key is None or target_column != table.primary_key:
             raise ValueError(
-                f"Entity table {table_name!r} requires a declared scalar "
-                "primary key.")
-        relationships.append({
-            'source_columns': [source_column],
-            'target_table': table_name,
-            'target_columns': [target_column],
-        })
+                f'Entity table {table_name!r} requires a declared scalar '
+                'primary key.'
+            )
+        relationships.append(
+            {
+                'source_columns': [source_column],
+                'target_table': table_name,
+                'target_columns': [target_column],
+            }
+        )
 
     processed_edges: set[tuple[str, str, str]] = set()
     for edge_type, link in context.subgraph.link_dict.items():
@@ -612,22 +645,25 @@ def _populate_relationship_columns(
 
         src_df[fkey] = fkey_values
         related_table_stype_overrides[src_table][fkey] = Stype.ID
-        relationships.append({
-            'source_table': src_table,
-            'source_columns': [fkey],
-            'target_table': dst_table,
-            'target_columns': [dst_key],
-        })
+        relationships.append(
+            {
+                'source_table': src_table,
+                'source_columns': [fkey],
+                'target_table': dst_table,
+                'target_columns': [dst_key],
+            }
+        )
         processed_edges.add(logical_edge_type)
 
     return relationships
 
 
 def _logical_forward_edge_type(
-        edge_type: tuple[str, str, str]) -> tuple[str, str, str]:
+    edge_type: tuple[str, str, str],
+) -> tuple[str, str, str]:
     src_table, fkey, dst_table = edge_type
     if fkey.startswith(REV_REL):
-        return (dst_table, fkey[len(REV_REL):], src_table)
+        return (dst_table, fkey[len(REV_REL) :], src_table)
     return edge_type
 
 
@@ -652,8 +688,10 @@ def _edge_pairs(
         rev_link = context.subgraph.link_dict.get(rev_edge_type)
         if rev_link is None:
             return []
-        return [(dst, src)
-                for src, dst in _edge_pairs(context, rev_edge_type, rev_link)]
+        return [
+            (dst, src)
+            for src, dst in _edge_pairs(context, rev_edge_type, rev_link)
+        ]
 
     num_edges = int(link.num_edges)
     if num_edges == 0:
@@ -666,20 +704,30 @@ def _edge_pairs(
         colptr = np.asarray(link.col)
         if len(colptr) != target_count + 1:
             return []
-        row = (np.arange(num_edges, dtype=np.int64)
-               if link.row is None else np.asarray(link.row))
+        row = (
+            np.arange(num_edges, dtype=np.int64)
+            if link.row is None
+            else np.asarray(link.row)
+        )
         pairs: list[tuple[int, int]] = []
         for dst_index in range(target_count):
             start = int(colptr[dst_index])
             end = int(colptr[dst_index + 1])
-            pairs.extend((int(src_index), dst_index)
-                         for src_index in row[start:end])
+            pairs.extend(
+                (int(src_index), dst_index) for src_index in row[start:end]
+            )
         return pairs
 
-    row = (np.arange(num_edges, dtype=np.int64)
-           if link.row is None else np.asarray(link.row))
-    col = (np.arange(num_edges, dtype=np.int64)
-           if link.col is None else np.asarray(link.col))
+    row = (
+        np.arange(num_edges, dtype=np.int64)
+        if link.row is None
+        else np.asarray(link.row)
+    )
+    col = (
+        np.arange(num_edges, dtype=np.int64)
+        if link.col is None
+        else np.asarray(link.col)
+    )
     return [(int(src), int(dst)) for src, dst in zip(row, col)]
 
 
@@ -718,33 +766,33 @@ def _schema_spec(
     tables: PayloadTables,
 ) -> dict[str, Any]:
     spec = {
-        'instance_table':
-        _schema_for_dataframe(
+        'instance_table': _schema_for_dataframe(
             tables.instance_column_dtypes,
             stype_overrides={
                 INSTANCE_ID: Stype.ID,
-                **{
-                    column: Stype.ID
-                    for column in tables.entity_reference_columns.values()
-                },
-                **({
-                    tables.anchor_time_column: Stype.timestamp
-                } if tables.anchor_time_column is not None else {}),
+                **dict.fromkeys(
+                    tables.entity_reference_columns.values(), Stype.ID
+                ),
+                **(
+                    {tables.anchor_time_column: Stype.timestamp}
+                    if tables.anchor_time_column is not None
+                    else {}
+                ),
                 context.y_train.name or 'TARGET': _target_stype(
-                    context.task_type),
+                    context.task_type
+                ),
             },
-            primary_key=_instance_primary_key(context),
+            primary_key=INSTANCE_ID,
         ),
         'related_tables': {
-            table_name:
-            _schema_for_dataframe(
+            table_name: _schema_for_dataframe(
                 dtypes,
                 stype_overrides=tables.related_table_stype_overrides[
-                    table_name],
+                    table_name
+                ],
                 primary_key=tables.related_table_primary_keys[table_name],
             )
-            for table_name, dtypes in
-            tables.related_table_column_dtypes.items()
+            for table_name, dtypes in tables.related_table_column_dtypes.items()
         },
         'relationships': tables.relationships,
     }
@@ -773,12 +821,12 @@ def _schema_for_dataframe(
         'columns': {
             column_name: {
                 'dtype': dtype,
-                **({
-                    'stype': _stype_name(stype_overrides[column_name])
-                } if column_name in stype_overrides else {}),
-                **({
-                    'nullable': False
-                } if column_name in primary_keys else {}),
+                **(
+                    {'stype': _stype_name(stype_overrides[column_name])}
+                    if column_name in stype_overrides
+                    else {}
+                ),
+                **({'nullable': False} if column_name in primary_keys else {}),
             }
             for column_name, dtype in dtypes.items()
         },
@@ -786,12 +834,7 @@ def _schema_for_dataframe(
     }
 
 
-def _instance_primary_key(context: Context) -> str:
-    return INSTANCE_ID
-
-
-def _instance_payload_dataframe(df: pd.DataFrame,
-                                context: Context) -> pd.DataFrame:
+def _instance_payload_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return df.copy(deep=False)
 
 
@@ -821,14 +864,17 @@ def _dataframe_table(
         cells = []
         for column_index, value in enumerate(row):
             try:
-                cells.append(
-                    _cell_json_value(value, cell_dtypes[column_index]))
+                cells.append(_cell_json_value(value, cell_dtypes[column_index]))
             except ValueError as error:
                 column = columns[column_index]
-                qualified = (f"'{table_name}.{column}'"
-                             if table_name is not None else f"'{column}'")
+                qualified = (
+                    f"'{table_name}.{column}'"
+                    if table_name is not None
+                    else f"'{column}'"
+                )
                 raise ValueError(
-                    f"Column {qualified} row {row_index}: {error}") from error
+                    f'Column {qualified} row {row_index}: {error}'
+                ) from error
         rows.append(cells)
     return {'format': 'arrays', 'columns': columns, 'rows': rows}
 
@@ -856,7 +902,8 @@ def _output_fields(
 
 
 def _inference_config_to_json(
-        inference_config: InferenceConfig | None) -> dict[str, Any] | None:
+    inference_config: InferenceConfig | None,
+) -> dict[str, Any] | None:
     if inference_config is None:
         return None
 
@@ -917,19 +964,22 @@ def _target_json_value(task_type: TaskType, value: Any) -> Any:
             value = value.tolist()
         if not isinstance(value, (list, tuple)):
             raise ValueError(
-                "Link prediction target values must be stringlist arrays, "
-                f"but got {value!r}.")
+                'Link prediction target values must be stringlist arrays, '
+                f'but got {value!r}.'
+            )
         result: list[str] = []
         for item in value:
             if _is_null_like(item):
                 raise ValueError(
-                    "Link prediction target stringlist values must not contain "
-                    f"null items, but got {value!r}.")
+                    'Link prediction target stringlist values must not contain '
+                    f'null items, but got {value!r}.'
+                )
             item_value = _json_value(item)
             if item_value is None:
                 raise ValueError(
-                    "Link prediction target stringlist values must not contain "
-                    f"null items, but got {value!r}.")
+                    'Link prediction target stringlist values must not contain '
+                    f'null items, but got {value!r}.'
+                )
             result.append(str(item_value))
         return result
 
@@ -941,8 +991,9 @@ def _target_json_value(task_type: TaskType, value: Any) -> Any:
     if isinstance(value, Real) and value in (0, 1):
         return bool(value)
     raise ValueError(
-        "Binary classification target values must be booleans or numeric "
-        f"0/1 values, but got {value!r}.")
+        'Binary classification target values must be booleans or numeric '
+        f'0/1 values, but got {value!r}.'
+    )
 
 
 def _dtype_name(data: pd.Series) -> str:
@@ -986,7 +1037,7 @@ def _dtype_name(data: pd.Series) -> str:
     return 'string'
 
 
-_INT64_MIN = -2**63
+_INT64_MIN = -(2**63)
 _INT64_MAX = 2**63 - 1
 _INT64_SAFE_PRECISION = 18
 
@@ -996,7 +1047,7 @@ def _fits_int64(value: Decimal) -> bool:
 
 
 def _decimal_dtype_name(data: pd.Series) -> str | None:
-    """Name a DECIMAL column by what it holds, not by how pandas stores it.
+    r"""Name a DECIMAL column by what it holds, not by how pandas stores it.
 
     Neither an Arrow-backed ``decimal128`` nor an object column of
     ``Decimal`` satisfies ``is_integer_dtype``/``is_float_dtype``, so without
@@ -1016,8 +1067,7 @@ def _decimal_dtype_name(data: pd.Series) -> str | None:
             return 'float64'
         if pyarrow_dtype.precision <= _INT64_SAFE_PRECISION:
             return 'int64'
-        fits = all(
-            _is_null_like(value) or _fits_int64(value) for value in data)
+        fits = all(_is_null_like(value) or _fits_int64(value) for value in data)
         return 'int64' if fits else 'string'
 
     if not pd.api.types.is_object_dtype(data.dtype):
@@ -1057,17 +1107,20 @@ def _list_dtype_name(data: pd.Series) -> str | None:
         for item in value:
             if _is_null_like(item):
                 raise ValueError(
-                    "stringlist columns must not contain null items, "
-                    f"but got {value!r}.")
+                    'stringlist columns must not contain null items, '
+                    f'but got {value!r}.'
+                )
             item_value = _json_value(item)
             if item_value is None:
                 raise ValueError(
-                    "stringlist columns must not contain null items, "
-                    f"but got {value!r}.")
+                    'stringlist columns must not contain null items, '
+                    f'but got {value!r}.'
+                )
 
     if found_list and found_scalar:
         raise ValueError(
-            "Columns with stringlist values must contain only arrays or nulls.")
+            'Columns with stringlist values must contain only arrays or nulls.'
+        )
     if not found_list:
         return None
     return 'stringlist'
@@ -1122,16 +1175,6 @@ def _json_value(value: Any) -> Any:
         if math.isnan(value):
             return None
         raise ValueError(_NON_FINITE_MSG.format(value=value))
-    if isinstance(value, Decimal):
-        if value.is_nan():
-            return None
-        if not value.is_finite():
-            raise ValueError(_NON_FINITE_MSG.format(value=value))
-        # Exact base-10 text, which `_cell_json_value` then converts to the
-        # column's declared wire dtype -- normally `float64`, and `string` for
-        # a column that mixes decimals with values that are not numbers, where
-        # the text is the lossless form.
-        return str(value)
     try:
         if pd.isna(value):
             return None
@@ -1169,7 +1212,8 @@ def _cell_json_value(value: Any, dtype: str) -> Any:
         if not isinstance(value, list):
             raise ValueError(
                 f"expected an array of values for a 'stringlist' column, but "
-                f"got {value!r}")
+                f'got {value!r}'
+            )
         return [None if item is None else _wire_string(item) for item in value]
     if dtype == 'string':
         return _wire_string(value)
@@ -1188,8 +1232,9 @@ def _cell_json_value(value: Any, dtype: str) -> Any:
         return _timestamp_json_value(pd.Timestamp(value))
     if not isinstance(value, (str, int, float, bool, list)):
         raise ValueError(
-            f"cannot serialize a value of type {type(value).__name__} under "
-            f"wire dtype '{dtype}'; convert the column to a supported dtype")
+            f'cannot serialize a value of type {type(value).__name__} under '
+            f"wire dtype '{dtype}'; convert the column to a supported dtype"
+        )
     return value
 
 

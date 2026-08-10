@@ -166,14 +166,18 @@ def test_read_sqlite_rejects_database_and_uri_together(tmp_path):
 def test_read_table_runs_in_the_caller_duckdb_session():
     r"""connectors-duckdb-cursor-loses-caller-session.md"""
     import duckdb
+
     connection = duckdb.connect()
     try:
         connection.register('mydf', pd.DataFrame({'a': [1, 2, 3]}))
         connection.execute('CREATE TEMP TABLE tmp_t AS SELECT 1 AS a')
 
         assert read_table(connection, table='mydf').shape == (3, 1)
-        assert read_table(connection, query='SELECT * FROM tmp_t').shape == (1, 1)
-        assert connection.execute('SELECT 1').fetchall() == [(1, )]
+        assert read_table(connection, query='SELECT * FROM tmp_t').shape == (
+            1,
+            1,
+        )
+        assert connection.execute('SELECT 1').fetchall() == [(1,)]
     finally:
         connection.close()
 
@@ -183,8 +187,16 @@ def test_read_sqlite_by_table_and_query(tmp_path):
     with sqlite3.connect(database) as connection:
         pd.DataFrame({'a': [1, 2, 3]}).to_sql('items', connection, index=False)
     assert len(read('sqlite', database=database, table='items')) == 3
-    assert len(read('sqlite', database=database,
-                    query='SELECT * FROM items WHERE a > 1')) == 2
+    assert (
+        len(
+            read(
+                'sqlite',
+                database=database,
+                query='SELECT * FROM items WHERE a > 1',
+            )
+        )
+        == 2
+    )
 
 
 def test_read_duckdb_in_memory_query():
@@ -196,6 +208,7 @@ def test_read_duckdb_in_memory_query():
 def test_read_duckdb_by_table(tmp_path):
     database = str(tmp_path / 'db.duckdb')
     import duckdb
+
     connection = duckdb.connect(database)
     connection.execute('CREATE TABLE items AS SELECT * FROM range(5) AS t(a)')
     connection.close()
@@ -206,7 +219,7 @@ def test_read_sqlite_keeps_nullable_integers_exact(tmp_path):
     database = str(tmp_path / 'ids.sqlite')
     with sqlite3.connect(database) as connection:
         connection.execute('CREATE TABLE users (user_id BIGINT, age INTEGER)')
-        connection.execute('INSERT INTO users VALUES (?, 20)', (LARGE_ID, ))
+        connection.execute('INSERT INTO users VALUES (?, 20)', (LARGE_ID,))
         connection.execute('INSERT INTO users VALUES (NULL, 30)')
 
     frame = read('sqlite', database=database, table='users')
@@ -220,7 +233,8 @@ def test_read_sqlite_keeps_nullable_integers_exact(tmp_path):
 
 def test_read_table_prefers_arrow_over_pandas_fetch():
     cursor = _FakeCursor(
-        pa.table({'user_id': pa.array([LARGE_ID, None], type=pa.int64())}))
+        pa.table({'user_id': pa.array([LARGE_ID, None], type=pa.int64())})
+    )
 
     frame = read_table(_FakeConnection(cursor), table='users')
 

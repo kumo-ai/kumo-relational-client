@@ -8,13 +8,26 @@ import sys
 import threading
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from kumorfm._logging import _ENV_KUMO_LOG, initialize_logging
 from kumorfm._singleton import Singleton
 from kumorfm._version import __version__
 from kumorfm.api.typing import Dtype, Stype
-from kumorfm.client.client import KumoClient
+from kumorfm.exceptions import (
+    AuthenticationError,
+    ClientInitializationError,
+    GraphConstructionError,
+    HTTPException,
+    InvalidResponseError,
+    KumoRFMError,
+    NimFailureError,
+    NimTimeoutError,
+    NimUnreachableError,
+    UnknownDatasetError,
+)
+from kumorfm.client.client import KumoClient, redact_url
 from kumorfm.client.transport import RFMTransport
 
 initialize_logging()
@@ -33,15 +46,18 @@ class GlobalState(metaclass=Singleton):
     returns early rather than re-resolving credentials.
     """
 
-    _url: Optional[str] = None
-    _api_key: Optional[str] = None
+    _url: str | None = None
+    # Kept out of the repr: `global_state` is exported, and a dataclass repr
+    # reaches tracebacks, notebook echoes and crash reporters. The key is
+    # readable through the attribute for anyone who actually wants it.
+    _api_key: str | None = field(default=None, repr=False)
     _verify_ssl: bool = True
-    _timeout: Optional[float] = None
+    _timeout: float | None = None
     _max_retries: int = 3
-    _client_factory: Optional[Callable[[], Any]] = None
-    _serving_endpoint: Optional[str] = None
-    _serving_workspace: Optional[Any] = None
-    _serving_overrides: Optional[dict] = None
+    _client_factory: Callable[[], Any] | None = None
+    _serving_endpoint: str | None = None
+    _serving_workspace: Any | None = None
+    _serving_overrides: dict[str, Any] | None = None
 
     thread_local: threading.local = field(default_factory=threading.local)
 
@@ -65,9 +81,18 @@ class GlobalState(metaclass=Singleton):
         self._max_retries = 3
 
     @property
-    def _config(self) -> tuple[Optional[str], Optional[str], bool,
-                               Optional[float]]:
-        return (self._url, self._api_key, self._verify_ssl, self._timeout)
+    def _config(self) -> tuple[Any, ...]:
+        return (
+            self._url,
+            self._api_key,
+            self._verify_ssl,
+            self._timeout,
+            self._max_retries,
+            self._client_factory is not None,
+            self._serving_endpoint,
+            id(self._serving_workspace),
+            tuple(sorted((self._serving_overrides or {}).items())),
+        )
 
     @property
     def initialized(self) -> bool:
@@ -75,7 +100,7 @@ class GlobalState(metaclass=Singleton):
 
     @property
     def client(self) -> RFMTransport:
-        """The request client for this thread.
+        r"""The request client for this thread.
 
         A :class:`KumoClient` for the raw-NIM deployment, or whatever
         ``_client_factory`` builds otherwise.
@@ -96,27 +121,36 @@ class GlobalState(metaclass=Singleton):
         replaced. It is skipped under pytest so a test run cannot silently
         connect to a real endpoint.
         """
-        if (not self.initialized and os.getenv("KUMO_API_ENDPOINT")
-                and "pytest" not in sys.modules):
+        if (
+            not self.initialized
+            and os.getenv('KUMO_API_ENDPOINT')
+            and 'pytest' not in sys.modules
+        ):
             init()
 
         if not self.initialized:
-            raise ValueError("Client creation or authentication failed. "
-                             "Please re-create your client before proceeding.")
+            raise ValueError(
+                'Client creation or authentication failed. '
+                'Please re-create your client before proceeding.'
+            )
 
         config = self._config
-        if (hasattr(self.thread_local, '_client')
-                and getattr(self.thread_local, '_client_config',
-                            None) == config):
+        if (
+            hasattr(self.thread_local, '_client')
+            and getattr(self.thread_local, '_client_config', None) == config
+        ):
             return self.thread_local._client
 
         if self._client_factory is not None:
             client = self._client_factory()
         else:
-            client = KumoClient(self._url, self._api_key,
-                                verify_ssl=self._verify_ssl,
-                                timeout=self._timeout,
-                                max_retries=self._max_retries)
+            client = KumoClient(
+                self._url,
+                self._api_key,
+                verify_ssl=self._verify_ssl,
+                timeout=self._timeout,
+                max_retries=self._max_retries,
+            )
         self.thread_local._client = client
         self.thread_local._client_config = config
         return client
@@ -126,11 +160,11 @@ global_state: GlobalState = GlobalState()
 
 
 def init(
-    url: Optional[str] = None,
-    api_key: Optional[str] = None,
+    url: str | None = None,
+    api_key: str | None = None,
     verify_ssl: bool = True,
-    log_level: str = "INFO",
-    timeout: Optional[float] = None,
+    log_level: str = 'INFO',
+    timeout: float | None = None,
     max_retries: int = 3,
 ) -> None:
     r"""Initializes the KumoRFM client against a Universal TFM NIM.
@@ -146,26 +180,35 @@ def init(
     """
     set_log_level(os.getenv(_ENV_KUMO_LOG, log_level))
 
-    api_key = api_key or os.getenv("KUMO_API_KEY")
-    url = url or os.getenv("KUMO_API_ENDPOINT")
+    api_key = api_key or os.getenv('KUMO_API_KEY')
+    url = url or os.getenv('KUMO_API_ENDPOINT')
     if not url:
-        raise ValueError("KumoRFM initialization failed since no endpoint "
-                         "URL was provided. Please either set the "
-                         "'KUMO_API_ENDPOINT' environment variable or "
-                         "explicitly call `kumorfm.init(url=...)`.")
+        raise ValueError(
+            'KumoRFM initialization failed since no endpoint '
+            'URL was provided. Please either set the '
+            "'KUMO_API_ENDPOINT' environment variable or "
+            'explicitly call `kumorfm.init(url=...)`.'
+        )
 
     if global_state.initialized:
-        unchanged = (url == global_state._url
-                     and api_key == global_state._api_key
-                     and verify_ssl == global_state._verify_ssl
-                     and timeout == global_state._timeout
-                     and max_retries == global_state._max_retries)
+        unchanged = (
+            url == global_state._url
+            and api_key == global_state._api_key
+            and verify_ssl == global_state._verify_ssl
+            and timeout == global_state._timeout
+            and max_retries == global_state._max_retries
+        )
         if unchanged:
             return
         global_state.clear()
 
-    client = KumoClient(url=url, api_key=api_key, verify_ssl=verify_ssl,
-                        timeout=timeout, max_retries=max_retries)
+    client = KumoClient(
+        url=url,
+        api_key=api_key,
+        verify_ssl=verify_ssl,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
     client.authenticate()
 
     global_state._url = client._url
@@ -175,16 +218,19 @@ def init(
     global_state._max_retries = max_retries
 
     logging.getLogger('kumorfm').info(
-        f"Initialized KumoRFM SDK v{__version__} against deployment '{url}'")
+        "Initialized KumoRFM SDK v%s against deployment '%s'",
+        __version__,
+        redact_url(url),
+    )
 
 
 def init_databricks_serving(
     endpoint: str,
     *,
-    workspace_client: Optional[Any] = None,
-    max_request_bytes: Optional[int] = None,
-    timeout: Optional[float] = None,
-    log_level: str = "INFO",
+    workspace_client: Any | None = None,
+    max_request_bytes: int | None = None,
+    timeout: float | None = None,
+    log_level: str = 'INFO',
 ) -> None:
     r"""Initialize against a Databricks Model Serving endpoint.
 
@@ -225,15 +271,20 @@ def init_databricks_serving(
     """
     overrides: dict[str, Any] = {
         name: value
-        for name, value in (('max_request_bytes', max_request_bytes),
-                            ('timeout', timeout)) if value is not None
+        for name, value in (
+            ('max_request_bytes', max_request_bytes),
+            ('timeout', timeout),
+        )
+        if value is not None
     }
 
     if global_state.initialized:
-        unchanged = (global_state._client_factory is not None
-                     and endpoint == global_state._serving_endpoint
-                     and workspace_client is global_state._serving_workspace
-                     and overrides == global_state._serving_overrides)
+        unchanged = (
+            global_state._client_factory is not None
+            and endpoint == global_state._serving_endpoint
+            and workspace_client is global_state._serving_workspace
+            and overrides == global_state._serving_overrides
+        )
         if unchanged:
             set_log_level(os.getenv(_ENV_KUMO_LOG, log_level))
             return
@@ -254,10 +305,14 @@ def init_databricks_serving(
     global_state._serving_workspace = workspace_client
     global_state._serving_overrides = overrides
     global_state.thread_local._client = probe
+    global_state.thread_local._client_config = global_state._config
 
     logging.getLogger('kumorfm').info(
-        f"Initialized KumoRFM SDK v{__version__} against Databricks Model "
-        f"Serving endpoint '{endpoint}'")
+        'Initialized KumoRFM SDK v%s against Databricks Model Serving '
+        "endpoint '%s'",
+        __version__,
+        endpoint,
+    )
 
 
 def set_log_level(level: str) -> None:
@@ -270,6 +325,7 @@ def in_streamlit_notebook() -> bool:
     try:
         import streamlit  # noqa: F401
         from snowflake.snowpark.context import get_active_session
+
         get_active_session()
         return True
     except Exception:
@@ -280,6 +336,7 @@ def in_streamlit_notebook() -> bool:
 def in_jupyter_notebook() -> bool:
     try:
         from IPython import get_ipython
+
         shell = get_ipython()
         if 'google.colab' in str(shell.__class__):
             return True
@@ -294,6 +351,7 @@ def in_jupyter_notebook() -> bool:
 def in_vnext_notebook() -> bool:
     try:
         from snowflake.snowpark.context import get_active_session
+
         get_active_session()
         return in_jupyter_notebook()
     except Exception:
@@ -307,16 +365,33 @@ def in_notebook() -> bool:
 
 @lru_cache
 def in_tmux() -> bool:
+    r"""Whether output should avoid emoji.
+
+    Terminal multiplexers commonly mis-measure the display width of an emoji
+    and corrupt the rest of the line, so the table and graph banners fall back
+    to plain text. Each name below marks one such environment; add another only
+    alongside a terminal that shows the same defect.
+    """
     return 'TMUX' in os.environ or 'HERDR_ENV' in os.environ
 
 
 __all__ = [
+    'AuthenticationError',
+    'ClientInitializationError',
     'Dtype',
-    'Stype',
+    'GraphConstructionError',
+    'HTTPException',
+    'InvalidResponseError',
     'KumoClient',
+    'KumoRFMError',
+    'NimFailureError',
+    'NimTimeoutError',
+    'NimUnreachableError',
+    'Stype',
+    'UnknownDatasetError',
+    '__version__',
     'global_state',
     'init',
     'init_databricks_serving',
     'set_log_level',
-    '__version__',
 ]

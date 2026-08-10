@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from typing import Any, List, Optional, Tuple, Union
+from typing import Any, Union
 
 import pydantic
 from pydantic.dataclasses import dataclass
@@ -35,24 +35,26 @@ class Condition(ASTNode):
             user input to be used, e.g. when reporting errors.
             (default: :obj:`None`)
     """
+
     target: Union['Aggregation', 'Column', 'Join', None] = None
-    op: Union[RelOp, MemberOp, StrOp, str] = ''
-    value: Union[Constant, int, float, str, bool, None] = None
-    input_op: Optional[str] = None
+    op: RelOp | MemberOp | StrOp | str = ''
+    value: Constant | int | float | str | bool | None = None
+    input_op: str | None = None
 
     def __post_init__(self) -> None:
         if self.target is None:
-            raise ValueError(f"Class '{self.__class__.__name__}' is missing a "
-                             f"target.")
+            raise ValueError(
+                f"Class '{self.__class__.__name__}' is missing a target."
+            )
         # Backward compatibility with older configs
         if not isinstance(self.value, (Constant, dict)):
             self.value = Constant.from_value(self.value)
         if isinstance(self.op, str):
-            if self.op in set(item.value for item in RelOp):
+            if self.op in {item.value for item in RelOp}:
                 self.op = RelOp(self.op)
-            elif self.op in set(item.value for item in StrOp):
+            elif self.op in {item.value for item in StrOp}:
                 self.op = StrOp(self.op)
-            elif self.op in set(item.value for item in MemberOp):
+            elif self.op in {item.value for item in MemberOp}:
                 self.op = MemberOp(self.op)
             elif self.op == SQL_LIKE:
                 self.input_op = self.op
@@ -61,19 +63,21 @@ class Condition(ASTNode):
                 self.input_op = self.op
                 self.op, self.value.value = self.like_to_str_op(negate=True)
             else:
-                raise ValueError(f"{self.op} is not found in the relational "
-                                 f"nor the string operators.")
+                raise ValueError(
+                    f'{self.op} is not found in the relational '
+                    f'nor the string operators.'
+                )
         super().__post_init__()
 
     @property
-    def children(self) -> List[Union['ASTNode', int, float, str, bool]]:
+    def children(self) -> list[Union['ASTNode', int, float, str, bool]]:
         assert self.target is not None
         assert self.value is not None
         return [self.target, self.value]
 
     def __and__(
-            self, f2: Union['Condition',
-                            'LogicalOperation']) -> 'LogicalOperation':
+        self, f2: Union['Condition', 'LogicalOperation']
+    ) -> 'LogicalOperation':
         return LogicalOperation(
             left=self,
             bool_op=BoolOp.AND,
@@ -81,8 +85,8 @@ class Condition(ASTNode):
         )
 
     def __or__(
-            self, f2: Union['Condition',
-                            'LogicalOperation']) -> 'LogicalOperation':
+        self, f2: Union['Condition', 'LogicalOperation']
+    ) -> 'LogicalOperation':
         return LogicalOperation(
             left=self,
             bool_op=BoolOp.OR,
@@ -97,7 +101,7 @@ class Condition(ASTNode):
         return self.value.typed_value()
 
     def to_string(self, rich: bool = False) -> str:
-        r"""Creates a predictive query statement from the filter. """
+        r"""Creates a predictive query statement from the filter."""
         assert isinstance(self.op, (RelOp, MemberOp, StrOp))
         assert isinstance(self.value, Constant)
         op = self.op.value
@@ -112,7 +116,7 @@ class Condition(ASTNode):
         assert self.target is not None
         return f'{self.target.to_string(rich=rich)} {op} {value}'
 
-    def like_to_str_op(self, negate=False) -> Tuple[StrOp, str]:
+    def like_to_str_op(self, negate=False) -> tuple[StrOp, str]:
         # Check the string whether starts with '%', ends with '%', or both
         str_op = None
         assert isinstance(self.value, Constant)
@@ -129,7 +133,8 @@ class Condition(ASTNode):
             raise ValueError(
                 'Condition must contain a % at the start ',
                 'end, or both ends of the value being compared when using '
-                'the LIKE operator')
+                'the LIKE operator',
+            )
 
         # Remove the '%' to get the original value
         assert isinstance(self.value.value, str)
@@ -137,10 +142,11 @@ class Condition(ASTNode):
 
         # TODO: add support for not starts with, not ends with
         if negate:
-            # raise exception if not strop.contains
             if str_op != StrOp.CONTAINS:
-                raise ValueError("'NOT LIKE' only works for values that start "
-                                 "with '%' and end with '%'.")
+                raise ValueError(
+                    "'NOT LIKE' only works for values that start "
+                    "with '%' and end with '%'."
+                )
             str_op = StrOp.NOT_CONTAINS
         return str_op, new_value
 
@@ -148,7 +154,9 @@ class Condition(ASTNode):
 from kumorfm.api.pquery.AST.aggregation import Aggregation  # noqa: E402
 from kumorfm.api.pquery.AST.column import Column  # noqa: E402
 from kumorfm.api.pquery.AST.join import Join  # noqa: E402
-from kumorfm.api.pquery.AST.logical_operation import LogicalOperation  # noqa: E402
+from kumorfm.api.pquery.AST.logical_operation import (  # noqa: E402
+    LogicalOperation,
+)
 
 if pydantic.__version__.startswith('1.'):
     Condition.__pydantic_model__.update_forward_refs()

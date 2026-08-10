@@ -4,25 +4,24 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 
 class HTTPMethod(Enum):
     r"""HTTP methods supported by the API."""
 
-    GET = "GET"
-    POST = "POST"
-    DELETE = "DELETE"
+    GET = 'GET'
+    POST = 'POST'
+    DELETE = 'DELETE'
 
 
 @dataclass(frozen=True)
 class Endpoint:
     r"""Represents an API endpoint with its path and HTTP method."""
 
-    path: Optional[str] = field(default=None)
+    path: str | None = field(default=None)
     method: HTTPMethod = HTTPMethod.GET
 
     def get_path(self) -> str:
         if self.path is None:
-            raise ValueError("Endpoint requires a path")
+            raise ValueError('Endpoint requires a path')
         return self.path

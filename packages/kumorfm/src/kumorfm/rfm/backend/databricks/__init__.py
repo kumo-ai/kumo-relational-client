@@ -8,8 +8,8 @@ from .table import DatabricksTable
 from .sampler import DatabricksSampler
 
 __all__ = [
-    'connect',
     'Connection',
-    'DatabricksTable',
     'DatabricksSampler',
+    'DatabricksTable',
+    'connect',
 ]

@@ -13,6 +13,7 @@ Serving with no coverage at all.
 stub module registered in ``sys.modules`` is enough to exercise the branch --
 no compiled extension, no Databricks SDK, no network.
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -22,6 +23,7 @@ from typing import Any
 
 import pandas as pd
 import pytest
+
 from nvidia_sdfm.adapters.kumorfm import KumoRFMAdapter
 from nvidia_sdfm.core.serving import ServingTarget
 from nvidia_sdfm.core.transport import Transport
@@ -47,11 +49,11 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
 
     class _KumoRFM:
         def __init__(self, graph: Any, **kwargs: Any) -> None:
-            calls["graph"] = graph
+            calls['graph'] = graph
 
         def predict(self, query: str, **kwargs: Any) -> pd.DataFrame:
-            calls["predict"] = {"query": query, **kwargs}
-            return pd.DataFrame({"prediction": [1]})
+            calls['predict'] = {'query': query, **kwargs}
+            return pd.DataFrame({'prediction': [1]})
 
         def batch_mode(self, *args: Any, **kwargs: Any) -> Any:
             import contextlib
@@ -64,7 +66,7 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
             # using it, which is how this file broke.
             import contextlib
 
-            calls["retry"] = (args, kwargs)
+            calls['retry'] = (args, kwargs)
             return contextlib.nullcontext()
 
     # The adapter resolves HTTPException out of sys.modules at call time, so a
@@ -72,11 +74,15 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     # kumorfm.exceptions instead would cost this file the property its
     # docstring claims -- and the client_tests job, which installs no engine,
     # is the only place the branch gets covered.
-    exceptions = types.ModuleType("kumorfm.exceptions")
+    exceptions = types.ModuleType('kumorfm.exceptions')
 
     class _HTTPException(Exception):
-        def __init__(self, status_code: int, detail: str | None = None,
-                     headers: dict[str, str] | None = None) -> None:
+        def __init__(
+            self,
+            status_code: int,
+            detail: str | None = None,
+            headers: dict[str, str] | None = None,
+        ) -> None:
             super().__init__(detail)
             self.status_code = status_code
             self.detail = detail
@@ -84,30 +90,28 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
 
     exceptions.HTTPException = _HTTPException
 
-    module = types.ModuleType("kumorfm.rfm")
-    module.init = lambda **kw: calls.setdefault("init", kw)
-    module.init_client = lambda **kw: calls.setdefault("init", kw)
+    module = types.ModuleType('kumorfm.rfm')
+    module.init = lambda **kw: calls.setdefault('init', kw)
+    module.init_client = lambda **kw: calls.setdefault('init', kw)
     module.init_databricks_serving = lambda endpoint, **kw: calls.setdefault(
-        "init_databricks_serving", {"endpoint": endpoint, **kw}
+        'init_databricks_serving', {'endpoint': endpoint, **kw}
     )
     module.KumoRFM = _KumoRFM
     module._SDFM_CLIENT_TOKEN = _SDFM_CLIENT_TOKEN
 
-    parent = types.ModuleType("kumorfm")
+    parent = types.ModuleType('kumorfm')
     parent.rfm = module
     parent.exceptions = exceptions
 
-    monkeypatch.setitem(sys.modules, "kumorfm", parent)
-    monkeypatch.setitem(sys.modules, "kumorfm.rfm", module)
-    monkeypatch.setitem(sys.modules, "kumorfm.exceptions", exceptions)
+    monkeypatch.setitem(sys.modules, 'kumorfm', parent)
+    monkeypatch.setitem(sys.modules, 'kumorfm.rfm', module)
+    monkeypatch.setitem(sys.modules, 'kumorfm.exceptions', exceptions)
     module.calls = calls
     return module
 
 
 def _request() -> KumoRFMRequest:
-    return KumoRFMRequest(
-        graph=object(), query="PREDICT x FOR y", indices=[1]
-    )
+    return KumoRFMRequest(graph=object(), query='PREDICT x FOR y', indices=[1])
 
 
 def test_serving_target_initializes_by_endpoint_name(
@@ -115,13 +119,15 @@ def test_serving_target_initializes_by_endpoint_name(
 ) -> None:
     """The branch under test: a ServingTarget must not be sent through the
     URL-based init, which would read attributes that raise by design."""
-    target = ServingTarget("kumo-rfm", workspace_client="WS")
+    target = ServingTarget('kumo-rfm', workspace_client='WS')
     KumoRFMAdapter().predict(target, _request())
 
-    assert "init_databricks_serving" in engine.calls
-    assert engine.calls["init_databricks_serving"]["endpoint"] == "kumo-rfm"
-    assert engine.calls["init_databricks_serving"]["workspace_client"] == "WS"
-    assert "init" not in engine.calls, "took the raw-NIM path for a serving target"
+    assert 'init_databricks_serving' in engine.calls
+    assert engine.calls['init_databricks_serving']['endpoint'] == 'kumo-rfm'
+    assert engine.calls['init_databricks_serving']['workspace_client'] == 'WS'
+    assert 'init' not in engine.calls, (
+        'took the raw-NIM path for a serving target'
+    )
 
 
 def test_serving_target_never_reads_url_or_api_key(
@@ -129,54 +135,57 @@ def test_serving_target_never_reads_url_or_api_key(
 ) -> None:
     """ServingTarget.url raises. If the adapter duck-typed instead of checking
     the type, this is where it would blow up."""
-    KumoRFMAdapter().predict(ServingTarget("kumo-rfm"), _request())
-    sent = engine.calls["init_databricks_serving"]
-    assert "url" not in sent and "api_key" not in sent and "verify_ssl" not in sent
+    KumoRFMAdapter().predict(ServingTarget('kumo-rfm'), _request())
+    sent = engine.calls['init_databricks_serving']
+    assert (
+        'url' not in sent and 'api_key' not in sent and 'verify_ssl' not in sent
+    )
 
 
 def test_transport_still_takes_the_url_path(
     engine: types.SimpleNamespace,
 ) -> None:
     """The raw-NIM path must be unchanged by the branch."""
-    transport = Transport("https://nim.example.com:8000", api_key="secret")
+    transport = Transport('https://nim.example.com:8000', api_key='secret')
     KumoRFMAdapter().predict(transport, _request())
 
-    assert "init" in engine.calls
-    assert engine.calls["init"]["url"] == "https://nim.example.com:8000"
-    assert engine.calls["init"]["api_key"] == "secret"
-    assert "init_databricks_serving" not in engine.calls
+    assert 'init' in engine.calls
+    assert engine.calls['init']['url'] == 'https://nim.example.com:8000'
+    assert engine.calls['init']['api_key'] == 'secret'
+    assert 'init_databricks_serving' not in engine.calls
 
 
 def test_both_paths_reach_the_same_predict(
     engine: types.SimpleNamespace,
 ) -> None:
     """Only initialization differs; inference must be identical."""
-    KumoRFMAdapter().predict(ServingTarget("kumo-rfm"), _request())
-    serving = engine.calls["predict"]
+    KumoRFMAdapter().predict(ServingTarget('kumo-rfm'), _request())
+    serving = engine.calls['predict']
 
     engine.calls.clear()
     KumoRFMAdapter().predict(
-        Transport("https://nim.example.com:8000"), _request()
+        Transport('https://nim.example.com:8000'), _request()
     )
-    assert engine.calls["predict"] == serving
+    assert engine.calls['predict'] == serving
 
 
 # -- the documented happy path --------------------------------------------
+
 
 def test_a_serving_client_closes() -> None:
     """The class docstring offers close() as the alternative to the context
     manager. It did not work: ServingTarget had no close()."""
     from nvidia_sdfm import SDFMClient
 
-    client = SDFMClient.for_databricks_serving("kumo-rfm")
+    client = SDFMClient.for_databricks_serving('kumo-rfm')
     client.close()
 
 
 def test_a_serving_client_works_as_a_context_manager() -> None:
     from nvidia_sdfm import SDFMClient
 
-    with SDFMClient.for_databricks_serving("kumo-rfm") as client:
-        assert "kumo-rfm" in client.models()
+    with SDFMClient.for_databricks_serving('kumo-rfm') as client:
+        assert 'kumo-rfm' in client.models()
 
 
 def test_a_serving_client_reprs() -> None:
@@ -185,16 +194,16 @@ def test_a_serving_client_reprs() -> None:
     up in exactly the places you most want it to work."""
     from nvidia_sdfm import SDFMClient
 
-    text = repr(SDFMClient.for_databricks_serving("kumo-rfm"))
-    assert "kumo-rfm" in text
-    assert str(SDFMClient.for_databricks_serving("kumo-rfm"))
+    text = repr(SDFMClient.for_databricks_serving('kumo-rfm'))
+    assert 'kumo-rfm' in text
+    assert str(SDFMClient.for_databricks_serving('kumo-rfm'))
 
 
 def test_a_url_client_still_reprs_with_its_url() -> None:
     from nvidia_sdfm import SDFMClient
 
-    assert "https://nim.example.com:8000" in repr(
-        SDFMClient("https://nim.example.com:8000")
+    assert 'https://nim.example.com:8000' in repr(
+        SDFMClient('https://nim.example.com:8000')
     )
 
 
@@ -208,11 +217,11 @@ def test_the_repr_does_not_render_the_workspace_client() -> None:
         def __repr__(self) -> str:
             return "WorkspaceClient(token='dapi-SECRET', host='acme.databricks.com')"
 
-    target = ServingTarget("kumo-rfm", _Leaky())
-    assert "dapi-SECRET" not in repr(target)
-    assert "acme.databricks.com" not in repr(target)
-    assert "dapi-SECRET" not in repr(
-        SDFMClient.for_databricks_serving("kumo-rfm", workspace_client=_Leaky())
+    target = ServingTarget('kumo-rfm', _Leaky())
+    assert 'dapi-SECRET' not in repr(target)
+    assert 'acme.databricks.com' not in repr(target)
+    assert 'dapi-SECRET' not in repr(
+        SDFMClient.for_databricks_serving('kumo-rfm', workspace_client=_Leaky())
     )
 
 
@@ -222,20 +231,28 @@ def test_both_construction_paths_populate_the_same_fields() -> None:
     one and not the other is an AttributeError at first use, not here."""
     from nvidia_sdfm import SDFMClient
 
-    by_url = SDFMClient("https://nim.example.com:8000")
-    by_endpoint = SDFMClient.for_databricks_serving("kumo-rfm")
+    by_url = SDFMClient('https://nim.example.com:8000')
+    by_endpoint = SDFMClient.for_databricks_serving('kumo-rfm')
     assert vars(by_url).keys() == vars(by_endpoint).keys()
 
 
 # -- what the target refuses to do ----------------------------------------
 
-@pytest.mark.parametrize(("refuse", "code"), [
-    pytest.param(lambda c: c.url, "INVALID_CONFIGURATION", id="url"),
-    pytest.param(lambda c: c.health_ready(), "UNSUPPORTED_FEATURE",
-                 id="health_ready"),
-    pytest.param(lambda c: ServingTarget("kumo-rfm").predict({}),
-                 "UNSUPPORTED_FEATURE", id="predict"),
-])
+
+@pytest.mark.parametrize(
+    ('refuse', 'code'),
+    [
+        pytest.param(lambda c: c.url, 'INVALID_CONFIGURATION', id='url'),
+        pytest.param(
+            lambda c: c.health_ready(), 'UNSUPPORTED_FEATURE', id='health_ready'
+        ),
+        pytest.param(
+            lambda c: ServingTarget('kumo-rfm').predict({}),
+            'UNSUPPORTED_FEATURE',
+            id='predict',
+        ),
+    ],
+)
 def test_a_serving_target_refuses_what_does_not_apply(refuse, code) -> None:
     """A serving endpoint has no URL, no readiness route, and no generic
     prediction path. Each member exists only to say so, naming the endpoint,
@@ -243,28 +260,28 @@ def test_a_serving_target_refuses_what_does_not_apply(refuse, code) -> None:
     from nvidia_sdfm import SDFMClient
 
     with pytest.raises(SdfmError) as caught:
-        refuse(SDFMClient.for_databricks_serving("kumo-rfm"))
+        refuse(SDFMClient.for_databricks_serving('kumo-rfm'))
     assert caught.value.code == code
-    assert "kumo-rfm" in caught.value.message
+    assert 'kumo-rfm' in caught.value.message
 
 
 # -- the two endpoint-validation layers -----------------------------------
 
 _BAD_ENDPOINTS = [
-    pytest.param("", id="empty"),
-    pytest.param("   ", id="whitespace-only"),
+    pytest.param('', id='empty'),
+    pytest.param('   ', id='whitespace-only'),
     pytest.param(
-        "https://user:PWSECRET@acme.cloud.databricks.com/serving",
-        id="userinfo-credentials",
+        'https://user:PWSECRET@acme.cloud.databricks.com/serving',
+        id='userinfo-credentials',
     ),
-    pytest.param("acme.databricks.com/serving?token=dapiTOK", id="token-query"),
-    pytest.param("kumo-rfm\n", id="trailing-newline"),
-    pytest.param("kumo#rfm", id="fragment"),
+    pytest.param('acme.databricks.com/serving?token=dapiTOK', id='token-query'),
+    pytest.param('kumo-rfm\n', id='trailing-newline'),
+    pytest.param('kumo#rfm', id='fragment'),
 ]
 
 
 @requires_kumorfm
-@pytest.mark.parametrize("endpoint", _BAD_ENDPOINTS)
+@pytest.mark.parametrize('endpoint', _BAD_ENDPOINTS)
 def test_the_two_endpoint_validation_layers_agree(endpoint: str) -> None:
     """ServingTarget and kumorfm's DatabricksServingClient validate the same
     endpoint independently, with the same predicates in the same order. Only
@@ -275,6 +292,7 @@ def test_the_two_endpoint_validation_layers_agree(endpoint: str) -> None:
     the one input guaranteed to be able to carry credentials.
     """
     from kumorfm.client.databricks_serving import DatabricksServingClient
+
     from nvidia_sdfm import SDFMClient
 
     with pytest.raises(SdfmError) as ours:
@@ -282,14 +300,15 @@ def test_the_two_endpoint_validation_layers_agree(endpoint: str) -> None:
     with pytest.raises(ValueError) as theirs:
         DatabricksServingClient(endpoint)
 
-    assert ours.value.code == "INVALID_CONFIGURATION"
+    assert ours.value.code == 'INVALID_CONFIGURATION'
     assert ours.value.message == str(theirs.value)
-    for leak in ("PWSECRET", "dapiTOK", "acme"):
+    for leak in ('PWSECRET', 'dapiTOK', 'acme'):
         assert leak not in ours.value.message
         assert leak not in str(theirs.value)
 
 
 # -- failures coming back out of the engine -------------------------------
+
 
 def _missing_sdk() -> Exception:
     """Verbatim what kumorfm raises when databricks-sdk is absent."""
@@ -304,33 +323,47 @@ def _ambient_auth_failed() -> Exception:
 
     return HTTPException(
         503,
-        "could not authenticate to Databricks from the ambient configuration",
+        'could not authenticate to Databricks from the ambient configuration',
     )
 
 
-@pytest.mark.parametrize(("build", "code", "says"), [
-    pytest.param(_missing_sdk, "MISSING_EXTRA",
-                 "pip install nvidia-sdfm[databricks-serving]",
-                 id="missing-databricks-sdk"),
-    pytest.param(_ambient_auth_failed, "SERVING_INIT_FAILED",
-                 "could not authenticate", id="ambient-auth-failed"),
-])
+@pytest.mark.parametrize(
+    ('build', 'code', 'says'),
+    [
+        pytest.param(
+            _missing_sdk,
+            'MISSING_EXTRA',
+            'pip install nvidia-sdfm[databricks-serving]',
+            id='missing-databricks-sdk',
+        ),
+        pytest.param(
+            _ambient_auth_failed,
+            'SERVING_INIT_FAILED',
+            'could not authenticate',
+            id='ambient-auth-failed',
+        ),
+    ],
+)
 def test_engine_init_failures_are_translated_at_the_boundary(
-    engine: types.SimpleNamespace, build, code, says,
+    engine: types.SimpleNamespace,
+    build,
+    code,
+    says,
 ) -> None:
     """kumorfm names its own extra, so an unwrapped ImportError tells someone
     who installed nvidia-sdfm[databricks-serving] to install a package they
     never named. Nothing from the engine reaches the caller untranslated."""
+
     def _raise(endpoint: str, **kwargs: Any) -> None:
         raise build()
 
     engine.init_databricks_serving = _raise
 
     with pytest.raises(SdfmError) as caught:
-        KumoRFMAdapter().predict(ServingTarget("kumo-rfm"), _request())
+        KumoRFMAdapter().predict(ServingTarget('kumo-rfm'), _request())
     assert caught.value.code == code
     assert says in caught.value.message
-    assert "kumorfm[" not in caught.value.message
+    assert 'kumorfm[' not in caught.value.message
 
 
 def test_engine_failure_on_the_serving_path_keeps_its_own_message(
@@ -346,6 +379,7 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
     real cause was discarded. Found while debugging a NIM BAD_REQUEST that the
     SDK reported as a configuration problem.
     """
+
     class _Failing:
         def __init__(self, graph: Any, **kwargs: Any) -> None:
             pass

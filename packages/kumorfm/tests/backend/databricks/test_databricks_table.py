@@ -4,15 +4,13 @@
 
 import pytest
 from kumorfm.api.typing import Dtype, Stype
-
 from kumorfm.rfm.backend.local import LocalTable
 from kumorfm.rfm.base import LocalExpression
 
 try:
     from kumorfm.rfm.backend.databricks import Connection, DatabricksTable
 except ImportError:
-    pytest.skip("'databricks' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'databricks' extension not installed", allow_module_level=True)
 
 
 def test_to_dtype() -> None:
@@ -62,9 +60,10 @@ def test_invalid_name(
     catalog: str,
     schema: str,
 ) -> None:
-    with pytest.raises(ValueError, match="does not exist"):
-        DatabricksTable(connection, name='__no_such_table__', catalog=catalog,
-                        schema=schema)
+    with pytest.raises(ValueError, match='does not exist'):
+        DatabricksTable(
+            connection, name='__no_such_table__', catalog=catalog, schema=schema
+        )
 
 
 def test_quoted_source_name(
@@ -72,8 +71,9 @@ def test_quoted_source_name(
     catalog: str,
     schema: str,
 ) -> None:
-    table = DatabricksTable(connection, name='customers', catalog=catalog,
-                            schema=schema)
+    table = DatabricksTable(
+        connection, name='customers', catalog=catalog, schema=schema
+    )
     assert table.source_name == f'{catalog}.{schema}.customers'
     assert table._quoted_source_name == f'`{catalog}`.`{schema}`.`customers`'
 
@@ -89,7 +89,10 @@ def test_customers(
         catalog=catalog,
         schema=schema,
         columns=[
-            'customer_id', 'segment', 'payment_terms_days', 'onboarded_year'
+            'customer_id',
+            'segment',
+            'payment_terms_days',
+            'onboarded_year',
         ],
     )
 
@@ -130,11 +133,12 @@ def test_num_rows(
     catalog: str,
     schema: str,
 ) -> None:
-    table = DatabricksTable(connection, name='products', catalog=catalog,
-                            schema=schema)
+    table = DatabricksTable(
+        connection, name='products', catalog=catalog, schema=schema
+    )
 
     with connection.cursor() as cursor:
-        cursor.execute(f"SELECT COUNT(*) FROM `{catalog}`.`{schema}`.products")
+        cursor.execute(f'SELECT COUNT(*) FROM `{catalog}`.`{schema}`.products')
         row = cursor.fetchone()
         assert row is not None
         expected = row[0]

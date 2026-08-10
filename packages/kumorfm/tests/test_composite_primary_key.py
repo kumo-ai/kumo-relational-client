@@ -5,7 +5,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from kumorfm.api.typing import Dtype
 from kumorfm.rfm.base.composite_key import (
     SEPARATOR,
@@ -22,45 +21,60 @@ def superstore():
 
     Neither column identifies a row on its own; the pair does.
     """
-    people = pd.DataFrame({
-        'Customer ID': ['AB-10015', 'AB-10015', 'ZZ-00001', 'ZZ-00001'],
-        'Region': ['Central', 'East', 'Central', 'West'],
-        'Segment': ['Consumer', 'Consumer', 'Corporate', 'Corporate'],
-    })
+    people = pd.DataFrame(
+        {
+            'Customer ID': ['AB-10015', 'AB-10015', 'ZZ-00001', 'ZZ-00001'],
+            'Region': ['Central', 'East', 'Central', 'West'],
+            'Segment': ['Consumer', 'Consumer', 'Corporate', 'Corporate'],
+        }
+    )
     rng = np.random.default_rng(0)
     size = 40
-    orders = pd.DataFrame({
-        'Order ID': np.arange(size),
-        'Customer ID': rng.choice(['AB-10015', 'ZZ-00001'], size),
-        'Region': rng.choice(['Central', 'East', 'West'], size),
-        'Order Date': (pd.to_datetime('2024-01-01') +
-                       pd.to_timedelta(rng.integers(0, 300, size), unit='D')),
-        'Sales': rng.uniform(5, 400, size).round(2),
-    })
+    orders = pd.DataFrame(
+        {
+            'Order ID': np.arange(size),
+            'Customer ID': rng.choice(['AB-10015', 'ZZ-00001'], size),
+            'Region': rng.choice(['Central', 'East', 'West'], size),
+            'Order Date': (
+                pd.to_datetime('2024-01-01')
+                + pd.to_timedelta(rng.integers(0, 300, size), unit='D')
+            ),
+            'Sales': rng.uniform(5, 400, size).round(2),
+        }
+    )
     return people, orders
 
 
 def build_graph(people, orders):
     import kumorfm.rfm as rfm
-    graph = rfm.Graph.from_data({'PEOPLE': people, 'ORDERS': orders},
-                                infer_metadata=False, verbose=False)
+
+    graph = rfm.Graph.from_data(
+        {'PEOPLE': people, 'ORDERS': orders},
+        infer_metadata=False,
+        verbose=False,
+    )
     graph['PEOPLE'].primary_key = ('Customer ID', 'Region')
     graph['ORDERS'].primary_key = 'Order ID'
     graph['ORDERS'].time_column = 'Order Date'
     return graph
 
+
 def test_folding_is_injective_across_a_separator_in_the_data() -> None:
-    assert (encode_values(['a', f'b{SEPARATOR}c']) != encode_values(
-        [f'a{SEPARATOR}b', 'c']))
+    assert encode_values(['a', f'b{SEPARATOR}c']) != encode_values(
+        [f'a{SEPARATOR}b', 'c']
+    )
 
 
-@pytest.mark.parametrize('parts', [
-    ('AB-10015', 'Central'),
-    ('a', 'b', 'c'),
-    (f'holds{SEPARATOR}separator', 'y'),
-    ('holds\\backslash', 'z'),
-    ('', 'empty-first-part'),
-])
+@pytest.mark.parametrize(
+    'parts',
+    [
+        ('AB-10015', 'Central'),
+        ('a', 'b', 'c'),
+        (f'holds{SEPARATOR}separator', 'y'),
+        ('holds\\backslash', 'z'),
+        ('', 'empty-first-part'),
+    ],
+)
 def test_a_folded_key_round_trips(parts: tuple) -> None:
     assert decode_value(encode_values(list(parts)), len(parts)) == parts
 
@@ -98,8 +112,10 @@ def test_an_approximate_part_is_refused() -> None:
     with pytest.raises(ValueError, match='floating-point'):
         refuse_unfoldable_dtypes([('score', Dtype.float64)])
 
+
 def test_a_table_keys_on_the_declared_columns(superstore) -> None:
     import kumorfm.rfm as rfm
+
     people, _ = superstore
     table = rfm.LocalTable(people, name='PEOPLE')
     table.primary_key = ('Customer ID', 'Region')
@@ -109,29 +125,35 @@ def test_a_table_keys_on_the_declared_columns(superstore) -> None:
 
 
 def test_declaring_a_composite_key_leaves_the_callers_frame_alone(
-        superstore) -> None:
+    superstore,
+) -> None:
     import kumorfm.rfm as rfm
+
     people, _ = superstore
     before = list(people.columns)
-    rfm.LocalTable(people, name='PEOPLE').primary_key = ('Customer ID',
-                                                         'Region')
+    rfm.LocalTable(people, name='PEOPLE').primary_key = (
+        'Customer ID',
+        'Region',
+    )
     assert list(people.columns) == before
 
 
 def test_a_single_column_key_is_untouched() -> None:
     import kumorfm.rfm as rfm
+
     table = rfm.LocalTable(pd.DataFrame({'id': [1, 2], 'x': [1, 2]}), name='T')
     table.primary_key = 'id'
 
     assert not table.has_composite_primary_key
     assert table.primary_key.name == 'id'
-    assert table.primary_key_columns == ('id', )
+    assert table.primary_key_columns == ('id',)
 
 
 def test_a_one_element_sequence_is_an_ordinary_key() -> None:
     import kumorfm.rfm as rfm
+
     table = rfm.LocalTable(pd.DataFrame({'id': [1, 2], 'x': [1, 2]}), name='T')
-    table.primary_key = ('id', )
+    table.primary_key = ('id',)
 
     assert not table.has_composite_primary_key
     assert table.primary_key.name == 'id'
@@ -139,6 +161,7 @@ def test_a_one_element_sequence_is_an_ordinary_key() -> None:
 
 def test_a_key_column_that_does_not_exist_is_refused(superstore) -> None:
     import kumorfm.rfm as rfm
+
     people, _ = superstore
     table = rfm.LocalTable(people, name='PEOPLE')
     with pytest.raises(ValueError, match='not present'):
@@ -151,6 +174,7 @@ def duckdb_graph(people, orders=None):
     import tempfile
 
     import kumorfm.rfm as rfm
+
     path = os.path.join(tempfile.mkdtemp(), 'g.duckdb')
     connection = duckdb.connect(path)
     connection.execute('CREATE TABLE PEOPLE AS SELECT * FROM people')
@@ -161,14 +185,16 @@ def duckdb_graph(people, orders=None):
 
 
 def test_a_warehouse_folds_an_identity_exactly_as_pandas_does(
-        superstore) -> None:
+    superstore,
+) -> None:
     people, _ = superstore
     graph = duckdb_graph(people)
     graph['PEOPLE'].primary_key = ('Customer ID', 'Region')
 
     folded = graph['PEOPLE']._sample_values(graph['PEOPLE'].primary_key.name)
     assert sorted(folded) == sorted(
-        encode_frame(people, ['Customer ID', 'Region']))
+        encode_frame(people, ['Customer ID', 'Region'])
+    )
 
 
 def test_a_warehouse_that_folds_differently_is_refused(superstore) -> None:
@@ -179,13 +205,14 @@ def test_a_warehouse_that_folds_differently_is_refused(superstore) -> None:
     disagreement is caught where the key is declared.
     """
     from kumorfm.rfm.base import composite_key as module
+
     people, _ = superstore
     graph = duckdb_graph(people)
 
     original = module.sql_expression
-    module.sql_expression = (
-        lambda columns, **kwargs: original(columns, **kwargs).replace(
-            'CHR(31)', "'|'"))
+    module.sql_expression = lambda columns, **kwargs: original(
+        columns, **kwargs
+    ).replace('CHR(31)', "'|'")
     try:
         with pytest.raises(ValueError, match='differently in the warehouse'):
             graph['PEOPLE'].primary_key = ('Customer ID', 'Region')
@@ -200,19 +227,21 @@ def test_a_warehouse_link_folds_on_both_sides(superstore) -> None:
     graph['PEOPLE'].primary_key = ('Customer ID', 'Region')
     graph['ORDERS'].primary_key = 'Order ID'
     graph['ORDERS'].time_column = 'Order Date'
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
 
     referencing = graph['ORDERS']._sample_values(graph.edges[0].fkey)
-    identity = graph['PEOPLE']._sample_values(
-        graph['PEOPLE'].primary_key.name)
+    identity = graph['PEOPLE']._sample_values(graph['PEOPLE'].primary_key.name)
     assert len(set(referencing) & set(identity)) > 0
+
 
 def test_a_fact_table_links_on_the_same_columns(superstore) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
 
     assert len(graph.edges) == 1
     edge = graph.edges[0]
@@ -221,7 +250,8 @@ def test_a_fact_table_links_on_the_same_columns(superstore) -> None:
 
 
 def test_a_link_naming_the_columns_in_the_wrong_order_is_refused(
-        superstore) -> None:
+    superstore,
+) -> None:
     r"""The failure this guard exists for.
 
     Folding ``(Region, Customer ID)`` produces values that meet no row of
@@ -231,20 +261,25 @@ def test_a_link_naming_the_columns_in_the_wrong_order_is_refused(
     people, orders = superstore
     graph = build_graph(people, orders)
     with pytest.raises(ValueError, match='matches no rows'):
-        graph.link(src_table='ORDERS', fkey=('Region', 'Customer ID'),
-                   dst_table='PEOPLE')
+        graph.link(
+            src_table='ORDERS',
+            fkey=('Region', 'Customer ID'),
+            dst_table='PEOPLE',
+        )
 
 
 def test_a_link_of_the_wrong_arity_is_refused(superstore) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
     with pytest.raises(ValueError, match='has to name 2 column'):
-        graph.link(src_table='ORDERS',
-                   fkey=('Customer ID', 'Region', 'Order ID'),
-                   dst_table='PEOPLE')
+        graph.link(
+            src_table='ORDERS',
+            fkey=('Customer ID', 'Region', 'Order ID'),
+            dst_table='PEOPLE',
+        )
 
 
-@pytest.mark.parametrize('reference', ['Customer ID', ('Customer ID', )])
+@pytest.mark.parametrize('reference', ['Customer ID', ('Customer ID',)])
 def test_one_column_cannot_name_a_row_of_a_composite_identity(
     superstore,
     reference,
@@ -263,29 +298,36 @@ def test_a_link_missing_a_key_column_is_refused(superstore) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
     with pytest.raises(ValueError, match='not present'):
-        graph.link(src_table='ORDERS', fkey=('Customer ID', 'Nope'),
-                   dst_table='PEOPLE')
+        graph.link(
+            src_table='ORDERS', fkey=('Customer ID', 'Nope'), dst_table='PEOPLE'
+        )
+
 
 def test_tuple_seeds_are_folded_into_identities() -> None:
     from kumorfm.rfm.rfm import _encode_composite_indices
-    encoded = _encode_composite_indices([('AB-10015', 'Central')],
-                                        ('Customer ID', 'Region'))
+
+    encoded = _encode_composite_indices(
+        [('AB-10015', 'Central')], ('Customer ID', 'Region')
+    )
     assert encoded == [encode_values(['AB-10015', 'Central'])]
 
 
 def test_a_seed_of_the_wrong_arity_is_refused() -> None:
     from kumorfm.rfm.rfm import _encode_composite_indices
+
     with pytest.raises(ValueError, match='2 value'):
-        _encode_composite_indices([('AB-10015', )],
-                                  ('Customer ID', 'Region'))
+        _encode_composite_indices([('AB-10015',)], ('Customer ID', 'Region'))
 
 
 def test_a_prediction_is_reported_against_the_declared_columns() -> None:
     from kumorfm.rfm.rfm import _decode_composite_entities
-    frame = pd.DataFrame({
-        'ENTITY': [encode_values(['AB-10015', 'Central'])],
-        'PREDICTION': [1.5],
-    })
+
+    frame = pd.DataFrame(
+        {
+            'ENTITY': [encode_values(['AB-10015', 'Central'])],
+            'PREDICTION': [1.5],
+        }
+    )
     decoded = _decode_composite_entities(frame, ('Customer ID', 'Region'))
 
     assert 'ENTITY' not in decoded.columns
@@ -293,11 +335,14 @@ def test_a_prediction_is_reported_against_the_declared_columns() -> None:
     assert decoded.iloc[0]['Customer ID'] == 'AB-10015'
     assert decoded.iloc[0]['Region'] == 'Central'
 
+
 @pytest.mark.parametrize('replacement', ['id', None])
 def test_replacing_a_composite_key_forgets_the_derived_column(
-    replacement: str | None, ) -> None:
+    replacement: str | None,
+) -> None:
     r"""A derived identity left behind would reach the model as a feature."""
     import kumorfm.rfm as rfm
+
     df = pd.DataFrame({'a': ['x', 'y'], 'b': ['1', '2'], 'id': [1, 2]})
     table = rfm.LocalTable(df, name='T')
     table.primary_key = ('a', 'b')
@@ -310,9 +355,11 @@ def test_replacing_a_composite_key_forgets_the_derived_column(
     assert not table.has_composite_primary_key
 
 
-def test_replacing_one_composite_key_with_another_keeps_only_the_new_one(
-) -> None:
+def test_replacing_one_composite_key_with_another_keeps_only_the_new_one() -> (
+    None
+):
     import kumorfm.rfm as rfm
+
     df = pd.DataFrame({'a': ['x', 'y'], 'b': ['1', '2'], 'c': ['p', 'q']})
     table = rfm.LocalTable(df, name='T')
     table.primary_key = ('a', 'b')
@@ -327,12 +374,15 @@ def test_replacing_one_composite_key_with_another_keeps_only_the_new_one(
 
 def test_a_three_column_identity_is_supported() -> None:
     import kumorfm.rfm as rfm
-    df = pd.DataFrame({
-        'a': ['x', 'x'],
-        'b': ['1', '1'],
-        'c': ['p', 'q'],
-        'v': [1, 2],
-    })
+
+    df = pd.DataFrame(
+        {
+            'a': ['x', 'x'],
+            'b': ['1', '1'],
+            'c': ['p', 'q'],
+            'v': [1, 2],
+        }
+    )
     table = rfm.LocalTable(df, name='T')
     table.primary_key = ('a', 'b', 'c')
 
@@ -342,17 +392,22 @@ def test_a_three_column_identity_is_supported() -> None:
 
 def test_an_identity_may_mix_numbers_and_text() -> None:
     import kumorfm.rfm as rfm
-    df = pd.DataFrame({
-        'cid': [1, 1, 2],
-        'Region': ['C', 'E', 'C'],
-        'v': [1, 2, 3],
-    })
+
+    df = pd.DataFrame(
+        {
+            'cid': [1, 1, 2],
+            'Region': ['C', 'E', 'C'],
+            'v': [1, 2, 3],
+        }
+    )
     table = rfm.LocalTable(df, name='T')
     table.primary_key = ('cid', 'Region')
 
     assert table._data[table.primary_key.name].is_unique
-    assert decode_value(table._data[table.primary_key.name].iloc[0],
-                        2) == ('1', 'C')
+    assert decode_value(table._data[table.primary_key.name].iloc[0], 2) == (
+        '1',
+        'C',
+    )
 
 
 def test_a_rejected_reassignment_keeps_the_existing_key(superstore) -> None:
@@ -362,10 +417,13 @@ def test_a_rejected_reassignment_keeps_the_existing_key(superstore) -> None:
     model as an ordinary high-cardinality feature.
     """
     import kumorfm.rfm as rfm
+
     people, _ = superstore
     people = people.assign(
-        When=pd.to_datetime(['2024-01-01', '2024-01-02', '2024-01-03',
-                             '2024-01-04']))
+        When=pd.to_datetime(
+            ['2024-01-01', '2024-01-02', '2024-01-03', '2024-01-04']
+        )
+    )
     table = rfm.LocalTable(people, name='PEOPLE')
     table.time_column = 'When'
     table.primary_key = ('Customer ID', 'Region')
@@ -382,8 +440,10 @@ def test_a_rejected_reassignment_keeps_the_existing_key(superstore) -> None:
 
 def test_a_float_column_cannot_be_part_of_an_identity() -> None:
     import kumorfm.rfm as rfm
-    table = rfm.LocalTable(pd.DataFrame({'f': [1.0, 2.0], 'b': ['1', '2']}),
-                           name='T')
+
+    table = rfm.LocalTable(
+        pd.DataFrame({'f': [1.0, 2.0], 'b': ['1', '2']}), name='T'
+    )
     with pytest.raises(ValueError, match='floating-point'):
         table.primary_key = ('f', 'b')
 
@@ -392,14 +452,17 @@ def test_a_float_foreign_key_is_refused(superstore) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
     with pytest.raises(ValueError, match='floating-point'):
-        graph.link(src_table='ORDERS', fkey=('Sales', 'Region'),
-                   dst_table='PEOPLE')
+        graph.link(
+            src_table='ORDERS', fkey=('Sales', 'Region'), dst_table='PEOPLE'
+        )
 
 
 def test_declaring_the_same_identity_twice_reuses_one_column() -> None:
     import kumorfm.rfm as rfm
-    table = rfm.LocalTable(pd.DataFrame({'a': ['x', 'y'], 'b': ['1', '2']}),
-                           name='T')
+
+    table = rfm.LocalTable(
+        pd.DataFrame({'a': ['x', 'y'], 'b': ['1', '2']}), name='T'
+    )
     names = []
     for _ in range(4):
         table.primary_key = ('a', 'b')
@@ -413,14 +476,19 @@ def test_declaring_the_same_identity_twice_reuses_one_column() -> None:
 
 
 def test_linking_the_same_composite_reference_twice_is_refused(
-        superstore) -> None:
+    superstore,
+) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
     with pytest.raises(ValueError, match='already exists'):
-        graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-                   dst_table='PEOPLE')
+        graph.link(
+            src_table='ORDERS',
+            fkey=('Customer ID', 'Region'),
+            dst_table='PEOPLE',
+        )
     assert len(graph.edges) == 1
 
 
@@ -428,27 +496,34 @@ def test_a_rejected_link_leaves_no_column_behind(superstore) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
     with pytest.raises(ValueError, match='matches no rows'):
-        graph.link(src_table='ORDERS', fkey=('Region', 'Customer ID'),
-                   dst_table='PEOPLE')
+        graph.link(
+            src_table='ORDERS',
+            fkey=('Region', 'Customer ID'),
+            dst_table='PEOPLE',
+        )
 
     stray = [
-        column.name for column in graph['ORDERS'].columns
+        column.name
+        for column in graph['ORDERS'].columns
         if column.name.startswith('__kumo_key_')
     ]
     assert stray == []
 
 
 def test_a_linked_composite_reference_actually_meets_the_identity(
-        superstore) -> None:
+    superstore,
+) -> None:
     r"""Names matching is not enough; the folded values have to intersect."""
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
 
     referencing = graph['ORDERS']._source_sample_df[graph.edges[0].fkey]
     identity = graph['PEOPLE']._source_sample_df[
-        graph['PEOPLE'].primary_key.name]
+        graph['PEOPLE'].primary_key.name
+    ]
     assert len(set(referencing) & set(identity)) > 0
 
 
@@ -456,36 +531,42 @@ def test_a_one_column_reference_takes_the_ordinary_path(superstore) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
     graph['PEOPLE'].primary_key = 'Customer ID'
-    graph.link(src_table='ORDERS', fkey=('Customer ID', ), dst_table='PEOPLE')
+    graph.link(src_table='ORDERS', fkey=('Customer ID',), dst_table='PEOPLE')
 
     assert graph.edges[0].fkey == 'Customer ID'
 
 
 def test_a_composite_link_can_be_removed_the_way_it_was_made(
-        superstore) -> None:
+    superstore,
+) -> None:
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
-    graph.unlink(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-                 dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
+    graph.unlink(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
 
     assert len(graph.edges) == 0
 
 
-def test_a_seed_naming_one_value_for_a_two_column_identity_is_refused(
-) -> None:
+def test_a_seed_naming_one_value_for_a_two_column_identity_is_refused() -> None:
     from kumorfm.rfm.rfm import _encode_composite_indices
+
     with pytest.raises(ValueError, match='on its own'):
         _encode_composite_indices(['AB-10015'], ('Customer ID', 'Region'))
 
 
 def test_a_key_column_clashing_with_a_result_column_is_reported() -> None:
     from kumorfm.rfm.rfm import _decode_composite_entities
-    frame = pd.DataFrame({
-        'ENTITY': [encode_values(['A', 'C'])],
-        'PREDICTION': [1.5],
-    })
+
+    frame = pd.DataFrame(
+        {
+            'ENTITY': [encode_values(['A', 'C'])],
+            'PREDICTION': [1.5],
+        }
+    )
     with pytest.raises(ValueError, match='already carries'):
         _decode_composite_entities(frame, ('PREDICTION', 'Region'))
 
@@ -505,8 +586,7 @@ def test_a_numpy_boolean_folds_like_a_python_one() -> None:
     ]
 
 
-def test_two_identities_that_join_the_same_way_get_different_columns(
-) -> None:
+def test_two_identities_that_join_the_same_way_get_different_columns() -> None:
     r"""``('a_b', 'c')`` and ``('a', 'b_c')`` must not share a column.
 
     Joining names with a separator made them indistinguishable, so a second
@@ -514,61 +594,78 @@ def test_two_identities_that_join_the_same_way_get_different_columns(
     joined against the wrong rows without any error.
     """
     import kumorfm.rfm as rfm
-    table = rfm.LocalTable(
-        pd.DataFrame({
-            'a_b': ['x'],
-            'c': ['1'],
-            'a': ['p'],
-            'b_c': ['q'],
-        }), name='T')
 
-    assert (table._derived_key_column_name(('a_b', 'c')) !=
-            table._derived_key_column_name(('a', 'b_c')))
+    table = rfm.LocalTable(
+        pd.DataFrame(
+            {
+                'a_b': ['x'],
+                'c': ['1'],
+                'a': ['p'],
+                'b_c': ['q'],
+            }
+        ),
+        name='T',
+    )
+
+    assert table._derived_key_column_name(
+        ('a_b', 'c')
+    ) != table._derived_key_column_name(('a', 'b_c'))
 
 
 def test_the_derived_name_is_stable_and_ordered() -> None:
     import kumorfm.rfm as rfm
+
     table = rfm.LocalTable(pd.DataFrame({'a': ['x'], 'c': ['1']}), name='T')
 
-    assert (table._derived_key_column_name(('a', 'c')) ==
-            table._derived_key_column_name(('a', 'c')))
-    assert (table._derived_key_column_name(('a', 'c')) !=
-            table._derived_key_column_name(('c', 'a')))
+    assert table._derived_key_column_name(
+        ('a', 'c')
+    ) == table._derived_key_column_name(('a', 'c'))
+    assert table._derived_key_column_name(
+        ('a', 'c')
+    ) != table._derived_key_column_name(('c', 'a'))
 
 
 def test_a_query_names_the_identity_by_any_of_its_columns(superstore) -> None:
     r"""A caller should not have to spell a column this SDK invented."""
     from kumorfm.rfm.query_parser import parse_query_locally
+
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
     definition = graph._to_api_graph_definition()
     derived = graph['PEOPLE'].primary_key.name
 
     for named in ('`Customer ID`', 'Region', f'`{derived}`'):
-        query = (f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
-                 f'FOR EACH PEOPLE.{named}')
+        query = (
+            f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.{named}'
+        )
         validated = parse_query_locally(query, definition)
         assert validated.entity_column == f'PEOPLE.{derived}'
 
 
 def test_a_column_outside_the_identity_still_cannot_be_the_entity(
-        superstore) -> None:
+    superstore,
+) -> None:
     from kumorfm.rfm.query_parser import parse_query_locally
+
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
 
     with pytest.raises(ValueError, match='primary key'):
         parse_query_locally(
             'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.Segment',
-            graph._to_api_graph_definition())
+            graph._to_api_graph_definition(),
+        )
 
 
 def test_a_caller_holding_only_the_graph_definition_gets_the_same_rule(
-        superstore) -> None:
+    superstore,
+) -> None:
     r"""The service and a local pre-check have to agree.
 
     A caller validating before it sends holds the graph definition and nothing
@@ -576,17 +673,23 @@ def test_a_caller_holding_only_the_graph_definition_gets_the_same_rule(
     accepts would be refused locally and never sent.
     """
     from kumorfm.rfm.query_parser import parse_query_locally
+
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
     definition = graph._to_api_graph_definition()
 
     validated = parse_query_locally(
         'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
-        'FOR EACH PEOPLE.`Customer ID`', definition)
+        'FOR EACH PEOPLE.`Customer ID`',
+        definition,
+    )
 
-    assert validated.entity_column == f'PEOPLE.{graph["PEOPLE"].primary_key.name}'
+    assert (
+        validated.entity_column == f'PEOPLE.{graph["PEOPLE"].primary_key.name}'
+    )
 
 
 def test_an_identity_is_recoverable_from_the_derived_column_alone() -> None:
@@ -595,9 +698,17 @@ def test_an_identity_is_recoverable_from_the_derived_column_alone() -> None:
         decode_identity,
         encode_identity,
     )
-    for columns in [('Customer ID', 'Region'), ('a_b', 'c'), ('a', 'b_c'),
-                    ('a', 'b', 'c'), ('holds:colon', 'y'), ('Cust.ID', 'R'),
-                    ('back`tick', 'R'), ('ünïcode', 'x')]:
+
+    for columns in [
+        ('Customer ID', 'Region'),
+        ('a_b', 'c'),
+        ('a', 'b_c'),
+        ('a', 'b', 'c'),
+        ('holds:colon', 'y'),
+        ('Cust.ID', 'R'),
+        ('back`tick', 'R'),
+        ('ünïcode', 'x'),
+    ]:
         derived = DERIVED_PREFIX + encode_identity(columns)
         assert decode_identity(derived) == columns
     assert decode_identity('Customer ID') is None
@@ -605,12 +716,15 @@ def test_an_identity_is_recoverable_from_the_derived_column_alone() -> None:
     assert decode_identity(DERIVED_PREFIX + 'nothex') is None
 
 
-@pytest.mark.parametrize('columns', [
-    ('Customer ID', 'Region'),
-    ('Cust.ID', 'Region'),
-    ('back`tick', 'Region'),
-    ('has space', 'Region'),
-])
+@pytest.mark.parametrize(
+    'columns',
+    [
+        ('Customer ID', 'Region'),
+        ('Cust.ID', 'Region'),
+        ('back`tick', 'Region'),
+        ('has space', 'Region'),
+    ],
+)
 def test_a_derived_name_is_written_without_quoting(columns) -> None:
     r"""The name reaches places a column name generally cannot.
 
@@ -622,6 +736,7 @@ def test_a_derived_name_is_written_without_quoting(columns) -> None:
     import re
 
     from kumorfm.rfm.base.composite_key import DERIVED_PREFIX, encode_identity
+
     derived = DERIVED_PREFIX + encode_identity(columns)
 
     assert re.fullmatch(r'[_A-Za-z0-9]+', derived)
@@ -629,61 +744,76 @@ def test_a_derived_name_is_written_without_quoting(columns) -> None:
 
 def test_an_identity_too_long_to_name_is_refused() -> None:
     from kumorfm.rfm.base.composite_key import encode_identity
+
     with pytest.raises(ValueError, match='longer than'):
         encode_identity(
-            tuple(f'a_very_long_warehouse_column_name_{i}' for i in range(8)))
+            tuple(f'a_very_long_warehouse_column_name_{i}' for i in range(8))
+        )
 
 
-def test_the_derived_column_can_be_named_without_backticks(
-        superstore) -> None:
+def test_the_derived_column_can_be_named_without_backticks(superstore) -> None:
     r"""How anyone on 2.27.0 would have written it, since it was bare then."""
     from kumorfm.rfm.query_parser import parse_query_locally
+
     people, orders = superstore
     graph = build_graph(people, orders)
-    graph.link(src_table='ORDERS', fkey=('Customer ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Customer ID', 'Region'), dst_table='PEOPLE'
+    )
     definition = graph._to_api_graph_definition()
     derived = graph['PEOPLE'].primary_key.name
 
     for named in (derived, f'`{derived}`'):
         validated = parse_query_locally(
-            f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 '
-            f'FOR EACH PEOPLE.{named}', definition)
+            f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.{named}',
+            definition,
+        )
         assert validated.entity_column == f'PEOPLE.{derived}'
 
 
 def test_a_dotted_key_column_does_not_break_the_derived_name() -> None:
     r"""A dot in a member name used to make the entity unsplittable."""
-    import numpy as np
-
     import kumorfm.rfm as rfm
+    import numpy as np
     from kumorfm.rfm.query_parser import parse_query_locally
+
     rng = np.random.default_rng(0)
     size = 40
-    people = pd.DataFrame({
-        'Cust.ID': ['A', 'A', 'B'],
-        'Region': ['C', 'E', 'C'],
-        'Segment': ['x', 'y', 'z'],
-    })
-    orders = pd.DataFrame({
-        'Order ID': np.arange(size),
-        'Cust.ID': rng.choice(['A', 'B'], size),
-        'Region': rng.choice(['C', 'E'], size),
-        'Order Date': (pd.to_datetime('2024-01-01') +
-                       pd.to_timedelta(rng.integers(0, 300, size), unit='D')),
-        'Sales': rng.uniform(5, 400, size).round(2),
-    })
-    graph = rfm.Graph.from_data({'PEOPLE': people, 'ORDERS': orders},
-                                infer_metadata=False, verbose=False)
+    people = pd.DataFrame(
+        {
+            'Cust.ID': ['A', 'A', 'B'],
+            'Region': ['C', 'E', 'C'],
+            'Segment': ['x', 'y', 'z'],
+        }
+    )
+    orders = pd.DataFrame(
+        {
+            'Order ID': np.arange(size),
+            'Cust.ID': rng.choice(['A', 'B'], size),
+            'Region': rng.choice(['C', 'E'], size),
+            'Order Date': (
+                pd.to_datetime('2024-01-01')
+                + pd.to_timedelta(rng.integers(0, 300, size), unit='D')
+            ),
+            'Sales': rng.uniform(5, 400, size).round(2),
+        }
+    )
+    graph = rfm.Graph.from_data(
+        {'PEOPLE': people, 'ORDERS': orders},
+        infer_metadata=False,
+        verbose=False,
+    )
     graph['PEOPLE'].primary_key = ('Cust.ID', 'Region')
     graph['ORDERS'].primary_key = 'Order ID'
     graph['ORDERS'].time_column = 'Order Date'
-    graph.link(src_table='ORDERS', fkey=('Cust.ID', 'Region'),
-               dst_table='PEOPLE')
+    graph.link(
+        src_table='ORDERS', fkey=('Cust.ID', 'Region'), dst_table='PEOPLE'
+    )
     derived = graph['PEOPLE'].primary_key.name
 
     assert '.' not in derived
     validated = parse_query_locally(
         f'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH PEOPLE.{derived}',
-        graph._to_api_graph_definition())
+        graph._to_api_graph_definition(),
+    )
     assert validated.entity_column == f'PEOPLE.{derived}'

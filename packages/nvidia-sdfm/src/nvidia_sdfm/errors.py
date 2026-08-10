@@ -13,9 +13,11 @@ and reports problems as :class:`ValueError`.
 Every error carries a ``code``, a short stable string meant to be branched on.
 Messages are written for people and will change; codes will not.
 """
+
 from __future__ import annotations
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 #: Entries rendered from an RFC-9457 ``invalid_params`` list before the rest
 #: are summarised as a count. A rejected batch can name thousands of rows.

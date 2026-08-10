@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from kumorfm.api.pquery import ValidatedPredictiveQuery
 
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.rfm.backend.sqlite import SQLiteTable
 from kumorfm.rfm.base import DataBackend, SQLSampler, Table
 from kumorfm.rfm.base.utils import Timestamp
@@ -34,10 +34,16 @@ class SQLiteSampler(SQLSampler):
             assert isinstance(table, SQLiteTable)
             self._connection = table._connection
 
+        # Per table, decided once on first use by `_time_separator`. Held on
+        # the instance rather than in a `functools.cache`, which would key on
+        # `self` and so keep every sampler -- and its graph and its open
+        # connection -- alive for the life of the process.
+        self._time_separator_dict: dict[str, str] = {}
+
         if optimize:
             with self._connection.cursor() as cursor:
-                cursor.execute("PRAGMA temp_store = MEMORY")
-                cursor.execute("PRAGMA cache_size = -2000000")  # 2 GB
+                cursor.execute('PRAGMA temp_store = MEMORY')
+                cursor.execute('PRAGMA cache_size = -2000000')  # 2 GB
 
         # Collect database indices for speeding sampling:
         index_dict: dict[str, set[tuple[str, ...]]] = defaultdict(set)
@@ -47,7 +53,7 @@ class SQLiteSampler(SQLSampler):
                 continue  # No physical column.
             if source_table[primary_key].is_unique_key:
                 continue
-            index_dict[table_name].add((primary_key, ))
+            index_dict[table_name].add((primary_key,))
         for src_table_name, foreign_key, _ in graph.edges:
             source_table = self.source_table_dict[src_table_name]
             if foreign_key not in source_table:
@@ -58,21 +64,25 @@ class SQLiteSampler(SQLSampler):
             if time_column is not None and time_column in source_table:
                 index_dict[src_table_name].add((foreign_key, time_column))
             else:
-                index_dict[src_table_name].add((foreign_key, ))
+                index_dict[src_table_name].add((foreign_key,))
 
         # Only maintain missing indices:
         with self._connection.cursor() as cursor:
             for table_name in list(index_dict.keys()):
                 indices = index_dict[table_name]
                 source_name = self.source_name_dict[table_name]
-                sql = f"PRAGMA index_list({source_name})"
+                sql = f'PRAGMA index_list({source_name})'
                 cursor.execute(sql)
                 for _, index_name, *_ in cursor.fetchall():
-                    sql = f"PRAGMA index_info({quote_ident(index_name)})"
+                    sql = f'PRAGMA index_info({quote_ident(index_name)})'
                     cursor.execute(sql)
                     # Fetch index information and sort by `seqno`:
-                    index_info = tuple(info[2] for info in sorted(
-                        cursor.fetchall(), key=lambda x: x[0]))
+                    index_info = tuple(
+                        info[2]
+                        for info in sorted(
+                            cursor.fetchall(), key=lambda x: x[0]
+                        )
+                    )
                     # Remove all indices in case primary index already exists:
                     for index in list(indices):
                         if index_info[0] == index[0]:
@@ -83,44 +93,100 @@ class SQLiteSampler(SQLSampler):
         if optimize and len(index_dict) > 0:
             if not isinstance(verbose, ProgressLogger):
                 verbose = ProgressLogger.default(
-                    msg="Optimizing SQLite database",
+                    msg='Optimizing SQLite database',
                     verbose=verbose,
                 )
 
             with verbose as logger, self._connection.cursor() as cursor:
                 for table_name, indices in index_dict.items():
                     for index in indices:
-                        name = f"kumo_index_{table_name}_{'_'.join(index)}"
+                        name = f'kumo_index_{table_name}_{"_".join(index)}'
                         name = quote_ident(name)
                         columns = ', '.join(quote_ident(v) for v in index)
                         columns += ' DESC' if len(index) > 1 else ''
                         source_name = self.source_name_dict[table_name]
-                        sql = (f"CREATE INDEX IF NOT EXISTS {name}\n"
-                               f"ON {source_name}({columns})")
+                        sql = (
+                            f'CREATE INDEX IF NOT EXISTS {name}\n'
+                            f'ON {source_name}({columns})'
+                        )
                         cursor.execute(sql)
                         self._connection.commit()
                         if len(index) > 1:
-                            logger.log(f"Created index on {index} in table "
-                                       f"'{table_name}'")
+                            logger.log(
+                                f'Created index on {index} in table '
+                                f"'{table_name}'"
+                            )
                         else:
-                            logger.log(f"Created index on '{index[0]}' in "
-                                       f"table '{table_name}'")
+                            logger.log(
+                                f"Created index on '{index[0]}' in "
+                                f"table '{table_name}'"
+                            )
 
         elif len(index_dict) > 0:
             num = sum(len(indices) for indices in index_dict.values())
             index_repr = '1 index' if num == 1 else f'{num} indices'
             num = len(index_dict)
             table_repr = '1 table' if num == 1 else f'{num} tables'
-            warnings.warn(f"Missing {index_repr} in {table_repr} for optimal "
-                          f"database querying. For improving runtime, we "
-                          f"strongly suggest to create indices for primary "
-                          f"and foreign keys, e.g., automatically by "
-                          f"instantiating KumoRFM via "
-                          f"`KumoRFM(graph, optimize=True)`.")
+            warnings.warn(
+                f'Missing {index_repr} in {table_repr} for optimal '
+                f'database querying. For improving runtime, we '
+                f'strongly suggest to create indices for primary '
+                f'and foreign keys, e.g., automatically by '
+                f'instantiating KumoRFM via '
+                f'`KumoRFM(graph, optimize=True)`.'
+            )
 
     @property
     def backend(self) -> DataBackend:
         return cast(DataBackend, DataBackend.SQLITE)
+
+    def _time_separator(self, table_name: str) -> str:
+        r"""The separator the stored timestamps of ``table_name`` actually use.
+
+        SQLite has no datetime type, so a window bound is compared as text and
+        has to be spelled the way the column is. ``datetime()`` and
+        ``pandas.to_sql`` write ``YYYY-MM-DD HH:MM:SS``, but an ISO-8601 writer
+        emits a ``T``, and ``'...T00:00:00' <= '... 00:00:00'`` is false for
+        the same instant because ``T`` sorts after a space -- silently dropping
+        every row that lands on a window edge.
+
+        One stored value decides it, and the answer is remembered per table.
+        Anything unreadable falls back to the space form, which is what this
+        code assumed unconditionally before, so a column that is not written
+        the ISO way behaves exactly as it did.
+
+        A column that mixes both spellings is the one case this cannot get
+        right: whichever spelling the probe reads, rows written the other way
+        are misplaced by one boundary instant. Widening the window to admit
+        both -- a space lower bound and a ``T`` upper bound -- is worse, since
+        it also admits every space-written row on the whole of the end date.
+        Store one spelling per column.
+        """
+        separator = self._time_separator_dict.get(table_name)
+        if separator is None:
+            separator = self._probe_time_separator(table_name)
+            self._time_separator_dict[table_name] = separator
+        return separator
+
+    def _probe_time_separator(self, table_name: str) -> str:
+        r"""Read one stored timestamp and report which separator it uses."""
+        column = self.time_column_dict.get(table_name)
+        if column is None:
+            return ' '
+        column_ref = self.table_column_ref_dict[table_name][column]
+        sql = (
+            f'SELECT {column_ref} FROM {self.source_name_dict[table_name]} '
+            f'WHERE {column_ref} IS NOT NULL LIMIT 1'
+        )
+        try:
+            with self._connection.cursor() as cursor:
+                cursor.execute(sql)
+                row = cursor.fetchone()
+        except Exception:
+            return ' '
+        if not row or not isinstance(row[0], str) or len(row[0]) < 11:
+            return ' '
+        return 'T' if row[0][10] == 'T' else ' '
 
     def _get_min_max_time_dict(
         self,
@@ -130,13 +196,15 @@ class SQLiteSampler(SQLSampler):
         for index, table_name in enumerate(table_names):
             column = self.time_column_dict[table_name]
             column_ref = self.table_column_ref_dict[table_name][column]
-            select = (f"SELECT\n"
-                      f"  {index} as table_index,\n"
-                      f"  MIN({column_ref}) as min_date,\n"
-                      f"  MAX({column_ref}) as max_date\n"
-                      f"FROM {self.source_name_dict[table_name]}")
+            select = (
+                f'SELECT\n'
+                f'  {index} as table_index,\n'
+                f'  MIN({column_ref}) as min_date,\n'
+                f'  MAX({column_ref}) as max_date\n'
+                f'FROM {self.source_name_dict[table_name]}'
+            )
             selects.append(select)
-        sql = "\nUNION ALL\n".join(selects)
+        sql = '\nUNION ALL\n'.join(selects)
 
         out_dict: dict[str, tuple[pd.Timestamp, pd.Timestamp]] = {}
         with self._connection.cursor() as cursor:
@@ -167,14 +235,14 @@ class SQLiteSampler(SQLSampler):
         key = self.primary_key_dict[table_name]
         if key not in source_table or source_table[key].is_nullable:
             key_ref = self.table_column_ref_dict[table_name][key]
-            filters.append(f" {key_ref} IS NOT NULL")
+            filters.append(f' {key_ref} IS NOT NULL')
 
         column = self.time_column_dict.get(table_name)
         if column is None:
             pass
         elif column not in source_table or source_table[column].is_nullable:
             column_ref = self.table_column_ref_dict[table_name][column]
-            filters.append(f" {column_ref} IS NOT NULL")
+            filters.append(f' {column_ref} IS NOT NULL')
 
         # A specific set of entities: bind the ids as parameters rather than
         # interpolating them into the SQL, so that string keys containing
@@ -183,20 +251,22 @@ class SQLiteSampler(SQLSampler):
         if entity_ids is not None:
             key_ref = self.table_column_ref_dict[table_name][key]
             placeholders = ', '.join(['?'] * len(entity_ids))
-            filters.append(f" {key_ref} IN ({placeholders})")
+            filters.append(f' {key_ref} IN ({placeholders})')
             parameters = list(entity_ids)
 
-        # TODO Make this query more efficient - it does full table scan.
+        # TODO: avoid the full table scan here.
         projections = [
             self.table_column_proj_dict[table_name][column]
             for column in self._ordered_columns(table_name, columns)
         ]
-        sql = (f"SELECT {', '.join(projections)}\n"
-               f"FROM {self.source_name_dict[table_name]}")
+        sql = (
+            f'SELECT {", ".join(projections)}\n'
+            f'FROM {self.source_name_dict[table_name]}'
+        )
         if len(filters) > 0:
-            sql += f"\nWHERE{' AND'.join(filters)}"
+            sql += f'\nWHERE{" AND".join(filters)}'
         if entity_ids is None:
-            sql += f"\nORDER BY RANDOM() LIMIT {num_rows}"
+            sql += f'\nORDER BY RANDOM() LIMIT {num_rows}'
 
         with self._connection.cursor() as cursor:
             # NOTE This may return duplicate primary keys. This is okay.
@@ -264,20 +334,24 @@ class SQLiteSampler(SQLSampler):
         tmp = pa.table([pa.array(index)], names=['__kumo_id__'])
         tmp_name = f'tmp_{table_name}_{key}_{id(tmp)}'
 
-        sql = (f"SELECT "
-               f"tmp.rowid - 1 as __kumo_batch__, "
-               f"{', '.join(projections)}\n"
-               f"FROM {quote_ident(tmp_name)} tmp\n"
-               f"JOIN {self.source_name_dict[table_name]} ent\n")
+        sql = (
+            f'SELECT '
+            f'tmp.rowid - 1 as __kumo_batch__, '
+            f'{", ".join(projections)}\n'
+            f'FROM {quote_ident(tmp_name)} tmp\n'
+            f'JOIN {self.source_name_dict[table_name]} ent\n'
+        )
         if key in source_table and source_table[key].is_unique_key:
-            sql += (f"  ON {key_ref} = tmp.__kumo_id__")
+            sql += f'  ON {key_ref} = tmp.__kumo_id__'
         else:
-            sql += (f"  ON ent.rowid = (\n"
-                    f"    SELECT rowid\n"
-                    f"    FROM {self.source_name_dict[table_name]}\n"
-                    f"    WHERE {key_ref} == tmp.__kumo_id__\n"
-                    f"    LIMIT 1\n"
-                    f")")
+            sql += (
+                f'  ON ent.rowid = (\n'
+                f'    SELECT rowid\n'
+                f'    FROM {self.source_name_dict[table_name]}\n'
+                f'    WHERE {key_ref} == tmp.__kumo_id__\n'
+                f'    LIMIT 1\n'
+                f')'
+            )
 
         with self._connection.cursor() as cursor:
             cursor.adbc_ingest(tmp_name, tmp, mode='replace')
@@ -305,11 +379,18 @@ class SQLiteSampler(SQLSampler):
     ) -> tuple[pd.DataFrame, np.ndarray]:
         time_column = self.time_column_dict.get(table_name)
 
-        # NOTE SQLite does not have a native datetime format. Currently, we
-        # assume timestamps are given as `TEXT` in `ISO-8601 UTC`:
+        # NOTE SQLite has no native datetime type. The bounds below are
+        # compared as text, so they have to be spelled the way the column is:
+        # `TEXT` in SQLite's own `YYYY-MM-DD HH:MM:SS` UTC form, which is what
+        # `datetime()` returns and what `pandas.to_sql` writes. A column stored
+        # with the ISO-8601 `T` separator instead does NOT compare correctly on
+        # the boundary -- `'...T00:00:00' <= '... 00:00:00'` is false for the
+        # same instant, because `T` sorts after a space -- so rows landing
+        # exactly on a window edge are dropped.
         tmp = pa.table([pa.array(index)], names=['__kumo_id__'])
         if time_column is not None and anchor_time is not None:
-            anchor_time = anchor_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+            _sep = self._time_separator(table_name)
+            anchor_time = anchor_time.dt.strftime(f'%Y-%m-%d{_sep}%H:%M:%S')
             tmp = tmp.append_column('__kumo_time__', pa.array(anchor_time))
         tmp_name = f'tmp_{table_name}_{foreign_key}_{id(tmp)}'
 
@@ -318,24 +399,28 @@ class SQLiteSampler(SQLSampler):
             self.table_column_proj_dict[table_name][column]
             for column in self._ordered_columns(table_name, columns)
         ]
-        sql = (f"SELECT "
-               f"tmp.rowid - 1 as __kumo_batch__, "
-               f"{', '.join(projections)}\n"
-               f"FROM {quote_ident(tmp_name)} tmp\n"
-               f"JOIN {self.source_name_dict[table_name]} fact\n"
-               f"ON fact.rowid IN (\n"
-               f"  SELECT rowid\n"
-               f"  FROM {self.source_name_dict[table_name]}\n"
-               f"  WHERE {key_ref} = tmp.__kumo_id__\n")
+        sql = (
+            f'SELECT '
+            f'tmp.rowid - 1 as __kumo_batch__, '
+            f'{", ".join(projections)}\n'
+            f'FROM {quote_ident(tmp_name)} tmp\n'
+            f'JOIN {self.source_name_dict[table_name]} fact\n'
+            f'ON fact.rowid IN (\n'
+            f'  SELECT rowid\n'
+            f'  FROM {self.source_name_dict[table_name]}\n'
+            f'  WHERE {key_ref} = tmp.__kumo_id__\n'
+        )
         if time_column is not None and anchor_time is not None:
             time_ref = self.table_column_ref_dict[table_name][time_column]
-            sql += f"  AND {time_ref} <= tmp.__kumo_time__\n"
-        time_ref = (None if time_column is None else
-                    self.table_column_ref_dict[table_name][time_column])
+            sql += f'  AND {time_ref} <= tmp.__kumo_time__\n'
+        time_ref = (
+            None
+            if time_column is None
+            else self.table_column_ref_dict[table_name][time_column]
+        )
         order_by = self._neighbor_order_by(table_name, time_ref, key_ref)
-        sql += f"  ORDER BY {order_by}\n"
-        sql += (f"  LIMIT {num_neighbors}\n"
-                f")")
+        sql += f'  ORDER BY {order_by}\n'
+        sql += f'  LIMIT {num_neighbors}\n)'
 
         with self._connection.cursor() as cursor:
             cursor.adbc_ingest(tmp_name, tmp, mode='replace')
@@ -366,15 +451,22 @@ class SQLiteSampler(SQLSampler):
     ) -> tuple[pd.DataFrame, np.ndarray]:
         time_column = self.time_column_dict[table_name]
 
-        # NOTE SQLite does not have a native datetime format. Currently, we
-        # assume timestamps are given as `TEXT` in `ISO-8601 UTC`:
+        # NOTE SQLite has no native datetime type. The bounds below are
+        # compared as text, so they have to be spelled the way the column is:
+        # `TEXT` in SQLite's own `YYYY-MM-DD HH:MM:SS` UTC form, which is what
+        # `datetime()` returns and what `pandas.to_sql` writes. A column stored
+        # with the ISO-8601 `T` separator instead does NOT compare correctly on
+        # the boundary -- `'...T00:00:00' <= '... 00:00:00'` is false for the
+        # same instant, because `T` sorts after a space -- so rows landing
+        # exactly on a window edge are dropped.
         tmp = pa.table([pa.array(index)], names=['__kumo_id__'])
+        _sep = self._time_separator(table_name)
         end_time = anchor_time + max_offset
-        end_time = end_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+        end_time = end_time.dt.strftime(f'%Y-%m-%d{_sep}%H:%M:%S')
         tmp = tmp.append_column('__kumo_end__', pa.array(end_time))
         if min_offset is not None:
             start_time = anchor_time + min_offset
-            start_time = start_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+            start_time = start_time.dt.strftime(f'%Y-%m-%d{_sep}%H:%M:%S')
             tmp = tmp.append_column('__kumo_start__', pa.array(start_time))
         tmp_name = f'tmp_{table_name}_{foreign_key}_{id(tmp)}'
 
@@ -384,15 +476,17 @@ class SQLiteSampler(SQLSampler):
             self.table_column_proj_dict[table_name][column]
             for column in self._ordered_columns(table_name, columns)
         ]
-        sql = (f"SELECT "
-               f"tmp.rowid - 1 as __kumo_batch__, "
-               f"{', '.join(projections)}\n"
-               f"FROM {quote_ident(tmp_name)} tmp\n"
-               f"JOIN {self.source_name_dict[table_name]}\n"
-               f"  ON {key_ref} = tmp.__kumo_id__\n"
-               f" AND {time_ref} <= tmp.__kumo_end__")
+        sql = (
+            f'SELECT '
+            f'tmp.rowid - 1 as __kumo_batch__, '
+            f'{", ".join(projections)}\n'
+            f'FROM {quote_ident(tmp_name)} tmp\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = tmp.__kumo_id__\n'
+            f' AND {time_ref} <= tmp.__kumo_end__'
+        )
         if min_offset is not None:
-            sql += f"\n AND {time_ref} > tmp.__kumo_start__"
+            sql += f'\n AND {time_ref} > tmp.__kumo_start__'
 
         with self._connection.cursor() as cursor:
             cursor.adbc_ingest(tmp_name, tmp, mode='replace')
@@ -428,12 +522,12 @@ class SQLiteSampler(SQLSampler):
         ys: list[pd.Series] = []
         mask = np.full(len(index), False, dtype=bool)
         for start in range(0, len(index), batch_size):
-            df = entity_df.iloc[index[start:start + batch_size]]
+            df = entity_df.iloc[index[start : start + batch_size]]
             entity_pkey = df[self.primary_key_dict[query.entity_table]]
             feat_dict, time_dict, batch_dict = self._sample_query_data(
                 entity_table_name=query.entity_table,
                 entity_pkey=entity_pkey,
-                anchor_time=anchor_time.iloc[start:start + batch_size],
+                anchor_time=anchor_time.iloc[start : start + batch_size],
                 columns_dict={
                     key: columns
                     for key, columns in columns_dict.items()
@@ -451,10 +545,10 @@ class SQLiteSampler(SQLSampler):
                 feat_dict=feat_dict,
                 time_dict=time_dict,
                 batch_dict=batch_dict,
-                anchor_time=anchor_time.iloc[start:start + batch_size],
+                anchor_time=anchor_time.iloc[start : start + batch_size],
             )
             ys.append(y)
-            mask[start:start + batch_size] = _mask
+            mask[start : start + batch_size] = _mask
 
             count += len(y)
             if count >= num_examples:

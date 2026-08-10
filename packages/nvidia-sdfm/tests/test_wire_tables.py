@@ -10,6 +10,7 @@ adapter wrote. The cases here are the ones where a rewrite could plausibly
 differ and the server would still accept the result: the empty-column frame,
 the row/column transpose, and the JS-safe-integer boundary.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -87,9 +88,14 @@ def test_the_adapter_and_the_shared_encoder_agree() -> None:
 
     context = pd.DataFrame({'x': [1.0, 2.0, 3.0], 'y': [0, 1, 0]})
     predict = pd.DataFrame({'x': [4.0]})
-    body = build_request(context=context, predict=predict,
-                         task='binary_classification', target='y',
-                         outputs=['prediction'], request_id='fixed')
+    body = build_request(
+        context=context,
+        predict=predict,
+        task='binary_classification',
+        target='y',
+        outputs=['prediction'],
+        request_id='fixed',
+    )
 
     assert body['context']['instance_table'] == encode(context)
     assert body['predict']['instance_table'] == encode(predict)

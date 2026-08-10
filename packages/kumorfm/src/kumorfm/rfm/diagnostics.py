@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
 
+from kumorfm.exceptions import KumoRFMError
+
 
 class SanitizationStatus(str, Enum):
     AVAILABLE = 'available'
@@ -49,7 +51,7 @@ class GraphSanitizationReport:
         return cls(status=SanitizationStatus.NOT_AVAILABLE, tables={})
 
 
-class TaskReferenceError(ValueError):
+class TaskReferenceError(KumoRFMError, ValueError):
     r"""Raised when task rows reference entities absent after sanitization."""
 
     def __init__(self, table_name: str, unresolved_rows: int) -> None:

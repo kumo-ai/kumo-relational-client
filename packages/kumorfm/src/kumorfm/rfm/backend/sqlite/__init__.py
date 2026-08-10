@@ -8,8 +8,8 @@ from .table import SQLiteTable
 from .sampler import SQLiteSampler
 
 __all__ = [
-    'connect',
     'Connection',
-    'SQLiteTable',
     'SQLiteSampler',
+    'SQLiteTable',
+    'connect',
 ]

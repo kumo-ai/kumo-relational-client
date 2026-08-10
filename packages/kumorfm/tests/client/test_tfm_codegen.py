@@ -2,36 +2,43 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from dataclasses import fields
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
-
 from kumorfm.client import KumoClient
 from kumorfm.client.endpoints import HTTPMethod
-from kumorfm.client.rfm import (
-    _prediction_item_to_row,
-    _prediction_response_to_rfm,
-)
 from kumorfm.client.generated.tfm_api import (
-    PredictionItem,
-    PredictionResponse,
     TFM_ENDPOINTS_BY_OPERATION_ID,
     TFM_MODEL_KUMO_RFM,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
     TFM_OUTPUT_FIELD_EXPLANATION,
     TFM_OUTPUT_FIELD_VALUES,
     TFM_SCHEMA_NAMES,
+    PredictionItem,
+    PredictionResponse,
     TFMOperations,
 )
+from kumorfm.client.rfm import (
+    _prediction_item_to_row,
+    _prediction_response_to_rfm,
+)
 
-
-CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
+# The Universal TFM OpenAPI contract is not vendored here, so the tests that
+# replay it skip unless a checkout is pointed at explicitly. The default is the
+# sibling-directory layout the maintainers use; anyone else sets
+# SDFM_CONTRACT_DIR.
+_ENV_CONTRACT_DIR = 'SDFM_CONTRACT_DIR'
+CANONICAL_SPEC = (
+    Path(os.environ.get(_ENV_CONTRACT_DIR, '../structured-data-api'))
+    / 'nim-sd.openapi.yaml'
+)
 
 
 def test_generated_tfm_api_runtime_metadata() -> None:
@@ -46,7 +53,8 @@ def test_generated_tfm_api_runtime_metadata() -> None:
     assert operation.endpoint.method == HTTPMethod.POST
     assert operation.endpoint.get_path() == '/v1/predictions'
     assert TFM_ENDPOINTS_BY_OPERATION_ID['runPrediction'] == (
-        operation.endpoint)
+        operation.endpoint
+    )
     assert 'HealthResponse' not in TFM_SCHEMA_NAMES
     assert 'ProblemDetails' in TFM_SCHEMA_NAMES
 
@@ -55,48 +63,54 @@ def test_generated_tfm_api_paths_are_service_root_relative() -> None:
     client = KumoClient('https://example.test', api_key=None)
 
     assert client._format_endpoint_url(
-        TFMOperations.run_prediction.endpoint.get_path()) == (
-            'https://example.test/v1/predictions')
+        TFMOperations.run_prediction.endpoint.get_path()
+    ) == ('https://example.test/v1/predictions')
 
     with pytest.raises(ValueError, match='must start'):
         client._format_endpoint_url('rfm/validate_query')
 
 
 def test_generated_prediction_response_parser() -> None:
-    response = PredictionResponse.from_dict({
-        'id': 'pred-1',
-        'model': 'kumo-rfm',
-        'predictions': [{
-            'id': 7,
-            'row_index': '3',
-            'forecast_step': '2',
-            'prediction': True,
-            'probabilities': {
-                'false': 0.25,
-                'true': 0.75,
-            },
-            'scores': [0.4, '0.6'],
-            'rankings': [{
-                'id': 11,
-                'score': '0.7',
-            }],
-            'embeddings': [0.1, 0.2],
-            'quantiles': {
-                '0.5': '1.25',
-            },
-            'explanation': {
-                'format': 'natural_language_summary',
-                'summary': 'Order frequency dropped.',
-            },
+    response = PredictionResponse.from_dict(
+        {
+            'id': 'pred-1',
+            'model': 'kumo-rfm',
+            'predictions': [
+                {
+                    'id': 7,
+                    'row_index': '3',
+                    'forecast_step': '2',
+                    'prediction': True,
+                    'probabilities': {
+                        'false': 0.25,
+                        'true': 0.75,
+                    },
+                    'scores': [0.4, '0.6'],
+                    'rankings': [
+                        {
+                            'id': 11,
+                            'score': '0.7',
+                        }
+                    ],
+                    'embeddings': [0.1, 0.2],
+                    'quantiles': {
+                        '0.5': '1.25',
+                    },
+                    'explanation': {
+                        'format': 'natural_language_summary',
+                        'summary': 'Order frequency dropped.',
+                    },
+                    'metadata': {
+                        'adapter_status': 'stubbed',
+                    },
+                }
+            ],
             'metadata': {
-                'adapter_status': 'stubbed',
+                'version': 'v1',
+                'task_kind': 'classification',
             },
-        }],
-        'metadata': {
-            'version': 'v1',
-            'task_kind': 'classification',
-        },
-    })
+        }
+    )
 
     assert response.id == 'pred-1'
     assert response.model == 'kumo-rfm'
@@ -109,7 +123,7 @@ def test_generated_prediction_response_parser() -> None:
     assert item.prediction is True
     assert item.probabilities == {'false': 0.25, 'true': 0.75}
     assert item.scores == (0.4, 0.6)
-    assert item.rankings == ({'id': 11, 'score': '0.7'}, )
+    assert item.rankings == ({'id': 11, 'score': '0.7'},)
     assert item.embeddings == (0.1, 0.2)
     assert item.quantiles == {'0.5': 1.25}
     assert item.explanation == {
@@ -129,10 +143,12 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
             'yes': 0.8,
         },
         scores=(0.3, 0.7),
-        rankings=({
-            'id': 'merchant-1',
-            'score': 0.9,
-        }, ),
+        rankings=(
+            {
+                'id': 'merchant-1',
+                'score': 0.9,
+            },
+        ),
         embeddings=(0.1, 0.2),
         quantiles={
             'p50': 12.5,
@@ -154,10 +170,12 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
         'NO_PROB': 0.2,
         'YES_PROB': 0.8,
         'SCORES': [0.3, 0.7],
-        'RANKINGS': [{
-            'id': 'merchant-1',
-            'score': 0.9,
-        }],
+        'RANKINGS': [
+            {
+                'id': 'merchant-1',
+                'score': 0.9,
+            }
+        ],
         'EMBEDDINGS': [0.1, 0.2],
         'Q_P50': 12.5,
         'EXPLANATION': {
@@ -182,8 +200,9 @@ def test_prediction_item_adapter_maps_known_fields() -> None:
     assert parsed_fields == mapped_fields | intentionally_unmapped_fields
 
 
-def test_prediction_response_correlates_opaque_ids_to_repeated_entities(
-) -> None:
+def test_prediction_response_correlates_opaque_ids_to_repeated_entities() -> (
+    None
+):
     response = PredictionResponse(
         id='pred-1',
         model='kumo-rfm',
@@ -231,8 +250,8 @@ def test_ranking_response_expands_rankings_to_compatibility_rows() -> None:
 
     converted = _prediction_response_to_rfm(
         response,
-        entity_ids=('user-7', ),
-        instance_ids=(20, ),
+        entity_ids=('user-7',),
+        instance_ids=(20,),
     )
 
     assert converted.prediction == {
@@ -252,24 +271,24 @@ def test_ranking_response_expands_rankings_to_compatibility_rows() -> None:
                 id='20',
                 row_index=0,
                 prediction='item-a',
-                rankings=({'id': 'item-a', 'score': 0.9}, ),
+                rankings=({'id': 'item-a', 'score': 0.9},),
             ),
             'must not include prediction',
         ),
         (PredictionItem(id='20', row_index=0), 'missing rankings'),
         (
-            PredictionItem(id='20', row_index=0, rankings=({'score': 0.9}, )),
+            PredictionItem(id='20', row_index=0, rankings=({'score': 0.9},)),
             'missing id',
         ),
         (
-            PredictionItem(id='20', row_index=0, rankings=({'id': 'item-a'}, )),
+            PredictionItem(id='20', row_index=0, rankings=({'id': 'item-a'},)),
             'missing score',
         ),
         (
             PredictionItem(
                 id='20',
                 row_index=0,
-                rankings=({'id': 7, 'score': 0.9}, ),
+                rankings=({'id': 7, 'score': 0.9},),
             ),
             'id must be a string',
         ),
@@ -277,7 +296,7 @@ def test_ranking_response_expands_rankings_to_compatibility_rows() -> None:
             PredictionItem(
                 id='20',
                 row_index=0,
-                rankings=({'id': 'item-a', 'score': 0.9, 'label': 'x'}, ),
+                rankings=({'id': 'item-a', 'score': 0.9, 'label': 'x'},),
             ),
             'unexpected fields',
         ),
@@ -290,7 +309,7 @@ def test_ranking_response_rejects_malformed_rankings(
     response = PredictionResponse(
         id='pred-rank-1',
         model='kumo-rfm',
-        predictions=(item, ),
+        predictions=(item,),
         metadata={
             'task_kind': 'temporal_link_prediction',
             'output_type': 'rankings',
@@ -300,8 +319,8 @@ def test_ranking_response_rejects_malformed_rankings(
     with pytest.raises(ValueError, match=error):
         _prediction_response_to_rfm(
             response,
-            entity_ids=('user-7', ),
-            instance_ids=(20, ),
+            entity_ids=('user-7',),
+            instance_ids=(20,),
         )
 
 
@@ -333,8 +352,8 @@ def test_forecast_response_allows_multiple_records_per_request_row() -> None:
 
     converted = _prediction_response_to_rfm(
         response,
-        entity_ids=('item-42', ),
-        instance_ids=(20, ),
+        entity_ids=('item-42',),
+        instance_ids=(20,),
     )
 
     assert converted.prediction == {
@@ -350,15 +369,17 @@ def test_forecast_response_allows_multiple_records_per_request_row() -> None:
     ('predictions', 'error'),
     [
         (
-            (PredictionItem(id='20', row_index=0, prediction=10.0), ),
+            (PredictionItem(id='20', row_index=0, prediction=10.0),),
             'missing forecast_step',
         ),
         (
             (
                 PredictionItem(
-                    id='20', row_index=0, prediction=10.0, forecast_step=1),
+                    id='20', row_index=0, prediction=10.0, forecast_step=1
+                ),
                 PredictionItem(
-                    id='20', row_index=0, prediction=11.0, forecast_step=1),
+                    id='20', row_index=0, prediction=11.0, forecast_step=1
+                ),
             ),
             'duplicate forecast_step',
         ),
@@ -381,8 +402,8 @@ def test_forecast_response_rejects_malformed_steps(
     with pytest.raises(ValueError, match=error):
         _prediction_response_to_rfm(
             response,
-            entity_ids=('item-42', ),
-            instance_ids=(20, ),
+            entity_ids=('item-42',),
+            instance_ids=(20,),
         )
 
 
@@ -390,21 +411,21 @@ def test_forecast_response_rejects_malformed_steps(
     ('predictions', 'entity_ids', 'instance_ids', 'error'),
     [
         (
-            (PredictionItem(id='20', prediction=1.0), ),
-            (3, ),
-            (20, ),
+            (PredictionItem(id='20', prediction=1.0),),
+            (3,),
+            (20,),
             'missing row_index',
         ),
         (
-            (PredictionItem(id='20', row_index=1, prediction=1.0), ),
-            (3, ),
-            (20, ),
+            (PredictionItem(id='20', row_index=1, prediction=1.0),),
+            (3,),
+            (20,),
             'row_index is out of range',
         ),
         (
-            (PredictionItem(id='wrong', row_index=0, prediction=1.0), ),
-            (3, ),
-            (20, ),
+            (PredictionItem(id='wrong', row_index=0, prediction=1.0),),
+            (3,),
+            (20,),
             'id does not match request instance_id',
         ),
         (
@@ -417,15 +438,15 @@ def test_forecast_response_rejects_malformed_steps(
             'duplicate row_index',
         ),
         (
-            (PredictionItem(id='20', row_index=-1, prediction=1.0), ),
-            (3, ),
-            (20, ),
+            (PredictionItem(id='20', row_index=-1, prediction=1.0),),
+            (3,),
+            (20,),
             'row_index is out of range',
         ),
         (
-            (PredictionItem(row_index=0, prediction=1.0), ),
-            (3, ),
-            (20, ),
+            (PredictionItem(row_index=0, prediction=1.0),),
+            (3,),
+            (20,),
             'id does not match request instance_id',
         ),
         (
@@ -438,7 +459,7 @@ def test_forecast_response_rejects_malformed_steps(
             'id does not match request instance_id',
         ),
         (
-            (PredictionItem(id='20', row_index=0, prediction=1.0), ),
+            (PredictionItem(id='20', row_index=0, prediction=1.0),),
             (3, 4),
             (20, 21),
             'response count does not match the request',
@@ -484,14 +505,16 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     )
 
     generated = output.read_text()
-    assert "Source: " in generated
-    assert "class TFMOperations" in generated
-    assert "class PredictionResponse" in generated
-    assert "run_prediction: Final[TFMOperation]" in generated
+    assert 'Source: ' in generated
+    assert 'class TFMOperations' in generated
+    assert 'class PredictionResponse' in generated
+    assert 'run_prediction: Final[TFMOperation]' in generated
     assert "path='/v1/predictions'" in generated
     assert "TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'" in generated
     assert "TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'" in generated
-    assert "TFM_OUTPUT_FIELD_EXPLANATION: Final[str] = 'explanation'" in generated
+    assert (
+        "TFM_OUTPUT_FIELD_EXPLANATION: Final[str] = 'explanation'" in generated
+    )
 
     subprocess.run(
         [
@@ -581,13 +604,13 @@ def test_generator_validation_reports_spec_drift(tmp_path: Path) -> None:
     assert validate_generated_code(spec, code) == []
 
     del spec['components']['schemas']['PredictionItem']['properties'][
-        'metadata']
+        'metadata'
+    ]
     errors = validate_generated_code(spec, code)
     assert any('PredictionItem fields differ' in error for error in errors)
 
 
-def test_generator_validation_reports_output_enum_drift(
-        tmp_path: Path) -> None:
+def test_generator_validation_reports_output_enum_drift(tmp_path: Path) -> None:
     from scripts.generate_tfm_api import (
         generate_code,
         validate_generated_code,
@@ -604,15 +627,16 @@ def test_generator_validation_reports_output_enum_drift(
     assert validate_generated_code(spec, code) == []
 
     spec['components']['schemas']['OutputSpec']['properties']['fields'][
-        'items']['enum'].append('attributions')
+        'items'
+    ]['enum'].append('attributions')
     errors = validate_generated_code(spec, code)
     assert any('TFM_OUTPUT_FIELD_VALUES differs' in error for error in errors)
 
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical structured-data-api checkout is not available beside '
-    'this repo',
+    reason=f'contract spec not found at {CANONICAL_SPEC}; set '
+    f'{_ENV_CONTRACT_DIR} to a checkout to run this',
 )
 def test_generated_tfm_api_matches_local_canonical_spec() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -628,13 +652,14 @@ def test_generated_tfm_api_matches_local_canonical_spec() -> None:
     # Keep the loaded spec live so the skip guard above cannot be accidentally
     # removed without also updating this test.
     assert spec['paths']['/v1/predictions']['post']['operationId'] == (
-        'runPrediction')
+        'runPrediction'
+    )
 
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical structured-data-api checkout is not available beside '
-    'this repo',
+    reason=f'contract spec not found at {CANONICAL_SPEC}; set '
+    f'{_ENV_CONTRACT_DIR} to a checkout to run this',
 )
 def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
@@ -645,34 +670,39 @@ def test_generated_tfm_api_contract_matches_local_canonical_spec() -> None:
 
     schemas = spec['components']['schemas']
     assert tuple(field.name for field in fields(PredictionItem)) == tuple(
-        schemas['PredictionItem']['properties'])
+        schemas['PredictionItem']['properties']
+    )
     assert tuple(field.name for field in fields(PredictionResponse)) == tuple(
-        schemas['PredictionResponse']['properties'])
+        schemas['PredictionResponse']['properties']
+    )
     assert set(schemas['PredictionItem'].get('required', [])) <= {
-        field.name
-        for field in fields(PredictionItem)
+        field.name for field in fields(PredictionItem)
     }
     assert set(schemas['PredictionResponse']['required']) <= {
-        field.name
-        for field in fields(PredictionResponse)
+        field.name for field in fields(PredictionResponse)
     }
-    assert TFM_OUTPUT_FIELD_VALUES == tuple(
-        schemas['OutputSpec']['properties']['fields']['items']['enum'])
+    assert (
+        tuple(schemas['OutputSpec']['properties']['fields']['items']['enum'])
+        == TFM_OUTPUT_FIELD_VALUES
+    )
     assert TFMOperations.run_prediction.response_schema == (
-        'PredictionResponse')
+        'PredictionResponse'
+    )
 
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical structured-data-api checkout is not available beside '
-    'this repo',
+    reason=f'contract spec not found at {CANONICAL_SPEC}; set '
+    f'{_ENV_CONTRACT_DIR} to a checkout to run this',
 )
 def test_documented_prediction_response_examples_parse() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
     examples = spec['paths']['/v1/predictions']['post']['responses']['200'][
-        'content']['application/json']['examples']
+        'content'
+    ]['application/json']['examples']
     required = set(
-        spec['components']['schemas']['PredictionResponse']['required'])
+        spec['components']['schemas']['PredictionResponse']['required']
+    )
 
     for name, example in examples.items():
         response = PredictionResponse.from_dict(example['value'])
@@ -689,7 +719,8 @@ def test_documented_prediction_response_examples_parse() -> None:
             if item.probabilities is not None:
                 assert all(
                     isinstance(value, float)
-                    for value in item.probabilities.values())
+                    for value in item.probabilities.values()
+                )
             if item.embeddings is not None:
                 assert isinstance(item.embeddings, tuple)
             if item.scores is not None:
@@ -702,14 +733,15 @@ def test_documented_prediction_response_examples_parse() -> None:
 
 @pytest.mark.skipif(
     not CANONICAL_SPEC.exists(),
-    reason='canonical structured-data-api checkout is not available beside '
-    'this repo',
+    reason=f'contract spec not found at {CANONICAL_SPEC}; set '
+    f'{_ENV_CONTRACT_DIR} to a checkout to run this',
 )
 def test_documented_prediction_request_examples_match_envelope_shape() -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
     request_schema = spec['components']['schemas']['PredictionRequest']
     examples = spec['paths']['/v1/predictions']['post']['requestBody'][
-        'content']['application/json']['examples']
+        'content'
+    ]['application/json']['examples']
     property_names = set(request_schema['properties'])
     required = set(request_schema['required'])
 
@@ -722,9 +754,9 @@ def test_documented_prediction_request_examples_match_envelope_shape() -> None:
 
 
 def _generated_source_sha(path: Path) -> str:
-    match = re.search(r'^# Source SHA256: ([0-9a-f]+)$',
-                      path.read_text(),
-                      flags=re.MULTILINE)
+    match = re.search(
+        r'^# Source SHA256: ([0-9a-f]+)$', path.read_text(), flags=re.MULTILINE
+    )
     assert match is not None
     return match.group(1)
 
@@ -739,8 +771,8 @@ def _load_local_canonical_spec_at_generated_revision() -> dict:
     generated_source_sha = _generated_source_sha(output)
     if generated_source_sha != _file_sha256(CANONICAL_SPEC):
         pytest.skip(
-            'local structured-data-api checkout is not the generated spec '
-            'revision')
+            'the local contract checkout is not the generated spec revision'
+        )
     return yaml.safe_load(CANONICAL_SPEC.read_text())
 
 
@@ -768,8 +800,7 @@ def _minimal_openapi_spec() -> dict:
                         'content': {
                             'application/json': {
                                 'schema': {
-                                    '$ref':
-                                    '#/components/schemas/PredictionRequest',
+                                    '$ref': '#/components/schemas/PredictionRequest',
                                 },
                             },
                         },
@@ -779,8 +810,7 @@ def _minimal_openapi_spec() -> dict:
                             'content': {
                                 'application/json': {
                                     'schema': {
-                                        '$ref':
-                                        '#/components/schemas/'
+                                        '$ref': '#/components/schemas/'
                                         'PredictionResponse',
                                     },
                                 },

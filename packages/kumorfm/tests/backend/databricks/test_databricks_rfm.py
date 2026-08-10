@@ -10,14 +10,12 @@ import pytest
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.pquery.AST import Aggregation, Column, DateOffsetRange
 from kumorfm.api.typing import AggregationType
-
 from kumorfm.rfm import Graph, KumoRFM
 
 try:
     from kumorfm.rfm.backend.databricks import DatabricksSampler
 except ImportError:
-    pytest.skip("'databricks' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'databricks' extension not installed", allow_module_level=True)
 
 
 def test_sample_subgraph(graph: Graph) -> None:
@@ -25,13 +23,13 @@ def test_sample_subgraph(graph: Graph) -> None:
     sampler = cast(DatabricksSampler, model._sampler)
 
     anchor = sampler.get_max_time(['order_lines'])
-    entity = sampler._sample_entity_table('customers',
-                                          {'customer_id', 'segment'},
-                                          num_rows=5, random_seed=42)
+    entity = sampler._sample_entity_table(
+        'customers', {'customer_id', 'segment'}, num_rows=5, random_seed=42
+    )
     pkey = entity['customer_id'].reset_index(drop=True)
 
     subgraph = sampler.sample_subgraph(
-        entity_table_names=('customers', ),
+        entity_table_names=('customers',),
         entity_pkey=pkey,
         anchor_time=pd.Series([anchor] * len(pkey)),
         num_neighbors=[16, 8],
@@ -81,8 +79,9 @@ def test_by_fkey_count_parity(graph: Graph) -> None:
     model = KumoRFM(graph)
     sampler = cast(DatabricksSampler, model._sampler)
 
-    entity = sampler._sample_entity_table('customers', {'customer_id'},
-                                          num_rows=15, random_seed=7)
+    entity = sampler._sample_entity_table(
+        'customers', {'customer_id'}, num_rows=15, random_seed=7
+    )
     pkey = entity['customer_id'].reset_index(drop=True)
 
     _, batch = sampler._by_fkey(
@@ -98,8 +97,10 @@ def test_by_fkey_count_parity(graph: Graph) -> None:
     source_name = sampler.source_name_dict['order_lines']
     ids = ', '.join(f"'{value}'" for value in pkey)
     with sampler._connection.cursor() as cursor:
-        cursor.execute(f"SELECT customer_id, COUNT(*) FROM {source_name} "
-                       f"WHERE customer_id IN ({ids}) GROUP BY customer_id")
+        cursor.execute(
+            f'SELECT customer_id, COUNT(*) FROM {source_name} '
+            f'WHERE customer_id IN ({ids}) GROUP BY customer_id'
+        )
         expected = {row[0]: row[1] for row in cursor.fetchall()}
 
     for i, value in enumerate(pkey):
@@ -113,8 +114,9 @@ def test_by_pkey_dedup(graph: Graph) -> None:
     model = KumoRFM(graph)
     sampler = cast(DatabricksSampler, model._sampler)
 
-    entity = sampler._sample_entity_table('customers', {'customer_id'},
-                                          num_rows=3, random_seed=1)
+    entity = sampler._sample_entity_table(
+        'customers', {'customer_id'}, num_rows=3, random_seed=1
+    )
     base = entity['customer_id'].tolist()
     # Repeat the keys to exercise duplicate handling:
     pkey = pd.Series(base + base)
@@ -136,8 +138,9 @@ def test_chunked_batch_offset(graph: Graph, monkeypatch) -> None:
     model = KumoRFM(graph)
     sampler = cast(DatabricksSampler, model._sampler)
 
-    entity = sampler._sample_entity_table('customers', {'customer_id'},
-                                          num_rows=12, random_seed=11)
+    entity = sampler._sample_entity_table(
+        'customers', {'customer_id'}, num_rows=12, random_seed=11
+    )
     pkey = entity['customer_id'].reset_index(drop=True)
 
     # Baseline: single chunk.
@@ -146,8 +149,10 @@ def test_chunked_batch_offset(graph: Graph, monkeypatch) -> None:
 
     # Force maximal chunking: one row per chunk.
     monkeypatch.setattr(
-        sampler, '_chunk_rows',
-        lambda rows, max_bytes=0: [[row] for row in rows] or [[]])
+        sampler,
+        '_chunk_rows',
+        lambda rows, max_bytes=0: [[row] for row in rows] or [[]],
+    )
 
     df1, batch1 = sampler._by_pkey('customers', pkey, {'customer_id'})
     chunked = dict(zip(batch1.tolist(), df1['customer_id'].tolist()))
@@ -169,8 +174,10 @@ def test_chunked_batch_offset(graph: Graph, monkeypatch) -> None:
     source_name = sampler.source_name_dict['order_lines']
     ids = ', '.join(f"'{value}'" for value in pkey)
     with sampler._connection.cursor() as cursor:
-        cursor.execute(f"SELECT customer_id, COUNT(*) FROM {source_name} "
-                       f"WHERE customer_id IN ({ids}) GROUP BY customer_id")
+        cursor.execute(
+            f'SELECT customer_id, COUNT(*) FROM {source_name} '
+            f'WHERE customer_id IN ({ids}) GROUP BY customer_id'
+        )
         expected = {row[0]: row[1] for row in cursor.fetchall()}
 
     for i, value in enumerate(pkey):

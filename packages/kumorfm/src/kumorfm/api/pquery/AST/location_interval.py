@@ -24,6 +24,7 @@ class ASTQueryLocationInterval:
             compatibility with modified queries, e.g. after rewriting queries
             for optimization.
     """
+
     start_row: int
     start_col: int
     end_row: int

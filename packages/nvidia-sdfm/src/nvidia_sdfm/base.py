@@ -6,9 +6,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, ClassVar, Union
+from typing import TYPE_CHECKING, ClassVar, TypeAlias
 
 import pandas as pd
+
 from nvidia_sdfm.core.serving import ServingTarget
 from nvidia_sdfm.core.transport import Transport
 from nvidia_sdfm.errors import UnknownModelError
@@ -17,15 +18,17 @@ from nvidia_sdfm.requests import ModelRequest
 if TYPE_CHECKING:
     from kumorfm.rfm.rfm import Explanation
 
-PredictResult = Union[pd.DataFrame, "Explanation"]
+# Quoted whole: `Explanation` is a TYPE_CHECKING-only name, and a runtime
+# `X | 'forward ref'` is a TypeError. The string is never evaluated unless a
+# caller asks for the hints.
+PredictResult: TypeAlias = 'pd.DataFrame | Explanation'
 
-RequestTypes = Union[type[ModelRequest], tuple[type[ModelRequest], ...]]
+RequestTypes: TypeAlias = type[ModelRequest] | tuple[type[ModelRequest], ...]
 
 
 def request_type_names(request_type: RequestTypes) -> str:
     r"""Render an adapter's accepted request type(s) for messages and capabilities."""
-    types = (request_type
-             if isinstance(request_type, tuple) else (request_type, ))
+    types = request_type if isinstance(request_type, tuple) else (request_type,)
     return ' | '.join(rt.__name__ for rt in types)
 
 
@@ -44,6 +47,7 @@ class ModelCapabilities:
     - ``tasks``: The task kinds the adapter accepts.
     - ``outputs``: The output fields the model can produce.
     """
+
     model: str
     request_type: str
     tasks: tuple[str, ...] = field(default_factory=tuple)
@@ -57,6 +61,7 @@ class ModelAdapter(ABC):
     ``request_type`` (the request class, or tuple of classes, it accepts), and
     is added to a client with ``SDFMClient._register``.
     """
+
     name: str
     request_type: ClassVar[RequestTypes]
 
@@ -90,7 +95,7 @@ class ModelAdapter(ABC):
         """
         raise NotImplementedError
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027 - optional hook, see below
         r"""Releases anything this adapter opened that the client cannot see.
 
         Called by :meth:`~nvidia_sdfm.SDFMClient.close` for every registered
@@ -142,7 +147,7 @@ class AdapterRegistry:
         for adapter in self._adapters.values():
             try:
                 adapter.close()
-            except BaseException as adapter_error:  # noqa: BLE001
+            except BaseException as adapter_error:
                 error = error or adapter_error
         if error is not None:
             raise error

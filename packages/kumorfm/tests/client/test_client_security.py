@@ -3,10 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 r"""``KumoClient`` carries every KumoRFM prediction, so it must enforce the
 credential guards the other client documents, and importing the package must
-not reach the network. See
-``bugs/security-kumoclient-import-side-effect-and-missing-plaintext-guard.md``,
-``bugs/security-kumoclient-api-key-follows-cross-origin-redirect.md`` and
-``bugs/quality-kumoclient-missing-transport-hardening.md``.
+not reach the network.
 """
 
 from __future__ import annotations
@@ -17,13 +14,12 @@ import os
 import subprocess
 import sys
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
 
 import pytest
 import requests
-
 from kumorfm.client.client import (
     _MAX_RESPONSE_BYTES,
     KumoClient,
@@ -69,11 +65,14 @@ def test_plaintext_url_with_an_api_key_is_refused() -> None:
         KumoClient('http://nim.test:8000', api_key='SECRET')
 
 
-@pytest.mark.parametrize('url', [
-    'https://nim.test:8000',
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
-])
+@pytest.mark.parametrize(
+    'url',
+    [
+        'https://nim.test:8000',
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+    ],
+)
 def test_supported_endpoints_still_accept_an_api_key(url: str) -> None:
     assert KumoClient(url, api_key='SECRET')._url == url
 
@@ -86,6 +85,11 @@ def test_plaintext_url_without_an_api_key_is_allowed() -> None:
 def test_unusable_urls_are_refused(url: str) -> None:
     with pytest.raises(ValueError):
         KumoClient(url)
+
+
+def test_non_string_url_is_refused() -> None:
+    with pytest.raises(ValueError, match='url must be a string'):
+        KumoClient(123)  # type: ignore[arg-type]
 
 
 def test_init_error_body_is_truncated() -> None:
@@ -129,8 +133,11 @@ def test_endpoint_env_var_still_initializes_on_first_use() -> None:
         env['KUMO_API_ENDPOINT'] = url
         env['PYTHONPATH'] = os.pathsep.join(sys.path)
         result = subprocess.run(
-            [sys.executable, '-c',
-             'import kumorfm; print(kumorfm.global_state.client._url)'],
+            [
+                sys.executable,
+                '-c',
+                'import kumorfm; print(kumorfm.global_state.client._url)',
+            ],
             env=env,
             capture_output=True,
             timeout=120,
@@ -227,8 +234,9 @@ def redirect_servers() -> Iterator[tuple[dict, dict]]:
     running: list[ThreadingHTTPServer] = []
     for _ in range(2):
         state: dict = {'headers': [], 'redirected': False}
-        server = ThreadingHTTPServer(('127.0.0.1', 0),
-                                     _make_redirect_handler(state))
+        server = ThreadingHTTPServer(
+            ('127.0.0.1', 0), _make_redirect_handler(state)
+        )
         state['url'] = f'http://localhost:{server.server_address[1]}'
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
@@ -253,7 +261,8 @@ def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(
     assert origin['headers'][0]['X-API-Key'] == 'SECRET-KUMO-KEY'
     assert target['headers']
     assert all(
-        headers.get('X-API-Key') is None for headers in target['headers'])
+        headers.get('X-API-Key') is None for headers in target['headers']
+    )
 
 
 def test_api_key_is_kept_on_a_same_origin_redirect(
@@ -265,8 +274,10 @@ def test_api_key_is_kept_on_a_same_origin_redirect(
     KumoClient(origin['url'], api_key='SECRET-KUMO-KEY').authenticate()
 
     assert len(origin['headers']) >= 2
-    assert all(headers['X-API-Key'] == 'SECRET-KUMO-KEY'
-               for headers in origin['headers'])
+    assert all(
+        headers['X-API-Key'] == 'SECRET-KUMO-KEY'
+        for headers in origin['headers']
+    )
 
 
 def test_redirects_are_still_followed(
@@ -345,8 +356,9 @@ def test_a_large_legal_body_is_still_delivered_in_full() -> None:
     r"""The cap must not truncate or reject a real prediction response, and the
     capped read must leave a response the existing callers can still use.
     """
-    payload = {'predictions': [{'id': str(i), 'row_index': i}
-                               for i in range(300_000)]}
+    payload = {
+        'predictions': [{'id': str(i), 'row_index': i} for i in range(300_000)]
+    }
     body = json.dumps(payload).encode()
     assert 8_000_000 < len(body) < _MAX_RESPONSE_BYTES
 

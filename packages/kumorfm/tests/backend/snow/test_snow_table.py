@@ -11,7 +11,7 @@ pytest.importorskip(
     reason="requires the 'snowflake' extra",
 )
 
-from kumorfm.rfm.backend.snow.table import SnowTable  # noqa: E402
+from kumorfm.rfm.backend.snow.table import SnowTable
 
 
 class _FakeCursor:
@@ -37,7 +37,7 @@ class _FakeConnection:
         self._paramstyle = 'pyformat'
 
     def cursor(self) -> _FakeCursor:
-        return _FakeCursor(('', ) * 7 + (self._num_rows, ))
+        return _FakeCursor(('',) * 7 + (self._num_rows,))
 
 
 class _StubTable:
@@ -50,8 +50,7 @@ class _StubTable:
 
 
 def test_get_num_rows_empty_table_names_the_table() -> None:
-    # Regression: bugs/quality-missing-f-prefix-error-messages.md -- this
-    # message used to print the literal '{self.source_name}'.
+    # Regression: this message used to print the literal '{self.source_name}'.
     with pytest.raises(RuntimeError, match="'DB.PUBLIC.AUDIT_EMPTY' is empty"):
         SnowTable._get_num_rows(_StubTable(0))  # type: ignore[arg-type]
 

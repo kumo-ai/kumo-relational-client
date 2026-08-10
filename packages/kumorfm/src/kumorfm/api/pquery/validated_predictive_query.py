@@ -4,7 +4,6 @@
 
 import copy
 from dataclasses import field
-from typing import Dict, List, Optional, Set, Tuple, Union
 
 from pydantic.dataclasses import dataclass
 from typing_extensions import Self
@@ -51,35 +50,39 @@ class ParsedPredictiveQuery:
         explain: Whether to perform RFM explanations.
 
     """
-    entity_ast: Union[Column, Filter]
-    target_ast: Union[LogicalOperation, Join, Condition, Column, Aggregation]
-    whatif_ast: Optional[Union[Condition, LogicalOperation]] = None
-    top_k: Optional[int] = None
-    problem_type: Optional[Union[ProblemType, str]] = None
+
+    entity_ast: Column | Filter
+    target_ast: LogicalOperation | Join | Condition | Column | Aggregation
+    whatif_ast: Condition | LogicalOperation | None = None
+    top_k: int | None = None
+    problem_type: ProblemType | str | None = None
     rfm_query: bool = False
-    for_each: str = "FOR EACH"
-    rfm_entity_ids: Optional[Condition] = None
+    for_each: str = 'FOR EACH'
+    rfm_entity_ids: Condition | None = None
     num_forecasts: int = 1
     evaluate: bool = False  # TODO: deprecate
     explain: bool = False  # TODO: deprecate
 
     def __post_init__(self):
-        if (self.problem_type is not None
-                and not isinstance(self.problem_type, ProblemType)):
+        if self.problem_type is not None and not isinstance(
+            self.problem_type, ProblemType
+        ):
             self.problem_type = ProblemType(self.problem_type.upper())
 
     @property
     def entity_column(self) -> str:
         r"""The name of the entity column of the query in the
-        `table.column` format."""
+        `table.column` format.
+        """
         if isinstance(self.entity_ast, Column):
             return self.entity_ast.fqn
-        elif isinstance(self.entity_ast, Filter):
+        if isinstance(self.entity_ast, Filter):
             assert self.entity_ast.target is not None
             return self.entity_ast.target.fqn
         raise ValueError(
             f'`{self.entity_ast}` has an invalid type '
-            f'`{type(self.entity_ast)}`, expected `Column` or `Filter`.')
+            f'`{type(self.entity_ast)}`, expected `Column` or `Filter`.'
+        )
 
     @property
     def entity_table(self) -> str:
@@ -89,69 +92,77 @@ class ParsedPredictiveQuery:
     @property
     def entity_column_obj(self) -> Column:
         r"""The entity column object of the query in the
-        `table.column` format."""
+        `table.column` format.
+        """
         if isinstance(self.entity_ast, Column):
             return self.entity_ast
-        elif isinstance(self.entity_ast, Filter):
+        if isinstance(self.entity_ast, Filter):
             assert self.entity_ast.target is not None
             return self.entity_ast.target
-        assert False
+        raise AssertionError(
+            f'unsupported entity AST {type(self.entity_ast).__name__}'
+        )
 
     @property
     def target_column(self) -> str:
-        """
-        The name of the target column of the query in the `table.column`
+        r"""The name of the target column of the query in the `table.column`
         format.
         """
         raise NotImplementedError
 
     @property
-    def entity_timeframe(self) -> Optional[DateOffsetRange]:
+    def entity_timeframe(self) -> DateOffsetRange | None:
         r"""Timeframe of the entity AST. :class:`DateOffsetRange` or
-        :obj:`None` if there are no time intervals in the entity definition."""
+        :obj:`None` if there are no time intervals in the entity definition.
+        """
         return self.entity_ast.date_offset_range
 
     @property
-    def target_timeframe(self) -> Optional[DateOffsetRange]:
+    def target_timeframe(self) -> DateOffsetRange | None:
         r"""Timeframe of the target AST. :class:`DateOffsetRange` or
-        :obj:`None` if there are no time intervals in the target definition."""
+        :obj:`None` if there are no time intervals in the target definition.
+        """
         return self.target_ast.date_offset_range
 
     @property
-    def whatif_timeframe(self) -> Optional[DateOffsetRange]:
+    def whatif_timeframe(self) -> DateOffsetRange | None:
         r"""Timeframe of the whatif AST. :class:`DateOffsetRange` or
         :obj:`None` if there is no `whatif` condition or if there are no time
-        intervals in the whatif definition."""
+        intervals in the whatif definition.
+        """
         if self.whatif_ast is None:
             return None
         return self.whatif_ast.date_offset_range
 
     @property
     def all_query_columns_with_locations(
-            self) -> List[Tuple[str, ASTQueryLocationInterval]]:
+        self,
+    ) -> list[tuple[str, ASTQueryLocationInterval]]:
         r"""Returns the list of all columns that appear in the query in the
-        `table.column` format."""
-        all_columns: Set[Tuple[str, ASTQueryLocationInterval]] = set()
+        `table.column` format.
+        """
+        all_columns: set[tuple[str, ASTQueryLocationInterval]] = set()
         all_columns |= set(self.entity_ast.all_query_columns_with_locations)
         all_columns |= set(self.target_ast.all_query_columns_with_locations)
         if self.whatif_ast is not None:
-            all_columns |= set(
-                self.whatif_ast.all_query_columns_with_locations)
+            all_columns |= set(self.whatif_ast.all_query_columns_with_locations)
         return list(all_columns)
 
     @property
-    def all_query_columns(self) -> List[str]:
+    def all_query_columns(self) -> list[str]:
         r"""Returns the list of all columns that appear in the query in the
-        `table.column` format."""
-        all_columns: Set[str] = set()
+        `table.column` format.
+        """
+        all_columns: set[str] = set()
         all_columns |= set(self.entity_ast.all_query_columns)
         all_columns |= set(self.target_ast.all_query_columns)
         if self.whatif_ast is not None:
             all_columns |= set(self.whatif_ast.all_query_columns)
         return list(all_columns)
 
-    def to_string(self, rich: bool = False,
-                  exclude_predict: bool = False) -> str:
+    def to_string(
+        self, rich: bool = False, exclude_predict: bool = False
+    ) -> str:
         r"""String representation of the predictive query.
 
         Args:
@@ -161,9 +172,10 @@ class ParsedPredictiveQuery:
         Returns:
             String, corresponding to the input query.
         """
-        predict_repr = '' if exclude_predict else maybe_bold('PREDICT',
-                                                             rich) + ' '
-        query_str = f"{predict_repr}{self.target_ast.to_string(rich=rich)}"
+        predict_repr = (
+            '' if exclude_predict else maybe_bold('PREDICT', rich) + ' '
+        )
+        query_str = f'{predict_repr}{self.target_ast.to_string(rich=rich)}'
         if self.evaluate and not exclude_predict:
             query_str = 'EVALUATE ' + query_str
         if self.explain and not exclude_predict:
@@ -171,29 +183,35 @@ class ParsedPredictiveQuery:
         if self.problem_type is not None:
             assert isinstance(self.problem_type, ProblemType)
             if self.problem_type == ProblemType.FORECAST:
-                query_str += (f" {maybe_bold('FORECAST', rich)}"
-                              f" {self.num_forecasts}"
-                              f" {maybe_bold('TIMEFRAMES', rich)}")
+                query_str += (
+                    f' {maybe_bold("FORECAST", rich)}'
+                    f' {self.num_forecasts}'
+                    f' {maybe_bold("TIMEFRAMES", rich)}'
+                )
             else:
-                query_str += f" {self.problem_type.value}"
+                query_str += f' {self.problem_type.value}'
         if self.top_k is not None:
-            query_str += ' ' + maybe_bold(f"TOP {self.top_k}", rich)
+            query_str += ' ' + maybe_bold(f'TOP {self.top_k}', rich)
         query_str += ' ' + maybe_bold(self.for_each, rich)
         # We "split" the entity IDs and entity def into 2 separate ASTs for
         # convenience. We put them back together.
         if self.rfm_entity_ids is None:
-            query_str += f" {self.entity_ast.to_string(rich=rich)}"
+            query_str += f' {self.entity_ast.to_string(rich=rich)}'
         elif isinstance(self.entity_ast, Column):
-            query_str += f" {self.rfm_entity_ids.to_string(rich=rich)}"
+            query_str += f' {self.rfm_entity_ids.to_string(rich=rich)}'
         else:
             assert isinstance(self.entity_ast, Filter)
             assert self.entity_ast.condition is not None
-            query_str += f" {self.rfm_entity_ids.to_string(rich=rich)}"
-            query_str += (f" {maybe_bold('WHERE', rich)} "
-                          f"{self.entity_ast.condition.to_string(rich=rich)}")
+            query_str += f' {self.rfm_entity_ids.to_string(rich=rich)}'
+            query_str += (
+                f' {maybe_bold("WHERE", rich)} '
+                f'{self.entity_ast.condition.to_string(rich=rich)}'
+            )
         if self.whatif_ast is not None:
-            query_str += (f" {maybe_bold('ASSUMING', rich)} "
-                          f"{self.whatif_ast.to_string(rich=rich)}")
+            query_str += (
+                f' {maybe_bold("ASSUMING", rich)} '
+                f'{self.whatif_ast.to_string(rich=rich)}'
+            )
         return query_str
 
     def to_autoregressive_query(self) -> Self:
@@ -212,13 +230,17 @@ class ParsedPredictiveQuery:
             assert out.entity_ast is not None
             out.entity_ast = out.entity_ast.target  # type: ignore
 
-        if (isinstance(out.target_ast, LogicalOperation)
-                and out.target_ast.bool_op == BoolOp.NOT):
+        if (
+            isinstance(out.target_ast, LogicalOperation)
+            and out.target_ast.bool_op == BoolOp.NOT
+        ):
             out.target_ast = out.target_ast.left  # type: ignore
 
-        if (isinstance(out.target_ast, Condition)  # Remove target condition:
-                and isinstance(out.target_ast.target, Aggregation)
-                and isinstance(out.target_ast.op, RelOp)):
+        if (
+            isinstance(out.target_ast, Condition)  # Remove target condition:
+            and isinstance(out.target_ast.target, Aggregation)
+            and isinstance(out.target_ast.op, RelOp)
+        ):
             out.target_ast = out.target_ast.target
 
         return out
@@ -227,7 +249,8 @@ class ParsedPredictiveQuery:
 @dataclass
 class ValidatedPredictiveQuery(ParsedPredictiveQuery):
     validation_response: ValidationResponse = field(
-        default_factory=ValidationResponse)
+        default_factory=ValidationResponse
+    )
 
     @property
     def entity_dtype(self) -> Dtype:
@@ -259,7 +282,7 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
             return QueryType.TEMPORAL
         return QueryType.STATIC
 
-    def get_single_target_fkey(self, lhs: bool = False) -> Optional[str]:
+    def get_single_target_fkey(self, lhs: bool = False) -> str | None:
         r"""Returns the fkey to the entity table from one target table.
         If there are multiple tables, it returns the alphabetically smallest
         one.
@@ -277,33 +300,31 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
         """
         return self._get_single_target_fkey(self.target_ast, lhs)
 
-    def _get_single_target_fkey(self, node: ASTNode,
-                                lhs: bool) -> Optional[str]:
+    def _get_single_target_fkey(self, node: ASTNode, lhs: bool) -> str | None:
         if isinstance(node, Join):
             if lhs:
                 return node.lhs_key
             return node.rhs_key
-        elif isinstance(node, Filter):
+        if isinstance(node, Filter):
             assert node.target is not None
             return self._get_single_target_fkey(node.target, lhs)
-        else:
-            keys = [
-                self._get_single_target_fkey(child, lhs)
-                for child in node.children
-            ]
-            str_keys = [x for x in keys if x is not None]
-            if len(str_keys) == 0:
-                return None
-            return min(str_keys)
+        keys = [
+            self._get_single_target_fkey(child, lhs) for child in node.children
+        ]
+        str_keys = [x for x in keys if x is not None]
+        if len(str_keys) == 0:
+            return None
+        return min(str_keys)
 
-    def get_final_target_aggregation(self) -> Optional[Aggregation]:
+    def get_final_target_aggregation(self) -> Aggregation | None:
         r"""Returns the final aggregation node performed on
         the target data if the last operation performed on the data was an
         aggregation. If the last performed operation was a condition,
-        logical operation, or column, it returns :obj:`None`."""
+        logical operation, or column, it returns :obj:`None`.
+        """
         return self._get_final_aggregation(self.target_ast)
 
-    def _get_final_aggregation(self, node: ASTNode) -> Optional[Aggregation]:
+    def _get_final_aggregation(self, node: ASTNode) -> Aggregation | None:
         if isinstance(node, Aggregation):
             return node
         if isinstance(node, Join):
@@ -311,13 +332,14 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
             return self._get_final_aggregation(node.rhs_target)
         return None
 
-    def get_final_target_column(self) -> Optional[Column]:
+    def get_final_target_column(self) -> Column | None:
         r"""Returns the column node if the target labels are taken directly
         from a column. If the last performed operation was a condition,
-        logical operation, or an aggregation, it returns :obj:`None`."""
+        logical operation, or an aggregation, it returns :obj:`None`.
+        """
         return self._get_final_column(self.target_ast)
 
-    def _get_final_column(self, node: ASTNode) -> Optional[Column]:
+    def _get_final_column(self, node: ASTNode) -> Column | None:
         if isinstance(node, Column):
             return node
         if isinstance(node, Join):
@@ -325,21 +347,22 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
             return self._get_final_column(node.rhs_target)
         return None
 
-    def get_all_target_aggregations(self) -> List[Aggregation]:
+    def get_all_target_aggregations(self) -> list[Aggregation]:
         r"""Returns the list of aggregation nodes used in computing the
         label, excluding the ones that appear in filters. Unlike
         `get_final_target_aggregation`, it also includes aggregations within
         conditions. Returns an empty list if no aggregations are involved in
-        label computation, e.g. in static queries."""
+        label computation, e.g. in static queries.
+        """
         return self._get_all_target_aggregations(self.target_ast)
 
-    def _get_all_target_aggregations(self, node: ASTNode) -> List[Aggregation]:
+    def _get_all_target_aggregations(self, node: ASTNode) -> list[Aggregation]:
         if isinstance(node, Aggregation):
             return [node]
-        elif isinstance(node, Filter):
+        if isinstance(node, Filter):
             assert node.target is not None
             return self._get_all_target_aggregations(node.target)
-        result: List[Aggregation] = []
+        result: list[Aggregation] = []
         for child in node.children:
             result.extend(self._get_all_target_aggregations(child))
         return result
@@ -347,11 +370,14 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
     def get_combined_date_offset_range(self) -> DateOffsetRange:
         r"""Returns the :class:`DateOffsetRange` that corresponds to combined
         target aggregation time ranges. This is exactly the timespan that
-        should not overlap between splits lest we risk data leakage."""
+        should not overlap between splits lest we risk data leakage.
+        """
         target_aggrs = self.get_all_target_aggregations()
         if len(target_aggrs) == 0:
-            raise ValueError('Cannot compute combined time range because '
-                             'target does not have any aggregations.')
+            raise ValueError(
+                'Cannot compute combined time range because '
+                'target does not have any aggregations.'
+            )
         cumulative_date_offset = None
         for aggr in target_aggrs:
             assert aggr.aggr_time_range is not None
@@ -359,7 +385,8 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
                 cumulative_date_offset = aggr.aggr_time_range
             else:
                 cumulative_date_offset = DateOffsetRange.merge_ranges(
-                    cumulative_date_offset, aggr.aggr_time_range)
+                    cumulative_date_offset, aggr.aggr_time_range
+                )
         assert cumulative_date_offset is not None
         return cumulative_date_offset
 
@@ -367,22 +394,26 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
         r"""Returns a list of entity specified by the user. If there are no
         entities specified by the user, the returned list is empty. If the
         user specified only one entity with 'FOR T.C = <ID>', the list will
-        contain only one entity."""
+        contain only one entity.
+        """
         if self.rfm_entity_ids is None:
             return []
         assert isinstance(self.rfm_entity_ids.value, Constant)
         ids = self.rfm_entity_ids.value.typed_value()
         if isinstance(ids, list):
             return ids
-        else:
-            return [ids]
+        return [ids]
 
-    def get_exclude_cols_dict(self) -> Dict[str, List[str]]:
+    def get_exclude_cols_dict(self) -> dict[str, list[str]]:
         r"""The columns of tables to exclude during model execution.
         Applies to static node prediction query targets, i.e.
         target columns that appear outside of aggregations and filter
-        conditions."""
-        def _get_exclude_cols_dict(target: ASTNode, ) -> Dict[str, List[str]]:
+        conditions.
+        """
+
+        def _get_exclude_cols_dict(
+            target: ASTNode,
+        ) -> dict[str, list[str]]:
 
             if isinstance(target, Column):
                 return {target.fqn.split('.')[0]: [target.fqn.split('.')[1]]}
@@ -392,9 +423,7 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
                 assert target.target is not None
                 return _get_exclude_cols_dict(target.target)
 
-            dicts = [
-                _get_exclude_cols_dict(child) for child in target.children
-            ]
+            dicts = [_get_exclude_cols_dict(child) for child in target.children]
 
             out_dict = {}
             for cols_dict in dicts:
@@ -402,8 +431,7 @@ class ValidatedPredictiveQuery(ParsedPredictiveQuery):
                     if table not in out_dict:
                         out_dict[table] = cols
                     else:
-                        out_dict[table] = list(
-                            set(out_dict[table]) | set(cols))
+                        out_dict[table] = list(set(out_dict[table]) | set(cols))
             return out_dict
 
         return _get_exclude_cols_dict(self.target_ast)

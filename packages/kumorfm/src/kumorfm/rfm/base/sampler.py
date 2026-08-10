@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING, Any, Literal, NamedTuple
 
 import numpy as np
 import pandas as pd
+
 from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
 from kumorfm.api.pquery.AST import Aggregation, ASTNode
 from kumorfm.api.rfm.context import EdgeLayout, Link, Subgraph, Table
 from kumorfm.api.typing import ProblemType, Stype
-
 from kumorfm.rfm.base import DataBackend
 from kumorfm.rfm.base.utils import Timestamp, to_naive_utc
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
@@ -55,6 +55,7 @@ class Sampler(ABC):
         graph: The graph.
         verbose: Whether to print verbose output.
     """
+
     def __init__(
         self,
         graph: 'Graph',
@@ -160,7 +161,7 @@ class Sampler(ABC):
         entity_pkey: pd.Series,
     ) -> None:
         r"""Validate task references when supported by the backend."""
-        return None
+        return
 
     def get_min_time(
         self,
@@ -179,8 +180,10 @@ class Sampler(ABC):
             for table_name, (min_time, max_time) in min_max_time_dict.items():
                 self._min_time_dict[table_name] = min_time
                 self._max_time_dict[table_name] = max_time
-        return min([self._min_time_dict[table]
-                    for table in table_names] + [pd.Timestamp.max])
+        return min(
+            [self._min_time_dict[table] for table in table_names]
+            + [pd.Timestamp.max]
+        )
 
     def get_max_time(
         self,
@@ -199,8 +202,10 @@ class Sampler(ABC):
             for table_name, (min_time, max_time) in min_max_time_dict.items():
                 self._min_time_dict[table_name] = min_time
                 self._max_time_dict[table_name] = max_time
-        return max([self._max_time_dict[table]
-                    for table in table_names] + [pd.Timestamp.min])
+        return max(
+            [self._max_time_dict[table] for table in table_names]
+            + [pd.Timestamp.min]
+        )
 
     # Subgraph Sampling #######################################################
 
@@ -239,17 +244,19 @@ class Sampler(ABC):
                 if table_name not in table_stype_dict:
                     raise ValueError(
                         f"'exclude_cols_dict' names table '{table_name}', "
-                        f"which is not in the graph. Available tables: "
-                        f"{sorted(table_stype_dict)}")
+                        f'which is not in the graph. Available tables: '
+                        f'{sorted(table_stype_dict)}'
+                    )
                 stype_dict = table_stype_dict[table_name]
                 for column_name in exclude_cols:
                     if column_name not in stype_dict:
                         raise ValueError(
                             f"'exclude_cols_dict' names column "
                             f"'{column_name}' of table '{table_name}', which "
-                            f"is not one of its feature columns (primary and "
-                            f"foreign keys are never sent as features). "
-                            f"Excludable columns: {sorted(stype_dict)}")
+                            f'is not one of its feature columns (primary and '
+                            f'foreign keys are never sent as features). '
+                            f'Excludable columns: {sorted(stype_dict)}'
+                        )
                     del stype_dict[column_name]
 
         # Collect all columns being used as features:
@@ -321,9 +328,11 @@ class Sampler(ABC):
 
             # Do not store reverse edge type if it is an exact replica:
             rev_edge_type = Subgraph.rev_edge_type(edge_type)
-            if (rev_edge_type in subgraph.link_dict
-                    and np.array_equal(row, out.col_dict[rev_edge_type])
-                    and np.array_equal(col, out.row_dict[rev_edge_type])):
+            if (
+                rev_edge_type in subgraph.link_dict
+                and np.array_equal(row, out.col_dict[rev_edge_type])
+                and np.array_equal(col, out.row_dict[rev_edge_type])
+            ):
                 subgraph.link_dict[edge_type] = Link(
                     layout=EdgeLayout.REV,
                     row=None,
@@ -341,8 +350,11 @@ class Sampler(ABC):
 
             # Store in compressed representation if more efficient:
             num_cols = subgraph.table_dict[edge_type[2]].num_rows
-            if (col is not None and len(col) > num_cols + 1
-                    and ((col[1:] - col[:-1]) >= 0).all()):
+            if (
+                col is not None
+                and len(col) > num_cols + 1
+                and ((col[1:] - col[:-1]) >= 0).all()
+            ):
                 layout = EdgeLayout.CSC
                 colcount = np.bincount(col, minlength=num_cols)
                 col = np.empty(num_cols + 1, dtype=col.dtype)
@@ -376,8 +388,8 @@ class Sampler(ABC):
         self,
         query: ValidatedPredictiveQuery,
     ) -> dict[
-            tuple[str, str, str],
-            tuple[pd.DateOffset | None, pd.DateOffset],
+        tuple[str, str, str],
+        tuple[pd.DateOffset | None, pd.DateOffset],
     ]:
         time_offset_dict: dict[
             tuple[str, str, str],
@@ -389,14 +401,17 @@ class Sampler(ABC):
                 table_name = node.get_target_column_name().split('.')[0]
 
                 edge_types = [
-                    edge_type for edge_type in self.edge_types
+                    edge_type
+                    for edge_type in self.edge_types
                     if edge_type[0] == table_name
                     and edge_type[2] == query.entity_table
                 ]
                 if len(edge_types) != 1:
-                    raise ValueError(f"Could not find a unique foreign key "
-                                     f"from table '{table_name}' to "
-                                     f"'{query.entity_table}'")
+                    raise ValueError(
+                        f'Could not find a unique foreign key '
+                        f"from table '{table_name}' to "
+                        f"'{query.entity_table}'"
+                    )
                 assert node.aggr_time_range is not None
                 if edge_types[0] not in time_offset_dict:
                     start = node.aggr_time_range.start_date_offset
@@ -468,8 +483,9 @@ class Sampler(ABC):
             columns_dict[table_name].add(self.time_column_dict[table_name])
 
         # 2. Sample random rows from entity table #############################
-        shared_train_test = ((query.query_type == QueryType.STATIC) &
-                             (train_anchor_time == test_anchor_time))
+        shared_train_test = (query.query_type == QueryType.STATIC) & (
+            train_anchor_time == test_anchor_time
+        )
         if shared_train_test:
             num_entity_rows = num_train_trials + num_test_trials
         else:
@@ -495,8 +511,10 @@ class Sampler(ABC):
         )
 
         if len(entity_df) == 0:
-            raise ValueError(f"Failed to find any rows in the entity table "
-                             f"'{query.entity_table}'.")
+            raise ValueError(
+                f'Failed to find any rows in the entity table '
+                f"'{query.entity_table}'."
+            )
 
         entity_pkey = entity_df[self.primary_key_dict[query.entity_table]]
         entity_time: pd.Series | None = None
@@ -560,12 +578,13 @@ class Sampler(ABC):
                 if len(matches) == 0:
                     raise RuntimeError(
                         f"Entity '{entity_ids[0]}' not found in entity table "
-                        f"'{query.entity_table}'")
+                        f"'{query.entity_table}'"
+                    )
                 forecast_entity_idx = int(matches[0])
             else:
                 valid_index = get_valid_entity_index(train_anchor_time)
                 if len(valid_index) == 0:
-                    raise RuntimeError("No valid entities for forecasting")
+                    raise RuntimeError('No valid entities for forecasting')
                 forecast_entity_idx = int(valid_index[0])
 
         if shared_train_test:
@@ -595,17 +614,20 @@ class Sampler(ABC):
                         test_times_list.append(current_time)
                         current_time += step_offset
                     test_index = np.array(test_indices_list, dtype=np.int64)
-                    test_time = pd.Series(test_times_list,
-                                          dtype='datetime64[ns]')
+                    test_time = pd.Series(
+                        test_times_list, dtype='datetime64[ns]'
+                    )
                 else:
                     test_index = get_valid_entity_index(  #
-                        test_anchor_time, max_size=num_test_trials)
+                        test_anchor_time, max_size=num_test_trials
+                    )
                     assert test_anchor_time != 'entity'
                     test_time = to_ser(test_anchor_time, len(test_index))
 
             if query.query_type == QueryType.STATIC and num_train_examples > 0:
                 train_index = get_valid_entity_index(  #
-                    train_anchor_time, max_size=num_train_trials)
+                    train_anchor_time, max_size=num_train_trials
+                )
                 assert train_anchor_time != 'entity'
                 train_time = to_ser(train_anchor_time, len(train_index))
             elif is_temporal and num_train_examples > 0:
@@ -617,11 +639,13 @@ class Sampler(ABC):
                 while True:
                     if is_forecasting:
                         assert forecast_entity_idx is not None
-                        train_index = np.array([forecast_entity_idx],
-                                               dtype=np.int64)
+                        train_index = np.array(
+                            [forecast_entity_idx], dtype=np.int64
+                        )
                     else:
                         train_index = get_valid_entity_index(  #
-                            train_anchor_time, max_size=num_train_trials)
+                            train_anchor_time, max_size=num_train_trials
+                        )
                     assert train_anchor_time != 'entity'
                     train_time = to_ser(train_anchor_time, len(train_index))
                     train_indices.append(train_index)
@@ -646,8 +670,11 @@ class Sampler(ABC):
             entity_df=entity_df,
             train_index=train_index,
             train_time=train_time,
-            num_train_examples=(num_train_examples + num_test_examples
-                                if shared_train_test else num_train_examples),
+            num_train_examples=(
+                num_train_examples + num_test_examples
+                if shared_train_test
+                else num_train_examples
+            ),
             test_index=test_index,
             test_time=test_time,
             num_test_examples=0 if shared_train_test else num_test_examples,
@@ -664,9 +691,12 @@ class Sampler(ABC):
 
             _num_test = num_test_examples
             _num_train = min(num_train_examples, 1000)
-            if (num_test_examples > 0 and num_train_examples > 0
-                    and len(train_y) < num_examples
-                    and len(train_y) < _num_test + _num_train):
+            if (
+                num_test_examples > 0
+                and num_train_examples > 0
+                and len(train_y) < num_examples
+                and len(train_y) < _num_test + _num_train
+            ):
                 # Not enough labels to satisfy requested split without losing
                 # large number of training examples:
                 _num_test = len(train_y) - _num_train
@@ -701,38 +731,50 @@ class Sampler(ABC):
         test_y = test_y.reset_index(drop=True)
 
         if num_train_examples > 0 and len(train_y) == 0:
-            raise RuntimeError("Failed to collect any context examples. Is "
-                               "your predictive query too restrictive?")
+            raise RuntimeError(
+                'Failed to collect any context examples. Is '
+                'your predictive query too restrictive?'
+            )
 
         if num_test_examples > 0 and len(test_y) == 0:
-            raise RuntimeError("Failed to collect any test examples for "
-                               "evaluation. Is your predictive query too "
-                               "restrictive?")
+            raise RuntimeError(
+                'Failed to collect any test examples for '
+                'evaluation. Is your predictive query too '
+                'restrictive?'
+            )
 
         global _coverage_warned
-        if (not num_train_examples > 0  #
-                and not _coverage_warned  #
-                and len(entity_df) >= num_entity_rows
-                and len(train_y) < num_train_examples // 2):
+        if (
+            num_train_examples > 0
+            and not _coverage_warned
+            and len(entity_df) >= num_entity_rows
+            and len(train_y) < num_train_examples // 2
+        ):
             _coverage_warned = True
-            warnings.warn(f"Failed to collect {num_train_examples:,} context "
-                          f"examples within {num_train_trials:,} candidates. "
-                          f"To improve coverage, consider increasing the "
-                          f"number of PQ iterations using the "
-                          f"'max_pq_iterations' option. This warning will not "
-                          f"be shown again in this run.")
+            warnings.warn(
+                f'Failed to collect {num_train_examples:,} context '
+                f'examples within {num_train_trials:,} candidates. '
+                f'To improve coverage, consider increasing the '
+                f'number of PQ iterations using the '
+                f"'max_pq_iterations' option. This warning will not "
+                f'be shown again in this run.'
+            )
 
-        if (not num_test_examples > 0  #
-                and not _coverage_warned  #
-                and len(entity_df) >= num_entity_rows
-                and len(test_y) < num_test_examples // 2):
+        if (
+            num_test_examples > 0
+            and not _coverage_warned
+            and len(entity_df) >= num_entity_rows
+            and len(test_y) < num_test_examples // 2
+        ):
             _coverage_warned = True
-            warnings.warn(f"Failed to collect {num_test_examples:,} test "
-                          f"examples within {num_test_trials:,} candidates. "
-                          f"To improve coverage, consider increasing the "
-                          f"number of PQ iterations using the "
-                          f"'max_pq_iterations' option. This warning will not "
-                          f"be shown again in this run.")
+            warnings.warn(
+                f'Failed to collect {num_test_examples:,} test '
+                f'examples within {num_test_trials:,} candidates. '
+                f'To improve coverage, consider increasing the '
+                f'number of PQ iterations using the '
+                f"'max_pq_iterations' option. This warning will not "
+                f'be shown again in this run.'
+            )
 
         return (
             TargetOutput(train_pkey, train_time, train_y),
@@ -758,11 +800,12 @@ class Sampler(ABC):
 
         time_offset_dict = {
             edge_type: (start, lag_timesteps * end)
-            for edge_type, (start, end)  #
-            in self._get_query_time_offset_dict(query).items()
+            for edge_type, (start, end) in self._get_query_time_offset_dict(  #
+                query
+            ).items()
         }
         columns_dict = self._get_query_columns_dict(query)
-        for table_name, _, _ in time_offset_dict.keys():
+        for table_name, _, _ in time_offset_dict:
             columns_dict[table_name].add(self.time_column_dict[table_name])
         assert query.target_timeframe is not None
         offset = query.target_timeframe.end_date_offset
@@ -862,24 +905,14 @@ class Sampler(ABC):
             tuple[pd.DateOffset | None, pd.DateOffset],
         ],
     ) -> tuple[
-            dict[str, pd.DataFrame],
-            dict[str, pd.Series],
-            dict[str, np.ndarray],
+        dict[str, pd.DataFrame],
+        dict[str, pd.Series],
+        dict[str, np.ndarray],
     ]:
-        r"""Returns the subgraph information to compute ground-truth targets of
-        a predictive query on-the-fly.
+        r"""Sample feature rows needed to compute query labels on the fly.
 
-        Returns sampled features, time information, and batch assignment for
-        each table involved into the predictive query.
-
-        Args:
-            entity_table_name: The entity table.
-            entity_pkey: The primary keys.
-            anchor_time: The anchor time.
-            columns_dict: The columns that are being used to compute
-                ground-truth targets.
-            time_offset_dict: The date offsets to query for each edge type,
-                relative to the anchor time.
+        Returns per-table sampled frames, per-table anchor times, and
+        per-table batch assignments for the tables involved in the query.
         """
 
     @abstractmethod
@@ -899,30 +932,18 @@ class Sampler(ABC):
             tuple[pd.DateOffset | None, pd.DateOffset],
         ],
     ) -> tuple[pd.Series, np.ndarray, pd.Series, np.ndarray]:
-        r"""Samples ground-truth targets given a predictive query from a set of
-        training and test candidates.
+        r"""Sample ground-truth labels from train and test candidate rows.
 
-        Args:
-            query: The predictive query.
-            entity_df: The entity data frame, containing the union of all train
-                and test candidates.
-            train_index: The indices of training candidates.
-            train_time: The anchor time of training candidates.
-            num_train_examples: How many training examples to produce.
-            test_index: The indices of test candidates.
-            test_time: The anchor time of test candidates.
-            num_test_examples: How many test examples to produce.
-            columns_dict: The columns that are being used to compute
-                ground-truth targets.
-            time_offset_dict: The date offsets to query for each edge type,
-                relative to the anchor time.
+        Returns labels and row selections for the requested train and test
+        examples, using ``columns_dict`` and ``time_offset_dict`` to fetch any
+        related rows needed by the predictive query.
         """
 
 
 # Helper Functions ############################################################
 
-PUNCTUATION = re.compile(r"[\'\"\.,\(\)\!\?\;\:]")
-MULTISPACE = re.compile(r"\s+")
+PUNCTUATION = re.compile(r'[\'\"\.,\(\)\!\?\;\:]')
+MULTISPACE = re.compile(r'\s+')
 
 
 def _normalize_text(
@@ -941,9 +962,9 @@ def _normalize_text(
         return ser
 
     def normalize_fn(line: str) -> list[str]:
-        line = PUNCTUATION.sub(" ", line)
-        line = re.sub(r"<br\s*/?>", " ", line)  # Handle <br /> or <br>
-        line = MULTISPACE.sub(" ", line)
+        line = PUNCTUATION.sub(' ', line)
+        line = re.sub(r'<br\s*/?>', ' ', line)  # Handle <br /> or <br>
+        line = MULTISPACE.sub(' ', line)
         words = line.split()
         if max_words is not None:
             words = words[:max_words]
@@ -955,7 +976,7 @@ def _normalize_text(
         # We estimate the number of words as 5 characters + 1 space in an
         # English text on average. We need this pre-filter here, as word
         # splitting on a giant text can be very expensive:
-        ser = ser.str[:6 * max_words]
+        ser = ser.str[: 6 * max_words]
 
     ser = ser.str.lower()
     ser = ser.map(normalize_fn)

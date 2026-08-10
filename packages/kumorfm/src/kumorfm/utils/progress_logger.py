@@ -46,6 +46,7 @@ def _in_terminal() -> bool:
 
 class ProgressLogger(ABC):
     r"""An abstract base class for logging progress updates."""
+
     def __init__(self, msg: str, verbose: bool = True) -> None:
         self.msg: str = msg
         self.verbose: bool = verbose
@@ -94,7 +95,7 @@ class ProgressLogger(ABC):
         # `verbose=False` too, which otherwise leaves the taskbar sequences as
         # the one thing a caller cannot turn off.
         if self._depth == 1 and self.verbose and _in_terminal():
-            sys.stdout.write("\x1b]9;4;3\x07")
+            sys.stdout.write('\x1b]9;4;3\x07')
             sys.stdout.flush()
         if self._depth == 1 and self.verbose:
             self.on_enter()
@@ -107,7 +108,7 @@ class ProgressLogger(ABC):
         if self._depth == 0 and self.verbose:
             self.on_exit(error=exc_val is not None)
         if self._depth == 0 and self.verbose and _in_terminal():
-            sys.stdout.write("\x1b]9;4;0\x07")
+            sys.stdout.write('\x1b]9;4;0\x07')
             sys.stdout.flush()
 
     def log(self, msg: str) -> None:
@@ -119,7 +120,7 @@ class ProgressLogger(ABC):
     def init_progress(self, msg: str, total: int) -> None:
         r"""Initializes a progress bar."""
         if self._progress_bar_msg is not None:
-            raise RuntimeError("Current progress not yet finished")
+            raise RuntimeError('Current progress not yet finished')
         self._progress_bar_msg = msg
         self._current = 0
         self._total = total
@@ -177,34 +178,34 @@ class PlainProgressLogger(ProgressLogger):
         from kumorfm import in_vnext_notebook
 
         if error:
-            msg = f"❌ {self.RED}({self.duration:.2f}s){self.RESET}"
+            msg = f'❌ {self.RED}({self.duration:.2f}s){self.RESET}'
         else:
-            msg = f"✅ {self.GREEN}({self.duration:.2f}s){self.RESET}"
+            msg = f'✅ {self.GREEN}({self.duration:.2f}s){self.RESET}'
 
         if in_vnext_notebook():
-            print(f"{self.DIM}↳{self.RESET} {msg}", flush=True)
+            print(f'{self.DIM}↳{self.RESET} {msg}', flush=True)
         else:
-            print(f" {msg}", flush=True)
+            print(f' {msg}', flush=True)
 
     def on_log(self, msg: str) -> None:
         from kumorfm import in_vnext_notebook
 
-        msg = f"{self.DIM}↳ {msg}{self.RESET}"
+        msg = f'{self.DIM}↳ {msg}{self.RESET}'
 
         if in_vnext_notebook():
             print(msg, flush=True)
         else:
-            print(f"\n{msg}", end='', flush=True)
+            print(f'\n{msg}', end='', flush=True)
 
     def on_init_progress(self, msg: str, total: int) -> None:
         from kumorfm import in_vnext_notebook
 
-        msg = f"{self.DIM}↳ {msg}{self.RESET}"
+        msg = f'{self.DIM}↳ {msg}{self.RESET}'
 
         if in_vnext_notebook():
             print(msg, flush=True)
         else:
-            print(f"\n{msg} {self.DIM}[{self.RESET}", end='', flush=True)
+            print(f'\n{msg} {self.DIM}[{self.RESET}', end='', flush=True)
 
     def on_step(self, msg: str, current: int, total: int) -> None:
         from kumorfm import in_vnext_notebook
@@ -212,9 +213,9 @@ class PlainProgressLogger(ProgressLogger):
         if in_vnext_notebook():
             return
 
-        msg = f"{self.DIM}#{self.RESET}"
+        msg = f'{self.DIM}#{self.RESET}'
         if current == total:
-            msg += f"{self.DIM}]{self.RESET}"
+            msg += f'{self.DIM}]{self.RESET}'
 
         print(msg, end='', flush=True)
 
@@ -287,7 +288,7 @@ class RichProgressLogger(ProgressLogger):
             TextColumn('•', style='dim'),
             ColoredTimeRemainingColumn(style='dim'),
         )
-        self._task = self._progress.add_task("Progress", total=total)
+        self._task = self._progress.add_task('Progress', total=total)
 
     def on_step(self, msg: str, current: int, total: int) -> None:
         assert self._progress is not None

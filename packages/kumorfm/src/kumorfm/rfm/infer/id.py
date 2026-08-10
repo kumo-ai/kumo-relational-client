@@ -5,6 +5,7 @@
 import re
 
 import pandas as pd
+
 from kumorfm.api.typing import Dtype, Stype
 
 # Column names suffixes that end in "id" but should not be given the ID stype.

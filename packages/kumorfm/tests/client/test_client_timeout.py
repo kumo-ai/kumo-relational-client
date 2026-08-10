@@ -13,15 +13,14 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
-
-import pytest
-import requests
 
 import kumorfm
 import kumorfm.rfm as rfm_engine
+import pytest
+import requests
 from kumorfm.client import KumoClient
 
 _READY_BODY = json.dumps({'status': 'healthy', 'check': 'ready'})
@@ -93,8 +92,9 @@ def test_per_call_timeout_overrides_the_client_default():
 def test_init_forwards_the_timeout_to_the_request_client():
     try:
         with _serve() as url:
-            rfm_engine.init(url=url, timeout=7.0,
-                            _token=rfm_engine._SDFM_CLIENT_TOKEN)
+            rfm_engine.init(
+                url=url, timeout=7.0, _token=rfm_engine._SDFM_CLIENT_TOKEN
+            )
             assert kumorfm.global_state.client._timeout == 7.0
     finally:
         rfm_engine.global_state.reset()
@@ -115,7 +115,8 @@ def test_max_retries_reaches_the_transport_policy():
     for max_retries in (0, 3, 7):
         client = KumoClient('https://tenant.example', max_retries=max_retries)
         policy = client._session.get_adapter(
-            'https://tenant.example/v1/predictions').max_retries
+            'https://tenant.example/v1/predictions'
+        ).max_retries
         assert policy.total == max_retries
         assert policy.connect == max_retries
         assert policy.status == max_retries
@@ -128,8 +129,11 @@ def test_a_server_chosen_retry_after_is_capped():
     r"""urllib3's own ceiling is six hours, which a `Retry-After` header on a
     retried request could park the caller for.
     """
-    policy = KumoClient('https://tenant.example')._session.get_adapter(
-        'https://tenant.example/v1/predictions').max_retries
+    policy = (
+        KumoClient('https://tenant.example')
+        ._session.get_adapter('https://tenant.example/v1/predictions')
+        .max_retries
+    )
     cap = getattr(policy, 'retry_after_max', None)
     if cap is not None:  # urllib3 >= 2.3 only
         assert cap == 60
@@ -144,14 +148,19 @@ def test_session_create_is_held_out_of_the_post_retries():
     """
     client = KumoClient('https://tenant.example', max_retries=3)
     create = client._session.get_adapter(
-        'https://tenant.example/v1/sessions').max_retries
+        'https://tenant.example/v1/sessions'
+    ).max_retries
     assert not create._is_method_retryable('POST')
     assert create.connect == 3
 
-    for path in ('/v1/predictions', '/v1/sessions/s1/predictions',
-                 '/v1/sessions/s1'):
+    for path in (
+        '/v1/predictions',
+        '/v1/sessions/s1/predictions',
+        '/v1/sessions/s1',
+    ):
         policy = client._session.get_adapter(
-            f'https://tenant.example{path}').max_retries
+            f'https://tenant.example{path}'
+        ).max_retries
         assert policy._is_method_retryable('POST'), path
 
 
@@ -173,8 +182,9 @@ def test_a_read_timeout_is_not_retried_and_keeps_its_type():
 def test_init_forwards_max_retries_to_the_request_client():
     try:
         with _serve() as url:
-            rfm_engine.init(url=url, max_retries=5,
-                            _token=rfm_engine._SDFM_CLIENT_TOKEN)
+            rfm_engine.init(
+                url=url, max_retries=5, _token=rfm_engine._SDFM_CLIENT_TOKEN
+            )
             assert kumorfm.global_state.client._max_retries == 5
     finally:
         rfm_engine.global_state.reset()

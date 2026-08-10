@@ -28,65 +28,71 @@ import json
 import os
 from typing import Any
 
-import pandas as pd
 import kumorfm.rfm as rfm
+import pandas as pd
 from kumorfm.api.typing import Stype
-
 from kumorfm.client import KumoClient
 from kumorfm.client.endpoints import Endpoint, HTTPMethod
-
 
 DEFAULT_BASE_URL = os.getenv('TFM_BASE_URL', 'http://127.0.0.1:8001')
 
 
 def build_demo_graph() -> rfm.Graph:
     tables = {
-        'USERS': pd.DataFrame({
-            'USER_ID': [0, 1, 2, 3, 4],
-            'AGE': [20.0, 30.0, 40.0, 50.0, 35.0],
-            'GENDER': ['male', 'female', 'female', 'male', 'female'],
-            'STATUS': ['A', 'B', 'A', 'C', None],
-        }),
-        'ORDERS': pd.DataFrame({
-            'ORDER_ID': list(range(13)),
-            'USER_ID': [0, 0, 0, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3],
-            'STORE_ID': [0, 1, 0, 1, 2, 2, 0, 1, 2, 0, 1, 1, 2],
-            'AMOUNT': [
-                10.0,
-                15.0,
-                float('nan'),
-                20.0,
-                25.0,
-                30.0,
-                10.0,
-                25.0,
-                20.0,
-                10.0,
-                15.0,
-                15.0,
-                20.0,
-            ],
-            'CAT': [10, 15, None, 20, 25, 30, 11, 26, 27, 28, 29, 32, 33],
-            'TIME': pd.to_datetime([
-                '2025-01-01',
-                '2024-12-20',
-                '2025-01-03',
-                '2025-01-02',
-                '2025-01-03',
-                '2025-01-04',
-                '2025-01-09',
-                '2025-01-02',
-                '2025-01-02',
-                '2025-01-01',
-                '2025-01-02',
-                '2025-01-03',
-                '2025-01-04',
-            ]),
-        }),
-        'STORES': pd.DataFrame({
-            'STORE_ID': [0, 1, 2],
-            'CAT': ['burger', 'pizza', 'fries'],
-        }),
+        'USERS': pd.DataFrame(
+            {
+                'USER_ID': [0, 1, 2, 3, 4],
+                'AGE': [20.0, 30.0, 40.0, 50.0, 35.0],
+                'GENDER': ['male', 'female', 'female', 'male', 'female'],
+                'STATUS': ['A', 'B', 'A', 'C', None],
+            }
+        ),
+        'ORDERS': pd.DataFrame(
+            {
+                'ORDER_ID': list(range(13)),
+                'USER_ID': [0, 0, 0, 1, 1, 1, 1, 3, 3, 3, 3, 3, 3],
+                'STORE_ID': [0, 1, 0, 1, 2, 2, 0, 1, 2, 0, 1, 1, 2],
+                'AMOUNT': [
+                    10.0,
+                    15.0,
+                    float('nan'),
+                    20.0,
+                    25.0,
+                    30.0,
+                    10.0,
+                    25.0,
+                    20.0,
+                    10.0,
+                    15.0,
+                    15.0,
+                    20.0,
+                ],
+                'CAT': [10, 15, None, 20, 25, 30, 11, 26, 27, 28, 29, 32, 33],
+                'TIME': pd.to_datetime(
+                    [
+                        '2025-01-01',
+                        '2024-12-20',
+                        '2025-01-03',
+                        '2025-01-02',
+                        '2025-01-03',
+                        '2025-01-04',
+                        '2025-01-09',
+                        '2025-01-02',
+                        '2025-01-02',
+                        '2025-01-01',
+                        '2025-01-02',
+                        '2025-01-03',
+                        '2025-01-04',
+                    ]
+                ),
+            }
+        ),
+        'STORES': pd.DataFrame(
+            {
+                'STORE_ID': [0, 1, 2],
+                'CAT': ['burger', 'pizza', 'fries'],
+            }
+        ),
     }
 
     graph = rfm.Graph.from_data(tables, verbose=False)
@@ -173,7 +179,7 @@ def parse_args() -> argparse.Namespace:
         '--api-key',
         default=os.getenv('KUMO_API_KEY'),
         help='Optional API key, only needed if the NIM is behind an '
-             'authenticating gateway. Default: KUMO_API_KEY or none.',
+        'authenticating gateway. Default: KUMO_API_KEY or none.',
     )
     parser.add_argument(
         '--timeout',

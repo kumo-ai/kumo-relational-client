@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from kumorfm.api.pquery import ValidatedPredictiveQuery
 
+from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.rfm.backend.snow import SnowTable
 from kumorfm.rfm.backend.snow.binding import paramstyle
 from kumorfm.rfm.base import DataBackend, SQLSampler, Table
@@ -55,13 +55,15 @@ class SnowSampler(SQLSampler):
         for index, table_name in enumerate(table_names):
             column = self.time_column_dict[table_name]
             column_ref = self.table_column_ref_dict[table_name][column]
-            select = (f"SELECT\n"
-                      f"  {index} as table_index,\n"
-                      f"  MIN({column_ref}) as min_date,\n"
-                      f"  MAX({column_ref}) as max_date\n"
-                      f"FROM {self.source_name_dict[table_name]}")
+            select = (
+                f'SELECT\n'
+                f'  {index} as table_index,\n'
+                f'  MIN({column_ref}) as min_date,\n'
+                f'  MAX({column_ref}) as max_date\n'
+                f'FROM {self.source_name_dict[table_name]}'
+            )
             selects.append(select)
-        sql = "\nUNION ALL\n".join(selects)
+        sql = '\nUNION ALL\n'.join(selects)
 
         out_dict: dict[str, tuple[pd.Timestamp, pd.Timestamp]] = {}
         with self._connection.cursor() as cursor:
@@ -95,14 +97,14 @@ class SnowSampler(SQLSampler):
         key = self.primary_key_dict[table_name]
         if key not in source_table or source_table[key].is_nullable:
             key_ref = self.table_column_ref_dict[table_name][key]
-            filters.append(f" {key_ref} IS NOT NULL")
+            filters.append(f' {key_ref} IS NOT NULL')
 
         column = self.time_column_dict.get(table_name)
         if column is None:
             pass
         elif column not in source_table or source_table[column].is_nullable:
             column_ref = self.table_column_ref_dict[table_name][column]
-            filters.append(f" {column_ref} IS NOT NULL")
+            filters.append(f' {column_ref} IS NOT NULL')
 
         # A specific set of entities: bind the ids as parameters rather than
         # interpolating them into the SQL, so that string keys containing
@@ -111,7 +113,7 @@ class SnowSampler(SQLSampler):
         if entity_ids is not None:
             key_ref = self.table_column_ref_dict[table_name][key]
             placeholders = ', '.join(['?'] * len(entity_ids))
-            filters.append(f" {key_ref} IN ({placeholders})")
+            filters.append(f' {key_ref} IN ({placeholders})')
             parameters = tuple(entity_ids)
 
         projections = [
@@ -119,14 +121,18 @@ class SnowSampler(SQLSampler):
             for column in self._ordered_columns(table_name, columns)
         ]
         if entity_ids is not None:
-            sql = (f"SELECT {', '.join(projections)}\n"
-                   f"FROM {self.source_name_dict[table_name]}")
+            sql = (
+                f'SELECT {", ".join(projections)}\n'
+                f'FROM {self.source_name_dict[table_name]}'
+            )
         else:
-            sql = (f"SELECT {', '.join(projections)}\n"
-                   f"FROM {self.source_name_dict[table_name]}\n"
-                   f"SAMPLE ROW ({num_rows} ROWS)")
+            sql = (
+                f'SELECT {", ".join(projections)}\n'
+                f'FROM {self.source_name_dict[table_name]}\n'
+                f'SAMPLE ROW ({num_rows} ROWS)'
+            )
         if len(filters) > 0:
-            sql += f"\nWHERE{' AND'.join(filters)}"
+            sql += f'\nWHERE{" AND".join(filters)}'
 
         with paramstyle(self._connection), self._connection.cursor() as cursor:
             # NOTE This may return duplicate primary keys. This is okay.
@@ -186,8 +192,8 @@ class SnowSampler(SQLSampler):
             anchor_time=time,
         )
 
-        train_mask = mask[:len(train_index)]
-        test_mask = mask[len(train_index):]
+        train_mask = mask[: len(train_index)]
+        test_mask = mask[len(train_index) :]
 
         boundary = int(train_mask.sum())
         train_y = y.iloc[:boundary]
@@ -214,26 +220,26 @@ class SnowSampler(SQLSampler):
 
         payload = json.dumps(list(index))
 
-        sql = ("WITH TMP as (\n"
-               "  SELECT\n"
-               "    f.index as __KUMO_BATCH__,\n")
+        sql = 'WITH TMP as (\n  SELECT\n    f.index as __KUMO_BATCH__,\n'
         if self.table_dtype_dict[table_name][key].is_int():
-            sql += "    f.value::NUMBER as __KUMO_ID__\n"
+            sql += '    f.value::NUMBER as __KUMO_ID__\n'
         elif self.table_dtype_dict[table_name][key].is_float():
-            sql += "    f.value::FLOAT as __KUMO_ID__\n"
+            sql += '    f.value::FLOAT as __KUMO_ID__\n'
         else:
-            sql += "    f.value::VARCHAR as __KUMO_ID__\n"
-        sql += (f"  FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?))) f\n"
-                f")\n"
-                f"SELECT "
-                f"TMP.__KUMO_BATCH__ as __KUMO_BATCH__, "
-                f"{', '.join(projections)}\n"
-                f"FROM TMP\n"
-                f"JOIN {self.source_name_dict[table_name]}\n"
-                f"  ON {key_ref} = TMP.__KUMO_ID__")
+            sql += '    f.value::VARCHAR as __KUMO_ID__\n'
+        sql += (
+            f'  FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?))) f\n'
+            f')\n'
+            f'SELECT '
+            f'TMP.__KUMO_BATCH__ as __KUMO_BATCH__, '
+            f'{", ".join(projections)}\n'
+            f'FROM TMP\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = TMP.__KUMO_ID__'
+        )
 
         with paramstyle(self._connection), self._connection.cursor() as cursor:
-            cursor.execute(sql, (payload, ))
+            cursor.execute(sql, (payload,))
             table = cursor.fetch_arrow_all(force_return_table=True)
 
         # Remove any duplicated primary keys in post-processing:
@@ -285,9 +291,9 @@ class SnowSampler(SQLSampler):
             seconds = min(math.ceil(5 * num_neighbors / freq), seconds)
             offset = pd.Timedelta(seconds=seconds)
 
-            end_time = anchor_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+            end_time = anchor_time.dt.strftime('%Y-%m-%d %H:%M:%S')
             start_time = anchor_time - offset
-            start_time = start_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+            start_time = start_time.dt.strftime('%Y-%m-%d %H:%M:%S')
             payload = json.dumps(list(zip(index, end_time, start_time)))
         else:
             payload = json.dumps(list(zip(index)))
@@ -298,45 +304,53 @@ class SnowSampler(SQLSampler):
             for column in self._ordered_columns(table_name, columns)
         ]
 
-        sql = ("WITH TMP as (\n"
-               "  SELECT\n"
-               "    f.index as __KUMO_BATCH__,\n")
+        sql = 'WITH TMP as (\n  SELECT\n    f.index as __KUMO_BATCH__,\n'
         if self.table_dtype_dict[table_name][foreign_key].is_int():
-            sql += "    f.value[0]::NUMBER as __KUMO_ID__"
+            sql += '    f.value[0]::NUMBER as __KUMO_ID__'
         elif self.table_dtype_dict[table_name][foreign_key].is_float():
-            sql += "    f.value[0]::FLOAT as __KUMO_ID__"
+            sql += '    f.value[0]::FLOAT as __KUMO_ID__'
         else:
-            sql += "    f.value[0]::VARCHAR as __KUMO_ID__"
+            sql += '    f.value[0]::VARCHAR as __KUMO_ID__'
         if end_time is not None and start_time is not None:
-            sql += (",\n"
-                    "    f.value[1]::TIMESTAMP_NTZ as __KUMO_END_TIME__,\n"
-                    "    f.value[2]::TIMESTAMP_NTZ as __KUMO_START_TIME__")
-        sql += (f"\n"
-                f"  FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?))) f\n"
-                f")\n"
-                f"SELECT "
-                f"TMP.__KUMO_BATCH__ as __KUMO_BATCH__, "
-                f"{', '.join(projections)}\n"
-                f"FROM TMP\n"
-                f"JOIN {self.source_name_dict[table_name]}\n"
-                f"  ON {key_ref} = TMP.__KUMO_ID__\n")
+            sql += (
+                ',\n'
+                '    f.value[1]::TIMESTAMP_NTZ as __KUMO_END_TIME__,\n'
+                '    f.value[2]::TIMESTAMP_NTZ as __KUMO_START_TIME__'
+            )
+        sql += (
+            f'\n'
+            f'  FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?))) f\n'
+            f')\n'
+            f'SELECT '
+            f'TMP.__KUMO_BATCH__ as __KUMO_BATCH__, '
+            f'{", ".join(projections)}\n'
+            f'FROM TMP\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = TMP.__KUMO_ID__\n'
+        )
         if end_time is not None and start_time is not None:
             assert time_column is not None
             time_ref = self.table_column_ref_dict[table_name][time_column]
-            sql += (f" AND {time_ref} <= TMP.__KUMO_END_TIME__\n"
-                    f" AND {time_ref} > TMP.__KUMO_START_TIME__\n"
-                    f"WHERE {time_ref} <= '{end_time.max()}'\n"
-                    f"  AND {time_ref} > '{start_time.min()}'\n")
-        sql += ("QUALIFY ROW_NUMBER() OVER (\n"
-                "  PARTITION BY TMP.__KUMO_BATCH__\n")
-        time_ref = (None if time_column is None else
-                    self.table_column_ref_dict[table_name][time_column])
+            sql += (
+                f' AND {time_ref} <= TMP.__KUMO_END_TIME__\n'
+                f' AND {time_ref} > TMP.__KUMO_START_TIME__\n'
+                f"WHERE {time_ref} <= '{end_time.max()}'\n"
+                f"  AND {time_ref} > '{start_time.min()}'\n"
+            )
+        sql += (
+            'QUALIFY ROW_NUMBER() OVER (\n  PARTITION BY TMP.__KUMO_BATCH__\n'
+        )
+        time_ref = (
+            None
+            if time_column is None
+            else self.table_column_ref_dict[table_name][time_column]
+        )
         order_by = self._neighbor_order_by(table_name, time_ref, key_ref)
-        sql += f"  ORDER BY {order_by}\n"
-        sql += f") <= {num_neighbors}"
+        sql += f'  ORDER BY {order_by}\n'
+        sql += f') <= {num_neighbors}'
 
         with paramstyle(self._connection), self._connection.cursor() as cursor:
-            cursor.execute(sql, (payload, ))
+            cursor.execute(sql, (payload,))
             table = cursor.fetch_arrow_all(force_return_table=True)
 
         batch = table['__KUMO_BATCH__'].cast(pa.int64()).to_numpy()
@@ -364,11 +378,11 @@ class SnowSampler(SQLSampler):
         time_column = self.time_column_dict[table_name]
 
         end_time = anchor_time + max_offset
-        end_time = end_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+        end_time = end_time.dt.strftime('%Y-%m-%d %H:%M:%S')
         start_time: pd.Series | None = None
         if min_offset is not None:
             start_time = anchor_time + min_offset
-            start_time = start_time.dt.strftime("%Y-%m-%d %H:%M:%S")
+            start_time = start_time.dt.strftime('%Y-%m-%d %H:%M:%S')
             payload = json.dumps(list(zip(index, end_time, start_time)))
         else:
             payload = json.dumps(list(zip(index, end_time)))
@@ -379,37 +393,37 @@ class SnowSampler(SQLSampler):
             self.table_column_proj_dict[table_name][column]
             for column in self._ordered_columns(table_name, columns)
         ]
-        sql = ("WITH TMP as (\n"
-               "  SELECT\n"
-               "    f.index as __KUMO_BATCH__,\n")
+        sql = 'WITH TMP as (\n  SELECT\n    f.index as __KUMO_BATCH__,\n'
         if self.table_dtype_dict[table_name][foreign_key].is_int():
-            sql += "    f.value[0]::NUMBER as __KUMO_ID__,\n"
+            sql += '    f.value[0]::NUMBER as __KUMO_ID__,\n'
         elif self.table_dtype_dict[table_name][foreign_key].is_float():
-            sql += "    f.value[0]::FLOAT as __KUMO_ID__,\n"
+            sql += '    f.value[0]::FLOAT as __KUMO_ID__,\n'
         else:
-            sql += "    f.value[0]::VARCHAR as __KUMO_ID__,\n"
-        sql += "    f.value[1]::TIMESTAMP_NTZ as __KUMO_END_TIME__"
+            sql += '    f.value[0]::VARCHAR as __KUMO_ID__,\n'
+        sql += '    f.value[1]::TIMESTAMP_NTZ as __KUMO_END_TIME__'
         if min_offset is not None:
-            sql += ",\n    f.value[2]::TIMESTAMP_NTZ as __KUMO_START_TIME__"
-        sql += (f"\n"
-                f"  FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?))) f\n"
-                f")\n"
-                f"SELECT "
-                f"TMP.__KUMO_BATCH__ as __KUMO_BATCH__, "
-                f"{', '.join(projections)}\n"
-                f"FROM TMP\n"
-                f"JOIN {self.source_name_dict[table_name]}\n"
-                f"  ON {key_ref} = TMP.__KUMO_ID__\n"
-                f" AND {time_ref} <= TMP.__KUMO_END_TIME__\n")
+            sql += ',\n    f.value[2]::TIMESTAMP_NTZ as __KUMO_START_TIME__'
+        sql += (
+            f'\n'
+            f'  FROM TABLE(FLATTEN(INPUT => PARSE_JSON(?))) f\n'
+            f')\n'
+            f'SELECT '
+            f'TMP.__KUMO_BATCH__ as __KUMO_BATCH__, '
+            f'{", ".join(projections)}\n'
+            f'FROM TMP\n'
+            f'JOIN {self.source_name_dict[table_name]}\n'
+            f'  ON {key_ref} = TMP.__KUMO_ID__\n'
+            f' AND {time_ref} <= TMP.__KUMO_END_TIME__\n'
+        )
         if start_time is not None:
-            sql += f"AND {time_ref} > TMP.__KUMO_START_TIME__\n"
+            sql += f'AND {time_ref} > TMP.__KUMO_START_TIME__\n'
         # Add global time bounds to enable partition pruning:
         sql += f"WHERE {time_ref} <= '{end_time.max()}'"
         if start_time is not None:
             sql += f"\nAND {time_ref} > '{start_time.min()}'"
 
         with paramstyle(self._connection), self._connection.cursor() as cursor:
-            cursor.execute(sql, (payload, ))
+            cursor.execute(sql, (payload,))
             table = cursor.fetch_arrow_all(force_return_table=True)
 
         batch = table['__KUMO_BATCH__'].cast(pa.int64()).to_numpy()

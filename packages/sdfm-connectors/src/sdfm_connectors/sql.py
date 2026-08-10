@@ -8,42 +8,90 @@ import difflib
 import importlib
 import pathlib
 import re
+from collections.abc import Collection, Iterator
 from contextlib import contextmanager
-from typing import Any, Collection, Iterator
+from typing import Any
 
 _TABLE_IDENTIFIER_RE = re.compile(
     r'^[A-Za-z_][A-Za-z0-9_$]*(\.[A-Za-z_][A-Za-z0-9_$]*)*$',
 )
 
 
-class MissingBackendError(ModuleNotFoundError):
-    r"""Raised when a backend's driver package is not installed.
-
-    Distinct from a plain ``ImportError``, which indicates an installed but
-    broken driver (e.g. a native ABI mismatch) and must not be reported as an
-    absent optional dependency.
-    """
-    def __init__(self, backend: str, driver: str) -> None:
-        super().__init__(
-            f"The {backend!r} backend requires {driver!r}. Install it via the "
-            f"{backend!r} extra, e.g. `pip install "
-            f"'sdfm-connectors[{backend}]'`.")
-        self.backend = backend
-        self.driver = driver
-
-
 class ConnectorError(Exception):
+    r"""Base class for every error this package raises.
+
+    ``except ConnectorError`` is the one catch that covers the whole connector
+    layer, including a missing optional driver. Each instance carries a stable
+    ``code`` so a caller can branch without matching on message text.
+    """
+
     def __init__(
         self,
         message: str,
         *,
         code: str | None = None,
-        details: dict | None = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
         self.code = code
         self.details = details or {}
+
+
+class MissingBackendError(ConnectorError, ModuleNotFoundError):
+    r"""Raised when a backend's driver package is not installed.
+
+    Distinct from a plain ``ImportError``, which indicates an installed but
+    broken driver (e.g. a native ABI mismatch) and must not be reported as an
+    absent optional dependency. Subclasses :class:`ModuleNotFoundError` as well
+    as :class:`ConnectorError` so callers written against either keep working.
+    """
+
+    def __init__(self, backend: str, driver: str) -> None:
+        super().__init__(
+            f'The {backend!r} backend requires {driver!r}. Install it via the '
+            f'{backend!r} extra, e.g. `pip install '
+            f"'sdfm-connectors[{backend}]'`.",
+            code='MISSING_BACKEND',
+            details={'backend': backend, 'driver': driver},
+        )
+        self.backend = backend
+        self.driver = driver
+
+
+_REJECTED_KEYWORD_MESSAGES = (
+    'unexpected keyword argument',
+    'incompatible function arguments',
+)
+
+
+def connect_with(backend: str, opener: Any, *args: Any, **kwargs: Any) -> Any:
+    r"""Open a connection, reporting a rejected keyword against the connector.
+
+    A file-backed backend takes its path as ``database`` or ``uri`` and passes
+    anything else through to the driver, so a caller reaching for ``path`` --
+    the name :func:`read` uses for a local file -- got the driver's own
+    ``Connection.__init__() got an unexpected keyword argument 'path'``, which
+    names neither the connector nor the two arguments it does accept.
+
+    Both phrasings are matched: a driver written in Python reports the rejected
+    keyword the way CPython does, while a compiled one built with pybind11 --
+    DuckDB's, for instance -- reports "incompatible function arguments" and
+    dumps its whole overload set instead.
+    """
+    try:
+        return opener(*args, **kwargs)
+    except TypeError as error:
+        if not any(text in str(error) for text in _REJECTED_KEYWORD_MESSAGES):
+            raise
+        raise ConnectorError(
+            f'{backend} connector got an unsupported argument: {error}. It '
+            f"takes the database as 'database' or 'uri'; other arguments are "
+            f"passed to the driver. To read a local file, use read('local', "
+            f'path=...) instead.',
+            code='INVALID_CONNECTOR_ARGS',
+            details={'backend': backend, 'arguments': sorted(kwargs)},
+        ) from error
 
 
 def require_driver(
@@ -138,7 +186,7 @@ def check_connect_args(
 
     The Snowflake and Databricks drivers accept ``**kwargs`` without complaint,
     so a misspelled parameter is otherwise dropped and the read runs against
-    whatever catalog/schema the connection defaults to — a wrong answer rather
+    whatever catalog/schema the connection defaults to: a wrong answer rather
     than an error. ``allowed`` is read off the driver itself so it stays
     accurate across driver upgrades, and ``driver_options`` is the escape hatch
     for anything genuinely outside it.
@@ -149,8 +197,9 @@ def check_connect_args(
     named = []
     for name in unknown:
         close = difflib.get_close_matches(name, allowed, n=1)
-        named.append(f'{name!r} (did you mean {close[0]!r}?)' if close
-                     else repr(name))
+        named.append(
+            f'{name!r} (did you mean {close[0]!r}?)' if close else repr(name)
+        )
     raise ConnectorError(
         f'{backend} connector got unexpected arguments {", ".join(named)}; '
         "pass driver-specific options through 'driver_options'",

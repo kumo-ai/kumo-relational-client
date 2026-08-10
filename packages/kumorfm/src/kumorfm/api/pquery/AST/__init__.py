@@ -13,8 +13,8 @@ from .aggregation import Aggregation
 from .join import Join
 
 __all__ = [
-    'Aggregation',
     'ASTNode',
+    'Aggregation',
     'Column',
     'Condition',
     'Constant',

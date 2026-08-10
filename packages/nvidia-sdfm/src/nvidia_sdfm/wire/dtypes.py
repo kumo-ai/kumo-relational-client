@@ -146,7 +146,9 @@ def serialize_cell(value: Any, dtype: str) -> Any:
             timestamp = timestamp.tz_localize('UTC')
         else:
             timestamp = timestamp.tz_convert('UTC')
-        return timestamp.isoformat(timespec='microseconds').replace('+00:00', 'Z')
+        return timestamp.isoformat(timespec='microseconds').replace(
+            '+00:00', 'Z'
+        )
     if dtype in ('int64', 'int32'):
         _require_finite(value)
         integer_value = int(value)
@@ -156,7 +158,10 @@ def serialize_cell(value: Any, dtype: str) -> Any:
                 'fractional part',
                 code='INVALID_REQUEST',
             )
-        if integer_value > JSON_SAFE_INT_MAX or integer_value < JSON_SAFE_INT_MIN:
+        if (
+            integer_value > JSON_SAFE_INT_MAX
+            or integer_value < JSON_SAFE_INT_MIN
+        ):
             return str(integer_value)
         return integer_value
     if dtype in ('float64', 'float32'):

@@ -14,30 +14,36 @@ from __future__ import annotations
 
 import pandas as pd
 import pytest
-
 from kumorfm.rfm import Graph
 from kumorfm.rfm.backend.local import LocalSampler
 
 
 @pytest.fixture()
 def sampler() -> LocalSampler:
-    graph = Graph.from_data({
-        'users': pd.DataFrame({
-            'user_id': range(8),
-            'age': [20 + i for i in range(8)],
-        }),
-        'orders': pd.DataFrame({
-            'order_id': range(16),
-            'user_id': [i % 8 for i in range(16)],
-            'amount': [float(i) for i in range(16)],
-        }),
-    }, verbose=False)
+    graph = Graph.from_data(
+        {
+            'users': pd.DataFrame(
+                {
+                    'user_id': range(8),
+                    'age': [20 + i for i in range(8)],
+                }
+            ),
+            'orders': pd.DataFrame(
+                {
+                    'order_id': range(16),
+                    'user_id': [i % 8 for i in range(16)],
+                    'amount': [float(i) for i in range(16)],
+                }
+            ),
+        },
+        verbose=False,
+    )
     return LocalSampler(graph, verbose=False)
 
 
 def _sample(sampler: LocalSampler, exclude: dict[str, list[str]]) -> None:
     sampler.sample_subgraph(
-        entity_table_names=('users', ),
+        entity_table_names=('users',),
         entity_pkey=pd.Series([0, 1]),
         anchor_time=pd.Series(pd.to_datetime(['2025-01-01'] * 2)),
         num_neighbors=[4, 4],
@@ -64,7 +70,8 @@ def test_an_unknown_column_is_named(sampler: LocalSampler) -> None:
 
 
 def test_a_primary_key_is_reported_as_not_excludable(
-        sampler: LocalSampler) -> None:
+    sampler: LocalSampler,
+) -> None:
     r"""Primary and foreign keys never travel as features, so excluding one is
     a no-op the caller almost certainly did not intend -- and it raised the
     same bare ``KeyError``.
@@ -73,15 +80,19 @@ def test_a_primary_key_is_reported_as_not_excludable(
         _sample(sampler, {'users': ['user_id']})
 
 
-@pytest.mark.parametrize('exclude', [
-    None,
-    {},
-    {'users': []},
-    {'users': ['age']},
-    {'orders': ['amount']},
-    {'users': ['age'], 'orders': ['amount']},
-])
-def test_valid_exclusions_are_still_accepted(sampler: LocalSampler,
-                                             exclude) -> None:
+@pytest.mark.parametrize(
+    'exclude',
+    [
+        None,
+        {},
+        {'users': []},
+        {'users': ['age']},
+        {'orders': ['amount']},
+        {'users': ['age'], 'orders': ['amount']},
+    ],
+)
+def test_valid_exclusions_are_still_accepted(
+    sampler: LocalSampler, exclude
+) -> None:
     r"""The guard must not reject what already worked."""
     _sample(sampler, exclude)

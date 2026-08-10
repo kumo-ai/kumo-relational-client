@@ -8,7 +8,6 @@ from typing import Any
 import pandas as pd
 import pytest
 from kumorfm.api.graph import ColumnKey, ColumnKeyGroup
-
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph, LocalTable
 from kumorfm.rfm.base import ColumnSpec
@@ -18,30 +17,39 @@ from kumorfm.rfm.base import ColumnSpec
 def sample_dfs() -> dict[str, pd.DataFrame]:
     """Create sample DataFrames for testing."""
     df_dict = {}
-    df_dict['users'] = pd.DataFrame({
-        'user_id': [1, 2, 3, 4, 5],
-        'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
-        'age': [25, 30, 35, 40, 45],
-        'created_at':
-        pd.date_range('2023-01-01', periods=5),
-        'is_active': [True, True, False, True, False]
-    })
-    df_dict['orders'] = pd.DataFrame({
-        'order_id': [101, 102, 103, 104, 105],
-        'user_id': [1, 2, 1, 3, 4],
-        'product_id': [201, 202, 201, 203, 202],
-        'amount': [100.0, 250.0, 75.0, 300.0, 150.0],
-        'order_date':
-        pd.date_range('2023-02-01', periods=5),
-        'status':
-        ['completed', 'pending', 'completed', 'cancelled', 'completed']
-    })
-    df_dict['products'] = pd.DataFrame({
-        'product_id': [201, 202, 203],
-        'name': ['Widget A', 'Widget B', 'Widget C'],
-        'price': [10.0, 20.0, 30.0],
-        'category': ['tools', 'tools', 'gadgets']
-    })
+    df_dict['users'] = pd.DataFrame(
+        {
+            'user_id': [1, 2, 3, 4, 5],
+            'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
+            'age': [25, 30, 35, 40, 45],
+            'created_at': pd.date_range('2023-01-01', periods=5),
+            'is_active': [True, True, False, True, False],
+        }
+    )
+    df_dict['orders'] = pd.DataFrame(
+        {
+            'order_id': [101, 102, 103, 104, 105],
+            'user_id': [1, 2, 1, 3, 4],
+            'product_id': [201, 202, 201, 203, 202],
+            'amount': [100.0, 250.0, 75.0, 300.0, 150.0],
+            'order_date': pd.date_range('2023-02-01', periods=5),
+            'status': [
+                'completed',
+                'pending',
+                'completed',
+                'cancelled',
+                'completed',
+            ],
+        }
+    )
+    df_dict['products'] = pd.DataFrame(
+        {
+            'product_id': [201, 202, 203],
+            'name': ['Widget A', 'Widget B', 'Widget C'],
+            'price': [10.0, 20.0, 30.0],
+            'category': ['tools', 'tools', 'gadgets'],
+        }
+    )
     return df_dict
 
 
@@ -96,7 +104,7 @@ def test_duplicate_table_names(sample_dfs: dict[str, pd.DataFrame]) -> None:
     table1 = LocalTable(sample_dfs['users'], name='duplicate')
     table2 = LocalTable(sample_dfs['orders'], name='duplicate')
 
-    with pytest.raises(KeyError, match="names must be globally unique"):
+    with pytest.raises(KeyError, match='names must be globally unique'):
         Graph(tables=[table1, table2])
 
 
@@ -162,17 +170,14 @@ def test_from_data_with_edges(sample_dfs: dict[str, pd.DataFrame]) -> None:
 
 def test_empty_graph() -> None:
     graph = Graph(tables=[])
-    with pytest.raises(ValueError, match="At least one table needs to be"):
+    with pytest.raises(ValueError, match='At least one table needs to be'):
         graph.validate()
 
     graph = Graph.from_data({})
-    with pytest.raises(ValueError, match="At least one table needs to be"):
+    with pytest.raises(ValueError, match='At least one table needs to be'):
         graph.validate()
 
-    assert str(graph) == ('Graph(\n'
-                          '  tables=[],\n'
-                          '  edges=[],\n'
-                          ')')
+    assert str(graph) == ('Graph(\n  tables=[],\n  edges=[],\n)')
 
 
 def test_has_table(sample_tables: list[LocalTable]) -> None:
@@ -237,7 +242,7 @@ def test_link_duplicate_edge(sample_tables: list[LocalTable]) -> None:
 
     graph.link('orders', 'user_id', 'users')
 
-    with pytest.raises(ValueError, match="Edge.* already exists"):
+    with pytest.raises(ValueError, match='Edge.* already exists'):
         graph.link('orders', 'user_id', 'users')
 
 
@@ -258,10 +263,10 @@ def test_link_invalid_foreign_key(sample_tables: list[LocalTable]) -> None:
     graph = Graph(sample_tables)
 
     graph.link('orders', 'order_id', 'users')
-    with pytest.raises(ValueError, match="Cannot treat the primary key"):
+    with pytest.raises(ValueError, match='Cannot treat the primary key'):
         graph.validate()
 
-    with pytest.raises(ValueError, match="incompatible data type"):
+    with pytest.raises(ValueError, match='incompatible data type'):
         graph.link('users', 'created_at', 'products')
 
 
@@ -288,7 +293,7 @@ def test_unlink_from_table(sample_tables: list[LocalTable]) -> None:
 def test_unlink_nonexistent_edge(sample_tables: list[LocalTable]) -> None:
     graph = Graph(sample_tables)
 
-    with pytest.raises(ValueError, match="Edge.* is not present"):
+    with pytest.raises(ValueError, match='Edge.* is not present'):
         graph.unlink('orders', 'user_id', 'users')
 
 
@@ -299,7 +304,7 @@ def test_validate_success(sample_dfs: dict[str, pd.DataFrame]) -> None:
 
 
 def test_validate_compatible_data_type_families(
-        sample_dfs: dict[str, pd.DataFrame],  #
+    sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
     # Create data frames with different types but same family:
     users_df = sample_dfs['users']
@@ -315,7 +320,7 @@ def test_validate_compatible_data_type_families(
 
 
 def test_validate_mismatched_data_type_families(
-        sample_dfs: dict[str, pd.DataFrame],  #
+    sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
     # Create data frames with different types but same family:
     users_df = sample_dfs['users']
@@ -328,7 +333,7 @@ def test_validate_mismatched_data_type_families(
     graph = Graph(tables=[users_table, orders_table])
     graph.link('orders', 'user_id', 'users')
 
-    with pytest.raises(ValueError, match="have incompatible data types"):
+    with pytest.raises(ValueError, match='have incompatible data types'):
         graph.validate()
 
 
@@ -352,16 +357,18 @@ def test_repr(sample_tables: list[LocalTable]) -> None:
     graph = Graph(sample_tables)
     graph.link('orders', 'user_id', 'users')
 
-    assert str(graph) == ('Graph(\n'
-                          '  tables=[\n'
-                          '    users,\n'
-                          '    orders,\n'
-                          '    products,\n'
-                          '  ],\n'
-                          '  edges=[\n'
-                          '    orders.user_id ⇔ users.user_id,\n'
-                          '  ],\n'
-                          ')')
+    assert str(graph) == (
+        'Graph(\n'
+        '  tables=[\n'
+        '    users,\n'
+        '    orders,\n'
+        '    products,\n'
+        '  ],\n'
+        '  edges=[\n'
+        '    orders.user_id ⇔ users.user_id,\n'
+        '  ],\n'
+        ')'
+    )
 
 
 def test_copy(sample_tables: list[LocalTable]) -> None:
@@ -380,11 +387,13 @@ def test_copy(sample_tables: list[LocalTable]) -> None:
 
 
 def test_link_self_reference() -> None:
-    df = pd.DataFrame({
-        'user_id': [1, 2, 3],
-        'parent_user_id': [None, 1, 2],  # Self-referencing column
-        'name': ['Alice', 'Bob', 'Charlie']
-    })
+    df = pd.DataFrame(
+        {
+            'user_id': [1, 2, 3],
+            'parent_user_id': [None, 1, 2],  # Self-referencing column
+            'name': ['Alice', 'Bob', 'Charlie'],
+        }
+    )
 
     table = LocalTable(df, 'users', primary_key='user_id')
     graph = Graph(tables=[table]).infer_links()
@@ -400,12 +409,17 @@ def test_to_api_graph_definition(sample_tables: list[LocalTable]) -> None:
     assert set(graph_def.tables.keys()) == {'users', 'orders', 'products'}
     assert graph_def.col_groups == [
         ColumnKeyGroup(
-            columns=(ColumnKey(table_name='orders', col_name='user_id'),
-                     ColumnKey(table_name='users', col_name='user_id'))),
-        ColumnKeyGroup(columns=(
-            ColumnKey(table_name='orders', col_name='product_id'),
-            ColumnKey(table_name='products', col_name='product_id'),
-        ))
+            columns=(
+                ColumnKey(table_name='orders', col_name='user_id'),
+                ColumnKey(table_name='users', col_name='user_id'),
+            )
+        ),
+        ColumnKeyGroup(
+            columns=(
+                ColumnKey(table_name='orders', col_name='product_id'),
+                ColumnKey(table_name='products', col_name='product_id'),
+            )
+        ),
     ]
 
 
@@ -415,34 +429,34 @@ def test_to_mermaid_basic(sample_tables: list[LocalTable]) -> None:
     graph.link('orders', 'product_id', 'products')
 
     mermaid = graph._to_mermaid(show_columns=False)
-    assert mermaid.startswith("erDiagram")
+    assert mermaid.startswith('erDiagram')
 
     # Check tables are present:
-    assert "users {" in mermaid
-    assert "orders {" in mermaid
-    assert "products {" in mermaid
+    assert 'users {' in mermaid
+    assert 'orders {' in mermaid
+    assert 'products {' in mermaid
 
     # Check primary keys:
-    assert "user_id PK" in mermaid
-    assert "order_id PK" in mermaid
-    assert "product_id PK" in mermaid
+    assert 'user_id PK' in mermaid
+    assert 'order_id PK' in mermaid
+    assert 'product_id PK' in mermaid
 
     # Check foreign keys:
-    assert "user_id FK" in mermaid
-    assert "product_id FK" in mermaid
+    assert 'user_id FK' in mermaid
+    assert 'product_id FK' in mermaid
 
     # Check timestamps:
     assert 'timestamp created_at' in mermaid
     assert 'timestamp order_date' in mermaid
 
     # Check no feature columns:
-    assert "name" not in mermaid
-    assert "age" not in mermaid
-    assert "amount" not in mermaid
+    assert 'name' not in mermaid
+    assert 'age' not in mermaid
+    assert 'amount' not in mermaid
 
     # Check relationships:
-    assert "users o|--o{ orders : user_id" in mermaid
-    assert "products o|--o{ orders : product_id" in mermaid
+    assert 'users o|--o{ orders : user_id' in mermaid
+    assert 'products o|--o{ orders : product_id' in mermaid
 
 
 def test_to_mermaid_with_columns(sample_tables: list[LocalTable]) -> None:
@@ -450,16 +464,16 @@ def test_to_mermaid_with_columns(sample_tables: list[LocalTable]) -> None:
 
     mermaid = graph._to_mermaid(show_columns=True)
 
-    assert "categorical name" in mermaid
-    assert "numerical age" in mermaid
-    assert "numerical amount" in mermaid
+    assert 'categorical name' in mermaid
+    assert 'numerical age' in mermaid
+    assert 'numerical amount' in mermaid
 
 
 def test_to_mermaid_empty_graph() -> None:
     graph = Graph(tables=[])
     mermaid = graph._to_mermaid()
 
-    assert mermaid == "erDiagram"
+    assert mermaid == 'erDiagram'
 
 
 def test_to_mermaid_no_edges(sample_tables: list[LocalTable]) -> None:
@@ -467,18 +481,20 @@ def test_to_mermaid_no_edges(sample_tables: list[LocalTable]) -> None:
 
     mermaid = graph._to_mermaid(show_columns=False)
 
-    assert "users {" in mermaid
-    assert "o|--o{" not in mermaid
+    assert 'users {' in mermaid
+    assert 'o|--o{' not in mermaid
 
 
-# Regression tests for bugs/quality-validate-error-message-defects.md.
+# Regression tests.
 def test_validate_primary_key_as_foreign_key_message(
-        sample_dfs: dict[str, pd.DataFrame],  #
+    sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
-    users_table = LocalTable(sample_dfs['users'], 'users',
-                             primary_key='user_id')
-    orders_table = LocalTable(sample_dfs['orders'], 'orders',
-                              primary_key='user_id')
+    users_table = LocalTable(
+        sample_dfs['users'], 'users', primary_key='user_id'
+    )
+    orders_table = LocalTable(
+        sample_dfs['orders'], 'orders', primary_key='user_id'
+    )
 
     graph = Graph(tables=[users_table, orders_table])
     graph.link('orders', 'user_id', 'users')
@@ -491,18 +507,21 @@ def test_validate_primary_key_as_foreign_key_message(
 
 
 def test_validate_non_key_foreign_key_dtype_message(
-        sample_dfs: dict[str, pd.DataFrame],  #
+    sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
-    users_table = LocalTable(sample_dfs['users'], 'users',
-                             primary_key='user_id')
-    orders_table = LocalTable(sample_dfs['orders'], 'orders',
-                              primary_key='order_id')
+    users_table = LocalTable(
+        sample_dfs['users'], 'users', primary_key='user_id'
+    )
+    orders_table = LocalTable(
+        sample_dfs['orders'], 'orders', primary_key='order_id'
+    )
 
     graph = Graph(tables=[users_table, orders_table])
     graph.link('orders', 'user_id', 'users')
     graph['orders'].remove_column('user_id')
     graph['orders'].add_column(
-        ColumnSpec('user_id', dtype='date', stype='timestamp'))
+        ColumnSpec('user_id', dtype='date', stype='timestamp')
+    )
 
     with pytest.raises(ValueError) as err:
         graph.validate()
@@ -513,7 +532,7 @@ def test_validate_non_key_foreign_key_dtype_message(
 
 
 def test_validate_names_the_edge_left_behind_by_remove_column(
-        sample_dfs: dict[str, pd.DataFrame],  #
+    sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
     r"""graph-dangling-edge-after-remove-column.md
 
@@ -523,10 +542,12 @@ def test_validate_names_the_edge_left_behind_by_remove_column(
     consistency failure, and uncatchable by the ``except ValueError`` the
     documented failure mode implies.
     """
-    users_table = LocalTable(sample_dfs['users'], 'users',
-                             primary_key='user_id')
-    orders_table = LocalTable(sample_dfs['orders'], 'orders',
-                              primary_key='order_id')
+    users_table = LocalTable(
+        sample_dfs['users'], 'users', primary_key='user_id'
+    )
+    orders_table = LocalTable(
+        sample_dfs['orders'], 'orders', primary_key='order_id'
+    )
 
     graph = Graph(tables=[users_table, orders_table])
     graph.link('orders', 'user_id', 'users')
@@ -542,7 +563,7 @@ def test_validate_names_the_edge_left_behind_by_remove_column(
 
 
 def test_empty_edges_suppress_inference_unlike_none(
-        sample_dfs: dict[str, pd.DataFrame],  #
+    sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
     r"""The documented divergence between ``edges=None`` and ``edges=[]``."""
     inferred = Graph.from_data(sample_dfs, verbose=False)
@@ -552,7 +573,7 @@ def test_empty_edges_suppress_inference_unlike_none(
 
 
 def test_empty_edges_suppress_catalog_foreign_keys_too(
-        tmp_path: Any,  #
+    tmp_path: Any,  #
 ) -> None:
     r"""graph-edges-empty-does-not-suppress-catalog-links.md
 
@@ -574,18 +595,23 @@ def test_empty_edges_suppress_catalog_foreign_keys_too(
                          price REAL,
                          FOREIGN KEY(user_id) REFERENCES users(user_id));
     """)
-    connection.executemany('INSERT INTO users VALUES (?,?)',
-                           [(i, 20 + i) for i in range(20)])
-    connection.executemany('INSERT INTO orders VALUES (?,?,?)',
-                           [(i, i % 20, float(i)) for i in range(60)])
+    connection.executemany(
+        'INSERT INTO users VALUES (?,?)', [(i, 20 + i) for i in range(20)]
+    )
+    connection.executemany(
+        'INSERT INTO orders VALUES (?,?,?)',
+        [(i, i % 20, float(i)) for i in range(60)],
+    )
     connection.commit()
     connection.close()
 
     declared = [('orders', 'user_id', 'users')]
 
     # `edges=None` still applies the catalog's foreign keys, as documented.
-    assert [tuple(edge) for edge in
-            Graph.from_sqlite(str(path), verbose=False).edges] == declared
+    assert [
+        tuple(edge)
+        for edge in Graph.from_sqlite(str(path), verbose=False).edges
+    ] == declared
 
     for kwargs in ({'edges': []}, {'edges': [], 'infer_metadata': False}):
         graph = Graph.from_sqlite(str(path), verbose=False, **kwargs)
@@ -595,3 +621,43 @@ def test_empty_edges_suppress_catalog_foreign_keys_too(
     # catalog pass naming the same edge.
     pinned = Graph.from_sqlite(str(path), edges=declared, verbose=False)
     assert [tuple(edge) for edge in pinned.edges] == declared
+
+
+def test_a_graph_without_any_primary_key_is_valid_but_warns() -> None:
+    r"""A partial conversion may legitimately yield a graph with no key.
+
+    `from_databricks_metric_view` produces exactly this when every join in the
+    view is rejected, so `validate()` cannot require a primary key without
+    turning a safely-degraded conversion into a hard failure. The graph is
+    reported twice instead: once as a warning naming the columns that could
+    serve as the key, and again by the parser if a query names one as an
+    entity.
+    """
+    left = pd.DataFrame({'n_id': range(5), 'value': range(5)})
+    right = pd.DataFrame({'w_id': range(5), 'n_id': range(5)})
+
+    with pytest.warns(UserWarning, match='pass `primary_key=` explicitly'):
+        graph = Graph.from_data({'nulls': left, 'wide': right}, verbose=False)
+
+    assert not any(graph[name].has_primary_key() for name in graph.tables)
+    assert graph.validate() is graph
+
+
+def test_column_specs_are_distinguishable() -> None:
+    r"""Two specs for different columns are not the same spec.
+
+    `ColumnSpec` was a dataclass with no annotated fields, so the generated
+    `__eq__` compared an empty tuple and every instance compared equal, while
+    `__repr__` rendered as `ColumnSpec()`. Its sibling `Column` already opts
+    out of both.
+    """
+    alpha = ColumnSpec('alpha')
+    beta = ColumnSpec('beta')
+
+    assert alpha != beta
+    assert alpha == alpha
+    assert hash(alpha) == hash(alpha)
+    assert repr(alpha) == 'ColumnSpec(name=alpha)'
+    assert repr(ColumnSpec('gamma', dtype='int')) == (
+        'ColumnSpec(name=gamma, dtype=int)'
+    )

@@ -24,11 +24,23 @@ snowflake_connector = require_driver(
 
 Connection: TypeAlias = snowflake_connector.SnowflakeConnection
 
-_AUTH_ARGS = frozenset({
-    'account', 'user', 'password', 'passcode', 'private_key',
-    'private_key_file', 'private_key_path', 'token', 'authenticator',
-    'auth_class', 'connection_name', 'oauth_client_id', 'oauth_client_secret',
-})
+_AUTH_ARGS = frozenset(
+    {
+        'account',
+        'user',
+        'password',
+        'passcode',
+        'private_key',
+        'private_key_file',
+        'private_key_path',
+        'token',
+        'authenticator',
+        'auth_class',
+        'connection_name',
+        'oauth_client_id',
+        'oauth_client_secret',
+    }
+)
 
 
 def _declared_connect_args() -> frozenset[str]:
@@ -45,9 +57,12 @@ def _declared_connect_args() -> frozenset[str]:
     declared = set(snowflake_connector.connection.DEFAULT_CONFIGURATION)
     signature = inspect.signature(Connection.__init__)
     declared.update(
-        name for name, parameter in signature.parameters.items()
-        if parameter.kind not in (parameter.VAR_POSITIONAL,
-                                  parameter.VAR_KEYWORD) and name != 'self')
+        name
+        for name, parameter in signature.parameters.items()
+        if parameter.kind
+        not in (parameter.VAR_POSITIONAL, parameter.VAR_KEYWORD)
+        and name != 'self'
+    )
     return frozenset(declared | _AUTH_ARGS)
 
 
@@ -114,7 +129,7 @@ def _connect_without_arguments() -> Connection:
 
     With no arguments the driver falls back to its own default-connection file,
     whose absence it reports as "Default connection with name 'default' cannot
-    be found" — a feature this package never mentions. The fallback still works
+    be found", a feature this package never mentions. The fallback still works
     where it is configured; only the failure is re-stated in the SDK's terms.
     """
     try:

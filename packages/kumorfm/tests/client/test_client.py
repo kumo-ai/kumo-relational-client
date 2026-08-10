@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-
 from kumorfm.client import KumoClient
 
 
@@ -20,10 +19,12 @@ def test_authenticate_accepts_universal_tfm_nim(requests_mock):
         f'{base_url}/v1/models',
         json={
             'object': 'list',
-            'data': [{
-                'id': 'kumo-rfm',
-                'object': 'model',
-            }],
+            'data': [
+                {
+                    'id': 'kumo-rfm',
+                    'object': 'model',
+                }
+            ],
         },
     )
 
@@ -63,8 +64,7 @@ def test_authenticate_rejects_unready_universal_tfm_nim(
 @pytest.mark.parametrize('status_code', [401, 403])
 def test_authenticate_surfaces_gateway_auth_error(requests_mock, status_code):
     base_url = 'https://nim.test'
-    requests_mock.get(f'{base_url}/v1/health/ready',
-                      json={'status': 'ready'})
+    requests_mock.get(f'{base_url}/v1/health/ready', json={'status': 'ready'})
     requests_mock.get(f'{base_url}/v1/models', status_code=status_code)
 
     with pytest.raises(ValueError, match='authentication failed'):

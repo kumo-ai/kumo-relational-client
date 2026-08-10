@@ -5,12 +5,13 @@
 from __future__ import annotations
 
 from abc import ABC
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 
 class Expression(ABC):
-    """A base expression to define logical columns."""
+    r"""A base expression to define logical columns."""
+
     @classmethod
     def coerce(
         cls,
@@ -26,7 +27,7 @@ class Expression(ABC):
         if isinstance(spec, str):
             return LocalExpression(spec)
         if isinstance(spec, Mapping):
-            for sub_cls in (LocalExpression, ):
+            for sub_cls in (LocalExpression,):
                 try:
                     return sub_cls(**dict(spec))
                 except TypeError:
@@ -42,6 +43,7 @@ class LocalExpression(Expression):
     Args:
         value: The value of the expression.
     """
+
     value: str
 
     def __repr__(self) -> str:

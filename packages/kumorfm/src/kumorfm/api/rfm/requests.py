@@ -2,10 +2,9 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# SDK-owned: listed in API_OWNED in scripts/sync_internal_packages.py, so a
-# re-sync preserves it. Upstream also defines validate/parse/evaluate request
-# and response types; this SDK only ever POSTs a prediction, so only those two
-# are kept. See api/SOURCE.md.
+# SDK-owned, not upstream's. Upstream also defined validate/parse/evaluate
+# request and response types; this SDK only ever POSTs a prediction, so only
+# the prediction request and response are kept. See api/SOURCE.md.
 
 from typing import Any
 
@@ -21,7 +20,7 @@ class RFMPredictRequest:
     context: Context
     run_mode: RunMode
     use_prediction_time: bool = False
-    query: str = ""
+    query: str = ''
     inference_config: InferenceConfig | None = None
     return_embeddings: bool = False
 

@@ -12,7 +12,6 @@ from pathlib import Path
 
 import pytest
 import requests
-
 from rfm_nim_live_harness import (
     LiveNimClient,
     assert_prediction_response,
@@ -78,7 +77,9 @@ def test_text_stringlist_live_payload_exercises_equal_length_tokens() -> None:
         index = table['columns'].index('description')
         values = [row[index] for row in table['rows']]
         assert values, f'{split} split must include at least one row'
-        assert all(isinstance(value, list) and len(value) == 1 for value in values)
+        assert all(
+            isinstance(value, list) and len(value) == 1 for value in values
+        )
 
 
 @pytest.mark.parametrize(
@@ -138,8 +139,7 @@ def test_live_runner_accepts_no_pytest_args(tmp_path: Path) -> None:
     invocation_log = tmp_path / 'python-invocations.log'
     fake_python = tmp_path / 'python'
     fake_python.write_text(
-        '#!/bin/sh\n'
-        'printf "%s\\n" "$*" >> "$RFM_NIM_FAKE_PYTHON_LOG"\n',
+        '#!/bin/sh\nprintf "%s\\n" "$*" >> "$RFM_NIM_FAKE_PYTHON_LOG"\n',
     )
     fake_python.chmod(0o755)
     env = os.environ.copy()

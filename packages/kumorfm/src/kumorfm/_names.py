@@ -10,10 +10,11 @@ a spelling device only: once parsed, the AST holds the name the data itself
 uses, so nothing downstream needs to know a name was ever quoted.
 :func:`fqn` puts the quotes back when a query is rendered.
 
-This module deliberately sits outside ``kumorfm/pql`` and ``kumorfm/api``,
-which are vendored trees that a re-sync deletes and re-copies wholesale. Both
-import from here, so the spelling rules survive a re-sync on their own.
+This module sits outside ``kumorfm/pql`` and ``kumorfm/api`` so that the
+spelling rules have one home that both of those trees import from, rather than
+a copy in each. See ``pql/SOURCE.md`` for how the quoting reaches the parser.
 """
+
 from __future__ import annotations
 
 import re
@@ -79,7 +80,8 @@ def canonical_fqn(full_name: str) -> str:
         if '.' in part:
             raise ValueError(
                 f"Column name '{part}' contains a dot, which is not supported "
-                f"in a predictive query. Rename the column to reference it.")
+                f'in a predictive query. Rename the column to reference it.'
+            )
     return '.'.join(parts)
 
 
@@ -101,12 +103,16 @@ def quote_name(name: str) -> str:
     """
     if name == '*' or _BARE_NAME.fullmatch(name):
         return name
-    for char, label in ((QUOTE, 'a backtick'), ('\r', 'a carriage return'),
-                        ('\n', 'a newline')):
+    for char, label in (
+        (QUOTE, 'a backtick'),
+        ('\r', 'a carriage return'),
+        ('\n', 'a newline'),
+    ):
         if char in name:
             raise ValueError(
                 f"Name '{name}' contains {label}, which a predictive query "
-                f"cannot express.")
+                f'cannot express.'
+            )
     return f'{QUOTE}{name}{QUOTE}'
 
 

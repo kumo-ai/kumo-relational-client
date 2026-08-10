@@ -14,10 +14,10 @@ from __future__ import annotations
 import gzip
 import threading
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Iterator
 
 import pytest
 import urllib3.util.retry
@@ -32,8 +32,10 @@ from nvidia_sdfm.errors import NimRequestError, SdfmError
 
 _REFUSED_URL = 'http://127.0.0.1:1'
 _RETRY_AFTER_SECONDS = 3600
-_RETRY_AFTER_CAP_APPLIES = (getattr(_build_retry(1, 0.0), 'retry_after_max',
-                                    None) == _RETRY_AFTER_MAX_SECONDS)
+_RETRY_AFTER_CAP_APPLIES = (
+    getattr(_build_retry(1, 0.0), 'retry_after_max', None)
+    == _RETRY_AFTER_MAX_SECONDS
+)
 
 
 def _predictions_body(size: int) -> bytes:
@@ -99,8 +101,10 @@ def _serve(*script: _Reply) -> Iterator[tuple[ThreadingHTTPServer, str]]:
 
 
 def test_retry_policy_retries_transient_status_on_a_real_socket():
-    with _serve(_Reply(status=503), _Reply(status=503), _Reply()) as (server,
-                                                                     url):
+    with _serve(_Reply(status=503), _Reply(status=503), _Reply()) as (
+        server,
+        url,
+    ):
         transport = Transport(url, max_retries=3, backoff_factor=0.0)
         assert transport.predict({'model': 'tabicl'}) == {'predictions': []}
     assert server.received == ['/v1/predictions'] * 3
@@ -117,15 +121,17 @@ def test_retry_after_header_is_capped(monkeypatch):
     monkeypatch.setattr(urllib3.util.retry.time, 'sleep', slept.append)
 
     with _serve(
-            _Reply(status=503,
-                   headers={'Retry-After': str(_RETRY_AFTER_SECONDS)}),
-            _Reply()) as (_, url):
+        _Reply(status=503, headers={'Retry-After': str(_RETRY_AFTER_SECONDS)}),
+        _Reply(),
+    ) as (_, url):
         Transport(url, max_retries=1, backoff_factor=0.0).predict(
-            {'model': 'tabicl'})
+            {'model': 'tabicl'}
+        )
 
     assert slept == [
         _RETRY_AFTER_MAX_SECONDS
-        if _RETRY_AFTER_CAP_APPLIES else _RETRY_AFTER_SECONDS
+        if _RETRY_AFTER_CAP_APPLIES
+        else _RETRY_AFTER_SECONDS
     ]
 
 
@@ -151,15 +157,17 @@ def test_gzip_bomb_is_refused_instead_of_inflated():
     r"""A small compressed body that inflates past the cap must not be parsed.
 
     Without the cap ``requests`` inflates this to ``_MAX_RESPONSE_BYTES + 1``
-    bytes of valid JSON and ``predict`` returns it. See
-    ``bugs/security-hostile-server-response-unbounded.md``.
+    bytes of valid JSON and ``predict`` returns it.
     """
-    bomb = gzip.compress(_predictions_body(_MAX_RESPONSE_BYTES + 1),
-                         compresslevel=1)
+    bomb = gzip.compress(
+        _predictions_body(_MAX_RESPONSE_BYTES + 1), compresslevel=1
+    )
     assert len(bomb) < 1024 * 1024
 
-    with _serve(_Reply(raw=bomb,
-                       headers={'Content-Encoding': 'gzip'})) as (_, url):
+    with _serve(_Reply(raw=bomb, headers={'Content-Encoding': 'gzip'})) as (
+        _,
+        url,
+    ):
         transport = Transport(url, max_retries=0)
         with pytest.raises(SdfmError) as excinfo:
             transport.predict({'model': 'tabicl'})
@@ -186,8 +194,9 @@ def test_large_legitimate_response_is_returned_intact(encode):
 def test_oversized_error_body_is_refused_before_it_becomes_a_message():
     bomb = gzip.compress(b'x' * (_MAX_RESPONSE_BYTES + 1), compresslevel=1)
 
-    with _serve(_Reply(status=500, raw=bomb,
-                       headers={'Content-Encoding': 'gzip'})) as (_, url):
+    with _serve(
+        _Reply(status=500, raw=bomb, headers={'Content-Encoding': 'gzip'})
+    ) as (_, url):
         transport = Transport(url, max_retries=0)
         with pytest.raises(SdfmError) as excinfo:
             transport.predict({'model': 'tabicl'})
@@ -234,10 +243,14 @@ def test_a_slow_session_create_is_not_retried():
     released. The server-side request log is the ground truth here: the client
     genuinely cannot see the sessions it stranded.
     """
-    with _serve(_Reply(delay=2.0), _Reply(delay=2.0),
-                _Reply(body='{"session_id": "s2"}')) as (server, url):
-        transport = Transport(url, timeout=0.5, max_retries=2,
-                              backoff_factor=0.0)
+    with _serve(
+        _Reply(delay=2.0),
+        _Reply(delay=2.0),
+        _Reply(body='{"session_id": "s2"}'),
+    ) as (server, url):
+        transport = Transport(
+            url, timeout=0.5, max_retries=2, backoff_factor=0.0
+        )
         with pytest.raises(SdfmError) as excinfo:
             transport.create_session({'model': 'tabicl'})
 

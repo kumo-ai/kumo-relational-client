@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 r"""Entity ids must reach the warehouse as bound parameters, never as SQL
-text. See ``bugs/security-sql-injection-interpolated-identifiers.md``.
+text.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from typing import Any
 import pandas as pd
 import pyarrow as pa
 import pytest
-
 from kumorfm.api.typing import Dtype, Stype
 
 # Ordinary keys that Python's `repr()` used to mangle, plus a payload that used
@@ -31,8 +30,9 @@ _COLUMNS = {'user_id', 'ts'}
 def _insert_sql() -> str:
     values = ', '.join(
         f"('{key.replace(chr(39), chr(39) * 2)}', '2024-01-0{i + 1}')"
-        for i, key in enumerate(_ROWS))
-    return f"INSERT INTO users VALUES {values}"
+        for i, key in enumerate(_ROWS)
+    )
+    return f'INSERT INTO users VALUES {values}'
 
 
 @pytest.fixture(scope='module')
@@ -42,19 +42,18 @@ def sqlite_sampler(
     pytest.importorskip('adbc_driver_sqlite')
 
     import adbc_driver_sqlite.dbapi as adbc
-
     import kumorfm.rfm as rfm
     from kumorfm.rfm.backend.sqlite import SQLiteSampler
 
     path = Path(tmp_path_factory.mktemp('sqlite')) / 'entity_ids.db'
     connection = adbc.connect(str(path))
     with connection.cursor() as cursor:
-        cursor.execute("CREATE TABLE users (user_id TEXT PRIMARY KEY, "
-                       "ts TEXT NOT NULL)")
+        cursor.execute(
+            'CREATE TABLE users (user_id TEXT PRIMARY KEY, ts TEXT NOT NULL)'
+        )
         cursor.execute(_insert_sql())
-        cursor.execute("CREATE TABLE secrets (user_id TEXT, ts TEXT)")
-        cursor.execute("INSERT INTO secrets VALUES ('TOPSECRET', "
-                       "'2099-01-01')")
+        cursor.execute('CREATE TABLE secrets (user_id TEXT, ts TEXT)')
+        cursor.execute("INSERT INTO secrets VALUES ('TOPSECRET', '2099-01-01')")
     connection.commit()
 
     graph = rfm.Graph.from_sqlite(
@@ -79,12 +78,13 @@ def duckdb_sampler(
     path = Path(tmp_path_factory.mktemp('duckdb')) / 'entity_ids.duckdb'
     connection = duckdb.connect(str(path))
     with connection.cursor() as cursor:
-        cursor.execute("CREATE TABLE users (user_id VARCHAR PRIMARY KEY, "
-                       "ts TIMESTAMP NOT NULL)")
+        cursor.execute(
+            'CREATE TABLE users (user_id VARCHAR PRIMARY KEY, '
+            'ts TIMESTAMP NOT NULL)'
+        )
         cursor.execute(_insert_sql())
-        cursor.execute("CREATE TABLE secrets (user_id VARCHAR, ts TIMESTAMP)")
-        cursor.execute("INSERT INTO secrets VALUES ('TOPSECRET', "
-                       "'2099-01-01')")
+        cursor.execute('CREATE TABLE secrets (user_id VARCHAR, ts TIMESTAMP)')
+        cursor.execute("INSERT INTO secrets VALUES ('TOPSECRET', '2099-01-01')")
     connection.commit()
 
     graph = rfm.Graph.from_duckdb(
@@ -111,8 +111,9 @@ def _sample(sampler: Any, entity_ids: list) -> pd.DataFrame:
     )
 
 
-@pytest.mark.parametrize('entity_id',
-                         [_PLAIN, _BACKSLASH, _QUOTES, _APOSTROPHE])
+@pytest.mark.parametrize(
+    'entity_id', [_PLAIN, _BACKSLASH, _QUOTES, _APOSTROPHE]
+)
 def test_quotable_entity_id_round_trips(sampler: Any, entity_id: str) -> None:
     df = _sample(sampler, [entity_id])
     assert df['user_id'].tolist() == [entity_id]
@@ -141,10 +142,10 @@ def test_unmatched_entity_id_still_returns_nothing(sampler: Any) -> None:
 
 
 class _SnowCursor:
-    def __init__(self, connection: '_SnowConnection') -> None:
+    def __init__(self, connection: _SnowConnection) -> None:
         self._connection = connection
 
-    def __enter__(self) -> '_SnowCursor':
+    def __enter__(self) -> _SnowCursor:
         return self
 
     def __exit__(self, *exc: Any) -> bool:
@@ -152,13 +153,16 @@ class _SnowCursor:
 
     def execute(self, sql: str, parameters: Any = None) -> None:
         self._connection.calls.append(
-            (sql, parameters, self._connection._paramstyle))
+            (sql, parameters, self._connection._paramstyle)
+        )
 
     def fetch_arrow_all(self, force_return_table: bool = True) -> pa.Table:
-        return pa.table({
-            'user_id': pa.array([], type=pa.string()),
-            'ts': pa.array([], type=pa.string()),
-        })
+        return pa.table(
+            {
+                'user_id': pa.array([], type=pa.string()),
+                'ts': pa.array([], type=pa.string()),
+            }
+        )
 
     def fetchall(self) -> list:
         return self._connection.rows
@@ -189,27 +193,28 @@ def snow_sampler() -> Any:
     sampler._source_name_dict = {'users': '"DB"."SCHEMA"."USERS"'}
     sampler._source_table_dict = {
         'users': {
-            'user_id':
-            SourceColumn(name='user_id', dtype=Dtype.string,
-                         is_primary_key=True, is_unique_key=True,
-                         is_nullable=False),
-            'ts':
-            SourceColumn(name='ts', dtype=Dtype.date, is_primary_key=False,
-                         is_unique_key=False, is_nullable=False),
+            'user_id': SourceColumn(
+                name='user_id',
+                dtype=Dtype.string,
+                is_primary_key=True,
+                is_unique_key=True,
+                is_nullable=False,
+            ),
+            'ts': SourceColumn(
+                name='ts',
+                dtype=Dtype.date,
+                is_primary_key=False,
+                is_unique_key=False,
+                is_nullable=False,
+            ),
         },
     }
     sampler._table_dtype_dict = {
-        'users': {
-            'user_id': Dtype.string,
-            'ts': Dtype.date
-        },
+        'users': {'user_id': Dtype.string, 'ts': Dtype.date},
     }
     sampler._table_stype_dict = {'users': {'ts': Stype.timestamp}}
     sampler._table_column_ref_dict = {
-        'users': {
-            'user_id': '"user_id"',
-            'ts': '"ts"'
-        },
+        'users': {'user_id': '"user_id"', 'ts': '"ts"'},
     }
     sampler._table_column_proj_dict = sampler._table_column_ref_dict
     return sampler
@@ -256,8 +261,11 @@ def test_snow_min_max_probe_keeps_table_names_out_of_the_sql(
     neutralise ``\'`` on Snowflake. The branch is identified by position now.
     """
     hostile = "users\\' UNION ALL SELECT 'pwned', NULL, NULL --"
-    for attribute in ('_time_column_dict', '_source_name_dict',
-                      '_table_column_ref_dict'):
+    for attribute in (
+        '_time_column_dict',
+        '_source_name_dict',
+        '_table_column_ref_dict',
+    ):
         mapping = getattr(snow_sampler, attribute)
         mapping[hostile] = mapping['users']
     snow_sampler._connection.rows = [(0, None, None)]

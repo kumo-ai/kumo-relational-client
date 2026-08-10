@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 """Tests for the self-contained Mermaid visualization pipeline."""
+
 import base64
 import html
 import io
@@ -14,26 +15,31 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
 from kumorfm.rfm import Graph, LocalTable, viz
 from kumorfm.rfm import graph as graph_module
 
 
 @pytest.fixture
 def sample_graph() -> Graph:
-    users = pd.DataFrame({
-        'user_id': [1, 2, 3],
-        'name': ['Alice', 'Bob', 'Charlie'],
-    })
-    orders = pd.DataFrame({
-        'order_id': [10, 11],
-        'user_id': [1, 2],
-        'amount': [9.5, 3.2],
-    })
-    graph = Graph(tables=[
-        LocalTable(users, name='users', primary_key='user_id'),
-        LocalTable(orders, name='orders', primary_key='order_id'),
-    ])
+    users = pd.DataFrame(
+        {
+            'user_id': [1, 2, 3],
+            'name': ['Alice', 'Bob', 'Charlie'],
+        }
+    )
+    orders = pd.DataFrame(
+        {
+            'order_id': [10, 11],
+            'user_id': [1, 2],
+            'amount': [9.5, 3.2],
+        }
+    )
+    graph = Graph(
+        tables=[
+            LocalTable(users, name='users', primary_key='user_id'),
+            LocalTable(orders, name='orders', primary_key='order_id'),
+        ]
+    )
     graph.link('orders', 'user_id', 'users')
     return graph
 
@@ -78,8 +84,9 @@ def test_to_iframe_round_trip(sample_graph: Graph) -> None:
 
 
 def test_render_image_url_encoding(requests_mock) -> None:
-    requests_mock.get(re.compile(r'https://mermaid\.ink/.*'),
-                      content=b'png-bytes')
+    requests_mock.get(
+        re.compile(r'https://mermaid\.ink/.*'), content=b'png-bytes'
+    )
     out = viz.render_image('erDiagram', 'png')
     assert out == b'png-bytes'
 
@@ -92,14 +99,14 @@ def test_render_image_url_encoding(requests_mock) -> None:
 
 
 def test_render_image_svg_route(requests_mock) -> None:
-    requests_mock.get(re.compile(r'https://mermaid\.ink/svg/.*'),
-                      content=b'<svg/>')
+    requests_mock.get(
+        re.compile(r'https://mermaid\.ink/svg/.*'), content=b'<svg/>'
+    )
     assert viz.render_image('erDiagram', 'svg') == b'<svg/>'
 
 
 def test_render_image_unreachable(requests_mock) -> None:
-    requests_mock.get(re.compile(r'https://mermaid\.ink/.*'),
-                      status_code=503)
+    requests_mock.get(re.compile(r'https://mermaid\.ink/.*'), status_code=503)
     with pytest.raises(RuntimeError, match='offline rendering'):
         viz.render_image('erDiagram', 'png')
 
@@ -128,37 +135,43 @@ def test_visualize_mmd_file(sample_graph: Graph, tmp_path: Path) -> None:
     assert 'users o|--o{ orders : user_id' in source
 
 
-def test_visualize_png_file(sample_graph: Graph, tmp_path: Path,
-                            requests_mock) -> None:
-    requests_mock.get(re.compile(r'https://mermaid\.ink/.*'),
-                      content=b'png-bytes')
+def test_visualize_png_file(
+    sample_graph: Graph, tmp_path: Path, requests_mock
+) -> None:
+    requests_mock.get(
+        re.compile(r'https://mermaid\.ink/.*'), content=b'png-bytes'
+    )
     path = tmp_path / 'graph.png'
     sample_graph.visualize(path=path)
     assert path.read_bytes() == b'png-bytes'
 
 
 def test_visualize_bytes_io(sample_graph: Graph, requests_mock) -> None:
-    requests_mock.get(re.compile(r'https://mermaid\.ink/.*'),
-                      content=b'png-bytes')
+    requests_mock.get(
+        re.compile(r'https://mermaid\.ink/.*'), content=b'png-bytes'
+    )
     buffer = io.BytesIO()
     sample_graph.visualize(path=buffer)
     assert buffer.getvalue() == b'png-bytes'
 
 
-def test_visualize_rejects_unknown_suffix(sample_graph: Graph,
-                                          tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="not supported"):
+def test_visualize_rejects_unknown_suffix(
+    sample_graph: Graph, tmp_path: Path
+) -> None:
+    with pytest.raises(ValueError, match='not supported'):
         sample_graph.visualize(path=tmp_path / 'graph.pdf')
 
 
-def test_visualize_rejects_missing_suffix(sample_graph: Graph,
-                                          tmp_path: Path) -> None:
+def test_visualize_rejects_missing_suffix(
+    sample_graph: Graph, tmp_path: Path
+) -> None:
     with pytest.raises(ValueError, match='Missing file extension'):
         sample_graph.visualize(path=tmp_path / 'graph')
 
 
-def test_visualize_jupyter_display(sample_graph: Graph, no_notebook,
-                                   monkeypatch: pytest.MonkeyPatch) -> None:
+def test_visualize_jupyter_display(
+    sample_graph: Graph, no_notebook, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(graph_module, 'in_jupyter_notebook', lambda: True)
 
     displayed: list = []
@@ -179,14 +192,18 @@ def test_visualize_jupyter_display(sample_graph: Graph, no_notebook,
     assert 'height="222"' in payload
 
 
-def test_visualize_streamlit_display(sample_graph: Graph, no_notebook,
-                                     monkeypatch: pytest.MonkeyPatch) -> None:
+def test_visualize_streamlit_display(
+    sample_graph: Graph, no_notebook, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(graph_module, 'in_streamlit_notebook', lambda: True)
 
     calls: list = []
     fake_st = types.ModuleType('streamlit')
-    fake_st.components = types.SimpleNamespace(v1=types.SimpleNamespace(
-        html=lambda body, height, scrolling: calls.append((body, height))))
+    fake_st.components = types.SimpleNamespace(
+        v1=types.SimpleNamespace(
+            html=lambda body, height, scrolling: calls.append((body, height))
+        )
+    )
     fake_st.code = lambda body: calls.append(('code', body))
     monkeypatch.setitem(sys.modules, 'streamlit', fake_st)
 
@@ -198,15 +215,18 @@ def test_visualize_streamlit_display(sample_graph: Graph, no_notebook,
     assert height == 333
 
 
-def test_visualize_streamlit_fallback(sample_graph: Graph, no_notebook,
-                                      monkeypatch: pytest.MonkeyPatch,
-                                      ) -> None:
+def test_visualize_streamlit_fallback(
+    sample_graph: Graph,
+    no_notebook,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     monkeypatch.setattr(graph_module, 'in_streamlit_notebook', lambda: True)
 
     calls: list = []
     fake_st = types.ModuleType('streamlit')
-    fake_st.components = types.SimpleNamespace(v1=types.SimpleNamespace(
-        html=None))  # Simulate missing custom component support.
+    fake_st.components = types.SimpleNamespace(
+        v1=types.SimpleNamespace(html=None)
+    )  # Simulate missing custom component support.
     fake_st.code = lambda body: calls.append(body)
     monkeypatch.setitem(sys.modules, 'streamlit', fake_st)
 
@@ -216,9 +236,11 @@ def test_visualize_streamlit_fallback(sample_graph: Graph, no_notebook,
     assert calls[0].startswith('erDiagram')
 
 
-def test_visualize_terminal_prints_source(sample_graph: Graph, no_notebook,
-                                          monkeypatch: pytest.MonkeyPatch,
-                                          ) -> None:
+def test_visualize_terminal_prints_source(
+    sample_graph: Graph,
+    no_notebook,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     printed: list = []
     monkeypatch.setattr('builtins.print', lambda *args: printed.append(args))
 

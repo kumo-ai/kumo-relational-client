@@ -23,15 +23,17 @@ from kumorfm.api.typing import (
     RelOp,
     TimeUnit,
 )
-
 from kumorfm.rfm.pquery import PQueryPandasExecutor
 
 
-@pytest.mark.parametrize(('column_name', 'expected'), [
-    ('AGE', pd.Series([10, None, 30], dtype='float32')),
-    ('GENDER', pd.Series(['male', None, 'female'])),
-    ('CAT', pd.Series([1, pd.NA, 3], dtype='Int64')),
-])
+@pytest.mark.parametrize(
+    ('column_name', 'expected'),
+    [
+        ('AGE', pd.Series([10, None, 30], dtype='float32')),
+        ('GENDER', pd.Series(['male', None, 'female'])),
+        ('CAT', pd.Series([1, pd.NA, 3], dtype='Int64')),
+    ],
+)
 @pytest.mark.parametrize('filter_na', [False, True])
 def test_column(
     column_name: str,
@@ -39,17 +41,19 @@ def test_column(
     filter_na: bool,
 ) -> None:
     feat_dict = {
-        'USERS':
-        pd.DataFrame({
-            'AGE': [10, None, 30],
-            'GENDER': ['male', None, 'female'],
-            'CAT': pd.Series([1, pd.NA, 3], dtype='Int64'),
-        })
+        'USERS': pd.DataFrame(
+            {
+                'AGE': [10, None, 30],
+                'GENDER': ['male', None, 'female'],
+                'CAT': pd.Series([1, pd.NA, 3], dtype='Int64'),
+            }
+        )
     }
 
     column = Column(fqn=f'USERS.{column_name}')
-    out, mask = PQueryPandasExecutor().execute_column(column, feat_dict,
-                                                      filter_na)
+    out, mask = PQueryPandasExecutor().execute_column(
+        column, feat_dict, filter_na
+    )
 
     if filter_na:
         expected = expected.dropna().reset_index(drop=True)
@@ -59,46 +63,57 @@ def test_column(
     assert np.array_equal(mask, np.array([True, False, True]))
 
 
-@pytest.mark.parametrize(('op, expected'), [
-    (RelOp.EQ, pd.Series([False, True, False, True, False])),
-    (RelOp.NEQ, pd.Series([True, False, False, False, True])),
-    (RelOp.LEQ, pd.Series([True, True, False, True, False])),
-    (RelOp.GEQ, pd.Series([False, True, False, True, True])),
-    (RelOp.LT, pd.Series([True, False, False, False, False])),
-    (RelOp.GT, pd.Series([False, False, False, False, True])),
-])
+@pytest.mark.parametrize(
+    ('op, expected'),
+    [
+        (RelOp.EQ, pd.Series([False, True, False, True, False])),
+        (RelOp.NEQ, pd.Series([True, False, False, False, True])),
+        (RelOp.LEQ, pd.Series([True, True, False, True, False])),
+        (RelOp.GEQ, pd.Series([False, True, False, True, True])),
+        (RelOp.LT, pd.Series([True, False, False, False, False])),
+        (RelOp.GT, pd.Series([False, False, False, False, True])),
+    ],
+)
 def test_rel_op_int(op: RelOp, expected: pd.Series) -> None:
     left = pd.Series([2, 4, pd.NA, 4, 6], dtype='Int64')
 
     out = PQueryPandasExecutor().execute_rel_op(
-        left, op, right=Constant(value='4', dtype_maybe=Dtype.int))
+        left, op, right=Constant(value='4', dtype_maybe=Dtype.int)
+    )
     pd.testing.assert_series_equal(out, expected)
 
 
-@pytest.mark.parametrize(('op, expected'), [
-    (RelOp.EQ, pd.Series([False, True, False, True, False])),
-    (RelOp.NEQ, pd.Series([True, False, False, False, True])),
-    (RelOp.LEQ, pd.Series([True, True, False, True, False])),
-    (RelOp.GEQ, pd.Series([False, True, False, True, True])),
-    (RelOp.LT, pd.Series([True, False, False, False, False])),
-    (RelOp.GT, pd.Series([False, False, False, False, True])),
-])
+@pytest.mark.parametrize(
+    ('op, expected'),
+    [
+        (RelOp.EQ, pd.Series([False, True, False, True, False])),
+        (RelOp.NEQ, pd.Series([True, False, False, False, True])),
+        (RelOp.LEQ, pd.Series([True, True, False, True, False])),
+        (RelOp.GEQ, pd.Series([False, True, False, True, True])),
+        (RelOp.LT, pd.Series([True, False, False, False, False])),
+        (RelOp.GT, pd.Series([False, False, False, False, True])),
+    ],
+)
 def test_rel_op_float(op: RelOp, expected: pd.Series) -> None:
     left = pd.Series([2.5, 4.5, pd.NA, 4.5, 6.5], dtype='Float64')
 
     out = PQueryPandasExecutor().execute_rel_op(
-        left, op, right=Constant(value='4.5', dtype_maybe=Dtype.float))
+        left, op, right=Constant(value='4.5', dtype_maybe=Dtype.float)
+    )
     pd.testing.assert_series_equal(out, expected)
 
 
-@pytest.mark.parametrize(('op, expected'), [
-    (RelOp.EQ, pd.Series([False, True, False, True, False])),
-    (RelOp.NEQ, pd.Series([True, False, False, False, True])),
-    (RelOp.LEQ, pd.Series([True, True, False, True, False])),
-    (RelOp.GEQ, pd.Series([False, True, False, True, True])),
-    (RelOp.LT, pd.Series([True, False, False, False, False])),
-    (RelOp.GT, pd.Series([False, False, False, False, True])),
-])
+@pytest.mark.parametrize(
+    ('op, expected'),
+    [
+        (RelOp.EQ, pd.Series([False, True, False, True, False])),
+        (RelOp.NEQ, pd.Series([True, False, False, False, True])),
+        (RelOp.LEQ, pd.Series([True, True, False, True, False])),
+        (RelOp.GEQ, pd.Series([False, True, False, True, True])),
+        (RelOp.LT, pd.Series([True, False, False, False, False])),
+        (RelOp.GT, pd.Series([False, False, False, False, True])),
+    ],
+)
 def test_rel_op_timestamp(op: RelOp, expected: pd.Series) -> None:
     left = pd.Series(
         ['2019-06-07', '2023-01-01', pd.NaT, '2023-01-01', '2025-12-31'],
@@ -106,7 +121,8 @@ def test_rel_op_timestamp(op: RelOp, expected: pd.Series) -> None:
     )
 
     out = PQueryPandasExecutor().execute_rel_op(
-        left, op, right=Constant(value='2023-01-01', dtype_maybe=Dtype.date))
+        left, op, right=Constant(value='2023-01-01', dtype_maybe=Dtype.date)
+    )
     pd.testing.assert_series_equal(out, expected)
 
 
@@ -114,23 +130,28 @@ def test_rel_op_none() -> None:
     left = pd.Series([2, 4, pd.NA, 4, 6], dtype='Int64')
 
     out = PQueryPandasExecutor().execute_rel_op(
-        left, op=RelOp.EQ, right=Constant(value='NULL', dtype_maybe=None))
+        left, op=RelOp.EQ, right=Constant(value='NULL', dtype_maybe=None)
+    )
     pd.testing.assert_series_equal(
         out,
         pd.Series([False, False, True, False, False]),
     )
 
     out = PQueryPandasExecutor().execute_rel_op(
-        left, op=RelOp.NEQ, right=Constant(value='NULL', dtype_maybe=None))
+        left, op=RelOp.NEQ, right=Constant(value='NULL', dtype_maybe=None)
+    )
     pd.testing.assert_series_equal(
         out,
         pd.Series([True, True, False, True, True]),
     )
 
 
-@pytest.mark.parametrize(('op, expected'), [
-    (MemberOp.IN, pd.Series([True, False, False, False, True])),
-])
+@pytest.mark.parametrize(
+    ('op, expected'),
+    [
+        (MemberOp.IN, pd.Series([True, False, False, False, True])),
+    ],
+)
 def test_member_op(op: MemberOp, expected: pd.Series) -> None:
     left = pd.Series([2, 4, pd.NA, 4, 6], dtype='Int64')
 
@@ -141,49 +162,54 @@ def test_member_op(op: MemberOp, expected: pd.Series) -> None:
             value=[
                 Constant(value='2', dtype_maybe=Dtype.int),
                 Constant(value='6', dtype_maybe=Dtype.int),
-            ], dtype_maybe=Dtype.intlist),
+            ],
+            dtype_maybe=Dtype.intlist,
+        ),
     )
     pd.testing.assert_series_equal(out, expected)
 
 
-@pytest.mark.parametrize(('op', 'expected_out', 'expected_mask'), [
-    pytest.param(
-        AggregationType.SUM,
-        pd.Series([6, 0, 0, 16, 2, 0], dtype='float32'),
-        np.array([True, True, True, True, True, True]),
-        id='SUM',
-    ),
-    pytest.param(
-        AggregationType.AVG,
-        pd.Series([3, None, None, 16 / 3, 2, None], dtype='float32'),
-        np.array([True, False, False, True, True, False]),
-        id='AVG',
-    ),
-    pytest.param(
-        AggregationType.MIN,
-        pd.Series([2, None, None, 4, 2, None], dtype='float32'),
-        np.array([True, False, False, True, True, False]),
-        id='MIN',
-    ),
-    pytest.param(
-        AggregationType.MAX,
-        pd.Series([4, None, None, 6, 2, None], dtype='float32'),
-        np.array([True, False, False, True, True, False]),
-        id='MAX',
-    ),
-    pytest.param(
-        AggregationType.COUNT,
-        pd.Series([2, 0, 0, 3, 1, 0], dtype='float32'),
-        np.array([True, True, True, True, True, True]),
-        id='COUNT',
-    ),
-    pytest.param(
-        AggregationType.LIST_DISTINCT,
-        pd.Series([[2, 4], pd.NA, pd.NA, [4, 6], [2], pd.NA]),
-        np.array([True, False, False, True, True, False]),
-        id='LIST_DISTINCT',
-    ),
-])
+@pytest.mark.parametrize(
+    ('op', 'expected_out', 'expected_mask'),
+    [
+        pytest.param(
+            AggregationType.SUM,
+            pd.Series([6, 0, 0, 16, 2, 0], dtype='float32'),
+            np.array([True, True, True, True, True, True]),
+            id='SUM',
+        ),
+        pytest.param(
+            AggregationType.AVG,
+            pd.Series([3, None, None, 16 / 3, 2, None], dtype='float32'),
+            np.array([True, False, False, True, True, False]),
+            id='AVG',
+        ),
+        pytest.param(
+            AggregationType.MIN,
+            pd.Series([2, None, None, 4, 2, None], dtype='float32'),
+            np.array([True, False, False, True, True, False]),
+            id='MIN',
+        ),
+        pytest.param(
+            AggregationType.MAX,
+            pd.Series([4, None, None, 6, 2, None], dtype='float32'),
+            np.array([True, False, False, True, True, False]),
+            id='MAX',
+        ),
+        pytest.param(
+            AggregationType.COUNT,
+            pd.Series([2, 0, 0, 3, 1, 0], dtype='float32'),
+            np.array([True, True, True, True, True, True]),
+            id='COUNT',
+        ),
+        pytest.param(
+            AggregationType.LIST_DISTINCT,
+            pd.Series([[2, 4], pd.NA, pd.NA, [4, 6], [2], pd.NA]),
+            np.array([True, False, False, True, True, False]),
+            id='LIST_DISTINCT',
+        ),
+    ],
+)
 @pytest.mark.parametrize('filter_na', [False, True])
 def test_aggregation_type(
     op: AggregationType,
@@ -208,20 +234,23 @@ def test_aggregation_type(
     assert np.array_equal(mask, expected_mask)
 
 
-@pytest.mark.parametrize(('op', 'expected_out', 'expected_mask'), [
-    pytest.param(
-        AggregationType.MIN,
-        pd.Series(['2025-01-01', None, '2025-02-01', None]),
-        np.array([True, False, True, False]),
-        id='MIN',
-    ),
-    pytest.param(
-        AggregationType.MAX,
-        pd.Series(['2025-01-10', None, '2025-02-01', None]),
-        np.array([True, False, True, False]),
-        id='MAX',
-    ),
-])
+@pytest.mark.parametrize(
+    ('op', 'expected_out', 'expected_mask'),
+    [
+        pytest.param(
+            AggregationType.MIN,
+            pd.Series(['2025-01-01', None, '2025-02-01', None]),
+            np.array([True, False, True, False]),
+            id='MIN',
+        ),
+        pytest.param(
+            AggregationType.MAX,
+            pd.Series(['2025-01-10', None, '2025-02-01', None]),
+            np.array([True, False, True, False]),
+            id='MAX',
+        ),
+    ],
+)
 @pytest.mark.parametrize('filter_na', [False, True])
 def test_aggregation_type_timestamp(
     op: AggregationType,
@@ -230,11 +259,14 @@ def test_aggregation_type_timestamp(
     filter_na: bool,
 ) -> None:
     feat = pd.to_datetime(
-        pd.Series([
-            '2025-01-01',
-            '2025-01-10',
-            '2025-02-01',
-        ]))
+        pd.Series(
+            [
+                '2025-01-01',
+                '2025-01-10',
+                '2025-02-01',
+            ]
+        )
+    )
     batch = np.array([0, 0, 2])
 
     out, mask = PQueryPandasExecutor().execute_aggregation_type(
@@ -297,11 +329,14 @@ def test_aggregation(
     assert np.array_equal(mask, np.array([True, True]))
 
 
-@pytest.mark.parametrize(('op', 'expected'), [
-    (BoolOp.AND, pd.Series([True, False, False, False])),
-    (BoolOp.OR, pd.Series([True, True, True, False])),
-    (BoolOp.NOT, pd.Series([False, True, False, True])),
-])
+@pytest.mark.parametrize(
+    ('op', 'expected'),
+    [
+        (BoolOp.AND, pd.Series([True, False, False, False])),
+        (BoolOp.OR, pd.Series([True, True, True, False])),
+        (BoolOp.NOT, pd.Series([False, True, False, True])),
+    ],
+)
 def test_bool_op(op: BoolOp, expected: pd.Series) -> None:
     left = pd.Series([True, False, True, False])
     right = pd.Series([True, True, False, False])
@@ -313,11 +348,12 @@ def test_bool_op(op: BoolOp, expected: pd.Series) -> None:
 @pytest.mark.parametrize('filter_na', [False, True])
 def test_logical_operation(filter_na: bool) -> None:
     feat_dict = {
-        'USERS':
-        pd.DataFrame({
-            'AGE': [10, None, 30, 20],
-            'GENDER': ['male', 'female', None, 'male'],
-        })
+        'USERS': pd.DataFrame(
+            {
+                'AGE': [10, None, 30, 20],
+                'GENDER': ['male', 'female', None, 'male'],
+            }
+        )
     }
     time_dict = {}
     batch_dict = {'fact': np.array([0, 1, 2])}
@@ -333,7 +369,7 @@ def test_logical_operation(filter_na: bool) -> None:
         right=Condition(
             target=Column(fqn='USERS.GENDER'),
             op=RelOp.EQ,
-            value=Constant(value='\"male\"', dtype_maybe=Dtype.string),
+            value=Constant(value='"male"', dtype_maybe=Dtype.string),
         ),
     )
 
@@ -420,10 +456,7 @@ def test_join() -> None:
 @pytest.mark.parametrize('filter_na', [False, True])
 def test_filter(filter_na: bool) -> None:
     feat_dict = {
-        'USERS': pd.DataFrame({
-            'AGE': [10, 25, 30],
-            'HEIGHT': [156, None, 186]
-        })
+        'USERS': pd.DataFrame({'AGE': [10, 25, 30], 'HEIGHT': [156, None, 186]})
     }
     time_dict = {}
     batch_dict = {'fact': np.array([0, 1, 2])}
@@ -447,7 +480,8 @@ def test_filter(filter_na: bool) -> None:
         pd.testing.assert_series_equal(out, pd.Series([186], dtype=np.float32))
     else:
         pd.testing.assert_series_equal(
-            out, pd.Series([None, 186], dtype=np.float32))
+            out, pd.Series([None, 186], dtype=np.float32)
+        )
     assert np.array_equal(mask, np.array([False, False, True]))
 
 
@@ -455,19 +489,20 @@ def test_filtered_aggregation() -> None:
     aggr = Aggregation(
         target=Filter(
             target=Column(fqn='fact.test'),
-            condition=Condition(target=Column(fqn='fact.condition'), op='=',
-                                value=Constant.from_value(0)),
+            condition=Condition(
+                target=Column(fqn='fact.condition'),
+                op='=',
+                value=Constant.from_value(0),
+            ),
         ),
         aggr=AggregationType.SUM,
         aggr_time_range=DateOffsetRange(0, 2, TimeUnit.DAYS),
     )
 
     feat_dict = {
-        'fact':
-        pd.DataFrame({
-            'test': range(1, 9),
-            'condition': [0, 0, 1, 0, 0, 1, 0, 0]
-        }),
+        'fact': pd.DataFrame(
+            {'test': range(1, 9), 'condition': [0, 0, 1, 0, 0, 1, 0, 0]}
+        ),
     }
     time_dict = {
         'fact': pd.Series(pd.date_range('2023-01-01', periods=8)),

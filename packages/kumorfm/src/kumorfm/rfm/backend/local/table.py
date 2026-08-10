@@ -2,12 +2,11 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Sequence, cast
+from collections.abc import Sequence
+from typing import cast
 
 import pandas as pd
-from kumorfm.runmode import MissingType
 
-from kumorfm.rfm.base import composite_key
 from kumorfm.rfm.base import (
     Column,
     ColumnSpec,
@@ -15,7 +14,9 @@ from kumorfm.rfm.base import (
     SourceColumn,
     SourceForeignKey,
     Table,
+    composite_key,
 )
+from kumorfm.runmode import MissingType
 
 
 class LocalTable(Table):
@@ -59,6 +60,7 @@ class LocalTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+
     def __init__(
         self,
         df: pd.DataFrame,
@@ -69,13 +71,13 @@ class LocalTable(Table):
     ) -> None:
 
         if df.empty:
-            raise ValueError("Data frame is empty")
+            raise ValueError('Data frame is empty')
         if isinstance(df.columns, pd.MultiIndex):
-            raise ValueError("Data frame must not have a multi-index")
+            raise ValueError('Data frame must not have a multi-index')
         if not df.columns.is_unique:
-            raise ValueError("Data frame must have unique column names")
+            raise ValueError('Data frame must have unique column names')
         if any(col == '' for col in df.columns):
-            raise ValueError("Data frame must have non-empty column names")
+            raise ValueError('Data frame must have non-empty column names')
 
         self._data = df.copy(deep=False)
 
@@ -98,7 +100,8 @@ class LocalTable(Table):
                 is_primary_key=False,
                 is_unique_key=False,
                 is_nullable=True,
-            ) for column_name in self._data.columns
+            )
+            for column_name in self._data.columns
         ]
 
     def _get_source_foreign_keys(self) -> list[SourceForeignKey]:
@@ -112,8 +115,9 @@ class LocalTable(Table):
         derived: str,
         names: Sequence[str],
     ) -> None:
-        self._data[derived] = composite_key.encode_frame(self._data,
-                                                         list(names))
+        self._data[derived] = composite_key.encode_frame(
+            self._data, list(names)
+        )
         self.__dict__.pop('_source_column_dict', None)
         self.__dict__.pop('_source_sample_df', None)
         if not self.has_column(derived):
@@ -129,9 +133,11 @@ class LocalTable(Table):
         self,
         columns: Sequence[ColumnSpec | Column],
     ) -> pd.DataFrame:
-        raise RuntimeError(f"Column expressions are not supported in "
-                           f"'{self.__class__.__name__}'. Please apply your "
-                           f"expressions on the `pd.DataFrame` directly.")
+        raise RuntimeError(
+            f'Column expressions are not supported in '
+            f"'{self.__class__.__name__}'. Please apply your "
+            f'expressions on the `pd.DataFrame` directly.'
+        )
 
     def _get_num_rows(self) -> int | None:
         return len(self._data)

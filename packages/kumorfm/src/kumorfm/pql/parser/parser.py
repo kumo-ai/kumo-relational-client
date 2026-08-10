@@ -16,6 +16,7 @@ from antlr4.error.Errors import (
 )
 from antlr4.error.ErrorStrategy import DefaultErrorStrategy
 from antlr4.InputStream import InputStream
+
 from kumorfm.api.common import ValidationResponse
 from kumorfm.api.pquery import ParsedPredictiveQuery
 from kumorfm.api.pquery.AST import (
@@ -26,10 +27,12 @@ from kumorfm.api.pquery.AST import (
     LogicalOperation,
 )
 from kumorfm.api.typing import ProblemType
-
 from kumorfm.pql.grammar.PQLGrammarLexer import PQLGrammarLexer
 from kumorfm.pql.grammar.PQLGrammarParser import PQLGrammarParser
-from kumorfm.pql.parser.error_translator import Antlr4SyntaxError, ErrorTranslator
+from kumorfm.pql.parser.error_translator import (
+    Antlr4SyntaxError,
+    ErrorTranslator,
+)
 from kumorfm.pql.parser.visitor import PQLVisitor
 
 
@@ -47,7 +50,8 @@ class QueryValidationType(Enum):
 
     def is_sdk(self) -> bool:
         return self in {
-            QueryValidationType.RFM_SDK, QueryValidationType.RFM_SDK_V2
+            QueryValidationType.RFM_SDK,
+            QueryValidationType.RFM_SDK_V2,
         }
 
     def is_demo(self) -> bool:
@@ -68,13 +72,20 @@ class _QuietErrorStrategy(DefaultErrorStrategy):
     internals to stdout even under ``verbose=False``. The error itself still
     reaches the listener and the raised ``ValueError`` is unchanged.
     """
-    def reportError(
+
+    def reportError(  # noqa: N802
         self,
         recognizer: Any,
         e: RecognitionException,
     ) -> None:
-        if isinstance(e, (NoViableAltException, InputMismatchException,
-                          FailedPredicateException)):
+        if isinstance(
+            e,
+            (
+                NoViableAltException,
+                InputMismatchException,
+                FailedPredicateException,
+            ),
+        ):
             super().reportError(recognizer, e)
             return
         if self.inErrorRecoveryMode(recognizer):
@@ -83,36 +94,36 @@ class _QuietErrorStrategy(DefaultErrorStrategy):
         recognizer.notifyErrorListeners(e.message, e.offendingToken, e)
 
 
-def state_from_pql_ctx(ctxType: Any) -> int:
-    if ctxType == PQLGrammarParser.ProgContext:
+def state_from_pql_ctx(ctx_type: Any) -> int:
+    if ctx_type == PQLGrammarParser.ProgContext:
         return PQLGrammarParser.RULE_prog
-    if ctxType == PQLGrammarParser.TargetContext:
+    if ctx_type == PQLGrammarParser.TargetContext:
         return PQLGrammarParser.RULE_target
-    if ctxType == PQLGrammarParser.Problem_specContext:
+    if ctx_type == PQLGrammarParser.Problem_specContext:
         return PQLGrammarParser.RULE_problem_spec
-    if ctxType == PQLGrammarParser.Problem_typeContext:
+    if ctx_type == PQLGrammarParser.Problem_typeContext:
         return PQLGrammarParser.RULE_problem_type
-    if ctxType == PQLGrammarParser.Top_kContext:
+    if ctx_type == PQLGrammarParser.Top_kContext:
         return PQLGrammarParser.RULE_top_k
-    if ctxType == PQLGrammarParser.ForecastContext:
+    if ctx_type == PQLGrammarParser.ForecastContext:
         return PQLGrammarParser.RULE_forecast
-    if ctxType == PQLGrammarParser.EntityContext:
+    if ctx_type == PQLGrammarParser.EntityContext:
         return PQLGrammarParser.RULE_entity
-    if ctxType == PQLGrammarParser.WhatifContext:
+    if ctx_type == PQLGrammarParser.WhatifContext:
         return PQLGrammarParser.RULE_whatif
-    if ctxType == PQLGrammarParser.ConditionContext:
+    if ctx_type == PQLGrammarParser.ConditionContext:
         return PQLGrammarParser.RULE_condition
-    if ctxType == PQLGrammarParser.AggregationContext:
+    if ctx_type == PQLGrammarParser.AggregationContext:
         return PQLGrammarParser.RULE_aggregation
-    if ctxType == PQLGrammarParser.ColumnContext:
+    if ctx_type == PQLGrammarParser.ColumnContext:
         return PQLGrammarParser.RULE_column
-    if ctxType == PQLGrammarParser.Filtered_columnContext:
+    if ctx_type == PQLGrammarParser.Filtered_columnContext:
         return PQLGrammarParser.RULE_filtered_column
-    if ctxType == PQLGrammarParser.ConstantContext:
+    if ctx_type == PQLGrammarParser.ConstantContext:
         return PQLGrammarParser.RULE_constant
-    if ctxType == PQLGrammarParser.ArrayContext:
+    if ctx_type == PQLGrammarParser.ArrayContext:
         return PQLGrammarParser.RULE_array
-    if ctxType == PQLGrammarParser.DatetimeContext:
+    if ctx_type == PQLGrammarParser.DatetimeContext:
         return PQLGrammarParser.RULE_datetime
     return -1
 
@@ -126,14 +137,15 @@ class Delegate(ErrorListener):
     This is the most basic implementation that collects all errors instead of
     printing them out (the default).
     """
+
     def __init__(self) -> None:
         super().__init__()
         self.errors: list[Antlr4SyntaxError] = []
 
-    def syntaxError(
+    def syntaxError(  # noqa: N802
         self,
         recognizer: PQLGrammarParser | PQLGrammarLexer,
-        offendingSymbol: antlr4.Token,
+        offendingSymbol: antlr4.Token,  # noqa: N803
         line: int,
         column: int,
         msg: str,
@@ -153,38 +165,40 @@ class Delegate(ErrorListener):
         # gets wiped after the error is reported
         lineage = []
         if isinstance(recognizer, PQLGrammarParser):
-            currCtx = recognizer._ctx
-            while (currCtx is not None
-                   and not isinstance(currCtx, PQLGrammarParser.ProgContext)):
-                lineage.append(state_from_pql_ctx(type(currCtx)))
-                currCtx = currCtx.parentCtx
-            lineage.append(state_from_pql_ctx(type(currCtx)))
+            curr_ctx = recognizer._ctx
+            while curr_ctx is not None and not isinstance(
+                curr_ctx, PQLGrammarParser.ProgContext
+            ):
+                lineage.append(state_from_pql_ctx(type(curr_ctx)))
+                curr_ctx = curr_ctx.parentCtx
+            lineage.append(state_from_pql_ctx(type(curr_ctx)))
 
         self.errors.append(
             Antlr4SyntaxError(
                 recognizer=recognizer,
-                offendingSymbol=offendingSymbol,
+                offending_symbol=offendingSymbol,
                 line=line,
                 column=column,
                 msg=msg,
                 e=e,
                 state=recognizer.state,
                 lineage=lineage,
-            ))
+            )
+        )
 
 
 class PQLParser:
     r"""Parses the input string according to the PQLGrammar.g4 grammar file."""
+
     def __init__(
         self,
-        query_validation_type: QueryValidationType = QueryValidationType.
-        ENTERPRISE,
+        query_validation_type: QueryValidationType = QueryValidationType.ENTERPRISE,
     ):
         self.query_validation_type = query_validation_type
 
     def parse_tree(
-            self,
-            query: str) -> tuple[antlr4.ParserRuleContext, PQLGrammarParser]:
+        self, query: str
+    ) -> tuple[antlr4.ParserRuleContext, PQLGrammarParser]:
         r"""Parses the input query and returns the ANTLR4 tree.
 
         Args:
@@ -196,9 +210,10 @@ class PQLParser:
         tree, parser, response = self._parse_tree(query)
         if response.ok:
             return tree, parser
-        else:
-            raise ValueError("Encountered the following issues during "
-                             f"parsing: {response.message()}")
+        raise ValueError(
+            'Encountered the following issues during '
+            f'parsing: {response.message()}'
+        )
 
     def validate(self, query: str) -> ValidationResponse:
         r"""Validates syntactic correctness of the query. Does not check for
@@ -302,17 +317,20 @@ class PQLParser:
             prefix = query[:query_start_index]
             if prefix.upper() in ['EXPLAIN', 'EVALUATE']:
                 # Remove the prefix and leading whitespace
-                query = query[query_start_index + 1:].lstrip()
+                query = query[query_start_index + 1 :].lstrip()
 
                 query_index_after_predict = query.find(' ')
-                query_index_after_predict = (query_index_after_predict
-                                             if query_index_after_predict != -1
-                                             else len(query))
+                query_index_after_predict = (
+                    query_index_after_predict
+                    if query_index_after_predict != -1
+                    else len(query)
+                )
                 if query[:query_index_after_predict].upper() != 'PREDICT':
                     raise ValueError(
-                        f'\"{prefix}\" should be followed by '
-                        f'\"PREDICT\", got '
-                        f'\"{query[:query_index_after_predict]}\".')
+                        f'"{prefix}" should be followed by '
+                        f'"PREDICT", got '
+                        f'"{query[:query_index_after_predict]}".'
+                    )
         ast_dict = self.to_ast(query)
         entity_ast = ast_dict['entity']
         assert isinstance(entity_ast, Filter | Column)
@@ -320,27 +338,33 @@ class PQLParser:
         assert isinstance(target_ast, ASTNode)
         whatif_ast: ASTNode | None = None
         if 'whatif' in ast_dict:
-            assert isinstance(ast_dict['whatif'], Condition) or isinstance(
-                ast_dict['whatif'],
-                LogicalOperation) or ast_dict['whatif'] is None
+            assert (
+                isinstance(ast_dict['whatif'], (Condition, LogicalOperation))
+                or ast_dict['whatif'] is None
+            )
             whatif_ast = ast_dict['whatif']
         top_k: int | None = None
         if 'top_k' in ast_dict:
-            assert isinstance(ast_dict['top_k'],
-                              int) or ast_dict['top_k'] is None
+            assert (
+                isinstance(ast_dict['top_k'], int) or ast_dict['top_k'] is None
+            )
             top_k = ast_dict['top_k']
         num_forecasts: int = 1
         has_forecast_clause = False
         if 'forecast' in ast_dict:
-            assert isinstance(ast_dict['forecast'],
-                              int) or ast_dict['forecast'] is None
+            assert (
+                isinstance(ast_dict['forecast'], int)
+                or ast_dict['forecast'] is None
+            )
             if ast_dict['forecast'] is not None:
                 num_forecasts = ast_dict['forecast']
                 has_forecast_clause = True
         problem_type: ProblemType | str | None = None
         if 'problem_type' in ast_dict:
-            assert isinstance(ast_dict['problem_type'],
-                              str) or ast_dict['problem_type'] is None
+            assert (
+                isinstance(ast_dict['problem_type'], str)
+                or ast_dict['problem_type'] is None
+            )
             problem_type = ast_dict['problem_type']
         if has_forecast_clause and problem_type is None:
             problem_type = ProblemType.FORECAST

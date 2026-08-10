@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 from kumorfm.api.rfm.context import REV_REL
 from kumorfm.api.typing import Stype
-
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph, TaskReferenceError
 from kumorfm.rfm.backend.local import LocalGraphStore
@@ -15,31 +14,47 @@ from kumorfm.rfm.backend.local import LocalGraphStore
 
 def test_local_graph_store() -> None:
     df_dict = {}
-    df_dict['USERS'] = pd.DataFrame({
-        'USER_ID':
-        pd.Series([0, 1, pd.NA, 2, 1, 3, 4], dtype='Int64'),
-        'TIME': ['1990-01-01'] * 6 + [None],
-        'TEXT': ['this is!', 'text', None, '', ' abc', 'hello!world', '?. :'],
-    })
+    df_dict['USERS'] = pd.DataFrame(
+        {
+            'USER_ID': pd.Series([0, 1, pd.NA, 2, 1, 3, 4], dtype='Int64'),
+            'TIME': ['1990-01-01'] * 6 + [None],
+            'TEXT': [
+                'this is!',
+                'text',
+                None,
+                '',
+                ' abc',
+                'hello!world',
+                '?. :',
+            ],
+        }
+    )
 
-    df_dict['ORDERS'] = pd.DataFrame({
-        'ORDER_ID': [str(i) for i in range(9)],
-        'USER_ID':
-        pd.Series([0, 1, 4, 2, 5, pd.NA, 4, 3, 3], dtype='Int64'),
-        'TIME':
-        pd.date_range('2023-01-01', periods=8)[::-1].tolist() + [pd.NaT],
-    })
+    df_dict['ORDERS'] = pd.DataFrame(
+        {
+            'ORDER_ID': [str(i) for i in range(9)],
+            'USER_ID': pd.Series(
+                [0, 1, 4, 2, 5, pd.NA, 4, 3, 3], dtype='Int64'
+            ),
+            'TIME': pd.date_range('2023-01-01', periods=8)[::-1].tolist()
+            + [pd.NaT],
+        }
+    )
 
-    df_dict['VIEWS'] = pd.DataFrame({
-        'USER_ID':
-        pd.Series([0, 1, 4, 2, 5, pd.NA, 4, 3, 3], dtype='Int64'),
-        'TIME':
-        pd.date_range('2023-01-01', periods=9)[::-1],
-    })
+    df_dict['VIEWS'] = pd.DataFrame(
+        {
+            'USER_ID': pd.Series(
+                [0, 1, 4, 2, 5, pd.NA, 4, 3, 3], dtype='Int64'
+            ),
+            'TIME': pd.date_range('2023-01-01', periods=9)[::-1],
+        }
+    )
 
-    df_dict['RETURNS'] = pd.DataFrame({
-        'ORDER_ID': ['2', '4', '7'],
-    })
+    df_dict['RETURNS'] = pd.DataFrame(
+        {
+            'ORDER_ID': ['2', '4', '7'],
+        }
+    )
 
     graph = Graph.from_data(df_dict, verbose=False)
     assert graph['USERS'].primary_key is not None
@@ -89,7 +104,6 @@ def test_local_graph_store() -> None:
             + table_report.null_time_rows
         )
 
-
     for table_name, df in store.df_dict.items():
         # No edges are dropped:
         assert len(df) == len(df_dict[table_name])
@@ -103,7 +117,8 @@ def test_local_graph_store() -> None:
         elif table_name == 'USERS':
             assert mask is not None
             assert np.array_equal(
-                mask, np.array([True, True, False, True, False, True, False]))
+                mask, np.array([True, True, False, True, False, True, False])
+            )
         elif table_name == 'ORDERS':
             assert mask is not None
             assert np.array_equal(mask, np.array([True] * 8 + [False]))
@@ -178,13 +193,13 @@ def test_local_graph_store() -> None:
         'VIEWS': (pd.Timestamp('2023-01-01'), pd.Timestamp('2023-01-09')),
     }
 
-    with pytest.raises(KeyError, match="does not exist"):
+    with pytest.raises(KeyError, match='does not exist'):
         store.get_node_id('', pd.Series([], dtype='int'))
 
-    with pytest.raises(KeyError, match="No primary keys passed"):
+    with pytest.raises(KeyError, match='No primary keys passed'):
         store.get_node_id('USERS', pd.Series([], dtype='int'))
 
-    with pytest.raises(KeyError, match=r"primary keys \[4\] do not exist"):
+    with pytest.raises(KeyError, match=r'primary keys \[4\] do not exist'):
         store.get_node_id('USERS', pd.Series([0, 1, 2, 3, 4]))
 
     assert np.array_equal(
@@ -203,13 +218,19 @@ def test_local_graph_store() -> None:
     with pytest.raises(ValueError, match="'VIEWS' does not have a primary"):
         store.get_node_id('VIEWS', pd.Series(['x', 'y']))
 
+
 def test_sanitization_reason_precedence_and_reference_count() -> None:
-    graph = Graph.from_data({
-        'USERS': pd.DataFrame({
-            'USER_ID': pd.Series([pd.NA, 1, 1, 2], dtype='Int64'),
-            'TIME': [None, None, None, '2025-01-01'],
-        }),
-    }, verbose=False)
+    graph = Graph.from_data(
+        {
+            'USERS': pd.DataFrame(
+                {
+                    'USER_ID': pd.Series([pd.NA, 1, 1, 2], dtype='Int64'),
+                    'TIME': [None, None, None, '2025-01-01'],
+                }
+            ),
+        },
+        verbose=False,
+    )
     store = LocalGraphStore(graph, verbose=False)
     report = store.sanitization_report.tables['USERS']
 

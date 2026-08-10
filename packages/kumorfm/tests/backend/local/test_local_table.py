@@ -5,19 +5,20 @@
 import pandas as pd
 import pytest
 from kumorfm.api.typing import Dtype, Stype
-
 from kumorfm.rfm import LocalTable
 
 
 @pytest.fixture
 def sample_df() -> pd.DataFrame:
-    return pd.DataFrame({
-        'user_id': [1, 2, 3, 4, 5],
-        'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
-        'age': [25.0, 30.0, 35.0, 40.0, 45.0],
-        'created_at': pd.date_range('2023-01-01', periods=5),
-        'is_active': [True, True, False, True, False]
-    })
+    return pd.DataFrame(
+        {
+            'user_id': [1, 2, 3, 4, 5],
+            'name': ['Alice', 'Bob', 'Charlie', 'David', 'Eve'],
+            'age': [25.0, 30.0, 35.0, 40.0, 45.0],
+            'created_at': pd.date_range('2023-01-01', periods=5),
+            'is_active': [True, True, False, True, False],
+        }
+    )
 
 
 def test_init(sample_df: pd.DataFrame) -> None:
@@ -85,10 +86,12 @@ def test_no_time_column(sample_df: pd.DataFrame) -> None:
 
 
 def test_time_column() -> None:
-    sample_df = pd.DataFrame({
-        'TIME': ['1990-01-01'],
-        'CREATE': ['1991-01-01'],
-    })
+    sample_df = pd.DataFrame(
+        {
+            'TIME': ['1990-01-01'],
+            'CREATE': ['1991-01-01'],
+        }
+    )
     table = LocalTable(sample_df, name='users').infer_metadata()
     assert table['TIME'].stype == Stype.timestamp
     assert table['CREATE'].stype == Stype.timestamp
@@ -102,10 +105,12 @@ def test_no_end_time_column(sample_df: pd.DataFrame) -> None:
 
 
 def test_end_time_column() -> None:
-    sample_df = pd.DataFrame({
-        'CREATE': ['1991-01-01'],
-        'END': ['1992-01-01'],
-    })
+    sample_df = pd.DataFrame(
+        {
+            'CREATE': ['1991-01-01'],
+            'END': ['1992-01-01'],
+        }
+    )
     table = LocalTable(sample_df, name='users').infer_metadata()
     assert table['CREATE'].stype == Stype.timestamp
     assert table['END'].stype == Stype.timestamp
@@ -115,23 +120,23 @@ def test_end_time_column() -> None:
     assert table.end_time_column is not None
     assert table.end_time_column.name == 'END'
 
-    with pytest.raises(ValueError, match="defined to be an end time column"):
+    with pytest.raises(ValueError, match='defined to be an end time column'):
         table.time_column = 'END'
 
-    with pytest.raises(ValueError, match="defined to be a time column"):
+    with pytest.raises(ValueError, match='defined to be a time column'):
         table.end_time_column = 'CREATE'
 
 
 def test_data_validation() -> None:
-    with pytest.raises(ValueError, match="is empty"):
+    with pytest.raises(ValueError, match='is empty'):
         LocalTable(pd.DataFrame(), name='users')
 
     df = pd.DataFrame({'id': [1, 2, 3]})[['id', 'id']]
-    with pytest.raises(ValueError, match="must have unique column names"):
+    with pytest.raises(ValueError, match='must have unique column names'):
         LocalTable(df, name='users')
 
     df = pd.DataFrame({'': [1, 2, 3]})
-    with pytest.raises(ValueError, match="must have non-empty column names"):
+    with pytest.raises(ValueError, match='must have non-empty column names'):
         LocalTable(df, name='users')
 
     df = pd.DataFrame({'A  B C': [1, 2, 3]})
@@ -156,7 +161,7 @@ def test_set_dtype(sample_df: pd.DataFrame) -> None:
 def test_wrong_time_stype(sample_df: pd.DataFrame) -> None:
     table = LocalTable(sample_df, name='users')
 
-    with pytest.raises(ValueError, match="incompatible semantic type"):
+    with pytest.raises(ValueError, match='incompatible semantic type'):
         table['created_at'].stype = Stype.text
 
 
@@ -196,12 +201,20 @@ def test_metadata(sample_df: pd.DataFrame) -> None:
 
     pd.testing.assert_frame_equal(
         table.metadata,
-        pd.DataFrame({
-            'Name': ['user_id', 'name', 'age', 'created_at', 'is_active'],
-            'Data Type': ['int', 'string', 'float', 'date', 'bool'],
-            'Semantic Type':
-            ['ID', 'text', 'numerical', 'timestamp', 'categorical'],
-            'Primary Key': [True, False, False, False, False],
-            'Time Column': [False, False, False, True, False],
-            'End Time Column': [False, False, False, False, False],
-        }))
+        pd.DataFrame(
+            {
+                'Name': ['user_id', 'name', 'age', 'created_at', 'is_active'],
+                'Data Type': ['int', 'string', 'float', 'date', 'bool'],
+                'Semantic Type': [
+                    'ID',
+                    'text',
+                    'numerical',
+                    'timestamp',
+                    'categorical',
+                ],
+                'Primary Key': [True, False, False, False, False],
+                'Time Column': [False, False, False, True, False],
+                'End Time Column': [False, False, False, False, False],
+            }
+        ),
+    )

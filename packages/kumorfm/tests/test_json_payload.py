@@ -4,6 +4,7 @@
 
 import hashlib
 import json
+import os
 import re
 from decimal import Decimal
 from pathlib import Path
@@ -14,12 +15,12 @@ import pandas as pd
 import pytest
 import requests
 from conftest import MOCK_URL
-
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.api.rfm.context import Table
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import Stype
 from kumorfm.client import KumoClient
+from kumorfm.client.generated import tfm_api as tfm_api_module
 from kumorfm.client.rfm import RFMAPI
 from kumorfm.rfm import Graph, KumoRFM, TaskTable
 from kumorfm.rfm.payload import (
@@ -33,15 +34,25 @@ from kumorfm.rfm.payload import (
 )
 from kumorfm.rfm.rfm import Explanation
 
-CANONICAL_SPEC = Path('../structured-data-api/nim-sd.openapi.yaml')
+# The Universal TFM OpenAPI contract is not vendored here, so the tests that
+# replay it skip unless a checkout is pointed at explicitly. The default is the
+# sibling-directory layout the maintainers use; anyone else sets
+# SDFM_CONTRACT_DIR.
+_ENV_CONTRACT_DIR = 'SDFM_CONTRACT_DIR'
+CANONICAL_SPEC = (
+    Path(os.environ.get(_ENV_CONTRACT_DIR, '../structured-data-api'))
+    / 'nim-sd.openapi.yaml'
+)
 
 
 def test_keyless_table_synthetic_key_is_opaque_on_name_collision() -> None:
-    source = pd.DataFrame({
-        SYNTHETIC_NODE_ID: [10, 11],
-        f'{SYNTHETIC_NODE_ID}_1': [20, 21],
-        'VALUE': [1.5, 2.5],
-    })
+    source = pd.DataFrame(
+        {
+            SYNTHETIC_NODE_ID: [10, 11],
+            f'{SYNTHETIC_NODE_ID}_1': [20, 21],
+            'VALUE': [1.5, 2.5],
+        }
+    )
     table = Table(
         df=source,
         row=None,
@@ -116,10 +127,12 @@ def test_predict_posts_universal_json_payload(
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
         additional_matcher=receptor,
-        json=_correlated_response({
-            'prediction': 0.5,
-            'embeddings': [0.1, 0.2],
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'embeddings': [0.1, 0.2],
+            }
+        ),
     )
 
     model = KumoRFM(user_store_graph, verbose=False)
@@ -133,12 +146,14 @@ def test_predict_posts_universal_json_payload(
         verbose=False,
     )
 
-    assert result.to_dict('records') == [{
-        'ENTITY': 3,
-        'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
-        'PREDICTION': 0.5,
-        'EMBEDDINGS': [0.1, 0.2],
-    }]
+    assert result.to_dict('records') == [
+        {
+            'ENTITY': 3,
+            'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
+            'PREDICTION': 0.5,
+            'EMBEDDINGS': [0.1, 0.2],
+        }
+    ]
     assert receptor.headers is not None
     assert receptor.headers['Content-Type'] == 'application/json'
 
@@ -150,43 +165,59 @@ def test_predict_posts_universal_json_payload(
     assert payload['schema']['relationships']
     assert payload['context']['instance_table']['format'] == 'arrays'
     assert payload['predict']['instance_table']['format'] == 'arrays'
-    assert payload['task']['target']['column_name'] in payload['context'][
-        'instance_table']['columns']
-    assert payload['task']['target']['column_name'] not in payload['predict'][
-        'instance_table']['columns']
+    assert (
+        payload['task']['target']['column_name']
+        in payload['context']['instance_table']['columns']
+    )
+    assert (
+        payload['task']['target']['column_name']
+        not in payload['predict']['instance_table']['columns']
+    )
     assert payload['schema']['instance_table']['primary_key'] == INSTANCE_ID
     predict_instance_table = payload['predict']['instance_table']
     predict_instance_id_index = predict_instance_table['columns'].index(
-        INSTANCE_ID)
+        INSTANCE_ID
+    )
     assert predict_instance_table['rows'][0][predict_instance_id_index] != 3
     context_instance_table = payload['context']['instance_table']
     instance_id_index = context_instance_table['columns'].index(INSTANCE_ID)
-    instance_ids = [row[instance_id_index]
-                    for row in context_instance_table['rows']]
+    instance_ids = [
+        row[instance_id_index] for row in context_instance_table['rows']
+    ]
     assert len(instance_ids) == len(set(instance_ids))
-    assert '__kumo_instance_feature' not in payload['context'][
-        'instance_table']['columns']
+    assert (
+        '__kumo_instance_feature'
+        not in payload['context']['instance_table']['columns']
+    )
     anchor_column = payload['task']['anchor_time_column']
     assert anchor_column.startswith(ANCHOR_TIME_PREFIX)
     assert anchor_column in payload['context']['instance_table']['columns']
     assert anchor_column in payload['predict']['instance_table']['columns']
-    assert payload['schema']['instance_table']['columns'][anchor_column][
-        'stype'] == 'timestamp'
+    assert (
+        payload['schema']['instance_table']['columns'][anchor_column]['stype']
+        == 'timestamp'
+    )
     entity_relationship = payload['schema']['relationships'][0]
     assert 'source_table' not in entity_relationship
     assert entity_relationship['source_columns'][0].startswith(
-        ENTITY_REFERENCE_PREFIX)
+        ENTITY_REFERENCE_PREFIX
+    )
     assert entity_relationship['target_table'] == 'USERS'
     assert payload['schema']['related_tables']['USERS']['primary_key'] == (
-        [INSTANCE_ID, 'USER_ID'])
+        [INSTANCE_ID, 'USER_ID']
+    )
     for schema in payload['schema']['related_tables'].values():
         assert INSTANCE_ID in schema['primary_key']
         assert schema['columns'][INSTANCE_ID]['nullable'] is False
-    assert payload['schema']['related_tables']['ORDERS']['columns']['TIME'][
-        'dtype'] == 'timestamp[us]'
+    assert (
+        payload['schema']['related_tables']['ORDERS']['columns']['TIME'][
+            'dtype'
+        ]
+        == 'timestamp[us]'
+    )
     assert payload['context']['related_tables']['ORDERS']['rows'][0][
-        payload['context']['related_tables']['ORDERS']['columns'].index(
-            'TIME')].endswith('Z')
+        payload['context']['related_tables']['ORDERS']['columns'].index('TIME')
+    ].endswith('Z')
     assert payload['task']['target']['dtype'] == 'float32'
     assert 'embeddings' in payload['output']['fields']
     assert 'quantiles' in payload['output']['fields']
@@ -194,7 +225,8 @@ def test_predict_posts_universal_json_payload(
     assert payload['inference']['run_mode'] == 'fast'
     assert payload['inference']['inference_config']['kind'] == 'regression'
     assert payload['inference']['inference_config']['output_type'] == (
-        'quantiles')
+        'quantiles'
+    )
     assert 'operation' not in payload['metadata']
     _assert_payload_matches_local_prediction_request_schema(payload)
 
@@ -230,7 +262,8 @@ def test_forecast_payload_contains_universal_controls(
     assert set(payload['output']['fields']) == {'quantiles'}
     assert payload['inference']['inference_config']['kind'] == 'regression'
     assert payload['inference']['inference_config']['output_type'] == (
-        'quantiles')
+        'quantiles'
+    )
 
 
 def test_link_prediction_payload_preserves_sampled_rhs_candidates(
@@ -238,33 +271,43 @@ def test_link_prediction_payload_preserves_sampled_rhs_candidates(
 ) -> None:
     task = TaskTable(
         task_type=TaskType.TEMPORAL_LINK_PREDICTION,
-        context_df=pd.DataFrame({
-            'ENTITY': [0, 1],
-            # Deliberately use target IDs that cannot occur in the sampled
-            # STORES table. Targets remain supervision on the instance table;
-            # payload materialization must not fabricate RHS candidate rows.
-            'TARGET': [['missing-0'], ['missing-1']],
-            'ANCHOR_TIMESTAMP': pd.to_datetime([
-                '2025-01-05',
-                '2025-01-05',
-            ]),
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': [3],
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': [0, 1],
+                # Deliberately use target IDs that cannot occur in the sampled
+                # STORES table. Targets remain supervision on the instance table;
+                # payload materialization must not fabricate RHS candidate rows.
+                'TARGET': [['missing-0'], ['missing-1']],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(
+                    [
+                        '2025-01-05',
+                        '2025-01-05',
+                    ]
+                ),
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': [3],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05']),
+            }
+        ),
         entity_table_name=('USERS', 'STORES'),
         entity_column='ENTITY',
         target_column='TARGET',
         time_column='ANCHOR_TIMESTAMP',
     )
 
-    payload = KumoRFM(user_store_graph, verbose=False).materialize_task(
-        task,
-        top_k=2,
-        num_neighbors=[4, 4],
-        verbose=False,
-    )[0].payload
+    payload = (
+        KumoRFM(user_store_graph, verbose=False)
+        .materialize_task(
+            task,
+            top_k=2,
+            num_neighbors=[4, 4],
+            verbose=False,
+        )[0]
+        .payload
+    )
 
     assert payload['task']['kind'] == 'temporal_link_prediction'
     assert payload['task']['entity_table_names'] == ['USERS', 'STORES']
@@ -278,22 +321,25 @@ def test_link_prediction_payload_preserves_sampled_rhs_candidates(
     assert target_schema['dtype'] == 'stringlist'
     assert target_schema['stype'] == 'multicategorical'
     assert payload['schema']['related_tables']['USERS']['primary_key'] == (
-        [INSTANCE_ID, 'USER_ID'])
+        [INSTANCE_ID, 'USER_ID']
+    )
     assert payload['schema']['related_tables']['STORES']['primary_key'] == (
-        [INSTANCE_ID, 'STORE_ID'])
+        [INSTANCE_ID, 'STORE_ID']
+    )
     assert 'TARGET' in payload['context']['instance_table']['columns']
     assert 'TARGET' not in payload['predict']['instance_table']['columns']
     target_index = payload['context']['instance_table']['columns'].index(
-        'TARGET')
-    assert [row[target_index]
-            for row in payload['context']['instance_table']['rows']] == (
-                [['missing-0'], ['missing-1']])
+        'TARGET'
+    )
+    assert [
+        row[target_index]
+        for row in payload['context']['instance_table']['rows']
+    ] == ([['missing-0'], ['missing-1']])
     stores = payload['context']['related_tables']['STORES']
     instance_index = stores['columns'].index(INSTANCE_ID)
     store_index = stores['columns'].index('STORE_ID')
     store_candidates = {
-        (row[instance_index], str(row[store_index]))
-        for row in stores['rows']
+        (row[instance_index], str(row[store_index])) for row in stores['rows']
     }
     assert all(
         store_id not in {'missing-0', 'missing-1'}
@@ -315,8 +361,9 @@ def test_link_prediction_target_values_must_be_stringlist_arrays() -> None:
 
 
 def test_stringlist_dtype_detection_rejects_mixed_or_null_items() -> None:
-    assert _dtype_name(pd.Series([['a'], None, np.array(['b'])], dtype=object)) == (
-        'stringlist')
+    assert _dtype_name(
+        pd.Series([['a'], None, np.array(['b'])], dtype=object)
+    ) == ('stringlist')
 
     with pytest.raises(ValueError, match='only arrays or nulls'):
         _dtype_name(pd.Series([['a'], 'b'], dtype=object))
@@ -331,39 +378,51 @@ def test_stringlist_dtype_detection_rejects_mixed_or_null_items() -> None:
 def test_payload_encodes_unsafe_int64_as_base10_strings() -> None:
     large_id = 9007199254740993
     large_feature = 2**62 + 1
-    users = pd.DataFrame({
-        'USER_ID': np.arange(large_id, large_id + 8, dtype='int64'),
-        'BIG_FEATURE': np.full(8, large_feature, dtype='int64'),
-        'AGE': np.arange(20, 28, dtype='int64'),
-    })
-    orders = pd.DataFrame({
-        'ORDER_ID': np.arange(16, dtype='int64'),
-        'USER_ID': np.repeat(users['USER_ID'].to_numpy(), 2),
-        'AMOUNT': np.arange(16, dtype='float64'),
-        'TIME': pd.to_datetime(['2025-01-01'] * 16),
-    })
+    users = pd.DataFrame(
+        {
+            'USER_ID': np.arange(large_id, large_id + 8, dtype='int64'),
+            'BIG_FEATURE': np.full(8, large_feature, dtype='int64'),
+            'AGE': np.arange(20, 28, dtype='int64'),
+        }
+    )
+    orders = pd.DataFrame(
+        {
+            'ORDER_ID': np.arange(16, dtype='int64'),
+            'USER_ID': np.repeat(users['USER_ID'].to_numpy(), 2),
+            'AMOUNT': np.arange(16, dtype='float64'),
+            'TIME': pd.to_datetime(['2025-01-01'] * 16),
+        }
+    )
     graph = Graph.from_data({'USERS': users, 'ORDERS': orders}, verbose=False)
     task = TaskTable(
         task_type=TaskType.REGRESSION,
-        context_df=pd.DataFrame({
-            'ENTITY': users['USER_ID'].to_numpy()[:6],
-            'TARGET': np.arange(6, dtype='float64'),
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 6),
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': users['USER_ID'].to_numpy()[6:],
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 2),
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': users['USER_ID'].to_numpy()[:6],
+                'TARGET': np.arange(6, dtype='float64'),
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 6),
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': users['USER_ID'].to_numpy()[6:],
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 2),
+            }
+        ),
         entity_table_name='USERS',
         entity_column='ENTITY',
         target_column='TARGET',
         time_column='ANCHOR_TIMESTAMP',
     )
 
-    payload = KumoRFM(graph, verbose=False).materialize_task(
-        task,
-        verbose=False,
-    )[0].payload
+    payload = (
+        KumoRFM(graph, verbose=False)
+        .materialize_task(
+            task,
+            verbose=False,
+        )[0]
+        .payload
+    )
 
     users_table = payload['context']['related_tables']['USERS']
     users_schema = payload['schema']['related_tables']['USERS']['columns']
@@ -381,11 +440,18 @@ def test_payload_encodes_unsafe_int64_as_base10_strings() -> None:
     assert orders_table['rows'][0][fkey_index] == str(large_id)
 
     instance_table = payload['context']['instance_table']
-    entity_ref_column = next(column for column in instance_table['columns']
-                             if column.startswith(ENTITY_REFERENCE_PREFIX))
+    entity_ref_column = next(
+        column
+        for column in instance_table['columns']
+        if column.startswith(ENTITY_REFERENCE_PREFIX)
+    )
     entity_index = instance_table['columns'].index(entity_ref_column)
-    assert payload['schema']['instance_table']['columns'][entity_ref_column][
-        'dtype'] == 'int64'
+    assert (
+        payload['schema']['instance_table']['columns'][entity_ref_column][
+            'dtype'
+        ]
+        == 'int64'
+    )
     assert instance_table['rows'][0][entity_index] == str(large_id)
 
     encoded = json.dumps(payload)
@@ -401,8 +467,11 @@ def test_entity_identity_survives_batch_local_row_indexes(
     session_id = 'sess_test'
     mock_api.post(
         f'{MOCK_URL}/v1/sessions',
-        json={'session_id': session_id, 'expires_at': '2099-01-01T00:00:00Z',
-              'ttl_seconds': 3600},
+        json={
+            'session_id': session_id,
+            'expires_at': '2099-01-01T00:00:00Z',
+            'ttl_seconds': 3600,
+        },
     )
     mock_api.post(
         f'{MOCK_URL}/v1/sessions/{session_id}/predictions',
@@ -410,8 +479,7 @@ def test_entity_identity_survives_batch_local_row_indexes(
     )
     mock_api.delete(f'{MOCK_URL}/v1/sessions/{session_id}', status_code=204)
     model = KumoRFM(user_store_graph, verbose=False)
-    model._client = RFMAPI(
-        KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     with model.batch_mode(batch_size=1):
         result = model.predict(ltv, indices=[3, 1], verbose=False)
@@ -434,10 +502,12 @@ def test_explain_surfaces_summary_from_nim_wrapped_details(
     }
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
-        json=_correlated_response({
-            'prediction': 0.5,
-            'explanation': nim_explanation,
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'explanation': nim_explanation,
+            }
+        ),
     )
 
     model = KumoRFM(user_store_graph, verbose=False)
@@ -467,30 +537,46 @@ def test_explain_matches_live_nim_shape_with_no_summary(
         'details': {
             'task_type': 'binary_classification',
             'cohorts': [
-                {'table_name': 'accounts', 'column_name': 'amount', 'hop': 0,
-                 'stype': 'numerical', 'cohorts': ['[8 - 9.25]', '(280 - 300]'],
-                 'populations': [0.5, 0.5], 'targets': [0.0, 1.0]},
+                {
+                    'table_name': 'accounts',
+                    'column_name': 'amount',
+                    'hop': 0,
+                    'stype': 'numerical',
+                    'cohorts': ['[8 - 9.25]', '(280 - 300]'],
+                    'populations': [0.5, 0.5],
+                    'targets': [0.0, 1.0],
+                },
             ],
             'subgraphs': [
-                {'seed_id': 0, 'seed_table': 'accounts',
-                 'seed_time': '2025-02-01T00:00:00', 'tables': {}, 'context_examples': []},
+                {
+                    'seed_id': 0,
+                    'seed_table': 'accounts',
+                    'seed_time': '2025-02-01T00:00:00',
+                    'tables': {},
+                    'context_examples': [],
+                },
             ],
         },
     }
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
-        json=_correlated_response({
-            'prediction': 0.5,
-            'explanation': live_explanation,
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'explanation': live_explanation,
+            }
+        ),
     )
 
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
-    result = model.predict(ltv, indices=[0],
-                           explain=ExplainConfig(skip_summary=True),
-                           verbose=False)
+    result = model.predict(
+        ltv,
+        indices=[0],
+        explain=ExplainConfig(skip_summary=True),
+        verbose=False,
+    )
 
     assert isinstance(result, Explanation)
     assert result.summary == ''
@@ -509,14 +595,16 @@ def test_explain_requests_explanation_output_field(
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
         additional_matcher=receptor,
-        json=_correlated_response({
-            'prediction': 0.5,
-            'explanation': {
-                'format': 'natural_language_summary',
-                'summary': 'Order frequency dropped.',
-                'warning': 'Cross-region fallback used.',
-            },
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'explanation': {
+                    'format': 'natural_language_summary',
+                    'summary': 'Order frequency dropped.',
+                    'warning': 'Cross-region fallback used.',
+                },
+            }
+        ),
     )
 
     model = KumoRFM(user_store_graph, verbose=False)
@@ -525,11 +613,13 @@ def test_explain_requests_explanation_output_field(
     result = model.predict(ltv, indices=[0], explain=True, verbose=False)
 
     assert isinstance(result, Explanation)
-    assert result.prediction.to_dict('records') == [{
-        'ENTITY': 0,
-        'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
-        'PREDICTION': 0.5,
-    }]
+    assert result.prediction.to_dict('records') == [
+        {
+            'ENTITY': 0,
+            'ANCHOR_TIMESTAMP': pd.Timestamp('2025-01-09 00:00:00', tz='UTC'),
+            'PREDICTION': 0.5,
+        }
+    ]
     assert result.summary == 'Order frequency dropped.'
     assert result.details == {
         'format': 'natural_language_summary',
@@ -551,19 +641,23 @@ def _v2_1_explanation() -> dict[str, Any]:
         'format': 'kumo_rfm_v2_1',
         'details': {
             'task_type': 'regression',
-            'cohorts': [{
-                'table_name': 'orders',
-                'column_name': 'COUNT(*)',
-                'hop': 1,
-                'cohorts': ['[0-0]', '(0-4+]'],
-                'populations': [0.2, 0.8],
-                'targets': [0.0, 0.5],
-            }],
-            'subgraphs': [{
-                'seed_id': 0,
-                'seed_table': 'users',
-                'tables': {},
-            }],
+            'cohorts': [
+                {
+                    'table_name': 'orders',
+                    'column_name': 'COUNT(*)',
+                    'hop': 1,
+                    'cohorts': ['[0-0]', '(0-4+]'],
+                    'populations': [0.2, 0.8],
+                    'targets': [0.0, 0.5],
+                }
+            ],
+            'subgraphs': [
+                {
+                    'seed_id': 0,
+                    'seed_table': 'users',
+                    'tables': {},
+                }
+            ],
         },
     }
 
@@ -576,19 +670,32 @@ def test_explain_generates_nl_summary_for_v2_1_payload(
 ) -> None:
     calls: dict[str, Any] = {}
 
-    def fake_generate(*, query: str, prediction: Any, cohorts: Any,
-                      subgraphs: Any, **kwargs: Any) -> str:
-        calls.update(query=query, prediction=prediction, cohorts=cohorts,
-                     subgraphs=subgraphs, **kwargs)
+    def fake_generate(
+        *,
+        query: str,
+        prediction: Any,
+        cohorts: Any,
+        subgraphs: Any,
+        **kwargs: Any,
+    ) -> str:
+        calls.update(
+            query=query,
+            prediction=prediction,
+            cohorts=cohorts,
+            subgraphs=subgraphs,
+            **kwargs,
+        )
         return 'Generated NL summary.'
 
     monkeypatch.setattr('kumorfm.rfm.rfm.generate_summary', fake_generate)
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
-        json=_correlated_response({
-            'prediction': 0.5,
-            'explanation': _v2_1_explanation(),
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'explanation': _v2_1_explanation(),
+            }
+        ),
     )
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
@@ -624,17 +731,22 @@ def test_explain_skips_generation_when_skip_summary(
     monkeypatch.setattr('kumorfm.rfm.rfm.generate_summary', fake_generate)
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
-        json=_correlated_response({
-            'prediction': 0.5,
-            'explanation': _v2_1_explanation(),
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'explanation': _v2_1_explanation(),
+            }
+        ),
     )
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
-    result = model.predict(ltv, indices=[0],
-                           explain=ExplainConfig(skip_summary=True),
-                           verbose=False)
+    result = model.predict(
+        ltv,
+        indices=[0],
+        explain=ExplainConfig(skip_summary=True),
+        verbose=False,
+    )
 
     assert isinstance(result, Explanation)
     assert result.summary == ''
@@ -658,13 +770,15 @@ def test_explain_prefers_server_summary_over_generation(
     monkeypatch.setattr('kumorfm.rfm.rfm.generate_summary', fake_generate)
     mock_api.post(
         f'{MOCK_URL}/v1/predictions',
-        json=_correlated_response({
-            'prediction': 0.5,
-            'explanation': {
-                'format': 'natural_language_summary',
-                'summary': 'Server text.',
-            },
-        }),
+        json=_correlated_response(
+            {
+                'prediction': 0.5,
+                'explanation': {
+                    'format': 'natural_language_summary',
+                    'summary': 'Server text.',
+                },
+            }
+        ),
     )
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = RFMAPI(KumoClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
@@ -676,7 +790,8 @@ def test_explain_prefers_server_summary_over_generation(
 
 
 def _assert_payload_matches_local_prediction_request_schema(
-        payload: dict[str, Any]) -> None:
+    payload: dict[str, Any],
+) -> None:
     spec = _load_local_canonical_spec_at_generated_revision()
     if spec is None:
         return
@@ -691,7 +806,11 @@ def _assert_payload_matches_local_prediction_request_schema(
 def _load_local_canonical_spec_at_generated_revision() -> dict | None:
     if not CANONICAL_SPEC.exists():
         return None
-    output = Path('kumorfm/client/generated/tfm_api.py')
+    # Located through the imported module rather than a path relative to the
+    # working directory: the latter resolved to nothing from the directory
+    # pytest actually runs in, so this guard returned early and the schema
+    # assertions below never ran.
+    output = Path(tfm_api_module.__file__)
     if _generated_source_sha(output) != _file_sha256(CANONICAL_SPEC):
         return None
     yaml = pytest.importorskip('yaml')
@@ -699,9 +818,9 @@ def _load_local_canonical_spec_at_generated_revision() -> dict | None:
 
 
 def _generated_source_sha(path: Path) -> str:
-    match = re.search(r'^# Source SHA256: ([0-9a-f]+)$',
-                      path.read_text(),
-                      flags=re.MULTILINE)
+    match = re.search(
+        r'^# Source SHA256: ([0-9a-f]+)$', path.read_text(), flags=re.MULTILINE
+    )
     assert match is not None
     return match.group(1)
 
@@ -739,7 +858,9 @@ def test_prediction_connection_drop_surfaces_clear_error(
 
     class _DroppingAPI:
         def predict(self, *args: Any, **kwargs: Any) -> Any:
-            raise requests.exceptions.ConnectionError('connection reset by peer')
+            raise requests.exceptions.ConnectionError(
+                'connection reset by peer'
+            )
 
     model = KumoRFM(user_store_graph, verbose=False)
     model._client = _DroppingAPI()  # type: ignore
@@ -750,53 +871,63 @@ def test_prediction_connection_drop_surfaces_clear_error(
 
 
 def _feature_payload(feature: Any) -> dict[str, Any]:
-    users = pd.DataFrame({
-        'USER_ID': np.arange(8, dtype='int64'),
-        'FEATURE': feature,
-    })
-    orders = pd.DataFrame({
-        'ORDER_ID': np.arange(16, dtype='int64'),
-        'USER_ID': np.repeat(np.arange(8, dtype='int64'), 2),
-        'AMOUNT': np.arange(16, dtype='float64'),
-        'TIME': pd.to_datetime(['2025-01-01'] * 16),
-    })
+    users = pd.DataFrame(
+        {
+            'USER_ID': np.arange(8, dtype='int64'),
+            'FEATURE': feature,
+        }
+    )
+    orders = pd.DataFrame(
+        {
+            'ORDER_ID': np.arange(16, dtype='int64'),
+            'USER_ID': np.repeat(np.arange(8, dtype='int64'), 2),
+            'AMOUNT': np.arange(16, dtype='float64'),
+            'TIME': pd.to_datetime(['2025-01-01'] * 16),
+        }
+    )
     graph = Graph.from_data({'USERS': users, 'ORDERS': orders}, verbose=False)
     task = TaskTable(
         task_type=TaskType.REGRESSION,
-        context_df=pd.DataFrame({
-            'ENTITY': np.arange(6, dtype='int64'),
-            'TARGET': np.arange(6, dtype='float64'),
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 6),
-        }),
-        pred_df=pd.DataFrame({
-            'ENTITY': np.arange(6, 8, dtype='int64'),
-            'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 2),
-        }),
+        context_df=pd.DataFrame(
+            {
+                'ENTITY': np.arange(6, dtype='int64'),
+                'TARGET': np.arange(6, dtype='float64'),
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 6),
+            }
+        ),
+        pred_df=pd.DataFrame(
+            {
+                'ENTITY': np.arange(6, 8, dtype='int64'),
+                'ANCHOR_TIMESTAMP': pd.to_datetime(['2025-01-05'] * 2),
+            }
+        ),
         entity_table_name='USERS',
         entity_column='ENTITY',
         target_column='TARGET',
         time_column='ANCHOR_TIMESTAMP',
     )
-    return KumoRFM(graph, verbose=False).materialize_task(
-        task,
-        verbose=False,
-    )[0].payload
+    return (
+        KumoRFM(graph, verbose=False)
+        .materialize_task(
+            task,
+            verbose=False,
+        )[0]
+        .payload
+    )
 
 
 @pytest.mark.parametrize('value', [float('inf'), float('-inf')])
 def test_non_finite_cell_names_its_table_column_and_row(value: float) -> None:
-    # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
-    # -- these used to escape as a bare ValueError out of ``json.dumps`` inside
-    # the request-size helper, naming neither table, column nor row.
+    # Regression: these used to escape as a bare ValueError out of
+    # ``json.dumps`` inside the request-size helper, naming neither table,
+    # column nor row.
     with pytest.raises(ValueError, match=r"Column 'USERS.FEATURE' row 3"):
         _feature_payload([1.0, 1.0, 1.0, value] + [1.0] * 4)
 
 
 def test_decimal_cells_are_named_by_what_they_hold() -> None:
-    # Regression: bugs/rfm-nonfinite-and-decimal-cells-raise-bare-json-errors.md
-    # -- every DB-API driver returns Decimal for NUMERIC columns, which used to
-    # raise 'Object of type Decimal is not JSON serializable'.
-    #
+    # Regression: every DB-API driver returns Decimal for NUMERIC columns,
+    # which used to raise 'Object of type Decimal is not JSON serializable'.
     # Serializing them is not enough on its own. A DECIMAL column announced as
     # `string` reaches the model as text, so a numeric feature stops being
     # numeric and an id stops being an id. The dtype follows the values, and
@@ -826,8 +957,10 @@ def test_decimal_cells_are_named_by_what_they_hold() -> None:
     # Built from digits rather than by arithmetic: Decimal addition applies the
     # context precision, which is 28 significant digits by default and would
     # round these before they ever reached the payload.
-    wide = [Decimal(f'1234567890123456789012345678{index:02d}')
-            for index in range(8)]
+    wide = [
+        Decimal(f'1234567890123456789012345678{index:02d}')
+        for index in range(8)
+    ]
     payload = _feature_payload(wide)
     table = payload['context']['related_tables']['USERS']
     schema = payload['schema']['related_tables']['USERS']['columns']

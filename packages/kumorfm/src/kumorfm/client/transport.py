@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The two transports the RFM path can be pointed at.
+r"""The two transports the RFM path can be pointed at.
 
 :class:`~kumorfm.client.client.KumoClient` speaks HTTP to a Universal TFM NIM
 and hands back a ``requests.Response``.
@@ -14,7 +14,7 @@ derives from the other, so the shared call sites (``RFMAPI`` and
 ``raise_on_error``) have to name both.
 """
 
-from typing import Union
+from typing import TypeAlias
 
 import requests
 
@@ -29,5 +29,5 @@ __all__ = [
     'TransportResponse',
 ]
 
-RFMTransport = Union[KumoClient, DatabricksServingClient]
-TransportResponse = Union[requests.Response, ServingResponse]
+RFMTransport: TypeAlias = KumoClient | DatabricksServingClient
+TransportResponse: TypeAlias = requests.Response | ServingResponse

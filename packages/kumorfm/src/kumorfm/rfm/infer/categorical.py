@@ -5,6 +5,7 @@
 import re
 
 import pandas as pd
+
 from kumorfm.api.typing import Dtype, Stype
 
 
@@ -22,8 +23,10 @@ def contains_categorical(
 
     if dtype.is_numerical():
         match = re.search(
-            (r'(^|_)(price|sales|amount|quantity|total|cost|score|rating|'
-             'avg|average|recency|age|num|pos|number|position)(_|$)'),
+            (
+                r'(^|_)(price|sales|amount|quantity|total|cost|score|rating|'
+                'avg|average|recency|age|num|pos|number|position)(_|$)'
+            ),
             column_name,
             re.IGNORECASE,
         )

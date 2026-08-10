@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please do **not** open a public issue or merge request for a security problem.
+Please do **not** open a public issue or pull request for a security problem.
 
 Report suspected vulnerabilities in this project to the NVIDIA Product Security
 Incident Response Team (PSIRT), following the process described at

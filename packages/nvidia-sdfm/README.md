@@ -33,9 +33,9 @@ TabICL (single table):
 ```python
 from nvidia_sdfm import SDFMClient
 
-with SDFMClient(url="http://localhost:8000") as client:
-    model = client.tabicl(context_df, target="label", task="classification")
-    df = model.predict(predict_df, outputs=["prediction", "probabilities"])
+with SDFMClient(url='http://localhost:8000') as client:
+    model = client.tabicl(context_df, target='label', task='classification')
+    df = model.predict(predict_df, outputs=['prediction', 'probabilities'])
 ```
 
 KumoRFM (relational) — needs `nvidia-sdfm[kumorfm]`:
@@ -43,13 +43,13 @@ KumoRFM (relational) — needs `nvidia-sdfm[kumorfm]`:
 ```python
 from nvidia_sdfm import SDFMClient, kumorfm
 
-graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
+graph = kumorfm.Graph.from_data({'users': df1, 'items': df2, 'orders': df3})
 
-with SDFMClient(url="http://localhost:8000") as client:
+with SDFMClient(url='http://localhost:8000') as client:
     df = client.kumorfm(graph).predict(
-        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
+        'PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1',
         indices=[...],
-        run_mode="fast",
+        run_mode='fast',
     )
 ```
 
@@ -61,9 +61,9 @@ the backend returns structured attribution only, generated locally by the SDK
 (see the warning below).
 
 ```python
-with SDFMClient(url="http://localhost:8000") as client:
+with SDFMClient(url='http://localhost:8000') as client:
     result = client.kumorfm(graph).predict(
-        "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
+        'PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1',
         explain=True,
     )
     predictions = result.prediction
@@ -100,12 +100,12 @@ referencing entities of `entity_table` in the graph; columns default to
 `ENTITY` / `TARGET` / `ANCHOR_TIMESTAMP`:
 
 ```python
-with SDFMClient(url="http://localhost:8000") as client:
+with SDFMClient(url='http://localhost:8000') as client:
     df = client.kumorfm(graph).predict_task(
-        context=train_df,      # ENTITY, TARGET, [ANCHOR_TIMESTAMP]
-        predict=predict_df,    # ENTITY, [ANCHOR_TIMESTAMP]
-        task_type="multiclass_classification",
-        entity_table="users",
+        context=train_df,  # ENTITY, TARGET, [ANCHOR_TIMESTAMP]
+        predict=predict_df,  # ENTITY, [ANCHOR_TIMESTAMP]
+        task_type='multiclass_classification',
+        entity_table='users',
     )
 ```
 

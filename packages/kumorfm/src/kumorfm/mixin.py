@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import dataclasses
-from typing import Any, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 from kumorfm.api.json_serde import dataclass_to_dict
 
@@ -13,12 +13,12 @@ T = TypeVar('T')
 class CastMixin:
     @classmethod
     def _cast(
-        cls: Type[T],
+        cls: type[T],
         *args: Any,
         **kwargs: Any,
-    ) -> Optional[T]:
-        # TODO clean up type hints
-        # TODO can we apply this recursively?
+    ) -> T | None:
+        # TODO: tighten these hints and consider recursing into nested
+        # dataclass fields.
         if len(args) == 1 and len(kwargs) == 0:
             elem = args[0]
             if elem is None:

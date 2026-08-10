@@ -5,27 +5,33 @@
 from typing import Any
 
 import pytest
-
 from kumorfm.api.pquery import ValidatedPredictiveQuery
 from kumorfm.exceptions import HTTPException
 from kumorfm.rfm import Graph, KumoRFM
 
 _CARDINALITY_DETAIL = (
-    '{"detail": "categorical cardinality 15001 exceeds limit 10000."}')
+    '{"detail": "categorical cardinality 15001 exceeds limit 10000."}'
+)
 
 
 class FailingAPI:
     r"""Fake RFMAPI whose predict always fails with a fixed status, counting
     how many times the retry loop actually called it.
     """
+
     def __init__(self, status: int, detail: str = 'boom') -> None:
         self.status = status
         self.detail = detail
         self.n_predict = 0
 
-    def predict(self, request: Any, *, entity_ids: Any = None,
-                instance_ids: Any = None,
-                anchor_times: Any = None) -> Any:
+    def predict(
+        self,
+        request: Any,
+        *,
+        entity_ids: Any = None,
+        instance_ids: Any = None,
+        anchor_times: Any = None,
+    ) -> Any:
         self.n_predict += 1
         raise HTTPException(self.status, self.detail)
 
@@ -36,8 +42,9 @@ def _model(graph: Graph, api: FailingAPI) -> KumoRFM:
     return model
 
 
-def _predict(model: KumoRFM, query: ValidatedPredictiveQuery,
-             num_retries: int = 2) -> str:
+def _predict(
+    model: KumoRFM, query: ValidatedPredictiveQuery, num_retries: int = 2
+) -> str:
     with model.retry(num_retries=num_retries):
         with pytest.raises(RuntimeError) as info:
             model.predict(query, indices=[0, 1], verbose=False)
@@ -88,9 +95,8 @@ def test_oversized_request_is_not_retried_and_carries_the_remedy(
     """
     api = FailingAPI(413, 'request entity too large')
     model = _model(user_store_graph, api)
-    with model.retry(num_retries=2):
-        with pytest.raises(ValueError) as info:
-            model.predict(ltv, indices=[0, 1], verbose=False)
+    with model.retry(num_retries=2), pytest.raises(ValueError) as info:
+        model.predict(ltv, indices=[0, 1], verbose=False)
 
     message = str(info.value)
     assert api.n_predict == 1, 'a deterministic payload must not be retried'

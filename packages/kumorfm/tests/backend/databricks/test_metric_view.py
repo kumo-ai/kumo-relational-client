@@ -7,13 +7,12 @@ from typing import Any
 
 import pandas as pd
 import pytest
-
+from kumorfm.exceptions import GraphConstructionError, KumoRFMError
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph
 
 try:
     import pyarrow as pa
-
     from kumorfm.rfm.backend.databricks import Connection
     from kumorfm.rfm.backend.databricks.metric_view import (
         SOURCE_ALIAS,
@@ -30,9 +29,7 @@ try:
         unquote_ident,
     )
 except ImportError:
-    pytest.skip("'databricks' extension not installed",
-                allow_module_level=True)
-
+    pytest.skip("'databricks' extension not installed", allow_module_level=True)
 
 
 def test_unquote_ident() -> None:
@@ -44,11 +41,14 @@ def test_unquote_ident() -> None:
 
 
 def test_parse_table_reference() -> None:
-    assert parse_table_reference('tab') == ('tab', )
+    assert parse_table_reference('tab') == ('tab',)
     assert parse_table_reference('sch.tab') == ('sch', 'tab')
     assert parse_table_reference('cat.sch.tab') == ('cat', 'sch', 'tab')
     assert parse_table_reference('`c at`.sch.`my tab`') == (
-        'c at', 'sch', 'my tab')
+        'c at',
+        'sch',
+        'my tab',
+    )
     assert parse_table_reference('  cat.sch.tab  ') == ('cat', 'sch', 'tab')
 
     assert parse_table_reference(None) is None
@@ -107,19 +107,21 @@ def test_references_alias() -> None:
 
 
 def test_strip_alias_qualifier() -> None:
-    assert strip_alias_qualifier('products.generation',
-                                 'products') == 'generation'
-    assert strip_alias_qualifier(
-        'COALESCE(source.a, source.`b c`)',
-        'source') == 'COALESCE(a, `b c`)'
-    assert strip_alias_qualifier('`my join`.a + `my join`.b',
-                                 'my join') == 'a + b'
+    assert (
+        strip_alias_qualifier('products.generation', 'products') == 'generation'
+    )
+    assert (
+        strip_alias_qualifier('COALESCE(source.a, source.`b c`)', 'source')
+        == 'COALESCE(a, `b c`)'
+    )
+    assert (
+        strip_alias_qualifier('`my join`.a + `my join`.b', 'my join') == 'a + b'
+    )
     assert strip_alias_qualifier('other.a', 'products') == 'other.a'
 
 
-
 def test_parse_metric_view_star_schema() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 version: "0.1"
 source: cat.sch.order_lines
 joins:
@@ -139,7 +141,7 @@ dimensions:
 measures:
   - name: Total Revenue
     expr: SUM(source.amount)
-''')
+""")
 
     assert spec.source == ('cat', 'sch', 'order_lines')
     assert spec.messages == []
@@ -149,7 +151,7 @@ measures:
         alias='customers',
         table=('cat', 'sch', 'customers'),
         parent_alias=SOURCE_ALIAS,
-        path=('customers', ),
+        path=('customers',),
         condition=(
             JoinKeyRef(qualifier='source', column='customer_id'),
             JoinKeyRef(qualifier='customers', column='customer_id'),
@@ -169,31 +171,31 @@ measures:
 
 
 def test_parse_metric_view_quoted_on_key() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: dim
     source: cat.sch.dim
     'on': source.dim_id = dim.id
-''')
+""")
     assert len(spec.joins) == 1
     assert spec.messages == []
 
 
 def test_parse_metric_view_fields_key() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 fields:
   - name: month
     expr: DATE_TRUNC('MONTH', source.at)
-''')
+""")
     assert [(c.name, c.expr) for c in spec.columns] == [
         ('month', "DATE_TRUNC('MONTH', at)"),
     ]
 
 
 def test_parse_metric_view_field_references() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: dim
@@ -210,12 +212,13 @@ dimensions:
     expr: LEFT(`Dim Name`, 2)
   - name: mixed
     expr: CONCAT(order_month, `Dim Name`)
-''')
+""")
 
     columns = {c.name: c for c in spec.columns}
     assert columns['order_quarter'].alias == 'source'
     assert columns['order_quarter'].expr == (
-        "DATE_TRUNC('QUARTER', (DATE_TRUNC('MONTH', order_date)))")
+        "DATE_TRUNC('QUARTER', (DATE_TRUNC('MONTH', order_date)))"
+    )
     assert columns['dim_prefix'].alias == 'dim'
     assert columns['dim_prefix'].expr == 'LEFT((UPPER(name)), 2)'
     assert 'mixed' not in columns
@@ -226,7 +229,7 @@ dimensions:
 
 
 def test_parse_metric_view_nested_joins() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: customer
@@ -236,7 +239,7 @@ joins:
       - name: nation
         source: cat.sch.nations
         on: c_nationkey = n_nationkey
-''')
+""")
 
     assert spec.messages == []
     assert [j.alias for j in spec.joins] == ['customer', 'nation']
@@ -249,7 +252,7 @@ joins:
 
 
 def test_parse_metric_view_nested_full_path_dimensions() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: customer
@@ -268,7 +271,7 @@ dimensions:
     expr: nation.n_comment
   - name: Mixed Path
     expr: CONCAT(customer.nation.n_name, customer.c_name)
-''')
+""")
 
     columns = {c.name: (c.alias, c.expr) for c in spec.columns}
     assert columns['Nation Name'] == ('nation', 'n_name')
@@ -294,11 +297,14 @@ def test_resolve_join_keys_full_path_qualifiers() -> None:
         cardinality='many_to_one',
     )
     assert resolve_join_keys(join, {'n_nationkey'}, {'c_nationkey'}) == (
-        'customer', 'c_nationkey', 'n_nationkey')
+        'customer',
+        'c_nationkey',
+        'n_nationkey',
+    )
 
 
 def test_parse_metric_view_using() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: products
@@ -307,7 +313,7 @@ joins:
   - name: composite
     source: cat.sch.other
     using: [a, b]
-''')
+""")
 
     assert len(spec.joins) == 1
     assert spec.joins[0].condition == (
@@ -321,7 +327,7 @@ joins:
 
 
 def test_parse_metric_view_cardinality() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: refunds
@@ -332,7 +338,7 @@ joins:
     source: cat.sch.broken
     on: broken.fact_id = source.id
     cardinality: many_to_many
-''')
+""")
 
     assert [j.alias for j in spec.joins] == ['refunds']
     assert spec.joins[0].cardinality == 'one_to_many'
@@ -343,7 +349,7 @@ joins:
 
 
 def test_parse_metric_view_skipped_joins() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 filter: source.status = 'VALID'
 joins:
@@ -364,7 +370,7 @@ dimensions:
     expr: nested.name
   - name: valid
     expr: source.amount
-''')
+""")
 
     assert spec.joins == []
     assert [(c.name, c.alias) for c in spec.columns] == [
@@ -385,7 +391,7 @@ dimensions:
 
 
 def test_parse_metric_view_duplicate_aliases() -> None:
-    spec = parse_metric_view('''
+    spec = parse_metric_view("""
 source: cat.sch.facts
 joins:
   - name: source
@@ -397,13 +403,12 @@ joins:
   - name: dim
     source: cat.sch.dim2
     on: source.dim2_id = dim.id
-''')
+""")
 
     assert [j.alias for j in spec.joins] == ['dim']
     assert spec.joins[0].table == ('cat', 'sch', 'dim')
     assert spec.messages == [
-        "Failed to add join 'source' since the name 'source' is already in "
-        'use',
+        "Failed to add join 'source' since the name 'source' is already in use",
         "Failed to add join 'dim' since the name 'dim' is already in use",
     ]
 
@@ -417,13 +422,12 @@ def test_parse_metric_view_errors() -> None:
         parse_metric_view('source: SELECT * FROM cat.sch.tab')
 
 
-
 def _join(
     condition: tuple[JoinKeyRef, JoinKeyRef],
     parent_alias: str = SOURCE_ALIAS,
 ) -> MetricViewJoin:
     if parent_alias == SOURCE_ALIAS:
-        path: tuple[str, ...] = ('dim', )
+        path: tuple[str, ...] = ('dim',)
     else:
         path = (parent_alias, 'dim')
     return MetricViewJoin(
@@ -437,19 +441,29 @@ def _join(
 
 
 def test_resolve_join_keys_qualified() -> None:
-    join = _join((
-        JoinKeyRef(qualifier='source', column='dim_id'),
-        JoinKeyRef(qualifier='dim', column='id'),
-    ))
+    join = _join(
+        (
+            JoinKeyRef(qualifier='source', column='dim_id'),
+            JoinKeyRef(qualifier='dim', column='id'),
+        )
+    )
     assert resolve_join_keys(join, {'id'}, {'dim_id'}) == (
-        'source', 'dim_id', 'id')
+        'source',
+        'dim_id',
+        'id',
+    )
 
-    join = _join((
-        JoinKeyRef(qualifier='dim', column='id'),
-        JoinKeyRef(qualifier='source', column='dim_id'),
-    ))
+    join = _join(
+        (
+            JoinKeyRef(qualifier='dim', column='id'),
+            JoinKeyRef(qualifier='source', column='dim_id'),
+        )
+    )
     assert resolve_join_keys(join, {'id'}, {'dim_id'}) == (
-        'source', 'dim_id', 'id')
+        'source',
+        'dim_id',
+        'id',
+    )
 
 
 def test_resolve_join_keys_nested_source_reference() -> None:
@@ -461,14 +475,19 @@ def test_resolve_join_keys_nested_source_reference() -> None:
         parent_alias='parent',
     )
     assert resolve_join_keys(join, {'id'}, {'other'}) == (
-        'source', 'dim_id', 'id')
+        'source',
+        'dim_id',
+        'id',
+    )
 
 
 def test_resolve_join_keys_unqualified() -> None:
-    join = _join((
-        JoinKeyRef(qualifier=None, column='dim_id'),
-        JoinKeyRef(qualifier=None, column='id'),
-    ))
+    join = _join(
+        (
+            JoinKeyRef(qualifier=None, column='dim_id'),
+            JoinKeyRef(qualifier=None, column='id'),
+        )
+    )
     assert resolve_join_keys(
         join,
         child_columns={'id', 'name'},
@@ -477,24 +496,30 @@ def test_resolve_join_keys_unqualified() -> None:
 
 
 def test_resolve_join_keys_unresolvable() -> None:
-    ambiguous = _join((
-        JoinKeyRef(qualifier=None, column='id'),
-        JoinKeyRef(qualifier=None, column='id'),
-    ))
+    ambiguous = _join(
+        (
+            JoinKeyRef(qualifier=None, column='id'),
+            JoinKeyRef(qualifier=None, column='id'),
+        )
+    )
     with pytest.raises(UnsupportedJoinError, match='could not be resolved'):
         resolve_join_keys(ambiguous, {'id'}, {'id'})
 
-    unknown = _join((
-        JoinKeyRef(qualifier='other', column='a'),
-        JoinKeyRef(qualifier='dim', column='id'),
-    ))
+    unknown = _join(
+        (
+            JoinKeyRef(qualifier='other', column='a'),
+            JoinKeyRef(qualifier='dim', column='id'),
+        )
+    )
     with pytest.raises(UnsupportedJoinError, match='could not be resolved'):
         resolve_join_keys(unknown, {'id'}, {'a'})
 
-    no_child = _join((
-        JoinKeyRef(qualifier='source', column='a'),
-        JoinKeyRef(qualifier='source', column='b'),
-    ))
+    no_child = _join(
+        (
+            JoinKeyRef(qualifier='source', column='a'),
+            JoinKeyRef(qualifier='source', column='b'),
+        )
+    )
     with pytest.raises(UnsupportedJoinError, match='could not be resolved'):
         resolve_join_keys(no_child, {'a', 'b'}, {'a', 'b'})
 
@@ -503,41 +528,53 @@ _CATALOG = 'cat'
 _SCHEMA = 'sch'
 
 _DATA = {
-    'order_lines': pd.DataFrame({
-        'line_id': [f'L{i}' for i in range(100)],
-        'order_id': [f'O{i % 40}' for i in range(100)],
-        'customer_id': [f'C{i % 10}' for i in range(100)],
-        'product_id': [f'P{i % 5}' for i in range(100)],
-        'promo_id': [f'M{i % 3}' for i in range(100)],
-        'order_date': pd.date_range('2025-01-01', periods=100, freq='D'),
-        'product_line': [['GPU', 'CPU', 'DPU'][i % 3] for i in range(100)],
-        'status': ['VALID'] * 100,
-        'amount': [float(10 + i) for i in range(100)],
-    }),
-    'customers': pd.DataFrame({
-        'customer_id': [f'C{i}' for i in range(10)],
-        'region_id': [f'R{i % 3}' for i in range(10)],
-        'segment': [['gold', 'silver'][i % 2] for i in range(10)],
-    }),
-    'regions': pd.DataFrame({
-        'region_id': ['R0', 'R1', 'R2'],
-        'name': ['AMER', 'EMEA', 'APAC'],
-    }),
-    'products': pd.DataFrame({
-        'product_id': [f'P{i}' for i in range(5)],
-        'product_line': [['GPU', 'CPU', 'DPU'][i % 3] for i in range(5)],
-    }),
-    'refunds': pd.DataFrame({
-        'refund_id': [f'F{i}' for i in range(20)],
-        'order_line_id': [f'L{i * 5}' for i in range(20)],
-        'refund_date': pd.date_range('2025-02-01', periods=20, freq='D'),
-        'amount': [float(i) for i in range(20)],
-    }),
-    'payments': pd.DataFrame({
-        'payment_id': [f'Y{i}' for i in range(10)],
-        'order_id': [f'O{i}' for i in range(10)],
-        'amount': [float(i) for i in range(10)],
-    }),
+    'order_lines': pd.DataFrame(
+        {
+            'line_id': [f'L{i}' for i in range(100)],
+            'order_id': [f'O{i % 40}' for i in range(100)],
+            'customer_id': [f'C{i % 10}' for i in range(100)],
+            'product_id': [f'P{i % 5}' for i in range(100)],
+            'promo_id': [f'M{i % 3}' for i in range(100)],
+            'order_date': pd.date_range('2025-01-01', periods=100, freq='D'),
+            'product_line': [['GPU', 'CPU', 'DPU'][i % 3] for i in range(100)],
+            'status': ['VALID'] * 100,
+            'amount': [float(10 + i) for i in range(100)],
+        }
+    ),
+    'customers': pd.DataFrame(
+        {
+            'customer_id': [f'C{i}' for i in range(10)],
+            'region_id': [f'R{i % 3}' for i in range(10)],
+            'segment': [['gold', 'silver'][i % 2] for i in range(10)],
+        }
+    ),
+    'regions': pd.DataFrame(
+        {
+            'region_id': ['R0', 'R1', 'R2'],
+            'name': ['AMER', 'EMEA', 'APAC'],
+        }
+    ),
+    'products': pd.DataFrame(
+        {
+            'product_id': [f'P{i}' for i in range(5)],
+            'product_line': [['GPU', 'CPU', 'DPU'][i % 3] for i in range(5)],
+        }
+    ),
+    'refunds': pd.DataFrame(
+        {
+            'refund_id': [f'F{i}' for i in range(20)],
+            'order_line_id': [f'L{i * 5}' for i in range(20)],
+            'refund_date': pd.date_range('2025-02-01', periods=20, freq='D'),
+            'amount': [float(i) for i in range(20)],
+        }
+    ),
+    'payments': pd.DataFrame(
+        {
+            'payment_id': [f'Y{i}' for i in range(10)],
+            'order_id': [f'O{i}' for i in range(10)],
+            'amount': [float(i) for i in range(10)],
+        }
+    ),
 }
 
 _COLUMN_TYPES = {
@@ -579,22 +616,30 @@ _COLUMN_TYPES = {
 }
 
 _EXPR_DATA = {
-    'order_lines': pd.DataFrame({
-        'order_month':
-        _DATA['order_lines']['order_date'].dt.to_period('M').dt.to_timestamp(),
-        'order_quarter':
-        _DATA['order_lines']['order_date'].dt.to_period('Q').dt.to_timestamp(),
-    }),
-    'customers': pd.DataFrame({
-        'customer_segment': _DATA['customers']['segment'],
-    }),
-    'regions': pd.DataFrame({
-        'region_name': _DATA['regions']['name'],
-        'region_code': _DATA['regions']['name'].str[:2],
-    }),
+    'order_lines': pd.DataFrame(
+        {
+            'order_month': _DATA['order_lines']['order_date']
+            .dt.to_period('M')
+            .dt.to_timestamp(),
+            'order_quarter': _DATA['order_lines']['order_date']
+            .dt.to_period('Q')
+            .dt.to_timestamp(),
+        }
+    ),
+    'customers': pd.DataFrame(
+        {
+            'customer_segment': _DATA['customers']['segment'],
+        }
+    ),
+    'regions': pd.DataFrame(
+        {
+            'region_name': _DATA['regions']['name'],
+            'region_code': _DATA['regions']['name'].str[:2],
+        }
+    ),
 }
 
-_METRIC_VIEW_YAML = '''
+_METRIC_VIEW_YAML = """
 version: "1.1"
 source: cat.sch.order_lines
 filter: source.status = 'VALID'
@@ -639,7 +684,7 @@ dimensions:
 measures:
   - name: total_amount
     expr: SUM(source.amount)
-'''
+"""
 
 _DESCRIBE_ROWS = [
     ('order_month', 'timestamp', None),
@@ -662,11 +707,12 @@ _DESCRIBE_ROWS = [
 
 
 class _FakeCursor:
-    def __init__(self, describe_rows: list,
-                 sql_log: list[str] | None = None) -> None:
+    def __init__(
+        self, describe_rows: list, sql_log: list[str] | None = None
+    ) -> None:
         self._describe_rows = describe_rows
         self._rows: list = []
-        self._arrow: 'pa.Table | None' = None
+        self._arrow: pa.Table | None = None
         self._sql_log = sql_log if sql_log is not None else []
 
     def __enter__(self) -> '_FakeCursor':
@@ -687,9 +733,12 @@ class _FakeCursor:
         markers = re.findall(
             r'lower\((?:\w+\.)?(\w+)\) = lower\(\?\)'
             r'|(?:\w+\.)?(\w+) = lower\(\?\)'
-            r'|(?:\w+\.)?(\w+) = \?', sql)
-        names = [folded or sargable or plain
-                 for folded, sargable, plain in markers]
+            r'|(?:\w+\.)?(\w+) = \?',
+            sql,
+        )
+        names = [
+            folded or sargable or plain for folded, sargable, plain in markers
+        ]
         if column not in names or parameters is None:
             return None
         value = parameters[names.index(column)]
@@ -708,19 +757,21 @@ class _FakeCursor:
         if 'information_schema.columns' in sql:
             schema = self._bound(sql, parameters, 'table_schema')
             table = self._bound(sql, parameters, 'table_name')
-            column_types = (_COLUMN_TYPES.get(table, {})
-                            if schema == _SCHEMA else {})
-            self._rows = [(name, dtype, 'YES', _CATALOG, _SCHEMA, table)
-                          for name, dtype in column_types.items()]
+            column_types = (
+                _COLUMN_TYPES.get(table, {}) if schema == _SCHEMA else {}
+            )
+            self._rows = [
+                (name, dtype, 'YES', _CATALOG, _SCHEMA, table)
+                for name, dtype in column_types.items()
+            ]
             return
 
         if 'information_schema' in sql:
             return
 
         if sql.upper().startswith('SELECT COUNT(*)'):
-            table = re.search(r'FROM `[^`]+`\.`[^`]+`\.`([^`]+)`',
-                              sql).group(1)
-            self._rows = [(len(_DATA[table]), )]
+            table = re.search(r'FROM `[^`]+`\.`[^`]+`\.`([^`]+)`', sql).group(1)
+            self._rows = [(len(_DATA[table]),)]
             return
 
         table = re.search(r'FROM `([^`]+)`\.`([^`]+)`\.`([^`]+)`', sql)
@@ -742,10 +793,12 @@ class _FakeCursor:
                 columns[name] = df[name]
             else:
                 assert expr_df is not None and name in expr_df.columns, (
-                    f'Unexpected column {name!r} in SQL: {sql}')
+                    f'Unexpected column {name!r} in SQL: {sql}'
+                )
                 columns[name] = expr_df[name]
         self._arrow = pa.Table.from_pandas(
-            pd.DataFrame(columns), preserve_index=False)
+            pd.DataFrame(columns), preserve_index=False
+        )
 
     def fetchall(self) -> list:
         return self._rows
@@ -783,14 +836,22 @@ def test_from_databricks_metric_view() -> None:
         )
 
     assert set(graph.tables) == {
-        'order_lines', 'customers', 'regions', 'products', 'refunds'
+        'order_lines',
+        'customers',
+        'regions',
+        'products',
+        'refunds',
     }
 
     fact = graph['order_lines']
     assert fact.source_name == 'cat.sch.order_lines'
     assert {column.name for column in fact.columns} == {
-        'order_month', 'order_quarter', 'product_line', 'line_id',
-        'customer_id', 'product_id'
+        'order_month',
+        'order_quarter',
+        'product_line',
+        'line_id',
+        'customer_id',
+        'product_id',
     }
     assert fact.primary_key is not None
     assert fact.primary_key.name == 'line_id'
@@ -799,14 +860,17 @@ def test_from_databricks_metric_view() -> None:
     assert fact['order_month'].expr is not None
     assert str(fact['order_month'].expr) == "DATE_TRUNC('MONTH', order_date)"
     assert str(fact['order_quarter'].expr) == (
-        "DATE_TRUNC('QUARTER', (DATE_TRUNC('MONTH', order_date)))")
+        "DATE_TRUNC('QUARTER', (DATE_TRUNC('MONTH', order_date)))"
+    )
     assert fact['product_line'].expr is None
     assert fact['product_id'].expr is None
 
     customers = graph['customers']
     assert customers.source_name == 'cat.sch.customers'
     assert {column.name for column in customers.columns} == {
-        'customer_segment', 'customer_id', 'region_id'
+        'customer_segment',
+        'customer_id',
+        'region_id',
     }
     assert customers.primary_key is not None
     assert customers.primary_key.name == 'customer_id'
@@ -815,7 +879,9 @@ def test_from_databricks_metric_view() -> None:
     regions = graph['regions']
     assert regions.source_name == 'cat.sch.regions'
     assert {column.name for column in regions.columns} == {
-        'region_name', 'region_code', 'region_id'
+        'region_name',
+        'region_code',
+        'region_id',
     }
     assert regions.primary_key is not None
     assert regions.primary_key.name == 'region_id'
@@ -837,8 +903,7 @@ def test_from_databricks_metric_view() -> None:
         Edge('refunds', 'order_line_id', 'order_lines'),
     }
     linked = {edge.src_table for edge in graph.edges} | {
-        edge.dst_table
-        for edge in graph.edges
+        edge.dst_table for edge in graph.edges
     }
     assert set(graph.tables) == linked
 
@@ -851,8 +916,10 @@ def test_from_databricks_metric_view() -> None:
 
 
 def test_from_databricks_metric_view_not_a_metric_view() -> None:
-    describe_rows = [(name, 'MANAGED' if name == 'Type' else dtype, comment)
-                     for name, dtype, comment in _DESCRIBE_ROWS]
+    describe_rows = [
+        (name, 'MANAGED' if name == 'Type' else dtype, comment)
+        for name, dtype, comment in _DESCRIBE_ROWS
+    ]
     with pytest.raises(ValueError, match='is not a metric view'):
         Graph.from_databricks_metric_view(
             'sales_mv',
@@ -872,7 +939,8 @@ def test_from_databricks_metric_view_invalid_name() -> None:
 
 def test_read_metric_view_definition() -> None:
     definition, dtypes, catalog, schema = read_metric_view_definition(
-        _FakeConnection(), '`cat`.`sch`.`sales_mv`')
+        _FakeConnection(), '`cat`.`sch`.`sales_mv`'
+    )
 
     assert definition == _METRIC_VIEW_YAML
     assert dtypes == {
@@ -901,7 +969,7 @@ def _metric_view(definition: str, dtypes: dict[str, str]) -> list:
     ]
 
 
-_REJECTED_JOIN_YAML = '''
+_REJECTED_JOIN_YAML = """
 version: "1.1"
 source: cat.sch.order_lines
 joins:
@@ -914,9 +982,9 @@ dimensions:
 measures:
   - name: total_amount
     expr: SUM(source.amount)
-'''
+"""
 
-_REJECTED_JOIN_DERIVED_KEY_YAML = '''
+_REJECTED_JOIN_DERIVED_KEY_YAML = """
 version: "1.1"
 source: cat.sch.order_lines
 joins:
@@ -929,16 +997,18 @@ dimensions:
 measures:
   - name: total_amount
     expr: SUM(source.amount)
-'''
+"""
 
 
-def test_from_databricks_metric_view_rejected_join_does_not_leak_column(
-) -> None:
+def test_from_databricks_metric_view_rejected_join_does_not_leak_column() -> (
+    None
+):
     # Regression test for `graph-metric-view-rejected-join-mutates-tables.md`:
     # a join that is reported as not added must not graft its key column onto
     # the fact table, where it can go on to become the graph's time column.
-    describe_rows = _metric_view(_REJECTED_JOIN_YAML,
-                                 {'product_line': 'string'})
+    describe_rows = _metric_view(
+        _REJECTED_JOIN_YAML, {'product_line': 'string'}
+    )
 
     with pytest.warns(UserWarning) as caught:
         graph = Graph.from_databricks_metric_view(
@@ -962,8 +1032,9 @@ def test_from_databricks_metric_view_rejected_join_keeps_expression() -> None:
     # Regression test for `graph-metric-view-rejected-join-mutates-tables.md`:
     # a join that is reported as not added must not replace a declared
     # dimension with its physical source column.
-    describe_rows = _metric_view(_REJECTED_JOIN_DERIVED_KEY_YAML,
-                                 {'product_id': 'string'})
+    describe_rows = _metric_view(
+        _REJECTED_JOIN_DERIVED_KEY_YAML, {'product_id': 'string'}
+    )
 
     with pytest.warns(UserWarning) as caught:
         graph = Graph.from_databricks_metric_view(
@@ -983,7 +1054,7 @@ def test_from_databricks_metric_view_rejected_join_keeps_expression() -> None:
     assert str(fact['product_id'].expr) == 'UPPER(product_id)'
 
 
-_HOSTILE_EXPR_YAML = '''
+_HOSTILE_EXPR_YAML = """
 version: "1.1"
 source: cat.sch.order_lines
 dimensions:
@@ -994,19 +1065,20 @@ dimensions:
 measures:
   - name: total_amount
     expr: SUM(source.amount)
-'''
+"""
 
 
 def test_from_databricks_metric_view_drops_a_hostile_expression() -> None:
-    # Regression test for
-    # `bugs/security-column-expr-executes-verbatim-warehouse-sql.md`: a
-    # dimension expression comes from whoever authored the view but runs
-    # under the caller's warehouse role, so a sub-query that reads a table
-    # outside the graph must never be lifted into a `ColumnSpec`.
-    describe_rows = _metric_view(_HOSTILE_EXPR_YAML, {
-        'product_line': 'string',
-        'leaked': 'double',
-    })
+    # Regression test: a dimension expression comes from whoever authored
+    # the view but runs under the caller's warehouse role, so a sub-query that
+    # reads a table outside the graph must never be lifted into a `ColumnSpec`.
+    describe_rows = _metric_view(
+        _HOSTILE_EXPR_YAML,
+        {
+            'product_line': 'string',
+            'leaked': 'double',
+        },
+    )
 
     with pytest.warns(UserWarning) as caught:
         graph = Graph.from_databricks_metric_view(
@@ -1031,10 +1103,16 @@ def test_from_databricks_case_insensitive_identifiers() -> None:
         catalog=_CATALOG.upper(),
         schema=_SCHEMA.upper(),
         tables=[
-            dict(name='CUSTOMERS', columns=['customer_id', 'segment'],
-                 primary_key='customer_id'),
-            dict(name='ORDER_LINES', columns=['line_id', 'customer_id'],
-                 primary_key='line_id'),
+            dict(
+                name='CUSTOMERS',
+                columns=['customer_id', 'segment'],
+                primary_key='customer_id',
+            ),
+            dict(
+                name='ORDER_LINES',
+                columns=['line_id', 'customer_id'],
+                primary_key='line_id',
+            ),
         ],
         edges=[('ORDER_LINES', 'customer_id', 'CUSTOMERS')],
         infer_metadata=False,
@@ -1059,7 +1137,8 @@ def test_from_databricks_unknown_table() -> None:
 
 
 def test_from_databricks_metric_view_tracks_internal_connection(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # Regression test for `graph-warehouse-connection-never-closed.md`: a
     # connection the SDK opened is a connection the SDK owns and closes.
     connection = _FakeConnection()
@@ -1086,7 +1165,8 @@ def test_from_databricks_metric_view_tracks_internal_connection(
 
 
 def test_from_databricks_closes_internal_connection_on_error(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # A connection the SDK opened must not leak in case the graph is never
     # constructed and can therefore never take ownership of it:
     connection = _FakeConnection()
@@ -1123,7 +1203,8 @@ def test_from_databricks_keeps_external_connection_open_on_error() -> None:
 
 
 def test_from_databricks_metric_view_closes_internal_connection_on_error(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     connection = _FakeConnection()
     monkeypatch.setattr(
         'kumorfm.rfm.backend.databricks.connect',
@@ -1137,7 +1218,6 @@ def test_from_databricks_metric_view_closes_internal_connection_on_error(
             verbose=False,
         )
     assert connection.closed
-
 
 
 @pytest.fixture(scope='session')
@@ -1164,7 +1244,10 @@ def test_live_metric_view_graph(metric_view_graph: Graph) -> None:
     graph = metric_view_graph
 
     assert set(graph.tables) == {
-        'order_lines', 'customers', 'products', 'orders'
+        'order_lines',
+        'customers',
+        'products',
+        'orders',
     }
 
     fact = graph['order_lines']
@@ -1172,8 +1255,12 @@ def test_live_metric_view_graph(metric_view_graph: Graph) -> None:
     assert fact.time_column is not None
     assert fact.time_column.name == 'Order Month'
     assert {column.name for column in fact.columns} == {
-        'Order Month', 'Product Family', 'Product Line', 'customer_id',
-        'product_id', 'order_id'
+        'Order Month',
+        'Product Family',
+        'Product Line',
+        'customer_id',
+        'product_id',
+        'order_id',
     }
 
     assert graph['customers'].primary_key is not None
@@ -1191,15 +1278,19 @@ def test_live_metric_view_graph(metric_view_graph: Graph) -> None:
     }
 
 
-def test_live_metric_view_qualified_name(connection: 'Connection',
-                                         catalog: str, schema: str) -> None:
+def test_live_metric_view_qualified_name(
+    connection: 'Connection', catalog: str, schema: str
+) -> None:
     graph = Graph.from_databricks_metric_view(
         f'{catalog}.{schema}.nvidia_erp_mv',
         connection=connection,
         verbose=False,
     )
     assert set(graph.tables) == {
-        'order_lines', 'customers', 'products', 'orders'
+        'order_lines',
+        'customers',
+        'products',
+        'orders',
     }
 
 
@@ -1220,22 +1311,26 @@ def test_conversion_messages_survive_a_warnings_as_errors_policy() -> None:
         warnings.simplefilter('error', ViewConversionWarning)
         with pytest.raises(ViewConversionWarning):
             Graph.from_databricks_metric_view(
-                'sales_mv', connection=_FakeConnection(), verbose=False)
+                'sales_mv', connection=_FakeConnection(), verbose=False
+            )
 
     with warnings.catch_warnings():
         warnings.simplefilter('ignore', ViewConversionWarning)
         graph = Graph.from_databricks_metric_view(
-            'sales_mv', connection=_FakeConnection(), verbose=False)
+            'sales_mv', connection=_FakeConnection(), verbose=False
+        )
 
     assert issubclass(ViewConversionWarning, UserWarning)
     assert len(graph.conversion_messages) > 0
-    assert any('Ignored the' in message
-               for message in graph.conversion_messages)
+    assert any(
+        'Ignored the' in message for message in graph.conversion_messages
+    )
 
 
 def test_conversion_messages_are_empty_for_a_plain_graph() -> None:
     graph = Graph.from_data(
-        {'users': pd.DataFrame({'user_id': [1, 2]})}, verbose=False)
+        {'users': pd.DataFrame({'user_id': [1, 2]})}, verbose=False
+    )
 
     assert graph.conversion_messages == ()
 
@@ -1256,7 +1351,8 @@ def test_from_databricks_rejects_a_schema_with_no_tables() -> None:
 
 
 def test_escalated_conversion_warning_closes_an_owned_connection(
-        monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     r"""Under warnings-as-errors the warning leaves the constructor, so the
     caller never receives the graph that would have owned this connection.
     Same contract as every other failure path here.
@@ -1291,8 +1387,9 @@ def test_escalated_conversion_warning_closes_an_owned_connection(
         assert connection.closed
 
 
-def test_escalated_conversion_warning_keeps_a_borrowed_connection_open(
-) -> None:
+def test_escalated_conversion_warning_keeps_a_borrowed_connection_open() -> (
+    None
+):
     import warnings
 
     from kumorfm.rfm import ViewConversionWarning
@@ -1303,7 +1400,8 @@ def test_escalated_conversion_warning_keeps_a_borrowed_connection_open(
         warnings.simplefilter('error', ViewConversionWarning)
         with pytest.raises(ViewConversionWarning):
             Graph.from_databricks_metric_view(
-                'sales_mv', connection=connection, verbose=False)
+                'sales_mv', connection=connection, verbose=False
+            )
 
     assert not connection.closed
 
@@ -1319,10 +1417,12 @@ def test_conversion_warning_is_attributed_to_the_caller() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter('always')
         Graph.from_databricks_metric_view(
-            'sales_mv', connection=_FakeConnection(), verbose=False)
+            'sales_mv', connection=_FakeConnection(), verbose=False
+        )
 
-    escalated = [w for w in caught
-                 if issubclass(w.category, ViewConversionWarning)]
+    escalated = [
+        w for w in caught if issubclass(w.category, ViewConversionWarning)
+    ]
     assert len(escalated) == 1
     assert escalated[0].filename == __file__
 
@@ -1342,22 +1442,29 @@ def test_information_schema_lookups_stay_pushdown_friendly() -> None:
         connection=connection,
         catalog=_CATALOG,
         schema=_SCHEMA,
-        tables=[dict(name='customers', columns=['customer_id', 'segment'],
-                     primary_key='customer_id')],
+        tables=[
+            dict(
+                name='customers',
+                columns=['customer_id', 'segment'],
+                primary_key='customer_id',
+            )
+        ],
         infer_metadata=False,
         verbose=False,
     )
 
-    lookups = [sql for sql in connection.sql_log
-               if 'information_schema' in sql]
+    lookups = [sql for sql in connection.sql_log if 'information_schema' in sql]
     assert lookups
 
     for sql in lookups:
-        assert re.search(r'lower\(\s*(?:\w+\.)?table_(?:schema|name)\s*\)',
-                         sql) is None, f'unsargable predicate in SQL: {sql}'
+        assert (
+            re.search(r'lower\(\s*(?:\w+\.)?table_(?:schema|name)\s*\)', sql)
+            is None
+        ), f'unsargable predicate in SQL: {sql}'
 
-    columns = next(sql for sql in lookups
-                   if 'information_schema.columns' in sql)
+    columns = next(
+        sql for sql in lookups if 'information_schema.columns' in sql
+    )
     assert 'table_schema = lower(?)' in columns
     assert 'table_name = lower(?)' in columns
     assert f"'{_SCHEMA}'" not in columns
@@ -1378,8 +1485,11 @@ def test_metric_view_drops_a_type_mismatched_relationship(monkeypatch) -> None:
     products = _DATA['products'].copy()
     products['product_id'] = range(len(products))
     monkeypatch.setitem(_DATA, 'products', products)
-    monkeypatch.setitem(_COLUMN_TYPES, 'products',
-                        {**_COLUMN_TYPES['products'], 'product_id': 'bigint'})
+    monkeypatch.setitem(
+        _COLUMN_TYPES,
+        'products',
+        {**_COLUMN_TYPES['products'], 'product_id': 'bigint'},
+    )
 
     with pytest.warns(ViewConversionWarning):
         graph = Graph.from_databricks_metric_view(
@@ -1389,13 +1499,48 @@ def test_metric_view_drops_a_type_mismatched_relationship(monkeypatch) -> None:
         )
 
     assert set(graph.tables) == {
-        'order_lines', 'customers', 'regions', 'products', 'refunds'
+        'order_lines',
+        'customers',
+        'regions',
+        'products',
+        'refunds',
     }
     assert Edge('order_lines', 'product_id', 'products') not in graph.edges
     assert graph.edges
 
-    dropped = [msg for msg in graph.conversion_messages
-               if 'incompatible data types' in msg]
+    dropped = [
+        msg
+        for msg in graph.conversion_messages
+        if 'incompatible data types' in msg
+    ]
     assert len(dropped) == 1
     assert "'order_lines'" in dropped[0] and "'products'" in dropped[0]
     assert graph.validate() is graph
+
+
+class _RaisingConnection(_FakeConnection):
+    r"""A connection whose driver fails the way a real one does."""
+
+    def cursor(self) -> Any:
+        raise _ServerOperationError('METRIC_VIEW_MISSING_MEASURE_FUNCTION')
+
+
+class _ServerOperationError(Exception):
+    r"""Stands in for ``databricks.sql.exc.ServerOperationError``.
+
+    Defined here rather than imported so the test states what matters: the
+    exception belongs to the driver's hierarchy and to nothing this SDK owns.
+    """
+
+
+def test_from_databricks_wraps_a_driver_exception() -> None:
+    with pytest.raises(GraphConstructionError) as caught:
+        Graph.from_databricks_metric_view(
+            'sales_mv',
+            connection=_RaisingConnection(),
+            verbose=False,
+        )
+
+    assert isinstance(caught.value, KumoRFMError)
+    assert isinstance(caught.value.__cause__, _ServerOperationError)
+    assert 'Databricks' in str(caught.value)

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 r"""Turning a DataFrame into the wire's ``arrays`` table."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -45,5 +46,5 @@ def encode_table(frame: pd.DataFrame, dtypes: dict[str, str]) -> dict[str, Any]:
     serialized_columns = [
         serialize_column(frame[column], dtypes[column]) for column in columns
     ]
-    rows = [list(row) for row in zip(*serialized_columns)]
+    rows = [list(row) for row in zip(*serialized_columns, strict=True)]
     return {'format': 'arrays', 'columns': columns, 'rows': rows}

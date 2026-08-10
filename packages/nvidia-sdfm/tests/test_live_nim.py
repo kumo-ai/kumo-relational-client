@@ -39,25 +39,31 @@ def test_nim_reports_ready(client: SDFMClient):
 
 
 def test_tabicl_predict_returns_expected_shape(client: SDFMClient):
-    context = pd.DataFrame({
-        'row_id': [f'ctx-{i}' for i in range(20)],
-        'age': [20 + i for i in range(20)],
-        'score': [0.05 * i for i in range(20)],
-        'target_col': ['yes' if i % 2 == 0 else 'no' for i in range(20)],
-    })
-    predict = pd.DataFrame({
-        'row_id': ['q-0', 'q-1'],
-        'age': [33, 49],
-        'score': [0.72, 0.30],
-    })
+    context = pd.DataFrame(
+        {
+            'row_id': [f'ctx-{i}' for i in range(20)],
+            'age': [20 + i for i in range(20)],
+            'score': [0.05 * i for i in range(20)],
+            'target_col': ['yes' if i % 2 == 0 else 'no' for i in range(20)],
+        }
+    )
+    predict = pd.DataFrame(
+        {
+            'row_id': ['q-0', 'q-1'],
+            'age': [33, 49],
+            'score': [0.72, 0.30],
+        }
+    )
 
-    frame = client._predict(TabICLRequest(
-        context=context,
-        predict=predict,
-        task='classification',
-        target='target_col',
-        outputs=['prediction', 'probabilities'],
-    ))
+    frame = client._predict(
+        TabICLRequest(
+            context=context,
+            predict=predict,
+            task='classification',
+            target='target_col',
+            outputs=['prediction', 'probabilities'],
+        )
+    )
 
     assert len(frame) == 2
     assert list(frame['row_index']) == [0, 1]
@@ -68,25 +74,31 @@ def test_tabicl_predict_returns_expected_shape(client: SDFMClient):
 
 
 def test_tabicl_predict_regression_returns_quantiles(client: SDFMClient):
-    context = pd.DataFrame({
-        'row_id': [f'ctx-{i}' for i in range(10)],
-        'feature_a': [float(i) for i in range(10)],
-        'target_col': [float(i) * 2.0 + 1.0 for i in range(10)],
-    })
-    predict = pd.DataFrame({
-        'row_id': ['q-0'],
-        'feature_a': [4.5],
-    })
+    context = pd.DataFrame(
+        {
+            'row_id': [f'ctx-{i}' for i in range(10)],
+            'feature_a': [float(i) for i in range(10)],
+            'target_col': [float(i) * 2.0 + 1.0 for i in range(10)],
+        }
+    )
+    predict = pd.DataFrame(
+        {
+            'row_id': ['q-0'],
+            'feature_a': [4.5],
+        }
+    )
 
-    frame = client._predict(TabICLRequest(
-        context=context,
-        predict=predict,
-        task='regression',
-        target='target_col',
-        outputs=['prediction', 'quantiles'],
-        prediction_statistic='mean',
-        quantile_levels=[0.1, 0.5, 0.9],
-    ))
+    frame = client._predict(
+        TabICLRequest(
+            context=context,
+            predict=predict,
+            task='regression',
+            target='target_col',
+            outputs=['prediction', 'quantiles'],
+            prediction_statistic='mean',
+            quantile_levels=[0.1, 0.5, 0.9],
+        )
+    )
 
     assert len(frame) == 1
     assert 'quantiles' in frame.columns

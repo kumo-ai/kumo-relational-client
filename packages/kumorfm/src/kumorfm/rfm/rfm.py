@@ -22,7 +22,6 @@ from rich.markdown import Markdown
 
 from kumorfm import in_notebook
 from kumorfm.api.explain import GraphGradientScore
-from kumorfm.runmode import RunMode
 from kumorfm.api.pquery import QueryType, ValidatedPredictiveQuery
 from kumorfm.api.pquery.AST import (
     Aggregation,
@@ -41,14 +40,12 @@ from kumorfm.api.rfm import (
 from kumorfm.api.rfm.context import Context, Table
 from kumorfm.api.task import TaskType
 from kumorfm.api.typing import AggregationType, ProblemType, Stype
-
 from kumorfm.client.client import KumoClient
 from kumorfm.client.rfm import RFMAPI
 from kumorfm.exceptions import HTTPException, NimFailureError
 from kumorfm.mixin import CastMixin
 from kumorfm.rfm import Graph, TaskTable
-from kumorfm.rfm.base import DataBackend, Sampler
-from kumorfm.rfm.base import composite_key
+from kumorfm.rfm.base import DataBackend, Sampler, composite_key
 from kumorfm.rfm.base.utils import Timestamp, to_naive_utc
 from kumorfm.rfm.diagnostics import GraphSanitizationReport
 from kumorfm.rfm.explain_summary import generate_summary
@@ -63,6 +60,7 @@ from kumorfm.rfm.payload import (
     validate_payload_table_rows,
 )
 from kumorfm.rfm.query_parser import parse_query_locally
+from kumorfm.runmode import RunMode
 from kumorfm.utils import ProgressLogger, display
 
 _RANDOM_SEED = 42
@@ -88,13 +86,15 @@ _DEFAULT_NUM_NEIGHBORS = {
 }
 
 _MAX_SIZE = 30 * 1024 * 1024
-_SIZE_LIMIT_MSG = ("Context size exceeds the 30MB limit. {stats}\nPlease "
-                   "reduce either the number of tables in the graph, their "
-                   "number of columns (e.g., large text columns), "
-                   "neighborhood configuration, or the run mode. If none of "
-                   "this is possible, please create a feature request at "
-                   "'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you must go "
-                   "beyond this for your use-case.")
+_SIZE_LIMIT_MSG = (
+    'Context size exceeds the 30MB limit. {stats}\nPlease '
+    'reduce either the number of tables in the graph, their '
+    'number of columns (e.g., large text columns), '
+    'neighborhood configuration, or the run mode. If none of '
+    'this is possible, please create a feature request at '
+    "'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you must go "
+    'beyond this for your use-case.'
+)
 
 _SESSION_UNSUPPORTED_STATUS = frozenset({404, 405, 501})
 
@@ -108,7 +108,11 @@ def _sessions_disabled_by_env() -> bool:
     stateless per-batch path even for multi-batch jobs.
     """
     return os.environ.get('KUMORFM_DISABLE_SESSIONS', '').strip().lower() in (
-        '1', 'true', 'yes', 'on')
+        '1',
+        'true',
+        'yes',
+        'on',
+    )
 
 
 def _no_session_reason(random_seed: int | None) -> str:
@@ -118,10 +122,12 @@ def _no_session_reason(random_seed: int | None) -> str:
     symptom is that every batch carries the full context instead of the
     prediction rows alone.
     """
-    cause = ('KUMORFM_DISABLE_SESSIONS is set' if random_seed is not None else
-             'random_seed=None re-samples neighborhoods per batch')
-    return (f"Sessions disabled ({cause}); each batch re-uploads the "
-            f"context")
+    cause = (
+        'KUMORFM_DISABLE_SESSIONS is set'
+        if random_seed is not None
+        else 'random_seed=None re-samples neighborhoods per batch'
+    )
+    return f'Sessions disabled ({cause}); each batch re-uploads the context'
 
 
 @dataclass(frozen=True)
@@ -131,6 +137,7 @@ class MaterializedPredictionRequest:
     The payload is the exact mapping passed to the live API and should be
     treated as read-only; nested payload containers are not copied or frozen.
     """
+
     payload: Mapping[str, Any]
     batch_index: int
     prediction_start: int
@@ -156,13 +163,14 @@ class _SessionHandle:
     tracked for deletion even if a later call raises); ``active`` flips to
     ``False`` when the NIM turns out not to support sessions.
     """
+
     id: str | None = None
     active: bool = True
 
 
 @dataclass(repr=False)
 class ExplainConfig(CastMixin):
-    """Configuration for explainability.
+    r"""Configuration for explainability.
 
     .. warning::
 
@@ -194,6 +202,7 @@ class ExplainConfig(CastMixin):
             ``KUMORFM_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini-2025-04-14``) and
             ``KUMORFM_EXPLAIN_LLM_TIMEOUT`` (default 20s).
     """
+
     skip_summary: bool = False
 
 
@@ -208,8 +217,10 @@ class Explanation:
         r"""Return the inner cohort/subgraph payload for a ``kumo_rfm_v2_1``
         explanation, or an empty mapping for any other format.
         """
-        if (isinstance(self.details, dict)
-                and self.details.get('format') == 'kumo_rfm_v2_1'):
+        if (
+            isinstance(self.details, dict)
+            and self.details.get('format') == 'kumo_rfm_v2_1'
+        ):
             inner = self.details.get('details')
             if isinstance(inner, dict):
                 return inner
@@ -243,8 +254,9 @@ class Explanation:
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 continue
             table_scores = scores[str(table)]
-            table_scores.columns[column] = (
-                table_scores.columns.get(column, 0.0) + float(value))
+            table_scores.columns[column] = table_scores.columns.get(
+                column, 0.0
+            ) + float(value)
         return scores
 
     def _iter_cells(
@@ -288,7 +300,7 @@ class Explanation:
             return self.prediction
         if index == 1:
             return self.summary
-        raise IndexError("Index out of range")
+        raise IndexError('Index out of range')
 
     def __iter__(self) -> Iterator[pd.DataFrame | str]:
         return iter((self.prediction, self.summary))
@@ -300,7 +312,7 @@ class Explanation:
         console = Console(soft_wrap=True)
         with console.capture() as cap:
             if self.warning is not None:
-                console.print(f"[bold yellow]Warning:[/] {self.warning}\n")
+                console.print(f'[bold yellow]Warning:[/] {self.warning}\n')
             console.print(display.to_rich_table(self.prediction))
             console.print(Markdown(self.summary))
         return cap.get()[:-1]
@@ -309,7 +321,7 @@ class Explanation:
         r"""Prints the explanation."""
         if in_notebook():
             if self.warning is not None:
-                display.message(f"**Warning:** {self.warning}")
+                display.message(f'**Warning:** {self.warning}')
             display.dataframe(self.prediction)
             display.message(self.summary)
         else:
@@ -320,10 +332,36 @@ class Explanation:
 
 
 _NIM_UNAVAILABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
-_CARDINALITY_RE = re.compile(
-    r'categorical cardinality \d+ exceeds limit (\d+)')
+# Server-side ceilings, restated here so the request is refused locally with an
+# actionable message instead of as an opaque failure from the NIM.
+_MAX_HOPS = 6
+_MAX_SUBGRAPH_TABLES = 15
+# Seconds, raised to the power of the attempt number. Matches the transport's
+# own `_RETRY_BACKOFF_FACTOR`; this is the application-level retry above it.
+_RETRY_BACKOFF_BASE_SECONDS = 2
+_CARDINALITY_RE = re.compile(r'categorical cardinality \d+ exceeds limit (\d+)')
 
 _OPTIMIZABLE_BACKENDS = frozenset({DataBackend.SQLITE, DataBackend.DUCKDB})
+
+
+def _first_uncastable(
+    values: Sequence[Any], dtype: Any
+) -> tuple[int, Any] | None:
+    r"""The first ``(position, value)`` that will not cast to ``dtype``.
+
+    Lets a rejected ``indices`` name the element responsible. Passing the whole
+    sequence to pandas reports only its own internals -- "int() argument must
+    be a string, a bytes-like object or a real number, not 'NoneType'" -- which
+    names neither the argument, the offending position, nor the key type the
+    entity table actually uses.
+    """
+    for position, value in enumerate(values):
+        try:
+            pd.Series([value], dtype=dtype)
+        except (TypeError, ValueError):
+            return position, value
+    return None
+
 
 def _class_dtype(task: TaskTable, context: Context) -> Any:
     r"""The dtype the ``CLASS`` column of a prediction frame should carry.
@@ -353,7 +391,6 @@ def _cast_class_column(values: pd.Series, dtype: Any) -> pd.Series:
         return values
 
 
-
 _MAX_INVALID_PARAMS = 5
 
 
@@ -377,6 +414,11 @@ def _problem_document(error: Exception) -> dict[str, Any]:
 
 def _invalid_params_summary(document: dict[str, Any]) -> str:
     r"""Render the NIM's per-field validation diagnosis.
+
+    ``nvidia_sdfm.errors.format_invalid_params`` is the counterpart on the SDK
+    side and must render the same shape. The two cannot share one
+    implementation: ``kumorfm`` does not depend on ``nvidia_sdfm``, and the
+    package both depend on is a SQL-connector package with no HTTP surface.
 
     The NIM names the exact table, row and column it rejected in
     ``invalid_params``; the top-level ``detail`` is often only "Request
@@ -418,15 +460,20 @@ def _cardinality_guidance(
     limit = int(match.group(1))
     columns = high_cardinality_columns(payload, limit) if payload else []
     if not columns:
-        return (" Set the offending column's stype to Stype.ID and retry "
-                "('text' does not lift the limit, its tokens are counted too).")
+        return (
+            " Set the offending column's stype to Stype.ID and retry "
+            "('text' does not lift the limit, its tokens are counted too)."
+        )
     listed = ', '.join(
         f"'{table}.{column}' holds {count:,}"
-        for table, column, count in columns[:3])
+        for table, column, count in columns[:3]
+    )
     table, column, _ = columns[0]
-    return (f" {listed}; set graph['{table}']['{column}'].stype = Stype.ID and "
-            f"retry ('text' does not lift the limit, its tokens are counted "
-            f"too).")
+    return (
+        f" {listed}; set graph['{table}']['{column}'].stype = Stype.ID and "
+        f"retry ('text' does not lift the limit, its tokens are counted "
+        f'too).'
+    )
 
 
 def _nim_failure_error(
@@ -444,8 +491,8 @@ def _nim_failure_error(
     a one-at-a-time hint.
 
     A 4xx is by definition about the request the caller sent, so it is reported
-    as such — quoting the NIM's per-field ``invalid_params`` diagnosis and
-    without inviting a bug report against the SDK. Only genuinely unclassifiable
+    as such, quoting the NIM's per-field ``invalid_params`` diagnosis without
+    inviting a bug report against the SDK. Only genuinely unclassifiable
     failures keep that invitation.
 
     A timeout is called out separately: it is the one failure the caller can
@@ -457,38 +504,53 @@ def _nim_failure_error(
             f'The KumoRFM NIM did not answer {subject} within the configured '
             'timeout. Raise it with SDFMClient(url, timeout=...), or retry '
             f'when the NIM is less busy. Original error: {error}',
-            transient=True)
+            transient=True,
+        )
     status = getattr(error, 'status_code', None)
     document = _problem_document(error)
     detail = document.get('detail', getattr(error, 'detail', None))
     invalid_params = document.get('invalid_params')
-    invalid_params = (invalid_params if isinstance(invalid_params, list)
-                      else [])
+    invalid_params = invalid_params if isinstance(invalid_params, list) else []
     fields = _invalid_params_summary(document)
 
     if status in _NIM_UNAVAILABLE_STATUS or isinstance(error, RequestException):
-        pacing = (' Explanations are the most GPU-intensive request, so send '
-                  'them one at a time.') if explain else ''
+        pacing = (
+            (
+                ' Explanations are the most GPU-intensive request, so send '
+                'them one at a time.'
+            )
+            if explain
+            else ''
+        )
         server = f' (server said: {detail})' if detail else ''
         return NimFailureError(
             f'The KumoRFM NIM could not complete {subject}: it is temporarily '
             f'unavailable, likely at capacity or recovering from GPU memory '
             f'pressure. Wait a few moments and retry.{pacing}{server}',
-            status_code=status, detail=detail,
-            invalid_params=invalid_params, transient=True)
+            status_code=status,
+            detail=detail,
+            invalid_params=invalid_params,
+            transient=True,
+        )
 
     if isinstance(status, int) and 400 <= status < 500:
         reason = str(detail or error).rstrip('.')
         return NimFailureError(
             f'The KumoRFM NIM rejected {subject} (HTTP {status}): '
             f'{reason}.{fields}{_cardinality_guidance(reason, payload)}',
-            status_code=status, detail=detail, invalid_params=invalid_params)
+            status_code=status,
+            detail=detail,
+            invalid_params=invalid_params,
+        )
 
     return NimFailureError(
-        f"An unexpected exception occurred. Please create an issue at "
+        f'An unexpected exception occurred. Please create an issue at '
         f"'https://github.com/NVIDIA/nvidia-sdfm-sdk'. "
-        f"{detail if detail else error}{fields}",
-        status_code=status, detail=detail, invalid_params=invalid_params)
+        f'{detail if detail else error}{fields}',
+        status_code=status,
+        detail=detail,
+        invalid_params=invalid_params,
+    )
 
 
 def _check_anchor_time(value: Any, name: str) -> Any:
@@ -496,7 +558,7 @@ def _check_anchor_time(value: Any, name: str) -> Any:
     and return it converted to the timezone-naive UTC the graph is held in.
 
     A date *string* is what most pandas users reach for first, and it used to
-    land on a bare ``assert`` with an empty message — and, under ``python -O``,
+    land on a bare ``assert`` with an empty message, and under ``python -O``
     on no check at all. A timezone-*aware* ``Timestamp`` is what the SDK's own
     ``predict`` output carries, so it is converted rather than refused.
     """
@@ -507,7 +569,8 @@ def _check_anchor_time(value: Any, name: str) -> Any:
     hint = f'; try pd.Timestamp({value!r})' if isinstance(value, str) else ''
     raise TypeError(
         f"'{name}' must be a pandas.Timestamp or the literal 'entity' (got "
-        f'{type(value).__name__} {value!r}){hint}')
+        f'{type(value).__name__} {value!r}){hint}'
+    )
 
 
 def _extract_explanation(
@@ -520,10 +583,11 @@ def _extract_explanation(
     # ``subgraphs``) with no natural-language ``summary``. We read both shapes so
     # ``summary`` is populated the moment the NIM starts producing one; until
     # then ``summary`` is legitimately empty against a live NIM. Generating that
-    # text is a server-side change tracked separately from #19.
+    # text is a server-side change, tracked separately from this client.
     if 'EXPLANATION' not in prediction or prediction.empty:
         raise RuntimeError(
-            "Prediction response did not include requested explanation.")
+            'Prediction response did not include requested explanation.'
+        )
     raw_explanation = prediction['EXPLANATION'].iloc[0]
     if isinstance(raw_explanation, dict):
         details = dict(raw_explanation)
@@ -552,7 +616,6 @@ def _extract_explanation(
     return prediction.drop(columns=['EXPLANATION']), summary, details, warning
 
 
-
 def _encode_composite_indices(
     indices: Sequence[Any],
     entity_key: tuple[str, ...],
@@ -566,20 +629,23 @@ def _encode_composite_indices(
     for index in indices:
         if isinstance(index, str):
             raise ValueError(
-                f"Entity table is identified by {list(entity_key)}, so each "
-                f"index has to name {len(entity_key)} value(s) as a tuple; "
-                f"got the single value {index!r}. No row is identified by a "
-                f"value on its own.")
+                f'Entity table is identified by {list(entity_key)}, so each '
+                f'index has to name {len(entity_key)} value(s) as a tuple; '
+                f'got the single value {index!r}. No row is identified by a '
+                f'value on its own.'
+            )
         if not isinstance(index, (tuple, list)):
             raise ValueError(
-                f"Entity table is identified by {list(entity_key)}, so each "
-                f"index has to name {len(entity_key)} value(s); got "
-                f"{index!r}")
+                f'Entity table is identified by {list(entity_key)}, so each '
+                f'index has to name {len(entity_key)} value(s); got '
+                f'{index!r}'
+            )
         if len(index) != len(entity_key):
             raise ValueError(
-                f"Entity table is identified by {list(entity_key)}, so each "
-                f"index has to name {len(entity_key)} value(s); got "
-                f"{list(index)}")
+                f'Entity table is identified by {list(entity_key)}, so each '
+                f'index has to name {len(entity_key)} value(s); got '
+                f'{list(index)}'
+            )
         encoded.append(composite_key.encode_values(list(index)))
     return encoded
 
@@ -607,12 +673,14 @@ def _decode_composite_entities(
     occupied = [name for name in entity_key if name in frame.columns]
     if occupied:
         raise ValueError(
-            f"Cannot report a prediction against key column(s) {occupied}: "
-            f"the result already carries a column of that name. Rename the "
-            f"key column(s) in the graph.")
+            f'Cannot report a prediction against key column(s) {occupied}: '
+            f'the result already carries a column of that name. Rename the '
+            f'key column(s) in the graph.'
+        )
     for offset, name in enumerate(entity_key):
-        frame.insert(position + offset, name,
-                     [parts[offset] for parts in decoded])
+        frame.insert(
+            position + offset, name, [parts[offset] for parts in decoded]
+        )
 
     if hasattr(result, 'prediction'):
         result.prediction = frame
@@ -621,13 +689,11 @@ def _decode_composite_entities(
 
 
 class KumoRFM:
-    r"""The Kumo Relational Foundation model (RFM) from the KumoRFM: A Foundation Model for In-Context Learning on
-    Relational Data.
+    r"""Run KumoRFM predictions over a relational graph.
 
-    :class:`KumoRFM` is a foundation model to generate predictions for any
-    relational dataset without training.
-    The model is pre-trained and the class provides an interface to query the
-    model from a :class:`Graph` object.
+    :class:`KumoRFM` provides the prediction interface for a pre-trained
+    relational foundation model. Build it from a :class:`Graph`, then issue PQL
+    queries with :meth:`predict`.
 
     .. code-block:: python
 
@@ -667,6 +733,7 @@ class KumoRFM:
             engine configuration lazily, which is last-writer-wins across
             threads.
     """
+
     def __init__(
         self,
         graph: Graph,
@@ -684,31 +751,39 @@ class KumoRFM:
         }
 
         if optimize and graph.backend not in _OPTIMIZABLE_BACKENDS:
-            warnings.warn(f"'optimize=True' has no effect on the "
-                          f"'{graph.backend.value}' backend; it is implemented "
-                          f"only for "
-                          f"{sorted(b.value for b in _OPTIMIZABLE_BACKENDS)}")
+            warnings.warn(
+                f"'optimize=True' has no effect on the "
+                f"'{graph.backend.value}' backend; it is implemented "
+                f'only for '
+                f'{sorted(b.value for b in _OPTIMIZABLE_BACKENDS)}'
+            )
 
         if graph.backend == DataBackend.LOCAL:
             from kumorfm.rfm.backend.local import LocalSampler
+
             self._sampler: Sampler = LocalSampler(graph, verbose)
         elif graph.backend == DataBackend.SQLITE:
             from kumorfm.rfm.backend.sqlite import SQLiteSampler
+
             self._sampler = SQLiteSampler(graph, verbose, optimize)
         elif graph.backend == DataBackend.DUCKDB:
             from kumorfm.rfm.backend.duckdb import DuckDBSampler
+
             self._sampler = DuckDBSampler(graph, verbose, optimize)
         elif graph.backend == DataBackend.SNOWFLAKE:
             from kumorfm.rfm.backend.snow import SnowSampler
+
             self._sampler = SnowSampler(graph, verbose)
         elif graph.backend == DataBackend.DATABRICKS:
             from kumorfm.rfm.backend.databricks import DatabricksSampler
+
             self._sampler = DatabricksSampler(graph, verbose)
         else:
             raise NotImplementedError
 
-        self._client: RFMAPI | None = (RFMAPI(_client)
-                                       if _client is not None else None)
+        self._client: RFMAPI | None = (
+            RFMAPI(_client) if _client is not None else None
+        )
 
         self._batch_size: int | Literal['max'] | None = None
         self._num_retries: int = 0
@@ -725,6 +800,7 @@ class KumoRFM:
             return self._client
 
         from kumorfm.rfm import global_state
+
         self._client = RFMAPI(global_state.client)
         return self._client
 
@@ -741,7 +817,7 @@ class KumoRFM:
         self,
         num_retries: int = 1,
     ) -> Generator[None, None, None]:
-        """Context manager to retry failed queries due to unexpected server
+        r"""Context manager to retry failed queries due to unexpected server
         issues.
 
         .. code-block:: python
@@ -753,8 +829,10 @@ class KumoRFM:
             num_retries: The maximum number of retries.
         """
         if num_retries < 0:
-            raise ValueError(f"'num_retries' must be greater than or equal to "
-                             f"zero (got {num_retries})")
+            raise ValueError(
+                f"'num_retries' must be greater than or equal to "
+                f'zero (got {num_retries})'
+            )
 
         previous = self._num_retries
         self._num_retries = num_retries
@@ -769,7 +847,7 @@ class KumoRFM:
         batch_size: int | Literal['max'] = 'max',
         num_retries: int = 1,
     ) -> Generator[None, None, None]:
-        """Context manager to predict in batches.
+        r"""Context manager to predict in batches.
 
         .. code-block:: python
 
@@ -788,11 +866,15 @@ class KumoRFM:
             ``KUMORFM_DISABLE_SESSIONS`` rules that out -- in which case every
             batch re-uploads the context and says so in the progress output.
         """
-        if batch_size != 'max' and (not isinstance(batch_size, int)
-                                    or isinstance(batch_size, bool)
-                                    or batch_size <= 0):
-            raise ValueError(f"'batch_size' must be a positive int or the "
-                             f"literal 'max' (got {batch_size!r})")
+        if batch_size != 'max' and (
+            not isinstance(batch_size, int)
+            or isinstance(batch_size, bool)
+            or batch_size <= 0
+        ):
+            raise ValueError(
+                f"'batch_size' must be a positive int or the "
+                f"literal 'max' (got {batch_size!r})"
+            )
 
         previous = self._batch_size
         self._batch_size = batch_size
@@ -887,7 +969,7 @@ class KumoRFM:
         random_seed: int | None = _RANDOM_SEED,
         verbose: bool | ProgressLogger = True,
     ) -> pd.DataFrame | Explanation:
-        """Returns predictions for a predictive query.
+        r"""Returns predictions for a predictive query.
 
         Inference Configuration
         -----------------------
@@ -1018,8 +1100,10 @@ class KumoRFM:
 
         if indices is None:
             if query_def.rfm_entity_ids is None:
-                raise ValueError("Cannot find entities to predict for. Please "
-                                 "pass them via `predict(query, indices=...)`")
+                raise ValueError(
+                    'Cannot find entities to predict for. Please '
+                    'pass them via `predict(query, indices=...)`'
+                )
             indices = query_def.get_rfm_entity_id_list()
         entity_key = self._composite_entity_key(query_def)
         if entity_key is not None:
@@ -1110,11 +1194,12 @@ class KumoRFM:
             )
         )
         explain_config, run_mode = self._apply_explain_guard(
-            explain, run_mode, task)
+            explain, run_mode, task
+        )
 
         if not isinstance(verbose, ProgressLogger):
             verbose = ProgressLogger.default(
-                msg=f"Materializing {task.task_type} task",
+                msg=f'Materializing {task.task_type} task',
                 verbose=verbose,
             )
         with verbose as logger:
@@ -1150,16 +1235,17 @@ class KumoRFM:
             return None, run_mode
         if run_mode in {RunMode.NORMAL, RunMode.BEST}:
             warnings.warn(
-                f"Explainability is currently only supported for run mode "
+                f'Explainability is currently only supported for run mode '
                 f"'FAST' (got '{run_mode}'). Provided run mode has been reset. "
-                f"Please lower the run mode to suppress this warning.",
+                f'Please lower the run mode to suppress this warning.',
                 stacklevel=3,
             )
             run_mode = RunMode.FAST
         if task.num_prediction_examples > 1:
             raise ValueError(
-                f"Cannot explain predictions for more than a single entity "
-                f"(got {task.num_prediction_examples:,})")
+                f'Cannot explain predictions for more than a single entity '
+                f'(got {task.num_prediction_examples:,})'
+            )
         return explain_config, run_mode
 
     def _resolve_task_request_options(
@@ -1185,18 +1271,21 @@ class KumoRFM:
             # second-deepest sample, and anything above the maximum clamps.
             max_hops = len(_DEFAULT_NUM_NEIGHBORS[key])
             if not 1 <= num_hops <= max_hops:
-                raise ValueError(f"'num_hops' must be between 1 and "
-                                 f"{max_hops} (got {num_hops})")
+                raise ValueError(
+                    f"'num_hops' must be between 1 and "
+                    f'{max_hops} (got {num_hops})'
+                )
             num_neighbors = _DEFAULT_NUM_NEIGHBORS[key][:num_hops]
 
         if inference_config is None:
             inference_config = InferenceConfig.from_task_type(task.task_type)
         elif isinstance(inference_config, dict):
-            Config = InferenceConfig
+            # Holds a class, not an instance, so it is named like one.
+            Config = InferenceConfig  # noqa: N806
             if task.task_type.is_classification:
-                Config = ClassificationInferenceConfig
+                Config = ClassificationInferenceConfig  # noqa: N806
             if task.task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
-                Config = RegressionInferenceConfig
+                Config = RegressionInferenceConfig  # noqa: N806
             inference_config = Config(**inference_config)  # type: ignore
         return run_mode, num_neighbors, inference_config
 
@@ -1211,10 +1300,14 @@ class KumoRFM:
         return None
 
     def _validate_task_references(self, task: TaskTable) -> None:
-        entity_pkey = pd.concat([
-            task._context_df[task._entity_column],
-            task._pred_df[task._entity_column],
-        ], axis=0, ignore_index=True)
+        entity_pkey = pd.concat(
+            [
+                task._context_df[task._entity_column],
+                task._pred_df[task._entity_column],
+            ],
+            axis=0,
+            ignore_index=True,
+        )
         self._sampler.validate_entity_references(
             task.entity_table_name,
             entity_pkey,
@@ -1257,7 +1350,8 @@ class KumoRFM:
         if session.id is None:
             try:
                 session.id = self._api_client.create_session(
-                    session_create_payload(payload))
+                    session_create_payload(payload)
+                )
             except HTTPException as error:
                 if _sessions_unsupported(error):
                     session.active = False
@@ -1266,14 +1360,17 @@ class KumoRFM:
         predict_payload = session_predict_payload(payload)
         try:
             return self._api_client.session_predict(
-                session.id, predict_payload, **correlate)
+                session.id, predict_payload, **correlate
+            )
         except HTTPException as error:
             if error.status_code != 404:
                 raise
             session.id = self._api_client.create_session(
-                session_create_payload(payload))
+                session_create_payload(payload)
+            )
             return self._api_client.session_predict(
-                session.id, predict_payload, **correlate)
+                session.id, predict_payload, **correlate
+            )
 
     def _delete_session_quietly(self, session_id: str) -> None:
         r"""Best-effort session deletion; the server also reaps it on TTL."""
@@ -1314,16 +1411,19 @@ class KumoRFM:
                         )
                     df = pd.DataFrame(**resp.prediction)
                     if explain_config is not None:
-                        df, summary, details, warning = (
-                            _extract_explanation(df, explain_config))
+                        df, summary, details, warning = _extract_explanation(
+                            df, explain_config
+                        )
 
                     if 'ENTITY' in df:
                         df['ENTITY'] = df['ENTITY'].astype(
-                            generated.entity_dtype)
+                            generated.entity_dtype
+                        )
 
                     if 'CLASS' in df:
                         df['CLASS'] = _cast_class_column(
-                            df['CLASS'], generated.class_dtype)
+                            df['CLASS'], generated.class_dtype
+                        )
 
                     if 'ANCHOR_TIMESTAMP' in df:
                         ser = df['ANCHOR_TIMESTAMP']
@@ -1333,7 +1433,8 @@ class KumoRFM:
                             else:
                                 unit = 'ms'
                             df['ANCHOR_TIMESTAMP'] = pd.to_datetime(
-                                ser, errors='coerce', unit=unit)
+                                ser, errors='coerce', unit=unit
+                            )
 
                     if 'TIME' in df:
                         ser = df['TIME']
@@ -1343,33 +1444,40 @@ class KumoRFM:
                             else:
                                 unit = 'ms'
                             df['TIME'] = pd.to_datetime(
-                                ser, errors='coerce', unit=unit)
+                                ser, errors='coerce', unit=unit
+                            )
 
                     predictions.append(df.reset_index(drop=True))
 
-                    if (materialized.prediction_stop
-                            < task.num_prediction_examples
-                            or materialized.batch_index > 0):
+                    if (
+                        materialized.prediction_stop
+                        < task.num_prediction_examples
+                        or materialized.batch_index > 0
+                    ):
                         verbose.step()
 
                     break
                 except (HTTPException, RequestException) as e:
                     if getattr(e, 'status_code', None) == 413:
-                        num_entities = (materialized.prediction_stop
-                                        - materialized.prediction_start)
+                        num_entities = (
+                            materialized.prediction_stop
+                            - materialized.prediction_start
+                        )
                         detail = getattr(e, 'detail', e)
                         raise ValueError(
-                            f"The request is too large for the endpoint "
-                            f"({detail}). It carries {num_entities:,} "
+                            f'The request is too large for the endpoint '
+                            f'({detail}). It carries {num_entities:,} '
                             f"entities; retry with a smaller 'batch_size' "
-                            f"(e.g. {max(1, num_entities // 2):,}), or "
-                            f"sample fewer related rows per entity with "
-                            f"'num_neighbors'.") from None
+                            f'(e.g. {max(1, num_entities // 2):,}), or '
+                            f'sample fewer related rows per entity with '
+                            f"'num_neighbors'."
+                        ) from None
                     failure = _nim_failure_error(
-                        e, explain_config is not None, request_payload)
+                        e, explain_config is not None, request_payload
+                    )
                     if attempt == self._num_retries or not failure.transient:
                         raise failure from None
-                    time.sleep(2**attempt)
+                    time.sleep(_RETRY_BACKOFF_BASE_SECONDS**attempt)
         return predictions, summary, details, warning
 
     def _iter_task_requests(
@@ -1394,17 +1502,21 @@ class KumoRFM:
         max_ctx = _MAX_CONTEXT_SIZE[run_mode]
         if task.num_context_examples > max_ctx:
             logger.log(
-                f"Sub-sampled {max_ctx:,} out of "
-                f"{task.num_context_examples:,} in-context examples")
+                f'Sub-sampled {max_ctx:,} out of '
+                f'{task.num_context_examples:,} in-context examples'
+            )
             task = task.narrow_context(0, max_ctx)
 
-        if (task.task_type == TaskType.FORECASTING
-                and task.num_forecasts > task.num_context_examples):
+        if (
+            task.task_type == TaskType.FORECASTING
+            and task.num_forecasts > task.num_context_examples
+        ):
             raise ValueError(
-                f"The number of forecast steps ({task.num_forecasts:,}) "
-                f"exceeds the number of available in-context examples "
-                f"({task.num_context_examples:,}). Please provide more "
-                f"historical data or reduce the number of forecast steps.")
+                f'The number of forecast steps ({task.num_forecasts:,}) '
+                f'exceeds the number of available in-context examples '
+                f'({task.num_context_examples:,}). Please provide more '
+                f'historical data or reduce the number of forecast steps.'
+            )
 
         batch_size = self._resolve_batch_size(task)
 
@@ -1414,22 +1526,25 @@ class KumoRFM:
             # link prediction caps at 200, so a fixed `batch_size=500` told the
             # user to retry with a value that reproduces this same error.
             raise ValueError(
-                f"Cannot predict for more than {max_batch_size:,} entities at "
-                f"once (got {batch_size:,}). Pass `batch_size=` to "
-                f"`predict(...)` (for example "
-                f"`batch_size={min(500, max_batch_size)}`, or "
-                f"`batch_size='max'`) to process entities in batches.")
+                f'Cannot predict for more than {max_batch_size:,} entities at '
+                f'once (got {batch_size:,}). Pass `batch_size=` to '
+                f'`predict(...)` (for example '
+                f'`batch_size={min(500, max_batch_size)}`, or '
+                f"`batch_size='max'`) to process entities in batches."
+            )
 
         num_batches = math.ceil(task.num_prediction_examples / batch_size)
         if num_batches > 1:
             logger.log(
-                f"Splitting {task.num_prediction_examples:,} entities into "
-                f"{num_batches:,} batches of size {batch_size:,}")
+                f'Splitting {task.num_prediction_examples:,} entities into '
+                f'{num_batches:,} batches of size {batch_size:,}'
+            )
             if progress_message is not None:
                 logger.init_progress(msg=progress_message, total=num_batches)
 
         for batch_index, start in enumerate(
-                range(0, task.num_prediction_examples, batch_size)):
+            range(0, task.num_prediction_examples, batch_size)
+        ):
             stop = min(start + batch_size, task.num_prediction_examples)
             batch_task = task.narrow_prediction(start, length=batch_size)
             context = self._get_context(
@@ -1452,18 +1567,21 @@ class KumoRFM:
             )
             payload = predict_request_to_json(request, explain=explain)
             prediction_row_count = len(
-                payload['predict']['instance_table']['rows'])
+                payload['predict']['instance_table']['rows']
+            )
             expected_prediction_rows = stop - start
             if prediction_row_count != expected_prediction_rows:
                 raise RuntimeError(
-                    f"Request batch {batch_index} serialized "
-                    f"{prediction_row_count:,} prediction rows; expected "
-                    f"{expected_prediction_rows:,} from its source range.")
+                    f'Request batch {batch_index} serialized '
+                    f'{prediction_row_count:,} prediction rows; expected '
+                    f'{expected_prediction_rows:,} from its source range.'
+                )
             request_size = payload_size_bytes(payload)
             if batch_index == 0:
                 logger.log(
-                    f"Generated context of size "
-                    f"{request_size / (1024 * 1024):.2f}MB")
+                    f'Generated context of size '
+                    f'{request_size / (1024 * 1024):.2f}MB'
+                )
             if request_size > _MAX_SIZE:
                 stats = context_size_stats(context)
                 raise ValueError(_SIZE_LIMIT_MSG.format(stats=stats))
@@ -1483,23 +1601,23 @@ class KumoRFM:
             anchor_column = payload['task'].get('anchor_time_column')
             anchor_index = (
                 predict_table['columns'].index(anchor_column)
-                if anchor_column in predict_table['columns'] else None
+                if anchor_column in predict_table['columns']
+                else None
             )
             yield _GeneratedPredictionRequest(
                 materialized=materialized,
                 entity_ids=tuple(
-                    batch_task._pred_df[
-                        batch_task.entity_column.name
-                    ].tolist()
+                    batch_task._pred_df[batch_task.entity_column.name].tolist()
                 ),
                 instance_ids=tuple(
-                    row[instance_id_index]
-                    for row in predict_table['rows']
+                    row[instance_id_index] for row in predict_table['rows']
                 ),
                 entity_dtype=entity_table.df[entity_table.primary_key].dtype,
                 anchor_times=tuple(
                     row[anchor_index] for row in predict_table['rows']
-                ) if anchor_index is not None else None,
+                )
+                if anchor_index is not None
+                else None,
                 class_dtype=_class_dtype(task, context),
             )
 
@@ -1576,7 +1694,7 @@ class KumoRFM:
         top_k: int | None = None,
         random_seed: int | None = _RANDOM_SEED,
     ) -> pd.DataFrame | Explanation:
-        """Returns predictions for a custom task specification.
+        r"""Returns predictions for a custom task specification.
 
         Args:
             task: The custom :class:`TaskTable`.
@@ -1632,7 +1750,8 @@ class KumoRFM:
         )
 
         explain_config, run_mode = self._apply_explain_guard(
-            explain, run_mode, task)
+            explain, run_mode, task
+        )
 
         if not isinstance(verbose, ProgressLogger):
             if task.task_type == TaskType.BINARY_CLASSIFICATION:
@@ -1649,9 +1768,9 @@ class KumoRFM:
                 task_type_repr = str(task.task_type)
 
             if explain_config is not None:
-                msg = f"Explaining {task_type_repr} task"
+                msg = f'Explaining {task_type_repr} task'
             else:
-                msg = f"Predicting {task_type_repr} task"
+                msg = f'Predicting {task_type_repr} task'
             verbose = ProgressLogger.default(msg=msg, verbose=verbose)
 
         with verbose as logger:
@@ -1675,8 +1794,11 @@ class KumoRFM:
                 and not _sessions_disabled_by_env()
                 and self._resolve_num_batches(task) > 1
             )
-            if (not use_sessions and explain_config is None
-                    and self._resolve_num_batches(task) > 1):
+            if (
+                not use_sessions
+                and explain_config is None
+                and self._resolve_num_batches(task) > 1
+            ):
                 logger.log(_no_session_reason(random_seed))
             session = _SessionHandle() if use_sessions else None
             try:
@@ -1700,9 +1822,12 @@ class KumoRFM:
             assert len(predictions) == 1
             assert details is not None
             summary = summary or ''
-            if (not explain_config.skip_summary and not summary
-                    and isinstance(details, dict)
-                    and details.get('format') == 'kumo_rfm_v2_1'):
+            if (
+                not explain_config.skip_summary
+                and not summary
+                and isinstance(details, dict)
+                and details.get('format') == 'kumo_rfm_v2_1'
+            ):
                 inner = details.get('details')
                 if not isinstance(inner, dict):
                     inner = {}
@@ -1737,7 +1862,7 @@ class KumoRFM:
         random_seed: int | None = _RANDOM_SEED,
         max_iterations: int = 10,
     ) -> pd.DataFrame:
-        """Returns the labels of a predictive query for a specified anchor
+        r"""Returns the labels of a predictive query for a specified anchor
         time.
 
         Args:
@@ -1768,12 +1893,14 @@ class KumoRFM:
         else:
             assert anchor_time == 'entity'
             if query_def.entity_table not in self._sampler.time_column_dict:
-                raise ValueError(f"Anchor time 'entity' requires the entity "
-                                 f"table '{query_def.entity_table}' "
-                                 f"to have a time column")
+                raise ValueError(
+                    f"Anchor time 'entity' requires the entity "
+                    f"table '{query_def.entity_table}' "
+                    f'to have a time column'
+                )
 
         try:
-            train, test = self._sampler.sample_target(
+            _train, test = self._sampler.sample_target(
                 query=query_def,
                 num_train_examples=0,
                 train_anchor_time=anchor_time,
@@ -1784,19 +1911,23 @@ class KumoRFM:
                 random_seed=random_seed,
             )
         except RuntimeError as e:
-            if "Failed to collect any" in str(e):
-                return pd.DataFrame({
-                    'ENTITY': [],
-                    'ANCHOR_TIMESTAMP': [],
-                    'TARGET': [],
-                })
-            raise e
+            if 'Failed to collect any' in str(e):
+                return pd.DataFrame(
+                    {
+                        'ENTITY': [],
+                        'ANCHOR_TIMESTAMP': [],
+                        'TARGET': [],
+                    }
+                )
+            raise
 
-        return pd.DataFrame({
-            'ENTITY': test.entity_pkey,
-            'ANCHOR_TIMESTAMP': test.anchor_time,
-            'TARGET': test.target,
-        })
+        return pd.DataFrame(
+            {
+                'ENTITY': test.entity_pkey,
+                'ANCHOR_TIMESTAMP': test.anchor_time,
+                'TARGET': test.target,
+            }
+        )
 
     def add_lagged_target(
         self,
@@ -1813,41 +1944,62 @@ class KumoRFM:
                 features.
         """
         if not task.has_time_column():
-            raise ValueError("Task requires to have a time columns in order "
-                             "to add lagged target features")
+            raise ValueError(
+                'Task requires to have a time columns in order '
+                'to add lagged target features'
+            )
         assert task.time_column is not None
 
         if lag_timesteps <= 0:
-            raise ValueError(f"'lag_timesteps' needs to be positive "
-                             f"(got '{lag_timesteps}')")
+            raise ValueError(
+                f"'lag_timesteps' needs to be positive (got '{lag_timesteps}')"
+            )
 
         query_def = self._parse_query(query)
 
         if query_def.query_type != QueryType.TEMPORAL:
-            raise ValueError("Lagged target features can only be added for "
-                             "temporal predictive queries")
+            raise ValueError(
+                'Lagged target features can only be added for '
+                'temporal predictive queries'
+            )
 
         lagged_df = self._sampler.sample_lagged_target(
             query=query_def,
-            entity_pkey=pd.concat([
-                task._context_df[task.entity_column.name],
-                task._pred_df[task.entity_column.name],
-            ], ignore_index=True),
-            anchor_time=pd.concat([
-                task._context_df[task.time_column.name],
-                task._pred_df[task.time_column.name],
-            ], ignore_index=True),
+            entity_pkey=pd.concat(
+                [
+                    task._context_df[task.entity_column.name],
+                    task._pred_df[task.entity_column.name],
+                ],
+                ignore_index=True,
+            ),
+            anchor_time=pd.concat(
+                [
+                    task._context_df[task.time_column.name],
+                    task._pred_df[task.time_column.name],
+                ],
+                ignore_index=True,
+            ),
             lag_timesteps=lag_timesteps,
         )
 
-        task._context_df = pd.concat([
-            task._context_df,
-            lagged_df.iloc[:task.num_context_examples].reset_index(drop=True),
-        ], axis=1)
-        task._pred_df = pd.concat([
-            task._pred_df,
-            lagged_df.iloc[task.num_context_examples:].reset_index(drop=True),
-        ], axis=1)
+        task._context_df = pd.concat(
+            [
+                task._context_df,
+                lagged_df.iloc[: task.num_context_examples].reset_index(
+                    drop=True
+                ),
+            ],
+            axis=1,
+        )
+        task._pred_df = pd.concat(
+            [
+                task._pred_df,
+                lagged_df.iloc[task.num_context_examples :].reset_index(
+                    drop=True
+                ),
+            ],
+            axis=1,
+        )
         task.add_columns(lagged_df.columns.tolist())
 
         return task
@@ -1858,11 +2010,13 @@ class KumoRFM:
             from adbc_driver_sqlite.dbapi import AdbcSqliteConnection
 
             from kumorfm.rfm.backend.sqlite import SQLiteSampler
+
             assert isinstance(self._sampler, SQLiteSampler)
             assert isinstance(connection, AdbcSqliteConnection)
             self._sampler._connection = connection
         if self._sampler.backend == DataBackend.DUCKDB:
             from kumorfm.rfm.backend.duckdb import Connection, DuckDBSampler
+
             assert isinstance(self._sampler, DuckDBSampler)
             assert isinstance(connection, Connection)
             self._sampler._connection = connection
@@ -1870,6 +2024,7 @@ class KumoRFM:
             from snowflake.connector import SnowflakeConnection
 
             from kumorfm.rfm.backend.snow import SnowSampler
+
             assert isinstance(self._sampler, SnowSampler)
             assert isinstance(connection, SnowflakeConnection)
             self._sampler._connection = connection
@@ -1878,6 +2033,7 @@ class KumoRFM:
                 Connection,
                 DatabricksSampler,
             )
+
             assert isinstance(self._sampler, DatabricksSampler)
             assert isinstance(connection, Connection)
             self._sampler._connection = connection
@@ -1910,18 +2066,21 @@ class KumoRFM:
         if isinstance(target, Aggregation):
             if target.aggr == AggregationType.LIST_DISTINCT:
                 table_name, col_name = target.get_target_column_name().split(
-                    '.')
+                    '.'
+                )
                 target_edge_types = [
-                    edge_type for edge_type in edge_types
+                    edge_type
+                    for edge_type in edge_types
                     if edge_type[0] == table_name and edge_type[1] == col_name
                 ]
                 if len(target_edge_types) != 1:
                     raise NotImplementedError(
-                        f"Multilabel-classification queries based on "
+                        f'Multilabel-classification queries based on '
                         f"'LIST_DISTINCT' are not supported yet. If you "
-                        f"planned to write a link prediction query instead, "
+                        f'planned to write a link prediction query instead, '
                         f"make sure to register '{col_name}' as a "
-                        f"foreign key.")
+                        f'foreign key.'
+                    )
                 return TaskType.TEMPORAL_LINK_PREDICTION
 
             return TaskType.REGRESSION
@@ -1934,7 +2093,7 @@ class KumoRFM:
         if target.stype in {Stype.numerical}:
             return TaskType.REGRESSION
 
-        raise NotImplementedError("Task type not yet supported")
+        raise NotImplementedError('Task type not yet supported')
 
     def _get_default_anchor_time(
         self,
@@ -1972,58 +2131,79 @@ class KumoRFM:
             max_time = self._sampler.get_max_time()
 
         if anchor_time < min_time:
-            raise ValueError(f"Anchor timestamp '{anchor_time}' is before "
-                             f"the earliest timestamp '{min_time}' in the "
-                             f"data.")
+            raise ValueError(
+                f"Anchor timestamp '{anchor_time}' is before "
+                f"the earliest timestamp '{min_time}' in the "
+                f'data.'
+            )
 
         if context_anchor_time is not None and context_anchor_time < min_time:
-            raise ValueError(f"Context anchor timestamp is too early or "
-                             f"aggregation time range is too large. To make "
-                             f"this prediction, we would need data back to "
-                             f"'{context_anchor_time}', however, your data "
-                             f"only contains data back to '{min_time}'.")
+            raise ValueError(
+                f'Context anchor timestamp is too early or '
+                f'aggregation time range is too large. To make '
+                f'this prediction, we would need data back to '
+                f"'{context_anchor_time}', however, your data "
+                f"only contains data back to '{min_time}'."
+            )
 
         if query.target_ast.date_offset_range is not None:
             end_offset = query.target_ast.date_offset_range.end_date_offset
         else:
             end_offset = pd.DateOffset(0)
 
-        if (context_anchor_time is not None
-                and context_anchor_time > anchor_time):
-            warnings.warn(f"Context anchor timestamp "
-                          f"(got '{context_anchor_time}') is set to a later "
-                          f"date than the prediction anchor timestamp "
-                          f"(got '{anchor_time}'). Please make sure this is "
-                          f"intended.")
-        elif (query.query_type == QueryType.TEMPORAL
-              and context_anchor_time is not None
-              and context_anchor_time + end_offset > anchor_time):
-            warnings.warn(f"Aggregation for context examples at timestamp "
-                          f"'{context_anchor_time}' will leak information "
-                          f"from the prediction anchor timestamp "
-                          f"'{anchor_time}'. Please make sure this is "
-                          f"intended.")
+        if (
+            context_anchor_time is not None
+            and context_anchor_time > anchor_time
+        ):
+            warnings.warn(
+                f'Context anchor timestamp '
+                f"(got '{context_anchor_time}') is set to a later "
+                f'date than the prediction anchor timestamp '
+                f"(got '{anchor_time}'). Please make sure this is "
+                f'intended.'
+            )
+        elif (
+            query.query_type == QueryType.TEMPORAL
+            and context_anchor_time is not None
+            and context_anchor_time + end_offset > anchor_time
+        ):
+            warnings.warn(
+                f'Aggregation for context examples at timestamp '
+                f"'{context_anchor_time}' will leak information "
+                f'from the prediction anchor timestamp '
+                f"'{anchor_time}'. Please make sure this is "
+                f'intended.'
+            )
 
-        elif (context_anchor_time is not None
-              and context_anchor_time - end_offset * query.num_forecasts
-              < min_time):
+        elif (
+            context_anchor_time is not None
+            and context_anchor_time - end_offset * query.num_forecasts
+            < min_time
+        ):
             _time = context_anchor_time - end_offset * query.num_forecasts
-            warnings.warn(f"Context anchor timestamp is too early or "
-                          f"aggregation time range is too large. To form "
-                          f"proper input data, we would need data back to "
-                          f"'{_time}', however, your data only contains "
-                          f"data back to '{min_time}'.")
+            warnings.warn(
+                f'Context anchor timestamp is too early or '
+                f'aggregation time range is too large. To form '
+                f'proper input data, we would need data back to '
+                f"'{_time}', however, your data only contains "
+                f"data back to '{min_time}'."
+            )
 
         if not evaluate and anchor_time > max_time + pd.DateOffset(days=1):
-            warnings.warn(f"Anchor timestamp '{anchor_time}' is after the "
-                          f"latest timestamp '{max_time}' in the data. Please "
-                          f"make sure this is intended.")
+            warnings.warn(
+                f"Anchor timestamp '{anchor_time}' is after the "
+                f"latest timestamp '{max_time}' in the data. Please "
+                f'make sure this is intended.'
+            )
 
-        if (evaluate
-                and anchor_time > max_time - end_offset * query.num_forecasts):
+        if (
+            evaluate
+            and anchor_time > max_time - end_offset * query.num_forecasts
+        ):
             raise ValueError(
-                f"Anchor timestamp for evaluation is after the latest "
-                f"supported timestamp '{max_time - end_offset}'.")
+                f'Anchor timestamp for evaluation is after the latest '
+                f"supported timestamp '{max_time - end_offset}'."
+            )
 
     def _get_task_table(
         self,
@@ -2039,11 +2219,14 @@ class KumoRFM:
     ) -> TaskTable:
 
         anchor_time = _check_anchor_time(anchor_time, 'anchor_time')
-        context_anchor_time = _check_anchor_time(context_anchor_time,
-                                                 'context_anchor_time')
+        context_anchor_time = _check_anchor_time(
+            context_anchor_time, 'context_anchor_time'
+        )
         if max_pq_iterations < 1:
-            raise ValueError(f"'max_pq_iterations' must be greater than zero "
-                             f"(got {max_pq_iterations})")
+            raise ValueError(
+                f"'max_pq_iterations' must be greater than zero "
+                f'(got {max_pq_iterations})'
+            )
 
         task_type = self._get_task_type(
             query=query,
@@ -2053,11 +2236,15 @@ class KumoRFM:
         num_train_examples = _MAX_CONTEXT_SIZE[run_mode]
         num_test_examples = _MAX_TEST_SIZE[task_type] if indices is None else 0
 
-        if (task_type == TaskType.FORECASTING and indices is not None
-                and len(set(indices)) > 1):
+        if (
+            task_type == TaskType.FORECASTING
+            and indices is not None
+            and len(set(indices)) > 1
+        ):
             raise ValueError(
-                "Forecasting requires a single entity ID, but got "
-                f"{len(set(indices))} unique IDs in 'indices'.")
+                'Forecasting requires a single entity ID, but got '
+                f"{len(set(indices))} unique IDs in 'indices'."
+            )
 
         if logger is not None:
             if task_type == TaskType.BINARY_CLASSIFICATION:
@@ -2072,7 +2259,7 @@ class KumoRFM:
                 task_type_repr = 'link prediction'
             else:
                 task_type_repr = str(task_type)
-            logger.log(f"Identified {query.query_type} {task_type_repr} task")
+            logger.log(f'Identified {query.query_type} {task_type_repr} task')
 
         if query.target_ast.date_offset_range is None:
             step_offset = pd.DateOffset(0)
@@ -2088,33 +2275,48 @@ class KumoRFM:
                 assert isinstance(anchor_time, pd.Timestamp)
                 if anchor_time == pd.Timestamp.min:
                     pass  # Static graph
-                elif (anchor_time.hour == 0 and anchor_time.minute == 0
-                      and anchor_time.second == 0
-                      and anchor_time.microsecond == 0):
-                    logger.log(f"Derived anchor time {anchor_time.date()}")
+                elif (
+                    anchor_time.hour == 0
+                    and anchor_time.minute == 0
+                    and anchor_time.second == 0
+                    and anchor_time.microsecond == 0
+                ):
+                    logger.log(f'Derived anchor time {anchor_time.date()}')
                 else:
-                    logger.log(f"Derived anchor time {anchor_time}")
+                    logger.log(f'Derived anchor time {anchor_time}')
 
         if isinstance(anchor_time, pd.Timestamp):
             if context_anchor_time == 'entity':
-                raise ValueError("Anchor time 'entity' needs to be shared "
-                                 "for context and prediction examples")
+                raise ValueError(
+                    "Anchor time 'entity' needs to be shared "
+                    'for context and prediction examples'
+                )
             if context_anchor_time is None:
                 context_anchor_time = anchor_time - step_offset
-            self._validate_time(query, anchor_time, context_anchor_time,
-                                evaluate=num_test_examples > 0)
+            self._validate_time(
+                query,
+                anchor_time,
+                context_anchor_time,
+                evaluate=num_test_examples > 0,
+            )
         else:
             assert anchor_time == 'entity'
             if query.query_type != QueryType.STATIC:
-                raise ValueError("Anchor time 'entity' is only valid for "
-                                 "static predictive queries")
+                raise ValueError(
+                    "Anchor time 'entity' is only valid for "
+                    'static predictive queries'
+                )
             if query.entity_table not in self._sampler.time_column_dict:
-                raise ValueError(f"Anchor time 'entity' requires the entity "
-                                 f"table '{query.entity_table}' to "
-                                 f"have a time column")
+                raise ValueError(
+                    f"Anchor time 'entity' requires the entity "
+                    f"table '{query.entity_table}' to "
+                    f'have a time column'
+                )
             if isinstance(context_anchor_time, pd.Timestamp):
-                raise ValueError("Anchor time 'entity' needs to be shared "
-                                 "for context and prediction examples")
+                raise ValueError(
+                    "Anchor time 'entity' needs to be shared "
+                    'for context and prediction examples'
+                )
             context_anchor_time = 'entity'
         assert context_anchor_time is not None
 
@@ -2146,50 +2348,82 @@ class KumoRFM:
         if num_test_examples > 0 and logger is not None:
             if task_type == TaskType.BINARY_CLASSIFICATION:
                 pos = 100 * int((test_y > 0).sum()) / len(test_y)
-                msg = (f"Collected {len(test_y):,} test examples with "
-                       f"{pos:.2f}% positive cases")
+                msg = (
+                    f'Collected {len(test_y):,} test examples with '
+                    f'{pos:.2f}% positive cases'
+                )
             elif task_type == TaskType.MULTICLASS_CLASSIFICATION:
-                msg = (f"Collected {len(test_y):,} test examples holding "
-                       f"{test_y.nunique()} classes")
+                msg = (
+                    f'Collected {len(test_y):,} test examples holding '
+                    f'{test_y.nunique()} classes'
+                )
             elif task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
                 _min, _max = float(test_y.min()), float(test_y.max())
-                msg = (f"Collected {len(test_y):,} test examples with targets "
-                       f"between {format_value(_min)} and "
-                       f"{format_value(_max)}")
+                msg = (
+                    f'Collected {len(test_y):,} test examples with targets '
+                    f'between {format_value(_min)} and '
+                    f'{format_value(_max)}'
+                )
             elif task_type == TaskType.TEMPORAL_LINK_PREDICTION:
                 num_rhs = test_y.explode().nunique()
-                msg = (f"Collected {len(test_y):,} test examples with "
-                       f"{num_rhs:,} unique items")
+                msg = (
+                    f'Collected {len(test_y):,} test examples with '
+                    f'{num_rhs:,} unique items'
+                )
             else:
                 raise NotImplementedError
             logger.log(msg)
 
         if num_test_examples == 0:
             assert indices is not None
-            test_pkey = pd.Series(indices, dtype=train_pkey.dtype)
+            try:
+                test_pkey = pd.Series(indices, dtype=train_pkey.dtype)
+            except (TypeError, ValueError) as error:
+                bad = _first_uncastable(indices, train_pkey.dtype)
+                where = (
+                    f'; indices[{bad[0]}] is {bad[1]!r}'
+                    if bad is not None
+                    else ''
+                )
+                raise ValueError(
+                    f"'indices' must hold values matching the primary key of "
+                    f"'{query.entity_table}', which is {train_pkey.dtype}"
+                    f'{where}'
+                ) from error
             if isinstance(anchor_time, pd.Timestamp):
-                test_time = pd.Series([anchor_time]).repeat(
-                    len(indices)).reset_index(drop=True)
+                test_time = (
+                    pd.Series([anchor_time])
+                    .repeat(len(indices))
+                    .reset_index(drop=True)
+                )
             else:
                 train_time = test_time = 'entity'
 
         if logger is not None:
             if task_type == TaskType.BINARY_CLASSIFICATION:
                 pos = 100 * int((train_y > 0).sum()) / len(train_y)
-                msg = (f"Collected {len(train_y):,} in-context examples with "
-                       f"{pos:.2f}% positive cases")
+                msg = (
+                    f'Collected {len(train_y):,} in-context examples with '
+                    f'{pos:.2f}% positive cases'
+                )
             elif task_type == TaskType.MULTICLASS_CLASSIFICATION:
-                msg = (f"Collected {len(train_y):,} in-context examples "
-                       f"holding {train_y.nunique()} classes")
+                msg = (
+                    f'Collected {len(train_y):,} in-context examples '
+                    f'holding {train_y.nunique()} classes'
+                )
             elif task_type in {TaskType.REGRESSION, TaskType.FORECASTING}:
                 _min, _max = float(train_y.min()), float(train_y.max())
-                msg = (f"Collected {len(train_y):,} in-context examples with "
-                       f"targets between {format_value(_min)} and "
-                       f"{format_value(_max)}")
+                msg = (
+                    f'Collected {len(train_y):,} in-context examples with '
+                    f'targets between {format_value(_min)} and '
+                    f'{format_value(_max)}'
+                )
             elif task_type == TaskType.TEMPORAL_LINK_PREDICTION:
                 num_rhs = train_y.explode().nunique()
-                msg = (f"Collected {len(train_y):,} in-context examples with "
-                       f"{num_rhs:,} unique items")
+                msg = (
+                    f'Collected {len(train_y):,} in-context examples with '
+                    f'{num_rhs:,} unique items'
+                )
             else:
                 raise NotImplementedError
             logger.log(msg)
@@ -2206,7 +2440,7 @@ class KumoRFM:
                         edge_type[2],
                     )
         else:
-            entity_table_names = (query.entity_table, )
+            entity_table_names = (query.entity_table,)
 
         context_df = pd.DataFrame({'ENTITY': train_pkey, 'TARGET': train_y})
         if isinstance(train_time, pd.Series):
@@ -2224,19 +2458,31 @@ class KumoRFM:
             entity_table_name=entity_table_names,
             entity_column='ENTITY',
             target_column='TARGET',
-            time_column='ANCHOR_TIMESTAMP' if isinstance(
-                train_time, pd.Series) else TaskTable.ENTITY_TIME,
+            time_column='ANCHOR_TIMESTAMP'
+            if isinstance(train_time, pd.Series)
+            else TaskTable.ENTITY_TIME,
             num_forecasts=query.num_forecasts,
             step_size=_date_offset_to_ns(step_offset)
-            if task_type == TaskType.FORECASTING else None,
+            if task_type == TaskType.FORECASTING
+            else None,
         )
 
-        if query.query_type == QueryType.TEMPORAL and task_type in {
+        if lag_timesteps < 0:
+            raise ValueError(
+                f"'lag_timesteps' cannot be negative (got {lag_timesteps})"
+            )
+
+        if (
+            query.query_type == QueryType.TEMPORAL
+            and task_type
+            in {
                 TaskType.BINARY_CLASSIFICATION,
                 TaskType.FORECASTING,
                 TaskType.MULTICLASS_CLASSIFICATION,
                 TaskType.REGRESSION,
-        } and lag_timesteps > 0:
+            }
+            and lag_timesteps > 0
+        ):
             task = self.add_lagged_target(task, query, lag_timesteps)
 
         return task
@@ -2253,40 +2499,58 @@ class KumoRFM:
     ) -> Context:
 
         if num_neighbors is None:
-            key = (RunMode.FAST
-                   if task.task_type.is_link_pred else RunMode(run_mode))
+            key = (
+                RunMode.FAST
+                if task.task_type.is_link_pred
+                else RunMode(run_mode)
+            )
             num_neighbors = _DEFAULT_NUM_NEIGHBORS[key][:2]
 
-        if len(num_neighbors) > 6:
-            raise ValueError(f"Cannot predict on subgraphs with more than 6 "
-                             f"hops (got {len(num_neighbors)}). Reduce the "
-                             f"number of hops and try again. Please create a "
-                             f"feature request at "
-                             f"'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you "
-                             f"must go beyond this for your use-case.")
+        if len(num_neighbors) > _MAX_HOPS:
+            raise ValueError(
+                f'Cannot predict on subgraphs with more than {_MAX_HOPS} '
+                f'hops (got {len(num_neighbors)}). Reduce the '
+                f'number of hops and try again. Please create a '
+                f'feature request at '
+                f"'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you "
+                f'must go beyond this for your use-case.'
+            )
 
         if _validate_references:
             self._validate_task_references(task)
 
-        entity_pkey = pd.concat([
-            task._context_df[task._entity_column],
-            task._pred_df[task._entity_column],
-        ], axis=0, ignore_index=True)
+        entity_pkey = pd.concat(
+            [
+                task._context_df[task._entity_column],
+                task._pred_df[task._entity_column],
+            ],
+            axis=0,
+            ignore_index=True,
+        )
 
         if task.use_entity_time:
             if task.entity_table_name not in self._sampler.time_column_dict:
-                raise ValueError(f"The given annchor time requires the entity "
-                                 f"table '{task.entity_table_name}' to have a "
-                                 f"time column")
+                raise ValueError(
+                    f'The given anchor time requires the entity '
+                    f"table '{task.entity_table_name}' to have a "
+                    f'time column'
+                )
             anchor_time = 'entity'
         elif task._time_column is not None:
-            anchor_time = pd.concat([
-                task._context_df[task._time_column],
-                task._pred_df[task._time_column],
-            ], axis=0, ignore_index=True)
+            anchor_time = pd.concat(
+                [
+                    task._context_df[task._time_column],
+                    task._pred_df[task._time_column],
+                ],
+                axis=0,
+                ignore_index=True,
+            )
         else:
-            anchor_time = pd.Series(self._get_default_anchor_time()).repeat(
-                (len(entity_pkey))).reset_index(drop=True)
+            anchor_time = (
+                pd.Series(self._get_default_anchor_time())
+                .repeat(len(entity_pkey))
+                .reset_index(drop=True)
+            )
 
         subgraph = self._sampler.sample_subgraph(
             entity_table_names=task.entity_table_names,
@@ -2297,18 +2561,25 @@ class KumoRFM:
             random_seed=random_seed,
         )
 
-        if len(subgraph.table_dict) >= 15:
-            raise ValueError(f"Cannot query from a graph with more than 15 "
-                             f"tables (got {len(subgraph.table_dict)}). "
-                             f"Please create a feature request at "
-                             f"'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you "
-                             f"must go beyond this for your use-case.")
+        if len(subgraph.table_dict) > _MAX_SUBGRAPH_TABLES:
+            raise ValueError(
+                f'Cannot query from a graph with more than '
+                f'{_MAX_SUBGRAPH_TABLES} '
+                f'tables (got {len(subgraph.table_dict)}). '
+                f'Please create a feature request at '
+                f"'https://github.com/NVIDIA/nvidia-sdfm-sdk' if you "
+                f'must go beyond this for your use-case.'
+            )
 
-        if (task.task_type.is_link_pred
-                and task.entity_table_names[-1] not in subgraph.table_dict):
-            raise ValueError("Cannot perform link prediction on subgraphs "
-                             "without any historical target entities. Please "
-                             "increase the number of hops and try again.")
+        if (
+            task.task_type.is_link_pred
+            and task.entity_table_names[-1] not in subgraph.table_dict
+        ):
+            raise ValueError(
+                'Cannot perform link prediction on subgraphs '
+                'without any historical target entities. Please '
+                'increase the number of hops and try again.'
+            )
 
         return Context(
             task_type=task.task_type,
@@ -2316,28 +2587,37 @@ class KumoRFM:
             subgraph=subgraph,
             y_train=task._context_df[task.target_column.name],
             y_test=task._pred_df[task.target_column.name]
-            if task.has_prediction_targets else None,
+            if task.has_prediction_targets
+            else None,
             task_table=Table(
-                df=pd.concat([
-                    task._context_df[[c.name for c in task.feature_columns]],
-                    task._pred_df[[c.name for c in task.feature_columns]],
-                ], axis=0, ignore_index=True),
+                df=pd.concat(
+                    [
+                        task._context_df[
+                            [c.name for c in task.feature_columns]
+                        ],
+                        task._pred_df[[c.name for c in task.feature_columns]],
+                    ],
+                    axis=0,
+                    ignore_index=True,
+                ),
                 row=None,
                 batch=np.arange(task._num_rows),
                 num_sampled_nodes=[],
                 stype_dict={
-                    column.name: column.stype
-                    for column in task.feature_columns
+                    column.name: column.stype for column in task.feature_columns
                 },
                 primary_key=None,
-            ) if len(task.feature_columns) > 0 else None,
+            )
+            if len(task.feature_columns) > 0
+            else None,
             top_k=top_k,
             step_size=task.step_size,
             num_forecasts=task.num_forecasts,
         )
 
+
 def _date_offset_to_ns(offset: pd.DateOffset) -> int | None:
-    """Convert a pandas DateOffset to an integer number of nanoseconds."""
+    r"""Convert a pandas DateOffset to an integer number of nanoseconds."""
     ref = Timestamp('2020-01-01')
     delta = (ref + offset) - ref
     return int(delta.total_seconds()) * 1_000_000_000

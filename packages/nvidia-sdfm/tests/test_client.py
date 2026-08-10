@@ -6,11 +6,14 @@ from __future__ import annotations
 
 import pytest
 
-from nvidia_sdfm import SDFMClient, ModelCapabilities
+from nvidia_sdfm import ModelCapabilities, SDFMClient
 
 
 def test_client_lists_builtin_models():
-    assert set(SDFMClient(url='http://nim.test').models()) == {'kumo-rfm', 'tabicl'}
+    assert set(SDFMClient(url='http://nim.test').models()) == {
+        'kumo-rfm',
+        'tabicl',
+    }
 
 
 def test_client_reports_capabilities():

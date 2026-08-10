@@ -4,17 +4,18 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping, TypeAlias
+from typing import Any, TypeAlias
 
-from kumorfm.api.typing import Dtype, Stype
 from typing_extensions import Self
 
+from kumorfm.api.typing import Dtype, Stype
 from kumorfm.mixin import CastMixin
 from kumorfm.rfm.base import Expression
 
 
-@dataclass(init=False)
+@dataclass(init=False, repr=False, eq=False)
 class ColumnSpec(CastMixin):
     r"""A column specification for adding a column to a table.
 
@@ -26,6 +27,7 @@ class ColumnSpec(CastMixin):
         expr: A column expression to define logical columns.
         dtype: The data type of the column.
     """
+
     def __init__(
         self,
         name: str,
@@ -55,10 +57,20 @@ class ColumnSpec(CastMixin):
 
     @property
     def is_source(self) -> bool:
-        r"""Whether the column specification refers to a phyiscal column
+        r"""Whether the column specification refers to a physical column
         present in the data source.
         """
         return self.expr is None
+
+    def __repr__(self) -> str:
+        parts = [f'name={self.name}']
+        if self.expr is not None:
+            parts.append(f'expr={self.expr}')
+        if self.dtype is not None:
+            parts.append(f'dtype={self.dtype}')
+        if self.stype is not None:
+            parts.append(f'stype={self.stype}')
+        return f'{self.__class__.__name__}({", ".join(parts)})'
 
 
 ColumnSpecType: TypeAlias = ColumnSpec | Mapping[str, Any] | str
@@ -77,6 +89,7 @@ class Column:
         dtype: The data type of the column.
         stype: The semantic type of the column.
     """
+
     stype: Stype
 
     def __init__(
@@ -124,18 +137,26 @@ class Column:
                 val = Stype(val)
             assert isinstance(val, Stype)
             if not val.supports_dtype(self.dtype):
-                raise ValueError(f"Column '{self.name}' received an "
-                                 f"incompatible semantic type (got "
-                                 f"dtype='{self.dtype}' and stype='{val}')")
+                raise ValueError(
+                    f"Column '{self.name}' received an "
+                    f'incompatible semantic type (got '
+                    f"dtype='{self.dtype}' and stype='{val}')"
+                )
             if self._is_primary_key and val != Stype.ID:
-                raise ValueError(f"Primary key '{self.name}' must have 'ID' "
-                                 f"semantic type (got '{val}')")
+                raise ValueError(
+                    f"Primary key '{self.name}' must have 'ID' "
+                    f"semantic type (got '{val}')"
+                )
             if self._is_time_column and val != Stype.timestamp:
-                raise ValueError(f"Time column '{self.name}' must have "
-                                 f"'timestamp' semantic type (got '{val}')")
+                raise ValueError(
+                    f"Time column '{self.name}' must have "
+                    f"'timestamp' semantic type (got '{val}')"
+                )
             if self._is_end_time_column and val != Stype.timestamp:
-                raise ValueError(f"End time column '{self.name}' must have "
-                                 f"'timestamp' semantic type (got '{val}')")
+                raise ValueError(
+                    f"End time column '{self.name}' must have "
+                    f"'timestamp' semantic type (got '{val}')"
+                )
 
         super().__setattr__(key, val)
 
@@ -153,4 +174,4 @@ class Column:
             parts.append(f'expr={self.expr}')
         parts.append(f'dtype={self.dtype}')
         parts.append(f'stype={self.stype}')
-        return f"{self.__class__.__name__}({', '.join(parts)})"
+        return f'{self.__class__.__name__}({", ".join(parts)})'

@@ -59,7 +59,8 @@ def __getattr__(name: str) -> Any:
         module = _import('kumorfm' if name in _ROOT_NAMES else 'kumorfm.rfm')
         return getattr(module, name)
     raise AttributeError(
-        f"module 'nvidia_sdfm.kumorfm' has no attribute {name!r}")
+        f"module 'nvidia_sdfm.kumorfm' has no attribute {name!r}"
+    )
 
 
 def __dir__() -> list[str]:

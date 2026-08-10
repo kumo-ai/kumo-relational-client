@@ -3,15 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-
 from kumorfm.graph import Edge
 from kumorfm.rfm import Graph
 
 try:
     from kumorfm.rfm.backend.databricks import Connection, DatabricksTable
 except ImportError:
-    pytest.skip("'databricks' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'databricks' extension not installed", allow_module_level=True)
 
 
 def test_graph(
@@ -21,12 +19,27 @@ def test_graph(
 ) -> None:
     graph = Graph(
         tables=[
-            DatabricksTable(connection, name='customers', catalog=catalog,
-                            schema=schema, primary_key='customer_id'),
-            DatabricksTable(connection, name='order_lines', catalog=catalog,
-                            schema=schema, time_column='order_date'),
-            DatabricksTable(connection, name='products', catalog=catalog,
-                            schema=schema, primary_key='product_id'),
+            DatabricksTable(
+                connection,
+                name='customers',
+                catalog=catalog,
+                schema=schema,
+                primary_key='customer_id',
+            ),
+            DatabricksTable(
+                connection,
+                name='order_lines',
+                catalog=catalog,
+                schema=schema,
+                time_column='order_date',
+            ),
+            DatabricksTable(
+                connection,
+                name='products',
+                catalog=catalog,
+                schema=schema,
+                primary_key='product_id',
+            ),
         ],
         edges=[
             ('order_lines', 'customer_id', 'customers'),

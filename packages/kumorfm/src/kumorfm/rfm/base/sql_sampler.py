@@ -10,9 +10,9 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import pandas as pd
+
 from kumorfm.api.rfm.context import Subgraph
 from kumorfm.api.typing import Dtype
-
 from kumorfm.rfm.base import (
     LocalExpression,
     Sampler,
@@ -73,7 +73,8 @@ class SQLSampler(Sampler):
                     column_ref_dict[column.name] = column.expr.value
                     column_proj_dict[column.name] = (
                         f'{column.expr} AS '
-                        f'{quote_ident(column.name, self._QUOTE_CHAR)}')
+                        f'{quote_ident(column.name, self._QUOTE_CHAR)}'
+                    )
                 else:
                     ident = quote_ident(column.name, self._QUOTE_CHAR)
                     column_ref_dict[column.name] = ident
@@ -106,7 +107,8 @@ class SQLSampler(Sampler):
         order = {
             column: position
             for position, column in enumerate(
-                self.table_column_proj_dict[table_name])
+                self.table_column_proj_dict[table_name]
+            )
         }
         return sorted(
             columns,
@@ -159,10 +161,12 @@ class SQLSampler(Sampler):
             return
 
         self._warned_random_seed = True
-        warnings.warn(f"The '{self.backend}' backend does not support seeded "
-                      f"random sampling, so 'random_seed' is ignored when "
-                      f"drawing in-context examples. Repeated calls with the "
-                      f"same seed may return different predictions.")
+        warnings.warn(
+            f"The '{self.backend}' backend does not support seeded "
+            f"random sampling, so 'random_seed' is ignored when "
+            f'drawing in-context examples. Repeated calls with the '
+            f'same seed may return different predictions.'
+        )
 
     @property
     def source_name_dict(self) -> dict[str, str]:
@@ -213,8 +217,7 @@ class SQLSampler(Sampler):
         sample_columns_dict: dict[str, set[str]] = {}
         for table, columns in columns_dict.items():
             sample_columns = columns | {
-                foreign_key
-                for foreign_key, _ in self.foreign_key_dict[table]
+                foreign_key for foreign_key, _ in self.foreign_key_dict[table]
             }
             if primary_key := self.primary_key_dict.get(table):
                 sample_columns |= {primary_key}
@@ -234,9 +237,11 @@ class SQLSampler(Sampler):
         if len(batch) != len(entity_pkey):
             mask = np.ones(len(entity_pkey), dtype=bool)
             mask[batch] = False
-            raise KeyError(f"The primary keys "
-                           f"{entity_pkey.iloc[mask].tolist()} do not exist "
-                           f"in the '{entity_table_name}' table")
+            raise KeyError(
+                f'The primary keys '
+                f'{entity_pkey.iloc[mask].tolist()} do not exist '
+                f"in the '{entity_table_name}' table"
+            )
 
         # Make sure that entities are returned in expected order:
         perm = batch.argsort()
@@ -252,7 +257,8 @@ class SQLSampler(Sampler):
         # Recursive Neighbor Sampling #########################################
 
         mapper_dict: dict[str, Mapper] = defaultdict(
-            lambda: Mapper(num_examples=len(entity_pkey)))
+            lambda: Mapper(num_examples=len(entity_pkey))
+        )
         mapper_dict[entity_table_name].add(
             pkey=df[self.primary_key_dict[entity_table_name]],
             batch=batch,
@@ -263,13 +269,15 @@ class SQLSampler(Sampler):
         batches_dict: dict[str, list[np.ndarray]] = defaultdict(list)
         batches_dict[entity_table_name].append(batch)
         num_sampled_nodes_dict: dict[str, list[int]] = defaultdict(
-            lambda: [0] * (len(num_neighbors) + 1))
+            lambda: [0] * (len(num_neighbors) + 1)
+        )
         num_sampled_nodes_dict[entity_table_name][0] = len(entity_pkey)
 
         rows_dict: dict[EdgeType, list[np.ndarray]] = defaultdict(list)
         cols_dict: dict[EdgeType, list[np.ndarray]] = defaultdict(list)
         num_sampled_edges_dict: dict[EdgeType, list[int]] = defaultdict(
-            lambda: [0] * len(num_neighbors))
+            lambda: [0] * len(num_neighbors)
+        )
 
         # The start index of data frame slices of the previous hop:
         offset_dict: dict[str, int] = defaultdict(int)
@@ -290,15 +298,20 @@ class SQLSampler(Sampler):
                 cols = [fkey for fkey, _ in self.foreign_key_dict[table]]
                 if table in self.primary_key_dict:
                     cols.append(self.primary_key_dict[table])
-                dfs = [df[cols] for df in dfs_dict[table][offset_dict[table]:]]
-                df = pd.concat(
-                    dfs,
-                    axis=0,
-                    ignore_index=True,
-                ) if len(dfs) > 1 else dfs[0]
-                batches = batches_dict[table][offset_dict[table]:]
-                batch = (np.concatenate(batches)
-                         if len(batches) > 1 else batches[0])
+                dfs = [df[cols] for df in dfs_dict[table][offset_dict[table] :]]
+                df = (
+                    pd.concat(
+                        dfs,
+                        axis=0,
+                        ignore_index=True,
+                    )
+                    if len(dfs) > 1
+                    else dfs[0]
+                )
+                batches = batches_dict[table][offset_dict[table] :]
+                batch = (
+                    np.concatenate(batches) if len(batches) > 1 else batches[0]
+                )
                 offset_dict[table] = len(batches_dict[table])  # Increase.
 
                 pkey: pd.Series | None = None
@@ -312,10 +325,12 @@ class SQLSampler(Sampler):
                     row = mapper_dict[dst_table].get(df[fkey], batch)
                     mask = row == -1
                     if mask.any():
-                        key_df = pd.DataFrame({
-                            'fkey': df[fkey],
-                            'batch': batch,
-                        }).iloc[mask]
+                        key_df = pd.DataFrame(
+                            {
+                                'fkey': df[fkey],
+                                'batch': batch,
+                            }
+                        ).iloc[mask]
                         # Only maintain unique keys per example:
                         unique_key_df = key_df.drop_duplicates()
                         # Fully de-duplicate keys across examples:
@@ -357,14 +372,15 @@ class SQLSampler(Sampler):
                             dfs_dict[dst_table].append(_df)
                             batches_dict[dst_table].append(_batch)
                             num_sampled_nodes_dict[dst_table][hop + 1] += (  #
-                                len(_batch))
+                                len(_batch)
+                            )
 
                     mask = row != -1
 
                     col = index
                     if col is None:
                         start = sum(num_sampled_nodes_dict[table][:hop])
-                        end = sum(num_sampled_nodes_dict[table][:hop + 1])
+                        end = sum(num_sampled_nodes_dict[table][: hop + 1])
                         col = np.arange(start, end)
 
                     row = row[mask]
@@ -424,9 +440,9 @@ class SQLSampler(Sampler):
         # Post-Processing #####################################################
 
         df_dict = {
-            table:
-            pd.concat(dfs, axis=0, ignore_index=True)
-            if len(dfs) > 1 else dfs[0]
+            table: pd.concat(dfs, axis=0, ignore_index=True)
+            if len(dfs) > 1
+            else dfs[0]
             for table, dfs in dfs_dict.items()
         }
 
@@ -463,7 +479,7 @@ class SQLSampler(Sampler):
 
         if visited_hops != len(num_neighbors):
             num_sampled_nodes_dict = {
-                key: value[:visited_hops + 1]
+                key: value[: visited_hops + 1]
                 for key, value in num_sampled_nodes_dict.items()
             }
             num_sampled_edges_dict = {
@@ -493,9 +509,9 @@ class SQLSampler(Sampler):
             tuple[pd.DateOffset | None, pd.DateOffset],
         ],
     ) -> tuple[
-            dict[str, pd.DataFrame],
-            dict[str, pd.Series],
-            dict[str, np.ndarray],
+        dict[str, pd.DataFrame],
+        dict[str, pd.Series],
+        dict[str, np.ndarray],
     ]:
         feat_dict: dict[str, pd.DataFrame] = {}
         time_dict: dict[str, pd.Series] = {}
@@ -511,12 +527,14 @@ class SQLSampler(Sampler):
             entity_df = entity_df.iloc[perm].reset_index(drop=True)
             feat_dict[entity_table_name] = entity_df
         else:
-            feat_dict[entity_table_name] = pd.DataFrame({
-                self.primary_key_dict[entity_table_name]:
-                entity_pkey,
-            })
+            feat_dict[entity_table_name] = pd.DataFrame(
+                {
+                    self.primary_key_dict[entity_table_name]: entity_pkey,
+                }
+            )
         batch_dict[entity_table_name] = np.arange(
-            len(feat_dict[entity_table_name]))
+            len(feat_dict[entity_table_name])
+        )
 
         for edge_type, (_min, _max) in time_offset_dict.items():
             table_name, foreign_key, _ = edge_type

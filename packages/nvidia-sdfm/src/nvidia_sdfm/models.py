@@ -4,7 +4,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Literal
 
 import pandas as pd
 
@@ -33,9 +34,11 @@ def require_frame(value: Any, name: str) -> pd.DataFrame:
     the argument nor the type it should have been.
     """
     if not isinstance(value, pd.DataFrame):
-        hint = ('; wrap a single row with pd.DataFrame([row])'
-                if isinstance(value, (dict, pd.Series)) else
-                '; build one with pd.DataFrame(...)')
+        hint = (
+            '; wrap a single row with pd.DataFrame([row])'
+            if isinstance(value, (dict, pd.Series))
+            else '; build one with pd.DataFrame(...)'
+        )
         raise SdfmError(
             f'{name} must be a pandas DataFrame, got '
             f'{type(value).__name__}{hint}',
@@ -157,7 +160,30 @@ class RFMModel:
 
         Returns:
             The predictions as a ``pd.DataFrame``, or a ``kumorfm``
-            ``Explanation`` when ``explain`` is set.
+            ``Explanation`` when ``explain`` is set (the frame is then on its
+            ``prediction`` attribute).
+
+            **The row count depends on the task**, so do not assume one row per
+            index. Every row carries ``ENTITY`` and ``ANCHOR_TIMESTAMP``; join
+            on ``ENTITY`` rather than on position.
+
+            =========================== ====================================
+            Task                        Rows and columns
+            =========================== ====================================
+            binary classification       One row per entity. ``PREDICTION``,
+                                        ``FALSE_PROB``, ``TRUE_PROB``.
+            regression                  One row per entity. ``PREDICTION``.
+            multiclass classification   One row per entity *per class*.
+                                        ``CLASS``, ``SCORE``, ``PREDICTED``.
+            ``RANK TOP k``              *k* rows per entity, best first.
+            (temporal link prediction)  ``CLASS``, ``SCORE``.
+            =========================== ====================================
+
+            A query whose target is a categorical column is a multiclass task,
+            so it is reached from here as well as from :meth:`predict_task`.
+
+            ``return_embeddings=True`` adds an ``EMBEDDINGS`` column without
+            changing the row count. See ``docs/reference/prediction-output.md``.
         """
         options = {
             name: value
@@ -244,7 +270,11 @@ class RFMModel:
             batch_size: As in :meth:`predict`.
             num_retries: As in :meth:`predict`.
             entity_column: The entity-id column in ``context`` / ``predict``.
-            target_column: The label column in ``context``.
+            target_column: The label column in ``context``. For
+                ``task_type='temporal_link_prediction'`` each value must be a
+                *list* of target ids, not a single id; a scalar is rejected
+                with "Link prediction target values must be stringlist
+                arrays".
             time_column: The anchor-timestamp column. ``None`` uses
                 ``ANCHOR_TIMESTAMP`` when either frame carries it, otherwise
                 the entity table's own time column.
@@ -272,7 +302,33 @@ class RFMModel:
 
         Returns:
             The predictions as a ``pd.DataFrame``, or a ``kumorfm``
-            ``Explanation`` when ``explain`` is set.
+            ``Explanation`` when ``explain`` is set (the frame is then on its
+            ``prediction`` attribute).
+
+            **The row count depends on ``task_type``**, so do not assume one
+            row per row of ``predict``. Every row carries ``ENTITY`` and
+            ``ANCHOR_TIMESTAMP``; join on ``ENTITY`` rather than on position.
+
+            ============================= ==================================
+            ``task_type``                 Rows and columns
+            ============================= ==================================
+            ``binary_classification``     One row per entity. ``PREDICTION``,
+                                          ``FALSE_PROB``, ``TRUE_PROB``.
+            ``regression``                One row per entity. ``PREDICTION``.
+            ``multiclass_classification`` One row per entity *per class*,
+                                          best first. ``CLASS``, ``SCORE``,
+                                          ``PREDICTED``.
+            ``temporal_link_prediction``  ``top_k`` rows per entity, best
+                                          first. ``CLASS``, ``SCORE``.
+            ``forecasting``               ``num_forecasts`` rows per entity.
+                                          ``PREDICTION``, ``FORECAST_STEP``.
+            ============================= ==================================
+
+            For multiclass, ``PREDICTED`` is ``True`` on the single winning
+            row per entity, so ``frame[frame['PREDICTED']]`` recovers one row
+            per entity. ``return_embeddings=True`` adds an ``EMBEDDINGS``
+            column without changing the row count. See
+            ``docs/reference/prediction-output.md``.
         """
         options = {
             name: value

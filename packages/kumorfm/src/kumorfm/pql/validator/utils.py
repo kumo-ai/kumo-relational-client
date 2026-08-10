@@ -9,7 +9,7 @@ from kumorfm.api.pquery.AST import Aggregation
 
 
 def col_name(full_name: str) -> str:
-    r""""Given a fully qualified column name in the format of
+    r"""Given a fully qualified column name in the format of
     `<table_name>`.`<col_name>`, returns the column name.
 
     Args:
@@ -23,7 +23,7 @@ def col_name(full_name: str) -> str:
 
 
 def table_name(full_name: str) -> str:
-    r""""Given a fully qualified column name in the format of
+    r"""Given a fully qualified column name in the format of
     `<table_name>`.`<col_name>`, returns the table name.
 
     Args:
@@ -53,8 +53,7 @@ def fqn(table_name: str, col_name: str) -> str:
     return f'{table_name}.{col_name}'
 
 
-def merge(r1: ValidationResponse,
-          r2: ValidationResponse) -> ValidationResponse:
+def merge(r1: ValidationResponse, r2: ValidationResponse) -> ValidationResponse:
     r"""Merges two validation responses.
 
     Args:
@@ -93,6 +92,7 @@ def get_rhs_lp_table(
         for col in col_group.columns:
             if graph.tables[col.table_name].pkey == col.col_name:
                 return col.table_name
-        raise AssertionError(f"col group {col_group} has no primary key")
+        raise AssertionError(f'col group {col_group} has no primary key')
     raise AssertionError(
-        f"Foreign Key {aggregated_col_name} not part of any group")
+        f'Foreign Key {aggregated_col_name} not part of any group'
+    )

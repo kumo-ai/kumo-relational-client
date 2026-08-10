@@ -8,9 +8,8 @@ from collections.abc import Sequence
 from typing import cast
 
 import pandas as pd
-from kumorfm.runmode import MissingType
-from kumorfm.api.typing import Dtype
 
+from kumorfm.api.typing import Dtype
 from kumorfm.rfm.backend.duckdb import Connection
 from kumorfm.rfm.base import (
     Column,
@@ -21,6 +20,7 @@ from kumorfm.rfm.base import (
     SourceForeignKey,
     Table,
 )
+from kumorfm.runmode import MissingType
 from kumorfm.utils import quote_ident
 
 
@@ -38,6 +38,7 @@ class DuckDBTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+
     _SQL_TEXT_TYPE = 'VARCHAR'
 
     def __init__(
@@ -70,23 +71,29 @@ class DuckDBTable(Table):
         source_columns: list[SourceColumn] = []
         with self._connection.cursor() as cursor:
             try:
-                sql = f"PRAGMA table_info({self._quoted_source_name})"
+                sql = f'PRAGMA table_info({self._quoted_source_name})'
                 cursor.execute(sql)
             except Exception as e:
-                raise ValueError(f"Table '{self.source_name}' does not exist "
-                                 f"in the DuckDB database") from e
+                raise ValueError(
+                    f"Table '{self.source_name}' does not exist "
+                    f'in the DuckDB database'
+                ) from e
             columns = cursor.fetchall()
 
             if len(columns) == 0:
-                raise ValueError(f"Table '{self.source_name}' does not exist "
-                                 f"in the DuckDB database")
+                raise ValueError(
+                    f"Table '{self.source_name}' does not exist "
+                    f'in the DuckDB database'
+                )
 
             unique_keys: set[str] = set()
             primary_keys: set[str] = set()
             source_name = quote_ident(self.source_name, char="'")
-            sql = ("SELECT constraint_type, constraint_column_names\n"
-                   "FROM duckdb_constraints()\n"
-                   f"WHERE table_name = {source_name}")
+            sql = (
+                'SELECT constraint_type, constraint_column_names\n'
+                'FROM duckdb_constraints()\n'
+                f'WHERE table_name = {source_name}'
+            )
             cursor.execute(sql)
             for constraint_type, column_names in cursor.fetchall():
                 if len(column_names) != 1:
@@ -115,11 +122,13 @@ class DuckDBTable(Table):
         source_foreign_keys: list[SourceForeignKey] = []
         with self._connection.cursor() as cursor:
             source_name = quote_ident(self.source_name, char="'")
-            sql = ("SELECT constraint_index, referenced_table,\n"
-                   "       constraint_column_names, referenced_column_names\n"
-                   "FROM duckdb_constraints()\n"
-                   f"WHERE table_name = {source_name}\n"
-                   "  AND constraint_type = 'FOREIGN KEY'")
+            sql = (
+                'SELECT constraint_index, referenced_table,\n'
+                '       constraint_column_names, referenced_column_names\n'
+                'FROM duckdb_constraints()\n'
+                f'WHERE table_name = {source_name}\n'
+                "  AND constraint_type = 'FOREIGN KEY'"
+            )
             cursor.execute(sql)
             rows = cursor.fetchall()
             counts = Counter(row[0] for row in rows)
@@ -136,9 +145,11 @@ class DuckDBTable(Table):
     def _get_source_sample_df(self) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             columns = [quote_ident(col) for col in self._source_column_dict]
-            sql = (f"SELECT {', '.join(columns)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(columns)} '
+                f'FROM {self._quoted_source_name} '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.to_arrow_table()
 
@@ -156,7 +167,7 @@ class DuckDBTable(Table):
 
     def _get_num_rows(self) -> int | None:
         with self._connection.cursor() as cursor:
-            sql = f"SELECT COUNT(*) FROM {self._quoted_source_name}"
+            sql = f'SELECT COUNT(*) FROM {self._quoted_source_name}'
             cursor.execute(sql)
             num_rows = cursor.fetchone()[0]  # type: ignore
 
@@ -171,12 +182,14 @@ class DuckDBTable(Table):
     ) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             projections = [
-                f"{column.expr} AS {quote_ident(column.name)}"
+                f'{column.expr} AS {quote_ident(column.name)}'
                 for column in columns
             ]
-            sql = (f"SELECT {', '.join(projections)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(projections)} '
+                f'FROM {self._quoted_source_name} '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.to_arrow_table()
 
@@ -185,8 +198,7 @@ class DuckDBTable(Table):
 
         return self._sanitize(
             df=table.to_pandas(types_mapper=pd.ArrowDtype),
-            dtype_dict={column.name: column.dtype
-                        for column in columns},
+            dtype_dict={column.name: column.dtype for column in columns},
             stype_dict=None,
         )
 
@@ -195,6 +207,23 @@ class DuckDBTable(Table):
         if dtype is None:
             return None
         dtype = dtype.strip().upper()
+        # Tested first: DuckDB spells a list as the element type plus '[]', and
+        # every scalar test below matches on a substring, so 'INTEGER[]' would
+        # otherwise be claimed by the INTEGER branch and typed as a scalar.
+        # The sibling Databricks and Snowflake mappings do not have this
+        # problem, because 'ARRAY<...>' does not contain its element spelling
+        # at the top level.
+        if dtype.endswith('[]'):
+            element = DuckDBTable._to_dtype(dtype[:-2])
+            if element is None:
+                return None
+            if element.is_int():
+                return Dtype.intlist
+            if element.is_float():
+                return Dtype.floatlist
+            if element.is_string():
+                return Dtype.stringlist
+            return Dtype.unsupported
         if re.search('UTINYINT|USMALLINT|UINTEGER|UBIGINT|UHUGEINT', dtype):
             return Dtype.int
         if re.search('TINYINT|SMALLINT|INTEGER|BIGINT|HUGEINT', dtype):
@@ -217,14 +246,4 @@ class DuckDBTable(Table):
             return Dtype.time
         if dtype.startswith('BLOB'):
             return Dtype.binary
-        if dtype.endswith('[]'):
-            element = dtype[:-2]
-            _dtype = DuckDBTable._to_dtype(element)
-            if _dtype is not None and _dtype.is_int():
-                return Dtype.intlist
-            if _dtype is not None and _dtype.is_float():
-                return Dtype.floatlist
-            if _dtype is not None and _dtype.is_string():
-                return Dtype.stringlist
-            return Dtype.unsupported
         return None

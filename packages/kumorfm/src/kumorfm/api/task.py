@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List
 
 from kumorfm.api.common import StrEnum
 
@@ -20,7 +19,7 @@ class TaskType(StrEnum):
     LINK_PREDICTION = 'link_prediction'  # Deprecated.
 
     @staticmethod
-    def get_node_pred_tasks() -> List['TaskType']:
+    def get_node_pred_tasks() -> list['TaskType']:
         return [
             TaskType.BINARY_CLASSIFICATION,
             TaskType.MULTICLASS_CLASSIFICATION,
@@ -35,7 +34,7 @@ class TaskType(StrEnum):
         return self in self.get_node_pred_tasks()
 
     @staticmethod
-    def get_link_pred_tasks() -> List['TaskType']:
+    def get_link_pred_tasks() -> list['TaskType']:
         return [
             TaskType.TEMPORAL_LINK_PREDICTION,
             TaskType.STATIC_LINK_PREDICTION,
@@ -47,7 +46,7 @@ class TaskType(StrEnum):
         return self in self.get_link_pred_tasks()
 
     @staticmethod
-    def get_classification_tasks() -> List['TaskType']:
+    def get_classification_tasks() -> list['TaskType']:
         return [
             TaskType.BINARY_CLASSIFICATION,
             TaskType.MULTICLASS_CLASSIFICATION,
@@ -59,7 +58,7 @@ class TaskType(StrEnum):
         return self in self.get_classification_tasks()
 
     @staticmethod
-    def get_multilabel_tasks() -> List['TaskType']:
+    def get_multilabel_tasks() -> list['TaskType']:
         return [
             TaskType.MULTILABEL_CLASSIFICATION,
             TaskType.MULTILABEL_RANKING,
@@ -70,7 +69,7 @@ class TaskType(StrEnum):
         return self in self.get_multilabel_tasks()
 
     @staticmethod
-    def get_ranking_tasks() -> List['TaskType']:
+    def get_ranking_tasks() -> list['TaskType']:
         return TaskType.get_link_pred_tasks() + [TaskType.MULTILABEL_RANKING]
 
     @property

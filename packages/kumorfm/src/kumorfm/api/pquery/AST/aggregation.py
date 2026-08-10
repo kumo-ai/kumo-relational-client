@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import List, Optional, Union
+from typing import Union
 
 import pydantic
 from pydantic.dataclasses import dataclass
@@ -31,28 +31,33 @@ class Aggregation(ASTNode):
         time_col: The time column to use during aggregation.
             For internal dataclass loading use only.
     """
-    target: Optional[Union['Filter', Column]] = None
-    aggr: Union[AggregationType, str] = ''
-    aggr_time_range: Optional[DateOffsetRange] = None
-    group_by: Optional[str] = None
-    time_col: Optional[str] = None
+
+    target: Union['Filter', Column] | None = None
+    aggr: AggregationType | str = ''
+    aggr_time_range: DateOffsetRange | None = None
+    group_by: str | None = None
+    time_col: str | None = None
 
     def __post_init__(self) -> None:
         if self.target is None:
-            raise ValueError(f"Class '{self.__class__.__name__}' is missing a "
-                             f"target.")
+            raise ValueError(
+                f"Class '{self.__class__.__name__}' is missing a target."
+            )
         if self.aggr_time_range is not None:
             if isinstance(self.aggr_time_range, dict):
                 # If Pydantic hasn't loaded attributes yet, they might still
                 # be dicts
-                self.aggr_time_range = from_json(self.aggr_time_range,
-                                                 DateOffsetRange)
+                self.aggr_time_range = from_json(
+                    self.aggr_time_range, DateOffsetRange
+                )
             if self.date_offset_range is not None:
                 if isinstance(self.date_offset_range, dict):
-                    self.date_offset_range = from_json(self.date_offset_range,
-                                                       DateOffsetRange)
+                    self.date_offset_range = from_json(
+                        self.date_offset_range, DateOffsetRange
+                    )
                 self.date_offset_range = DateOffsetRange.merge_ranges(
-                    self.date_offset_range, self.aggr_time_range)
+                    self.date_offset_range, self.aggr_time_range
+                )
             else:
                 self.date_offset_range = self.aggr_time_range
 
@@ -60,21 +65,21 @@ class Aggregation(ASTNode):
         super().__post_init__()
 
     @property
-    def children(self) -> List['ASTNode']:
+    def children(self) -> list['ASTNode']:
         assert self.target is not None
         return [self.target]
 
-    def non_inf_date_offset_range(self) -> Optional[DateOffsetRange]:
+    def non_inf_date_offset_range(self) -> DateOffsetRange | None:
         r"""The full time range of this subtree, excluding any ranges with
         infinities, given as a `DateOffsetRange`.
-        Returns :obj:`None` if there is no time range."""
+        Returns :obj:`None` if there is no time range.
+        """
         child_range = super().non_inf_date_offset_range()
         if self.aggr_time_range is None or self.aggr_time_range.is_open:
             return child_range
-        elif child_range is None:
+        if child_range is None:
             return self.aggr_time_range
-        else:
-            return child_range.merge_ranges(child_range, self.aggr_time_range)
+        return child_range.merge_ranges(child_range, self.aggr_time_range)
 
     @property
     def is_static(self) -> bool:
@@ -92,17 +97,16 @@ class Aggregation(ASTNode):
 
         start_offset = self.aggr_time_range.start
         if start_offset is None:
-            start_offset = "-INF"
+            start_offset = '-INF'
         assert isinstance(self.aggr_time_range.unit, TimeUnit)
-        return (f'{aggr_name}('
-                f'{target_repr}, '
-                f'{start_offset}, '
-                f'{self.aggr_time_range.end}, '
-                f'{self.aggr_time_range.unit.value}'
-                f')')
-
-    def _get_target_column_name(self) -> str:
-        return self.get_target_column_name()
+        return (
+            f'{aggr_name}('
+            f'{target_repr}, '
+            f'{start_offset}, '
+            f'{self.aggr_time_range.end}, '
+            f'{self.aggr_time_range.unit.value}'
+            f')'
+        )
 
     def get_target_column_name(self) -> str:
         r"""Returns the fully-qualified name (``table.column``) of the leaf
@@ -110,16 +114,16 @@ class Aggregation(ASTNode):
         """
         if isinstance(self.target, Column):
             return self.target.fqn
-        else:
-            assert isinstance(self.target, Filter)
-            assert isinstance(self.target.target, Column)
-            return self.target.target.fqn
+        assert isinstance(self.target, Filter)
+        assert isinstance(self.target.target, Column)
+        return self.target.target.fqn
 
     @property
-    def all_time_columns(self) -> List[str]:
+    def all_time_columns(self) -> list[str]:
         r"""List of all columns that are needed for temporal aggregations in
         the query, given with in a fully-qualified name format:
-        `table.column`."""
+        `table.column`.
+        """
         assert self.target is not None
         targets = self.target.all_time_columns
         if self.time_col is not None:

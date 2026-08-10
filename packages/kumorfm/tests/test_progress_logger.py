@@ -6,7 +6,6 @@ import io
 import sys
 
 import pytest
-
 from kumorfm.utils.progress_logger import PlainProgressLogger
 
 # The ConEmu / Windows Terminal taskbar-progress OSC sequences.
@@ -18,16 +17,22 @@ class _FakeTTY(io.StringIO):
         return True
 
 
-@pytest.mark.parametrize('stdout_factory, verbose, expected', [
-    (io.StringIO, True, False),
-    (_FakeTTY, True, True),
-    # `verbose=False` is the only control a caller has over this output, so it
-    # has to reach the taskbar sequences as well -- they are written outside
-    # `on_enter`/`on_exit` and were previously unconditional on a TTY.
-    (_FakeTTY, False, False),
-])
+@pytest.mark.parametrize(
+    'stdout_factory, verbose, expected',
+    [
+        (io.StringIO, True, False),
+        (_FakeTTY, True, True),
+        # `verbose=False` is the only control a caller has over this output, so it
+        # has to reach the taskbar sequences as well -- they are written outside
+        # `on_enter`/`on_exit` and were previously unconditional on a TTY.
+        (_FakeTTY, False, False),
+    ],
+)
 def test_taskbar_escapes_only_reach_a_verbose_tty(
-    monkeypatch, stdout_factory, verbose, expected,
+    monkeypatch,
+    stdout_factory,
+    verbose,
+    expected,
 ) -> None:
     import kumorfm
 

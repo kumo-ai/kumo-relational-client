@@ -23,29 +23,31 @@ _console = Console(legacy_windows=True)
 def message(msg: str) -> None:
     if in_streamlit_notebook():
         import streamlit as st
+
         st.markdown(msg)
     elif in_jupyter_notebook():
         from IPython.display import Markdown, display
+
         display(Markdown(msg))
     else:
-        print(msg.replace("`", "'"))
+        print(msg.replace('`', "'"))
 
 
 def title(msg: str) -> None:
     if in_notebook():
-        message(f"### {msg}")
+        message(f'### {msg}')
     else:
-        msg = msg.replace("`", "'")
-        _console.print(f"[bold]{msg}[/bold]", highlight=False)
+        msg = msg.replace('`', "'")
+        _console.print(f'[bold]{msg}[/bold]', highlight=False)
 
 
 def italic(msg: str) -> None:
     if in_notebook():
-        message(f"*{msg}*")
+        message(f'*{msg}*')
     else:
-        msg = msg.replace("`", "'")
+        msg = msg.replace('`', "'")
         _console.print(
-            f"[italic]{msg}[/italic]",
+            f'[italic]{msg}[/italic]',
             highlight=False,
             style='dim',
         )
@@ -53,26 +55,31 @@ def italic(msg: str) -> None:
 
 def unordered_list(items: Sequence[str]) -> None:
     if in_notebook():
-        msg = '\n'.join([f"- {item}" for item in items])
+        msg = '\n'.join([f'- {item}' for item in items])
         message(msg)
     else:
         text = Text('\n').join(
             Text.assemble(
                 Text(' • ', style='yellow'),
                 Text(item.replace('`', '')),
-            ) for item in items)
+            )
+            for item in items
+        )
         _console.print(text, highlight=False)
 
 
 def dataframe(df: pd.DataFrame) -> None:
     if in_streamlit_notebook():
         import streamlit as st
+
         st.dataframe(df, hide_index=True)
     elif in_vnext_notebook():
         from IPython.display import display
+
         display(df.reset_index(drop=True))
     elif in_jupyter_notebook():
         from IPython.display import display
+
         if hasattr(df.style, 'hide'):
             display(df.style.hide(axis='index'))  # pandas=2
         else:

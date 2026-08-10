@@ -7,6 +7,7 @@ import warnings
 
 import pandas as pd
 from dateutil.parser import UnknownTimezoneWarning
+
 from kumorfm.api.typing import Dtype, Stype
 
 
@@ -20,8 +21,10 @@ def contains_timestamp(ser: pd.Series, column_name: str, dtype: Dtype) -> bool:
     column_name = column_name.lower()
 
     match = re.search(
-        ('(^|_)(date|datetime|dt|time|timedate|timestamp|ts|'
-         'created|updated)(_|$)'),
+        (
+            '(^|_)(date|datetime|dt|time|timedate|timestamp|ts|'
+            'created|updated)(_|$)'
+        ),
         column_name,
         re.IGNORECASE,
     )

@@ -78,7 +78,6 @@ def infer_primary_key(
             score += 4
 
         for table_name_lower in table_names:
-
             if col_name_lower == table_name_lower:
                 score += 4  # USER -> USER
                 break
@@ -101,7 +100,9 @@ def infer_primary_key(
                 if col_name_lower.endswith(f'{table_name_lower}{suffix}'):
                     score += 2
 
-            # `rel-bench` hard-coding :(
+            # A name-shaped tie-break for one RelBench table whose primary
+            # key shares no substring with its table name, so none of the
+            # rules above can score it.
             if table_name == 'studies' and col_name == 'nct_id':
                 score += 1
 
@@ -125,8 +126,10 @@ def infer_primary_key(
 
     max_score = max(score for _, score in scores)
     tied = [col_name for col_name, score in scores if score == max_score]
-    warnings.warn(f"Found multiple potential primary keys in table "
-                  f"'{table_name}': {tied}. Please specify the primary "
-                  f"key for this table manually.")
+    warnings.warn(
+        f'Found multiple potential primary keys in table '
+        f"'{table_name}': {tied}. Please specify the primary "
+        f'key for this table manually.'
+    )
 
     return None

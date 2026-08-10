@@ -5,7 +5,7 @@
 import logging
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import kumorfm
 from kumorfm.client.transport import RFMTransport
@@ -32,23 +32,27 @@ logger = logging.getLogger('kumorfm_rfm')
 _SDFM_CLIENT_TOKEN = object()
 
 _DIRECT_USE_MESSAGE = (
-    "Direct use of the KumoRFM engine is not supported. Run inference through "
-    "the NVIDIA SDFM SDK:\n"
-    "    from nvidia_sdfm import SDFMClient, kumorfm\n"
-    "    graph = kumorfm.Graph.from_data(...)\n"
-    "    with SDFMClient(url=...) as client:\n"
-    "        client.kumorfm(graph).predict(query, indices=[...])"
+    'Direct use of the KumoRFM engine is not supported. Run inference through '
+    'the NVIDIA SDFM SDK:\n'
+    '    from nvidia_sdfm import SDFMClient, kumorfm\n'
+    '    graph = kumorfm.Graph.from_data(...)\n'
+    '    with SDFMClient(url=...) as client:\n'
+    '        client.kumorfm(graph).predict(query, indices=[...])'
 )
+
+
+_URL_NOT_PROVIDED = '__url_not_provided__'
 
 
 @dataclass
 class RfmGlobalState:
-    _url: str = '__url_not_provided__'
-    _thread_local = threading.local()
+    _url: str = _URL_NOT_PROVIDED
 
-    # Thread-safe init-once.
+    # Thread-safe init-once. Built per instance: a bare `threading.Lock()`
+    # default is evaluated once at class-definition time, so every instance
+    # would share one lock and `reset()` would serialize across all of them.
     _initialized: bool = False
-    _lock: threading.Lock = threading.Lock()
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
     def client(self) -> RFMTransport:
@@ -59,8 +63,7 @@ class RfmGlobalState:
     def reset(self) -> None:  # For testing only.
         with self._lock:
             self._initialized = False
-            self._url = '__url_not_provided__'
-            self._thread_local = threading.local()
+            self._url = _URL_NOT_PROVIDED
 
 
 global_state = RfmGlobalState()
@@ -74,12 +77,18 @@ def _configure(
     timeout: float | None,
     max_retries: int = 3,
 ) -> None:
-    resolved_url = (url or os.getenv("RFM_API_URL")
-                    or os.getenv("KUMO_API_ENDPOINT"))
+    resolved_url = (
+        url or os.getenv('RFM_API_URL') or os.getenv('KUMO_API_ENDPOINT')
+    )
 
-    kumorfm.init(url=resolved_url, api_key=api_key, verify_ssl=verify_ssl,
-                 log_level=log_level, timeout=timeout,
-                 max_retries=max_retries)
+    kumorfm.init(
+        url=resolved_url,
+        api_key=api_key,
+        verify_ssl=verify_ssl,
+        log_level=log_level,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
 
     global_state._url = kumorfm.global_state._url
     global_state._initialized = True
@@ -89,7 +98,7 @@ def init(
     url: str | None = None,
     api_key: str | None = None,
     verify_ssl: bool = True,
-    log_level: str = "INFO",
+    log_level: str = 'INFO',
     *,
     timeout: float | None = None,
     max_retries: int = 3,
@@ -98,8 +107,7 @@ def init(
     if _token is not _SDFM_CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
-        _configure(url, api_key, verify_ssl, log_level, timeout,
-                   max_retries)
+        _configure(url, api_key, verify_ssl, log_level, timeout, max_retries)
 
 
 def close_client(_token: object | None = None) -> None:
@@ -134,7 +142,7 @@ def init_client(
     url: str | None = None,
     api_key: str | None = None,
     verify_ssl: bool = True,
-    log_level: str = "INFO",
+    log_level: str = 'INFO',
     *,
     timeout: float | None = None,
     max_retries: int = 3,
@@ -159,8 +167,7 @@ def init_client(
     if _token is not _SDFM_CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
-        _configure(url, api_key, verify_ssl, log_level, timeout,
-                   max_retries)
+        _configure(url, api_key, verify_ssl, log_level, timeout, max_retries)
         return kumorfm.global_state.client
 
 
@@ -170,10 +177,10 @@ def init_databricks_serving(
     workspace_client: object | None = None,
     max_request_bytes: int | None = None,
     timeout: float | None = None,
-    log_level: str = "INFO",
+    log_level: str = 'INFO',
     _token: object | None = None,
 ) -> None:
-    """Initialize against a Databricks Model Serving endpoint.
+    r"""Initialize against a Databricks Model Serving endpoint.
 
     The counterpart to :func:`init`, which resolves a NIM base URL from its
     argument or the environment; there is no URL to resolve here.
@@ -192,28 +199,28 @@ def init_databricks_serving(
             timeout=timeout,
             log_level=log_level,
         )
-        global_state._url = f"databricks-serving:{endpoint}"
+        global_state._url = f'databricks-serving:{endpoint}'
         global_state._initialized = True
 
 
 LocalGraph = Graph  # NOTE Backward compatibility - do not use anymore.
 
 __all__ = [
-    'init',
-    'init_client',
-    'close_client',
-    'init_databricks_serving',
-    'Table',
-    'LocalTable',
+    'ExplainConfig',
+    'Explanation',
     'Graph',
     'GraphSanitizationReport',
-    'ViewConversionWarning',
+    'KumoRFM',
+    'LocalTable',
+    'MaterializedPredictionRequest',
     'SanitizationStatus',
+    'Table',
     'TableSanitizationReport',
     'TaskReferenceError',
     'TaskTable',
-    'KumoRFM',
-    'ExplainConfig',
-    'Explanation',
-    'MaterializedPredictionRequest',
+    'ViewConversionWarning',
+    'close_client',
+    'init',
+    'init_client',
+    'init_databricks_serving',
 ]

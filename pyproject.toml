@@ -8,11 +8,96 @@
 #
 # This file carries only shared tooling configuration. Each package's
 # [tool.ruff] extends this file, so the lint baseline below applies to every
-# first-party tree and a package cannot drop rules by shadowing the block.
+# first-party tree. Note that `extend` merges scalar settings but *replaces*
+# table-valued ones: a package that declares its own
+# [tool.ruff.lint.per-file-ignores] shadows the block below rather than adding
+# to it, and has to repeat any entry it still wants.
 
 [tool.ruff]
 line-length = 80
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+select = [
+    "E4", "E7", "E9",  # pycodestyle: the subset not owned by the formatter
+    "W",               # pycodestyle warnings
+    "F",               # pyflakes
+    "I",               # import sorting
+    "UP",              # pyupgrade: keeps PEP 585/604 from regressing
+    "B",               # bugbear: mutable defaults, shadowed loop vars
+    "C4",              # comprehension rewrites
+    "SIM",             # simplifiable constructs
+    "RET",             # return-path hygiene
+    "PIE",             # misc lint
+    "RUF",             # ruff's own rules
+    "G", "LOG",        # logging: lazy %s args, no handler surprises
+    "ERA",             # commented-out code
+    "DTZ",             # timezone-naive datetimes
+    "TRY004",          # raise TypeError for a type check
+    "TD002", "TD003",  # every TODO names an owner and an issue
+    "FIX",             # no bare FIXME/XXX/HACK left in the tree
+    "N",               # pep8-naming: one spelling for modules, functions,
+                       # classes and constants across all three packages
+]
+ignore = [
+    # Line length is the formatter's job. `ruff format` already wraps
+    # everything it is allowed to wrap; what E501 reports on top of that is the
+    # set of things it must not touch -- a generated SHA256, a URL, or the LLM
+    # prompt template in kumorfm/rfm/explain_summary.py, where rewrapping the
+    # string would change the text sent to the model. Enforced by
+    # `ruff format --check` in CI instead.
+    "E501",
+    # `Any` on the driver/connection seams is real debt, not noise. Typing them
+    # needs Protocols for the graph, the workspace client and the DB-API
+    # connection, which is its own change.
+    "ANN401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Import order inside a package __init__ is load-bearing here: several of them
+# import a submodule that imports a name back out of the partly-initialized
+# package, and the hand-written order is what keeps that resolvable. Sorting
+# them raises ImportError on kumorfm.rfm.backend.local. This preserves the
+# `skip = ["__init__.py"]` the repo's isort config already carried. Untangling
+# the cycles themselves is tracked separately.
+"**/__init__.py" = ["I001"]
+# Tests assert, use literal expected values, nest `with pytest.raises(...)`
+# around a fixture, and evaluate a bare attribute to prove it raises -- all of
+# which the corresponding rules read as defects in library code.
+"**/tests/**" = [
+    "S101",
+    "ANN",
+    "PLR2004",
+    "ERA001",
+    "SIM117",
+    "RUF012",
+    "B018",
+]
+"**/e2e/**" = ["S101", "ANN", "PLR2004", "T201"]
+"scripts/**" = ["S101", "ANN", "T201", "RUF012"]
+# `cls` is the correct first argument of a pydantic field validator, which is
+# what every N805 in these files is; ruff does not recognise the project's
+# `compatible_field_validator` decorator.
+"**/api/data_source.py" = ["N805"]
+"**/api/source_table.py" = ["N805"]
+"**/api/table.py" = ["N805"]
+# The generated `PQLGrammarVisitor` declares `visitProg` and its siblings.
+"**/pql/parser/visitor.py" = ["N802"]
+# `BaseHTTPRequestHandler` dispatches through `do_GET` and `do_POST`.
+"**/tests/client/test_client_security.py" = ["N815"]
+# ANTLR's `ErrorListener` calls `syntaxError(...)` by that exact name.
+"**/tests/test_pql_quoted_identifiers.py" = ["N802"]
+# The fake class mirrors `kumorfm.exceptions.HTTPException`.
+"**/tests/test_kumorfm_serving_branch.py" = ["N818"]
+# Examples are read as much as they are run: they print, they annotate
+# nothing, and a notebook cell re-imports what an earlier cell already
+# imported so it can be run on its own. Linting them still catches the things
+# that would mislead a reader, such as an unsorted import block or an unused
+# name.
+"**/examples/**" = ["S101", "ANN", "PLR2004", "T201", "ERA001"]
+"**/*.ipynb" = ["F811"]
+
+# Declared once here rather than per package: `extend` inherits it, so every
+# tree formats identically and a package cannot drift by omitting the block.
+[tool.ruff.format]
+quote-style = "single"

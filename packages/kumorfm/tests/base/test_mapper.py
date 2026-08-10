@@ -6,49 +6,48 @@ import numpy as np
 import pandas as pd
 import pytest
 from kumorfm.api.typing import Dtype
-
 from kumorfm.rfm.base.mapper import Mapper
 
 
 @pytest.mark.parametrize('dtype', [Dtype.int, Dtype.float, Dtype.string])
 def test_mapper(dtype: Dtype) -> None:
     if dtype == Dtype.int:
-        A = 2
-        B = 1
-        C = 0
+        a = 2
+        b = 1
+        c = 0
     elif dtype == Dtype.float:
-        A = 1.5
-        B = 3.7
-        C = 0.3
+        a = 1.5
+        b = 3.7
+        c = 0.3
     else:
         assert dtype == Dtype.string
-        A = 'A'
-        B = 'B'
-        C = 'C'
+        a = 'A'
+        b = 'B'
+        c = 'C'
 
     mapper = Mapper(num_examples=2)
     out = mapper.get(
-        pkey=pd.Series([A, B, C, A, B, C]),
+        pkey=pd.Series([a, b, c, a, b, c]),
         batch=np.array([1, 1, 1, 0, 0, 0]),
     )
     assert np.array_equal(out, np.array([-1, -1, -1, -1, -1, -1]))
 
     mapper.add(
-        pkey=pd.Series([A, A, B, B]),
+        pkey=pd.Series([a, a, b, b]),
         batch=np.array([0, 0, 0, 1]),
     )
     out = mapper.get(
-        pkey=pd.Series([A, B, C, A, B, C]),
+        pkey=pd.Series([a, b, c, a, b, c]),
         batch=np.array([1, 1, 1, 0, 0, 0]),
     )
     assert np.array_equal(out, np.array([-1, 2, -1, 0, 1, -1]))
 
     mapper.add(
-        pkey=pd.Series([A, B]),
+        pkey=pd.Series([a, b]),
         batch=np.array([1, 1]),
     )
     out = mapper.get(
-        pkey=pd.Series([A, B, C, A, B, C]),
+        pkey=pd.Series([a, b, c, a, b, c]),
         batch=np.array([1, 1, 1, 0, 0, 0]),
     )
     assert np.array_equal(out, np.array([3, 2, -1, 0, 1, -1]))

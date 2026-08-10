@@ -5,7 +5,6 @@
 import builtins
 
 import pydantic
-from pandas import DateOffset
 
 from kumorfm.api.common import StrEnum
 
@@ -48,6 +47,7 @@ class Stype(StrEnum):
             another AI model
         image: A column holding image URLs.
     """
+
     numerical = 'numerical'
     categorical = 'categorical'
     multicategorical = 'multicategorical'
@@ -57,14 +57,6 @@ class Stype(StrEnum):
     sequence = 'sequence'
     image = 'image'
     unsupported = 'unsupported'
-
-    def to_parent_stype(self) -> 'Stype':
-        r"""Convert the semantic type to its parent type.
-
-        Most semantic types are their own parent type. However, ``ID`` is
-        converted to ``categorical`` because it is a special case.
-        """
-        return self if self != Stype.ID else Stype.categorical
 
     def supports_dtype(self, dtype: 'Dtype') -> bool:
         r"""Whether a :class:`Stype` supports a :class:`Dtype`."""
@@ -110,6 +102,7 @@ class Dtype(StrEnum):
         binary: A column containing binary data.
         stringlist: A column containing list of strings.
     """
+
     # Booleans:
     bool = 'bool'
     # Integers:
@@ -143,7 +136,11 @@ class Dtype(StrEnum):
     def is_int(self) -> builtins.bool:
         r"""Whether the :class:`Dtype` holds integers."""
         return self in {
-            Dtype.int, Dtype.byte, Dtype.int16, Dtype.int32, Dtype.int64
+            Dtype.int,
+            Dtype.byte,
+            Dtype.int16,
+            Dtype.int32,
+            Dtype.int64,
         }
 
     def is_float(self) -> builtins.bool:
@@ -196,71 +193,15 @@ class Dtype(StrEnum):
         return Stype.unsupported
 
 
-class ColStatType(StrEnum):
-    # Any:
-    COUNT = 'COUNT'
-    NUM_NA = 'NUM_NA'
-    NA_FRACTION = 'NA_FRACTION'
-    INVALID_FRACTION = 'INVALID_FRACTION'
-
-    # Numerical, Temporal
-    MIN = 'MIN'
-    MAX = 'MAX'
-
-    # Numerical:
-    MEAN = 'MEAN'
-    QUANTILES = 'QUANTILES'
-    QUANTILE25 = 'QUANTILE25'
-    MEDIAN = 'MEDIAN'
-    QUANTILE75 = 'QUANTILE75'
-    STD = 'STD'
-    KURTOSIS = 'KURTOSIS'
-    HISTOGRAM = 'HISTOGRAM'
-    # num irrational entries (which are included in NA count and treated as NA)
-    NUM_IRRATIONAL = 'NUM_IRRATIONAL'
-
-    # Categorical:
-    # NUM_UNIQUE and NUM_UNIQUE_MULTI count empty strings / NA values as their
-    # own category. CATEGORY_COUNTS and MULTI_CATEGORY_COUNTS do not include
-    # empty strings / NA values as their own category.
-    NUM_UNIQUE = 'NUM_UNIQUE'
-    NUM_UNIQUE_MULTI = 'NUM_UNIQUE_MULTI'
-    CATEGORY_COUNTS = 'CATEGORY_COUNTS'
-    MULTI_CATEGORY_COUNTS = 'MULTI_CATEGORY_COUNTS'
-
-    UNIQUE_FRACTION = 'UNIQUE_FRACTION'
-
-    # The separator to use for the multi-categorical column:
-    MULTI_CATEGORIES_SEPARATOR = 'MULTI_CATEGORIES_SEPARATOR'
-
-    # Strings:
-    STRING_AVG_LEN = 'STRING_AVG_LEN'
-    STRING_MAX_LEN = 'STRING_MAX_LEN'
-    STRING_AVG_TOKENS = 'STRING_AVG_TOKENS'
-    STRING_MAX_TOKENS = 'STRING_MAX_TOKENS'
-    STRING_GLOVE_OVERLAP = 'STRING_GLOVE_OVERLAP'
-    STRING_AVG_NON_CHAR = 'STRING_AVG_NON_CHAR'
-    STRING_ARR_MIN_LEN = 'STRING_ARR_MIN_LEN'
-    STRING_ARR_MAX_LEN = 'STRING_ARR_MAX_LEN'
-
-    # Sequence:
-    SEQUENCE_MAX_LENGTH = 'SEQUENCE_MAX_LENGTH'
-    SEQUENCE_MIN_LENGTH = 'SEQUENCE_MIN_LENGTH'
-    SEQUENCE_MEAN = 'SEQUENCE_MEAN'
-    SEQUENCE_STD = 'SEQUENCE_STD'
-
-
 class TimeUnit(StrEnum):
     r"""Defines the unit of a time."""
+
     SECONDS = 'seconds'
     MINUTES = 'minutes'
     HOURS = 'hours'
     DAYS = 'days'
     WEEKS = 'weeks'
     MONTHS = 'months'
-
-    def to_offset(self) -> DateOffset:
-        return DateOffset(**{self: 1})
 
 
 class ProblemType(StrEnum):
@@ -271,6 +212,7 @@ class ProblemType(StrEnum):
     With CLASSIFY we use a classification loss.
     With FORECAST we use a time-series forecasting approach.
     """
+
     RANK = 'RANK'
     CLASSIFY = 'CLASSIFY'
     FORECAST = 'FORECAST'
@@ -278,6 +220,7 @@ class ProblemType(StrEnum):
 
 class AggregationType(StrEnum):
     r"""Defines supported aggregations."""
+
     SUM = 'SUM'
     AVG = 'AVG'
     MIN = 'MIN'
@@ -291,6 +234,7 @@ class AggregationType(StrEnum):
 
 class RelOp(StrEnum):
     r"""Defines relational operators: :obj:`!=, <=, >=, =, <, >`."""
+
     NEQ = '!='
     LEQ = '<='
     GEQ = '>='
@@ -301,13 +245,16 @@ class RelOp(StrEnum):
 
 class MemberOp(StrEnum):
     r"""Defines membership operators: :obj:`IS_IN`."""
+
     IS_IN = 'IS IN'
     IN = 'IN'
 
 
 class StrOp(StrEnum):
     r"""Defines string operators: :obj:`STARTS_WITH, ENDS_WITH, CONTAINS,
-    NOT_CONTAINS`."""
+    NOT_CONTAINS`.
+    """
+
     STARTS_WITH = 'STARTS WITH'
     ENDS_WITH = 'ENDS WITH'
     CONTAINS = 'CONTAINS'
@@ -316,6 +263,7 @@ class StrOp(StrEnum):
 
 class BoolOp(StrEnum):
     r"""Defines boolean operators: :obj:`AND, OR, NOT`."""
+
     AND = 'AND'
     OR = 'OR'
     NOT = 'NOT'

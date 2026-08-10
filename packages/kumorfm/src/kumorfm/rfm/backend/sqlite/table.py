@@ -8,9 +8,8 @@ from collections.abc import Sequence
 from typing import cast
 
 import pandas as pd
-from kumorfm.runmode import MissingType
-from kumorfm.api.typing import Dtype
 
+from kumorfm.api.typing import Dtype
 from kumorfm.rfm.backend.sqlite import Connection
 from kumorfm.rfm.base import (
     Column,
@@ -21,6 +20,7 @@ from kumorfm.rfm.base import (
     SourceForeignKey,
     Table,
 )
+from kumorfm.runmode import MissingType
 from kumorfm.utils import quote_ident
 
 
@@ -38,6 +38,7 @@ class SQLiteTable(Table):
         end_time_column: The name of the end time column of this table, if it
             exists.
     """
+
     _SQL_TEXT_TYPE = 'TEXT'
     _SQL_CHR_FUNCTION = 'CHAR'
 
@@ -70,20 +71,22 @@ class SQLiteTable(Table):
     def _get_source_columns(self) -> list[SourceColumn]:
         source_columns: list[SourceColumn] = []
         with self._connection.cursor() as cursor:
-            sql = f"PRAGMA table_info({self._quoted_source_name})"
+            sql = f'PRAGMA table_info({self._quoted_source_name})'
             cursor.execute(sql)
             columns = cursor.fetchall()
 
             if len(columns) == 0:
-                raise ValueError(f"Table '{self.source_name}' does not exist "
-                                 f"in the SQLite database")
+                raise ValueError(
+                    f"Table '{self.source_name}' does not exist "
+                    f'in the SQLite database'
+                )
 
             unique_keys: set[str] = set()
-            sql = f"PRAGMA index_list({self._quoted_source_name})"
+            sql = f'PRAGMA index_list({self._quoted_source_name})'
             cursor.execute(sql)
             for _, index_name, is_unique, *_ in cursor.fetchall():
                 if bool(is_unique):
-                    sql = f"PRAGMA index_info({quote_ident(index_name)})"
+                    sql = f'PRAGMA index_info({quote_ident(index_name)})'
                     cursor.execute(sql)
                     index = cursor.fetchall()
                     if len(index) == 1:
@@ -92,7 +95,8 @@ class SQLiteTable(Table):
             # Special SQLite case that creates a rowid alias for
             # `INTEGER PRIMARY KEY` annotated columns:
             rowid_candidates = [
-                column for _, column, dtype, _, _, is_pkey in columns
+                column
+                for _, column, dtype, _, _, is_pkey in columns
                 if bool(is_pkey) and dtype.strip().upper() == 'INTEGER'
             ]
             if len(rowid_candidates) == 1:
@@ -113,7 +117,7 @@ class SQLiteTable(Table):
     def _get_source_foreign_keys(self) -> list[SourceForeignKey]:
         source_foreign_keys: list[SourceForeignKey] = []
         with self._connection.cursor() as cursor:
-            sql = f"PRAGMA foreign_key_list({self._quoted_source_name})"
+            sql = f'PRAGMA foreign_key_list({self._quoted_source_name})'
             cursor.execute(sql)
             rows = cursor.fetchall()
             counts = Counter(row[0] for row in rows)
@@ -130,10 +134,12 @@ class SQLiteTable(Table):
     def _get_source_sample_df(self) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             columns = [quote_ident(col) for col in self._source_column_dict]
-            sql = (f"SELECT {', '.join(columns)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"ORDER BY rowid "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(columns)} '
+                f'FROM {self._quoted_source_name} '
+                f'ORDER BY rowid '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.fetch_arrow_table()
 
@@ -158,13 +164,15 @@ class SQLiteTable(Table):
     ) -> pd.DataFrame:
         with self._connection.cursor() as cursor:
             projections = [
-                f"{column.expr} AS {quote_ident(column.name)}"
+                f'{column.expr} AS {quote_ident(column.name)}'
                 for column in columns
             ]
-            sql = (f"SELECT {', '.join(projections)} "
-                   f"FROM {self._quoted_source_name} "
-                   f"ORDER BY rowid "
-                   f"LIMIT {self._NUM_SAMPLE_ROWS}")
+            sql = (
+                f'SELECT {", ".join(projections)} '
+                f'FROM {self._quoted_source_name} '
+                f'ORDER BY rowid '
+                f'LIMIT {self._NUM_SAMPLE_ROWS}'
+            )
             cursor.execute(sql)
             table = cursor.fetch_arrow_table()
 
@@ -173,8 +181,7 @@ class SQLiteTable(Table):
 
         return self._sanitize(
             df=table.to_pandas(types_mapper=pd.ArrowDtype),
-            dtype_dict={column.name: column.dtype
-                        for column in columns},
+            dtype_dict={column.name: column.dtype for column in columns},
             stype_dict=None,
         )
 

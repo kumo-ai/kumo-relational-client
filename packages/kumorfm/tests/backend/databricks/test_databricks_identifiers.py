@@ -9,8 +9,7 @@ quote character leaves a name containing ``\'`` able to close the literal and
 run the rest as SQL -- proven live against ``information_schema``. Names in a
 value position are therefore bound; the catalog, which sits in an identifier
 position no bind can fill, is backtick-quoted, a form a backslash cannot escape
-out of. See
-``bugs/security-discovery-sql-quote-ident-backslash-injection.md``.
+out of.
 """
 
 from __future__ import annotations
@@ -18,24 +17,24 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from kumorfm.rfm import Graph
 
 try:
     from kumorfm.rfm.backend.databricks import Connection, DatabricksTable
 except ImportError:
-    pytest.skip("'databricks' extension not installed",
-                allow_module_level=True)
+    pytest.skip("'databricks' extension not installed", allow_module_level=True)
 
-_BACKSLASH_INJECTION = ("x\\' UNION ALL SELECT current_user() FROM "
-                        "system.information_schema.tables --")
+_BACKSLASH_INJECTION = (
+    "x\\' UNION ALL SELECT current_user() FROM "
+    'system.information_schema.tables --'
+)
 
 
 class _Cursor:
-    def __init__(self, connection: '_Connection') -> None:
+    def __init__(self, connection: _Connection) -> None:
         self._connection = connection
 
-    def __enter__(self) -> '_Cursor':
+    def __enter__(self) -> _Cursor:
         return self
 
     def __exit__(self, *exc: Any) -> bool:
@@ -93,14 +92,18 @@ def test_from_databricks_binds_the_schema() -> None:
     assert 'my_schema' not in sql
 
 
-@pytest.mark.parametrize('schema', [
-    "x' UNION ALL SELECT 1 --",
-    _BACKSLASH_INJECTION,
-    "x\\\\' UNION ALL SELECT 1 --",
-    "x'' UNION ALL SELECT 1 --",
-])
+@pytest.mark.parametrize(
+    'schema',
+    [
+        "x' UNION ALL SELECT 1 --",
+        _BACKSLASH_INJECTION,
+        "x\\\\' UNION ALL SELECT 1 --",
+        "x'' UNION ALL SELECT 1 --",
+    ],
+)
 def test_from_databricks_never_writes_the_schema_into_the_sql(
-        schema: str) -> None:
+    schema: str,
+) -> None:
     sql, parameters = _discover(schema)
     assert parameters == [schema]
     assert 'UNION' not in sql.upper()
@@ -113,8 +116,10 @@ def test_from_databricks_quotes_an_injected_catalog() -> None:
         'my_schema',
         catalog='c`.information_schema.tables; DROP TABLE t; --',
     )
-    assert ('FROM `c``.information_schema.tables; DROP TABLE t; --`'
-            '.information_schema.tables') in sql
+    assert (
+        'FROM `c``.information_schema.tables; DROP TABLE t; --`'
+        '.information_schema.tables'
+    ) in sql
 
 
 class _Table(DatabricksTable):
@@ -125,12 +130,14 @@ class _Table(DatabricksTable):
         self._source_name = source_name
 
 
-@pytest.mark.parametrize('source_name', [
-    'orders',
-    "orders\\' UNION ALL SELECT 1 --",
-])
-def test_databricks_table_binds_the_metadata_lookups(
-        source_name: str) -> None:
+@pytest.mark.parametrize(
+    'source_name',
+    [
+        'orders',
+        "orders\\' UNION ALL SELECT 1 --",
+    ],
+)
+def test_databricks_table_binds_the_metadata_lookups(source_name: str) -> None:
     connection = _Connection()
     table = _Table(connection, source_name)
 

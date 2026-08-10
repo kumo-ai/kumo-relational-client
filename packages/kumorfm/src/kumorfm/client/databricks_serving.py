@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Invoke Kumo RFM through a Databricks Model Serving endpoint.
+r"""Invoke Kumo RFM through a Databricks Model Serving endpoint.
 
 The RFM execution path is unchanged: it still calls ``_request`` and reads
 ``ok`` / ``status_code`` / ``text`` / ``json()``. What changes is everything
@@ -28,7 +28,8 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any
 
 from kumorfm.client.endpoints import Endpoint
 from kumorfm.client.generated.tfm_api import TFMOperations
@@ -38,7 +39,9 @@ __all__ = ['DatabricksServingClient', 'ServingResponse']
 
 logger = logging.getLogger('kumorfm')
 
-# The frozen v1 boundary; see CONTRACT_V1.md in the serving repository.
+# The frozen v1 request/response column names. A deployed serving endpoint
+# reads and writes exactly these two, so renaming either breaks every endpoint
+# already in production.
 REQUEST_COLUMN = 'request_json'
 RESPONSE_COLUMN = 'response_json'
 
@@ -54,7 +57,7 @@ _ERROR_CODE_RE = re.compile(r'^[A-Z][A-Z0-9_]{0,63}$')
 
 
 class ServingResponse:
-    """A serving reply in the shape the RFM path reads.
+    r"""A serving reply in the shape the RFM path reads.
 
     There is no HTTP exchange here, so there is no ``requests.Response`` to
     return; this carries the four members ``raise_on_error`` and
@@ -78,7 +81,7 @@ class ServingResponse:
 
 
 def _validate_endpoint_name(name: str) -> str:
-    """Reject anything URL-shaped.
+    r"""Reject anything URL-shaped.
 
     A serving endpoint is named, not addressed, and a pasted workspace URL can
     carry userinfo credentials or a token query parameter. So the URL scan runs
@@ -99,7 +102,7 @@ def _validate_endpoint_name(name: str) -> str:
 
 
 def _status_of(error: BaseException) -> int:
-    """Map a Databricks SDK error onto an HTTP-equivalent status.
+    r"""Map a Databricks SDK error onto an HTTP-equivalent status.
 
     Matched by class name so ``databricks.sdk`` need not be importable to read
     this module, and a version bump that moves the classes cannot break the
@@ -128,8 +131,8 @@ def _status_of(error: BaseException) -> int:
     return status if isinstance(status, int) else 503
 
 
-def _error_code_of(error: BaseException) -> Optional[str]:
-    """The provider's error code, when enum-shaped enough to be non-secret."""
+def _error_code_of(error: BaseException) -> str | None:
+    r"""The provider's error code, when enum-shaped enough to be non-secret."""
     code = getattr(error, 'error_code', None)
     if isinstance(code, str) and _ERROR_CODE_RE.match(code):
         return code
@@ -137,7 +140,7 @@ def _error_code_of(error: BaseException) -> Optional[str]:
 
 
 class DatabricksServingClient:
-    """Address a Kumo RFM model served as a Databricks Model Serving endpoint.
+    r"""Address a Kumo RFM model served as a Databricks Model Serving endpoint.
 
     Args:
         endpoint: The serving endpoint **name**.
@@ -156,7 +159,7 @@ class DatabricksServingClient:
     def __init__(
         self,
         endpoint: str,
-        workspace_client: Optional[Any] = None,
+        workspace_client: Any | None = None,
         *,
         max_request_bytes: int = MAX_REQUEST_BYTES,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
@@ -209,7 +212,7 @@ class DatabricksServingClient:
         return self._endpoint
 
     def close(self) -> None:
-        """Nothing to release: the workspace client owns its own transport."""
+        r"""Nothing to release: the workspace client owns its own transport."""
 
     def _request(self, endpoint: Endpoint, **kwargs: Any) -> ServingResponse:
         path = endpoint.get_path()
@@ -225,7 +228,7 @@ class DatabricksServingClient:
         return self._query(request)
 
     def _query(self, request: Mapping[str, Any]) -> ServingResponse:
-        """Send one canonical request and return the serving reply.
+        r"""Send one canonical request and return the serving reply.
 
         The cap is measured on the serialized envelope rather than on the
         payload, because the gateway weighs what is sent and every quote in the
@@ -268,7 +271,7 @@ class DatabricksServingClient:
         return ServingResponse(200, self._body_of(reply))
 
     def _body_of(self, reply: Any) -> str:
-        """Extract the single canonical response the contract promises."""
+        r"""Extract the single canonical response the contract promises."""
         predictions = getattr(reply, 'predictions', None)
         if predictions is None and isinstance(reply, Mapping):
             predictions = reply.get('predictions')

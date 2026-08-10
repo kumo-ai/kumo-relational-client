@@ -15,20 +15,17 @@ Operating system: {platform.system()}
 CPU architecture: {platform.machine()}
 glibc version: {platform.libc_ver()[1]}
 
-✅ Supported Environments:
-* Python versions: 3.10, 3.11, 3.12, 3.13, 3.14
-* Operating systems and CPU architectures:
-  * Linux (x86_64)
-  * macOS (arm64)
-  * Windows (x86_64)
-* glibc versions: >=2.28
+✅ Prebuilt wheels are published for:
+* Python versions: 3.10, 3.11, 3.12, 3.13
+* Linux (x86_64), glibc >=2.28
 
-❌ Unsupported Environments:
-* Python versions: 3.8, 3.9, 3.15
-* Operating systems and CPU architectures:
-  * Linux (arm64)
-  * macOS (x86_64)
-  * Windows (arm64)
+No source distribution is published, so `pip install kumorfm` resolves on that
+platform alone. The extension also builds from a source checkout on macOS
+(arm64) and Windows (x86_64).
+
+❌ Not supported:
+* Python versions below 3.10, or 3.14 and later
+* Linux (arm64), macOS (x86_64), Windows (arm64)
 * glibc versions: <2.28
 
 Please create a feature request at 'https://github.com/NVIDIA/nvidia-sdfm-sdk'."""
@@ -40,7 +37,7 @@ from .graph_store import LocalGraphStore
 from .sampler import LocalSampler
 
 __all__ = [
-    'LocalTable',
     'LocalGraphStore',
     'LocalSampler',
+    'LocalTable',
 ]

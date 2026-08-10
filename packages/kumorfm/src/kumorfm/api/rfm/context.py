@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -23,11 +22,11 @@ class EdgeLayout(StrEnum):
 @dataclass(config={'arbitrary_types_allowed': True})
 class Table:
     df: pd.DataFrame
-    row: Optional[np.ndarray]
+    row: np.ndarray | None
     batch: np.ndarray
-    num_sampled_nodes: List[int]
-    stype_dict: Dict[str, Stype]
-    primary_key: Optional[str]
+    num_sampled_nodes: list[int]
+    stype_dict: dict[str, Stype]
+    primary_key: str | None
 
     @property
     def num_rows(self) -> int:
@@ -37,9 +36,9 @@ class Table:
 @dataclass(config={'arbitrary_types_allowed': True})
 class Link:
     layout: EdgeLayout
-    row: Optional[np.ndarray]
-    col: Optional[np.ndarray]
-    num_sampled_edges: List[int]
+    row: np.ndarray | None
+    col: np.ndarray | None
+    num_sampled_edges: list[int]
 
     def __post_init__(self) -> None:
         if self.layout == EdgeLayout.REV:  # Look up edges from reverse link:
@@ -53,8 +52,8 @@ class Link:
 @dataclass(config={'arbitrary_types_allowed': True})
 class Subgraph:
     anchor_time: np.ndarray
-    table_dict: Dict[str, Table]
-    link_dict: Dict[Tuple[str, str, str], Link]
+    table_dict: dict[str, Table]
+    link_dict: dict[tuple[str, str, str], Link]
 
     @property
     def batch_size(self) -> int:
@@ -63,33 +62,36 @@ class Subgraph:
     @property
     def num_hops(self) -> int:
         return max(
-            [len(link.num_sampled_edges)
-             for link in self.link_dict.values()] + [0])
+            [len(link.num_sampled_edges) for link in self.link_dict.values()]
+            + [0]
+        )
 
     @staticmethod
-    def rev_edge_type(edge_type: Tuple[str, str, str]) -> Tuple[str, str, str]:
+    def rev_edge_type(edge_type: tuple[str, str, str]) -> tuple[str, str, str]:
         src, rel, dst = edge_type
         if rel.startswith(REV_REL):
-            return (dst, rel[len(REV_REL):], src)
+            return (dst, rel[len(REV_REL) :], src)
         return (dst, f'{REV_REL}{rel}', src)
 
 
 @dataclass(config={'arbitrary_types_allowed': True})
 class Context:
     task_type: TaskType
-    entity_table_names: Tuple[str, ...]
+    entity_table_names: tuple[str, ...]
     subgraph: Subgraph
     y_train: pd.Series
-    y_test: Optional[pd.Series]
-    task_table: Optional[Table] = None
-    top_k: Optional[int] = None
-    step_size: Optional[int] = None
+    y_test: pd.Series | None
+    task_table: Table | None = None
+    top_k: int | None = None
+    step_size: int | None = None
     num_forecasts: int = 1
 
     def __post_init__(self) -> None:
         if len(self.entity_table_names) == 0:
-            raise ValueError("'entity_table_names' needs to at least contain "
-                             "one entity table name")
+            raise ValueError(
+                "'entity_table_names' needs to at least contain "
+                'one entity table name'
+            )
 
         if self.task_table is not None:
             assert self.task_table.row is None
@@ -103,4 +105,3 @@ class Context:
     @property
     def num_test(self) -> int:
         return self.subgraph.batch_size - self.num_train
-

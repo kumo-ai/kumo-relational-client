@@ -62,10 +62,13 @@ def parse_prediction_response(
         rows.append({field: item.get(field) for field in _ITEM_FIELDS})
     frame = pd.DataFrame(rows, columns=_ITEM_FIELDS)
     kept = set(_KEPT_FIELDS) | set(requested_fields or ())
-    frame = frame.drop(columns=[
-        column for column in frame.columns
-        if column not in kept and frame[column].isna().all()
-    ])
+    frame = frame.drop(
+        columns=[
+            column
+            for column in frame.columns
+            if column not in kept and frame[column].isna().all()
+        ]
+    )
     if len(frame) > 0:
         try:
             frame = frame.sort_values('row_index', kind='stable')

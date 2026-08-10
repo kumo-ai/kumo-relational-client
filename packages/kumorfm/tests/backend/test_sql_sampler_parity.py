@@ -10,13 +10,13 @@ future fix cannot be applied to one file and forgotten in the other three.
 ``_BIG`` is 2**53 + 1, the first integer ``float64`` cannot represent, so a
 column seeded from it detects the widening the moment it happens.
 """
+
 import sqlite3
 
+import kumorfm.rfm as rfm
 import numpy as np
 import pandas as pd
 import pytest
-
-import kumorfm.rfm as rfm
 
 pytest.importorskip('kumorfm.kumolib')
 
@@ -31,30 +31,37 @@ def _frames() -> tuple[pd.DataFrame, pd.DataFrame]:
         None if index % 5 == 0 else _BIG + 2 * index
         for index in range(num_orders)
     ]
-    users = pd.DataFrame({
-        'user_id': np.arange(num_users, dtype='int64'),
-        'age': np.arange(20, 20 + num_users, dtype='int64'),
-    })
-    orders = pd.DataFrame({
-        'order_id': np.arange(num_orders, dtype='int64'),
-        'user_id': np.tile(np.arange(num_users, dtype='int64'), 6),
-        'date': pd.to_datetime('2025-01-01') + pd.to_timedelta(
-            rng.integers(0, 90, num_orders).astype('int64'), unit='D'),
-        'amount': rng.uniform(5, 100, num_orders).round(2),
-        'ext_id': pd.array(external, dtype='Int64'),
-    })
+    users = pd.DataFrame(
+        {
+            'user_id': np.arange(num_users, dtype='int64'),
+            'age': np.arange(20, 20 + num_users, dtype='int64'),
+        }
+    )
+    orders = pd.DataFrame(
+        {
+            'order_id': np.arange(num_orders, dtype='int64'),
+            'user_id': np.tile(np.arange(num_users, dtype='int64'), 6),
+            'date': pd.to_datetime('2025-01-01')
+            + pd.to_timedelta(
+                rng.integers(0, 90, num_orders).astype('int64'), unit='D'
+            ),
+            'amount': rng.uniform(5, 100, num_orders).round(2),
+            'ext_id': pd.array(external, dtype='Int64'),
+        }
+    )
     return users, orders
 
 
-def _write_duckdb(path: str, users: pd.DataFrame,
-                  orders: pd.DataFrame) -> None:
+def _write_duckdb(path: str, users: pd.DataFrame, orders: pd.DataFrame) -> None:
     duckdb = pytest.importorskip('duckdb')
     connection = duckdb.connect(path)
     connection.execute(
-        'CREATE TABLE users (user_id BIGINT PRIMARY KEY, age BIGINT)')
+        'CREATE TABLE users (user_id BIGINT PRIMARY KEY, age BIGINT)'
+    )
     connection.execute(
         'CREATE TABLE orders (order_id BIGINT PRIMARY KEY, user_id BIGINT, '
-        'date TIMESTAMP, amount DOUBLE, ext_id BIGINT)')
+        'date TIMESTAMP, amount DOUBLE, ext_id BIGINT)'
+    )
     connection.register('_users', users)
     connection.execute('INSERT INTO users SELECT * FROM _users')
     connection.register('_orders', orders)
@@ -63,23 +70,27 @@ def _write_duckdb(path: str, users: pd.DataFrame,
     connection.close()
 
 
-def _write_sqlite(path: str, users: pd.DataFrame,
-                  orders: pd.DataFrame) -> None:
+def _write_sqlite(path: str, users: pd.DataFrame, orders: pd.DataFrame) -> None:
     connection = sqlite3.connect(path)
     connection.execute(
-        'CREATE TABLE users (user_id BIGINT PRIMARY KEY, age BIGINT)')
+        'CREATE TABLE users (user_id BIGINT PRIMARY KEY, age BIGINT)'
+    )
     connection.execute(
         'CREATE TABLE orders (order_id BIGINT PRIMARY KEY, user_id BIGINT, '
-        'date TEXT, amount REAL, ext_id BIGINT)')
-    connection.executemany('INSERT INTO users VALUES (?, ?)',
-                           users.values.tolist())
+        'date TEXT, amount REAL, ext_id BIGINT)'
+    )
+    connection.executemany(
+        'INSERT INTO users VALUES (?, ?)', users.values.tolist()
+    )
     rows = orders.copy()
     rows['date'] = rows['date'].astype(str)
-    rows['ext_id'] = rows['ext_id'].astype(object).where(
-        rows['ext_id'].notna(), None)
+    rows['ext_id'] = (
+        rows['ext_id'].astype(object).where(rows['ext_id'].notna(), None)
+    )
     connection.executemany(
         'INSERT INTO orders VALUES (?, ?, ?, ?, ?)',
-        [tuple(row) for row in rows.itertuples(index=False)])
+        [tuple(row) for row in rows.itertuples(index=False)],
+    )
     connection.execute('CREATE INDEX orders_user_id ON orders(user_id)')
     connection.commit()
     connection.close()
@@ -89,8 +100,9 @@ def _graph(backend: str, path: str) -> rfm.Graph:
     graph = getattr(rfm.Graph, f'from_{backend}')(path, verbose=False)
     graph['orders'].remove_column('ext_id')
     graph['orders'].add_column({'name': 'ext_id', 'stype': 'numerical'})
-    edges = {(edge.src_table, edge.fkey, edge.dst_table)
-             for edge in graph.edges}
+    edges = {
+        (edge.src_table, edge.fkey, edge.dst_table) for edge in graph.edges
+    }
     if ('orders', 'user_id', 'users') not in edges:
         graph.link('orders', 'user_id', 'users')
     graph.validate()
@@ -113,16 +125,21 @@ def sql_graph(request, tmp_path) -> rfm.Graph:
 
 def _related_payload(graph: rfm.Graph) -> tuple[dict, dict]:
     model = rfm.KumoRFM(graph, verbose=False)
-    task = model._get_task_table(model._parse_query(_QUERY), indices=[1, 2],
-                                 random_seed=0)
-    payload = model.materialize_task(task, random_seed=0,
-                                     verbose=False)[0].payload
-    return (payload['schema']['related_tables']['orders']['columns'],
-            payload['context']['related_tables']['orders'])
+    task = model._get_task_table(
+        model._parse_query(_QUERY), indices=[1, 2], random_seed=0
+    )
+    payload = model.materialize_task(task, random_seed=0, verbose=False)[
+        0
+    ].payload
+    return (
+        payload['schema']['related_tables']['orders']['columns'],
+        payload['context']['related_tables']['orders'],
+    )
 
 
 @pytest.mark.filterwarnings(
-    'ignore:.*does not support seeded random sampling.*:UserWarning')
+    'ignore:.*does not support seeded random sampling.*:UserWarning'
+)
 def test_nullable_integer_column_survives_subgraph_traversal(sql_graph):
     r"""data-nullable-int64-widened-in-sql-subgraph-sampler.md
 
@@ -135,7 +152,9 @@ def test_nullable_integer_column_survives_subgraph_traversal(sql_graph):
     assert schema['ext_id']['dtype'] == 'int64'
 
     position = table['columns'].index('ext_id')
-    values = [row[position] for row in table['rows'] if row[position] is not None]
+    values = [
+        row[position] for row in table['rows'] if row[position] is not None
+    ]
     assert len(values) > 0
 
     _, orders = _frames()
@@ -167,8 +186,9 @@ def test_projection_order_is_independent_of_set_iteration(sql_graph):
     columns = {'amount', 'user_id', 'date', 'order_id'}
     expected = sampler._ordered_columns('orders', columns)
 
-    assert expected == sampler._ordered_columns('orders', set(reversed(
-        sorted(columns))))
+    assert expected == sampler._ordered_columns(
+        'orders', set(reversed(sorted(columns)))
+    )
     assert set(expected) == columns
     declared = list(sampler.table_column_proj_dict['orders'])
     assert expected == [name for name in declared if name in columns]

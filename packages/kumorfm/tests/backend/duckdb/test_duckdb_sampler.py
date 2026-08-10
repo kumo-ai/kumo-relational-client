@@ -6,11 +6,11 @@ import warnings
 from pathlib import Path
 
 import pytest
-
 from kumorfm.rfm import Graph
 
-duckdb = pytest.importorskip('duckdb', reason="'duckdb' extension "
-                             "not installed")
+duckdb = pytest.importorskip(
+    'duckdb', reason="'duckdb' extension not installed"
+)
 
 from kumorfm.rfm.backend.duckdb import DuckDBSampler  # noqa: E402
 
@@ -19,10 +19,12 @@ from kumorfm.rfm.backend.duckdb import DuckDBSampler  # noqa: E402
 def graph(tmp_path: Path) -> Graph:
     path = tmp_path / 'users.duckdb'
     connection = duckdb.connect(path)
-    connection.execute("CREATE TABLE users AS "
-                       "SELECT i AS user_id, i % 40 AS age "
-                       "FROM range(200) t(i)")
-    connection.execute("CREATE UNIQUE INDEX users_pkey ON users (user_id)")
+    connection.execute(
+        'CREATE TABLE users AS '
+        'SELECT i AS user_id, i % 40 AS age '
+        'FROM range(200) t(i)'
+    )
+    connection.execute('CREATE UNIQUE INDEX users_pkey ON users (user_id)')
     connection.close()
 
     return Graph.from_duckdb(
@@ -33,8 +35,9 @@ def graph(tmp_path: Path) -> Graph:
 
 
 def _sample(sampler: DuckDBSampler, random_seed: int | None) -> list[int]:
-    df = sampler._sample_entity_table('users', {'user_id'}, 5,
-                                      random_seed=random_seed)
+    df = sampler._sample_entity_table(
+        'users', {'user_id'}, 5, random_seed=random_seed
+    )
     return sorted(df['user_id'].tolist())
 
 
@@ -58,7 +61,7 @@ def test_unseeded_sample_is_random(graph: Graph) -> None:
 
 
 def test_discovery_on_an_empty_database_names_what_it_searched(
-        tmp_path: Path,  #
+    tmp_path: Path,  #
 ) -> None:
     r"""graph-duckdb-empty-discovery-not-rejected.md
 
@@ -74,7 +77,7 @@ def test_discovery_on_an_empty_database_names_what_it_searched(
 
 
 def test_missing_database_is_reported_rather_than_created(
-        tmp_path: Path,  #
+    tmp_path: Path,  #
 ) -> None:
     r"""graph-duckdb-empty-discovery-not-rejected.md
 

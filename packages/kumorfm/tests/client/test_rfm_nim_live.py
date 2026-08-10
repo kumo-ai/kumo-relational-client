@@ -11,21 +11,19 @@ from urllib.parse import quote
 
 import pytest
 import requests
-
 from kumorfm.client import KumoClient
 from kumorfm.client.rfm import RFMAPI
-
-from rfm_nim_live_harness import (
-    LiveNimClient,
-    assert_prediction_response,
-    assert_problem_details,
-    assert_ready_and_model_available,
-)
 from rfm_nim_hardening_cases import (
     EXPECTED_REJECTION_CASES,
     REGRESSION_REJECTION_CASES,
     ExpectedRejectionCase,
     RejectionCase,
+)
+from rfm_nim_live_harness import (
+    LiveNimClient,
+    assert_prediction_response,
+    assert_problem_details,
+    assert_ready_and_model_available,
 )
 from rfm_nim_payloads import (
     NIM_V1_PREDICTION_PATH,
@@ -85,7 +83,8 @@ def live_nim_preflight(live_nim: LiveNimClient) -> None:
         assert_ready_and_model_available(live_nim)
     except (requests.RequestException, AssertionError) as exc:
         _PREFLIGHT_ERROR = str(exc) or (
-            'readiness or model-discovery response violated the live contract')
+            'readiness or model-discovery response violated the live contract'
+        )
         pytest.fail(
             f'could not reach RFM NIM at {live_nim.base_url}: '
             f'{_PREFLIGHT_ERROR}',
