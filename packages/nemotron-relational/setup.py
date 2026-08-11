@@ -11,7 +11,7 @@ from setuptools import setup
 # ``kumo-api`` dependency. ``pydantic`` used to arrive transitively via
 # ``kumo-api``; it is now declared directly.
 
-if bool(int(os.getenv('WITH_KUMOLIB', '1'))):
+if bool(int(os.getenv('WITH_RELATIONALLIB', '1'))):
     kwargs = dict(cmake_source_dir='.')
 else:
     kwargs = dict()

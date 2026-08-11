@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-r"""``RelationalClient`` carries every NemotronRelational prediction, so it must enforce the
+r"""``RelationalClient`` carries every Nemotron Relational prediction, so it must enforce the
 credential guards the other client documents, and importing the package must
 not reach the network.
 """
@@ -28,7 +28,7 @@ from nemotron_relational.client.client import (
 from nemotron_relational.exceptions import InvalidResponseError
 
 _READY = b'{"status": "ready"}'
-_MODELS = b'{"object": "list", "data": [{"id": "nemotron-relational-v1"}]}'
+_MODELS = b'{"object": "list", "data": [{"id": "nemotron-relational"}]}'
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -360,7 +360,7 @@ def test_a_compressed_body_cannot_inflate_past_the_cap() -> None:
         client = RelationalClient(url)
         with pytest.raises(InvalidResponseError, match='byte limit'):
             client._post(
-                '/v1/predictions', json={'model': 'nemotron-relational-v1'}
+                '/v1/predictions', json={'model': 'nemotron-relational'}
             )
 
 
@@ -377,7 +377,7 @@ def test_a_large_legal_body_is_still_delivered_in_full() -> None:
     with _serve_body(body) as url:
         client = RelationalClient(url)
         response = client._post(
-            '/v1/predictions', json={'model': 'nemotron-relational-v1'}
+            '/v1/predictions', json={'model': 'nemotron-relational'}
         )
 
     assert response.status_code == 200

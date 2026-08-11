@@ -27,7 +27,7 @@ _client: PredictClient | None = None
 
 def predict_tabicl(*, context, predict, task, target, **kwargs):
     assert _client is not None
-    handle = _client.tabicl(context, target=target, task=task)
+    handle = _client.tabular(context, target=target, task=task)
     return handle.predict(predict, **kwargs)
 
 

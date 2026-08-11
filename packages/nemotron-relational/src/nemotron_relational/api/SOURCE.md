@@ -33,7 +33,7 @@ internalized code, not as an instruction for re-syncing.
   from_protobuf,_target_transform_from_proto}` (`rfm/inference.py`);
   `RFMPredictRequest.{to_protobuf,serialize,from_bytes}` and
   `RFMEvaluateRequest.{to_protobuf,serialize,from_bytes}` (`rfm/requests.py`).
-- Kumo Enterprise platform modules dropped as unreachable from the RFM path:
+- Nemotron Relational Enterprise platform modules dropped as unreachable from the RFM path:
   `jobs.py`, `online_serving.py`, `distilled_model_plan.py`,
   `data_snapshot.py`, `rbac.py`. Nothing in `nemotron_relational`, `nemotron_predict` or
   `nemotron_predict_connectors` imports them, and they describe batch jobs, serving

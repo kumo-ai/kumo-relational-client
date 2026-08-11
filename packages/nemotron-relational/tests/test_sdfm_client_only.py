@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The NemotronRelational engine may only be initialized by nemotron_predict.PredictClient.
+"""The Nemotron Relational engine may only be initialized by nemotron_predict.PredictClient.
 
 Direct `rfm.init(...)` + `NemotronRelational(graph).predict(...)` against a NIM used to
 bypass the supported SDK surface (issue #22). These tests lock in that the

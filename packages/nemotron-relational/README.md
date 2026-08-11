@@ -1,8 +1,8 @@
 # nemotron_relational
 
-The NemotronRelational driver for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) SDK.
+The Nemotron Relational driver for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) SDK.
 
-This distribution provides the heavy, client-side machinery a NemotronRelational prediction
+This distribution provides the heavy, client-side machinery a Nemotron Relational prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
 the neighbor samplers (local native `relationallib`, plus DuckDB / SQLite / Snowflake /
 Databricks backends), the PQL parser, and the HTTP client that talks to a Universal
@@ -20,13 +20,13 @@ Predicting is not available that way: the engine's entry points refuse a direct
 call, so a prediction has to go through `nemotron-predict-client`.
 
 ```bash
-pip install nemotron-relational-v1
+pip install nemotron-relational
 # optional data backends:
-pip install "nemotron-relational-v1[duckdb]"      # or [sqlite] / [snowflake] / [databricks]
+pip install "nemotron-relational[duckdb]"      # or [sqlite] / [snowflake] / [databricks]
 # optional features:
-pip install "nemotron-relational-v1[explain]"     # natural-language explanation summaries
-pip install "nemotron-relational-v1[relbench]"    # Graph.from_relbench() dataset loading
-pip install "nemotron-relational-v1[codegen]"     # regenerate the TFM API client (see scripts/)
+pip install "nemotron-relational[explain]"     # natural-language explanation summaries
+pip install "nemotron-relational[relbench]"    # Graph.from_relbench() dataset loading
+pip install "nemotron-relational[codegen]"     # regenerate the TFM API client (see scripts/)
 ```
 
 Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
@@ -58,4 +58,4 @@ followed by a known-good prediction to detect service degradation.
 
 The native neighbor sampler (`nemotron_relational.relationallib`) is built from
 `src/nemotron_relational/csrc/neighbor_sampler.cpp` via CMake/scikit-build-core. Set
-`WITH_KUMOLIB=0` to skip the native build for a pure-Python editable install.
+`WITH_RELATIONALLIB=0` to skip the native build for a pure-Python editable install.

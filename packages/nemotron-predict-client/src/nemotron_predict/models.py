@@ -13,8 +13,8 @@ from nemotron_predict.errors import PredictError
 from nemotron_predict.requests import (
     NemotronRelationalRequest,
     NemotronRelationalTaskRequest,
-    TabICLRequest,
-    TabICLSession,
+    NemotronTabularRequest,
+    NemotronTabularSession,
 )
 
 if TYPE_CHECKING:
@@ -51,7 +51,7 @@ class _Unset:
     r"""Sentinel for "argument not supplied".
 
     A plain ``object()`` renders as ``<object object at 0x...>`` in ``help()``,
-    IDE hovers and generated docs, for most of ``RFMModel.predict``'s
+    IDE hovers and generated docs, for most of ``RelationalModel.predict``'s
     parameters. This one has a readable ``repr``.
     """
 
@@ -62,8 +62,8 @@ class _Unset:
 _UNSET: Any = _Unset()
 
 
-class RFMModel:
-    r"""A NemotronRelational handle bound to a graph, offering the familiar
+class RelationalModel:
+    r"""A Nemotron Relational handle bound to a graph, offering the familiar
     ``model.predict(query, ...)`` call from the old SDK.
 
     Returned by :meth:`PredictClient.nemotron_relational`. It is a thin, stateless wrapper: the
@@ -261,7 +261,7 @@ class RFMModel:
             task_type: One of ``'binary_classification'``,
                 ``'multiclass_classification'``, ``'regression'``,
                 ``'forecasting'`` or ``'temporal_link_prediction'`` (also on
-                ``capabilities('nemotron-relational-v1').tasks``).
+                ``capabilities('nemotron-relational').tasks``).
             entity_table: The graph table the ``entity_column`` values refer
                 to, or a ``(source, target)`` pair for temporal link
                 prediction.
@@ -366,22 +366,22 @@ class RFMModel:
         return self._client._predict(request)
 
     def __repr__(self) -> str:
-        return 'RFMModel()'
+        return 'RelationalModel()'
 
 
-class TabICLModel:
-    r"""A TabICL handle bound to a labelled context table.
+class TabularModel:
+    r"""A Nemotron Tabular handle bound to a labelled context table.
 
     Returned by :meth:`PredictClient.tabicl`. The context, task and target are
     supplied once; each :meth:`predict` scores a new table of unlabelled rows,
-    building a :class:`TabICLRequest` under the owning client.
+    building a :class:`NemotronTabularRequest` under the owning client.
 
     Reusing one handle for many scoring calls is the cheap path: the NIM pins
     the context after the first call, so later calls send only the rows to
     score. Against a NIM without session routes every call carries the context,
     as it always did; either way the predictions are the same.
 
-    >>> model = client.tabicl(context_df, target="y", task="classification")  # doctest: +SKIP
+    >>> model = client.tabular(context_df, target="y", task="classification")  # doctest: +SKIP
     >>> model.predict(new_rows)
     """
 
@@ -396,7 +396,7 @@ class TabICLModel:
         self._context = context
         self._task = task
         self._target = target
-        self._session = TabICLSession()
+        self._session = NemotronTabularSession()
 
     def predict(
         self,
@@ -417,23 +417,23 @@ class TabICLModel:
             predict: The unlabelled rows to score. Must share the context's
                 feature columns and hold at least one row.
             outputs: The fields to return, defaulting to ``['prediction']``.
-                TabICL produces ``'probabilities'`` for a classification task
+                Nemotron Tabular produces ``'probabilities'`` for a classification task
                 and ``'quantiles'`` for a regression one; asking for a field
                 the task cannot produce raises.
             positive_class: The class to treat as positive in a binary
                 classification. Must be one of the classes in the context's
-                target column. Currently ignored by the TabICL NIM.
+                target column. Currently ignored by the Nemotron Tabular NIM.
             prediction_statistic: The statistic to reduce a regression
                 prediction with, e.g. ``'mean'``.
             quantile_levels: The quantiles to return alongside a regression
                 prediction, each strictly between 0 and 1.
             score_format: Requested encoding of ``'probabilities'``.
-                Currently ignored by the TabICL NIM, which always returns an
+                Currently ignored by the Nemotron Tabular NIM, which always returns an
                 object keyed by class.
             embedding_dtype: Requested encoding of returned embeddings.
-                Currently ignored by the TabICL NIM.
+                Currently ignored by the Nemotron Tabular NIM.
             max_results: Requested cap on the number of returned rows.
-                Currently ignored by the TabICL NIM, which scores every row.
+                Currently ignored by the Nemotron Tabular NIM, which scores every row.
             request_id: An id to correlate this request with server logs. One
                 is generated when omitted.
 
@@ -453,7 +453,7 @@ class TabICLModel:
             )
             if value is not _UNSET
         }
-        request = TabICLRequest(
+        request = NemotronTabularRequest(
             context=self._context,
             predict=require_frame(predict, 'predict'),
             task=self._task,
@@ -472,11 +472,11 @@ class TabICLModel:
         if session is None or session.id is None:
             return
         try:
-            from nemotron_predict.adapters.tabicl import delete_session_quietly
+            from nemotron_predict.adapters.tabular import delete_session_quietly
 
             delete_session_quietly(self._client._transport, session.id)
         except Exception:
             pass
 
     def __repr__(self) -> str:
-        return 'TabICLModel()'
+        return 'TabularModel()'

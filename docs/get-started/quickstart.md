@@ -1,6 +1,6 @@
 ---
 title: "Quickstart for the NVIDIA SDFM SDK"
-description: "Run your first TabICL and NemotronRelational predictions against a Universal TFM API NIM using the NVIDIA SDFM SDK."
+description: "Run your first Nemotron Tabular and Nemotron Relational predictions against a Universal TFM API NIM using the NVIDIA SDFM SDK."
 template-library-version: "1.0.0"
 ---
 
@@ -14,19 +14,19 @@ typed handle.
 
 Before you start, you must complete the following prerequisites:
 
-1. Install the SDK. For the relational example, install the NemotronRelational extra:
+1. Install the SDK. For the relational example, install the Nemotron Relational extra:
    `pip install "nemotron-predict-client[relational]"`.
 2. Identify the URL of a running Universal TFM API NIM.
 
 ## Quickstart Steps
 
 1. Create a `PredictClient` pointed at your NIM.
-2. Build a model handle with `client.tabicl(...)` or `client.relational(...)`.
+2. Build a model handle with `client.tabular(...)` or `client.relational(...)`.
 3. Call `predict` and read the returned pandas DataFrame.
 
 ## Minimal Code Example
 
-### TabICL: Single Table
+### Nemotron Tabular: Single Table
 
 Provide labeled context rows and rows to predict:
 
@@ -35,8 +35,8 @@ from nemotron_predict import PredictClient
 
 # Connect to the NIM; the client is a context manager.
 with PredictClient(url='http://localhost:8000') as client:
-    # Build a TabICL handle bound to the labeled context table.
-    model = client.tabicl(context_df, target='label', task='classification')
+    # Build a Nemotron Tabular handle bound to the labeled context table.
+    model = client.tabular(context_df, target='label', task='classification')
     # Score the unlabeled rows.
     predictions = model.predict(
         predict_df, outputs=['prediction', 'probabilities']
@@ -76,8 +76,8 @@ serving only one of these models still reports both.
 from nemotron_predict import PredictClient
 
 with PredictClient(url='http://localhost:8000') as client:
-    print(client.models())  # ['nemotron-relational-v1', 'tabicl']
-    print(client.capabilities('tabicl'))  # tasks and outputs the model supports
+    print(client.models())  # ['nemotron-relational', 'nemotron-tabular']
+    print(client.capabilities('nemotron-tabular'))  # tasks and outputs the model supports
 ```
 
 To check the endpoint itself, call `client.health_ready()`. It returns whether

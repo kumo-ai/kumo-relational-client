@@ -19,7 +19,7 @@ glibc version: {platform.libc_ver()[1]}
 * Python versions: 3.10, 3.11, 3.12, 3.13
 * Linux (x86_64), glibc >=2.28
 
-No source distribution is published, so `pip install nemotron-relational-v1` resolves on that
+No source distribution is published, so `pip install nemotron-relational` resolves on that
 platform alone. The extension also builds from a source checkout on macOS
 (arm64) and Windows (x86_64).
 

@@ -14,7 +14,7 @@ following requirements.
 ### Compute
 
 The base client (`nemotron-predict-client`) is pure Python and has no special hardware
-requirements. The NemotronRelational driver performs graph sampling on the CPU of the
+requirements. The Nemotron Relational driver performs graph sampling on the CPU of the
 machine that runs the client; the model itself runs on the NIM's GPU, not on
 your client machine.
 
@@ -22,7 +22,7 @@ your client machine.
 
 ### Operating System
 
-The NemotronRelational driver ships prebuilt binary wheels for the following platforms:
+The Nemotron Relational driver ships prebuilt binary wheels for the following platforms:
 
 | Platform | Supported |
 | --- | --- |
@@ -32,7 +32,7 @@ The NemotronRelational driver ships prebuilt binary wheels for the following pla
 No source distribution is published either, so `pip install
 "nemotron-predict-client[relational]"` resolves on Linux x86_64 only. On any other platform,
 install the base `nemotron-predict-client` — it is pure Python, as are the connectors, and
-installs on anything running Python 3.10 or later — and run NemotronRelational from a Linux
+installs on anything running Python 3.10 or later — and run Nemotron Relational from a Linux
 x86_64 host.
 
 ### Runtime Dependencies
@@ -56,7 +56,7 @@ install only when you request the matching extra.
 
 At runtime, the client needs network access to a Universal TFM API NIM. Set the
 endpoint when you create the client, or through the `NEMOTRON_PREDICT_API_ENDPOINT`
-environment variable for the NemotronRelational path.
+environment variable for the Nemotron Relational path.
 
 ## Pre-Installation Checklist
 

@@ -124,14 +124,14 @@ def test_serving_target_initializes_by_endpoint_name(
     """The branch under test: a ServingTarget must not be sent through the
     URL-based init, which would read attributes that raise by design."""
     target = DatabricksServingTarget(
-        'nemotron-relational-v1', platform_client='WS'
+        'nemotron-relational', platform_client='WS'
     )
     NemotronRelationalAdapter().predict(target, _request())
 
     assert 'init_databricks_serving' in engine.calls
     assert (
         engine.calls['init_databricks_serving']['endpoint']
-        == 'nemotron-relational-v1'
+        == 'nemotron-relational'
     )
     assert engine.calls['init_databricks_serving']['workspace_client'] == 'WS'
     assert 'init' not in engine.calls, (
@@ -145,7 +145,7 @@ def test_serving_target_never_reads_url_or_api_key(
     """ServingTarget.url raises. If the adapter duck-typed instead of checking
     the type, this is where it would blow up."""
     NemotronRelationalAdapter().predict(
-        DatabricksServingTarget('nemotron-relational-v1'), _request()
+        DatabricksServingTarget('nemotron-relational'), _request()
     )
     sent = engine.calls['init_databricks_serving']
     assert (
@@ -171,7 +171,7 @@ def test_both_paths_reach_the_same_predict(
 ) -> None:
     """Only initialization differs; inference must be identical."""
     NemotronRelationalAdapter().predict(
-        DatabricksServingTarget('nemotron-relational-v1'), _request()
+        DatabricksServingTarget('nemotron-relational'), _request()
     )
     serving = engine.calls['predict']
 
@@ -190,17 +190,15 @@ def test_a_serving_client_closes() -> None:
     manager. It did not work: ServingTarget had no close()."""
     from nemotron_predict import PredictClient
 
-    client = PredictClient.for_databricks_serving('nemotron-relational-v1')
+    client = PredictClient.for_databricks_serving('nemotron-relational')
     client.close()
 
 
 def test_a_serving_client_works_as_a_context_manager() -> None:
     from nemotron_predict import PredictClient
 
-    with PredictClient.for_databricks_serving(
-        'nemotron-relational-v1'
-    ) as client:
-        assert 'nemotron-relational-v1' in client.models()
+    with PredictClient.for_databricks_serving('nemotron-relational') as client:
+        assert 'nemotron-relational' in client.models()
 
 
 def test_a_serving_client_reprs() -> None:
@@ -209,9 +207,9 @@ def test_a_serving_client_reprs() -> None:
     up in exactly the places you most want it to work."""
     from nemotron_predict import PredictClient
 
-    text = repr(PredictClient.for_databricks_serving('nemotron-relational-v1'))
-    assert 'nemotron-relational-v1' in text
-    assert str(PredictClient.for_databricks_serving('nemotron-relational-v1'))
+    text = repr(PredictClient.for_databricks_serving('nemotron-relational'))
+    assert 'nemotron-relational' in text
+    assert str(PredictClient.for_databricks_serving('nemotron-relational'))
 
 
 def test_a_url_client_still_reprs_with_its_url() -> None:
@@ -232,12 +230,12 @@ def test_the_repr_does_not_render_the_workspace_client() -> None:
         def __repr__(self) -> str:
             return "WorkspaceClient(token='dapi-SECRET', host='acme.databricks.com')"
 
-    target = DatabricksServingTarget('nemotron-relational-v1', _Leaky())
+    target = DatabricksServingTarget('nemotron-relational', _Leaky())
     assert 'dapi-SECRET' not in repr(target)
     assert 'acme.databricks.com' not in repr(target)
     assert 'dapi-SECRET' not in repr(
         PredictClient.for_databricks_serving(
-            'nemotron-relational-v1', workspace_client=_Leaky()
+            'nemotron-relational', workspace_client=_Leaky()
         )
     )
 
@@ -249,7 +247,7 @@ def test_both_construction_paths_populate_the_same_fields() -> None:
     from nemotron_predict import PredictClient
 
     by_url = PredictClient('https://nim.example.com:8000')
-    by_endpoint = PredictClient.for_databricks_serving('nemotron-relational-v1')
+    by_endpoint = PredictClient.for_databricks_serving('nemotron-relational')
     assert vars(by_url).keys() == vars(by_endpoint).keys()
 
 
@@ -264,7 +262,7 @@ def test_both_construction_paths_populate_the_same_fields() -> None:
             lambda c: c.health_ready(), 'UNSUPPORTED_FEATURE', id='health_ready'
         ),
         pytest.param(
-            lambda c: DatabricksServingTarget('nemotron-relational-v1').predict(
+            lambda c: DatabricksServingTarget('nemotron-relational').predict(
                 {}
             ),
             'UNSUPPORTED_FEATURE',
@@ -279,9 +277,9 @@ def test_a_serving_target_refuses_what_does_not_apply(refuse, code) -> None:
     from nemotron_predict import PredictClient
 
     with pytest.raises(PredictError) as caught:
-        refuse(PredictClient.for_databricks_serving('nemotron-relational-v1'))
+        refuse(PredictClient.for_databricks_serving('nemotron-relational'))
     assert caught.value.code == code
-    assert 'nemotron-relational-v1' in caught.value.message
+    assert 'nemotron-relational' in caught.value.message
 
 
 # -- the two endpoint-validation layers -----------------------------------
@@ -382,7 +380,7 @@ def test_engine_init_failures_are_translated_at_the_boundary(
 
     with pytest.raises(PredictError) as caught:
         NemotronRelationalAdapter().predict(
-            DatabricksServingTarget('nemotron-relational-v1'), _request()
+            DatabricksServingTarget('nemotron-relational'), _request()
         )
     assert caught.value.code == code
     assert says in caught.value.message
@@ -419,10 +417,10 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
 
     with pytest.raises(PredictError) as excinfo:
         NemotronRelationalAdapter().predict(
-            DatabricksServingTarget('nemotron-relational-v1'), _request()
+            DatabricksServingTarget('nemotron-relational'), _request()
         )
 
     message = str(excinfo.value)
     assert 'payload too large' in message
     assert 'has no URL' not in message
-    assert 'nemotron-relational-v1' in message
+    assert 'nemotron-relational' in message

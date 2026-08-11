@@ -1612,7 +1612,7 @@ class Graph:
         Many forecasting datasets arrive as a single table where each row
         represents one entity and a column holds an array of historical
         observations.  This method converts such a table into the two-table
-        *(entity + target)* structure expected by NemotronRelational and returns a
+        *(entity + target)* structure expected by Nemotron Relational and returns a
         ready-to-use predictive query.
 
         The input ``df`` is split into:

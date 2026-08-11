@@ -74,7 +74,7 @@ class RfmValidator:
                     ValidationError(
                         title='Invalid query structure',
                         message=(
-                            '"FOR" clause is only supported for Kumo '
+                            '"FOR" clause is only supported for Nemotron Relational '
                             'foundation model, use FOR EACH when '
                             'training your own model.'
                         ),
@@ -86,7 +86,7 @@ class RfmValidator:
                         title='Invalid query structure',
                         message=(
                             'Specifying entities is only supported for '
-                            'Kumo foundation model, not when '
+                            'Nemotron Relational foundation model, not when '
                             'training your own model.'
                         ),
                     )

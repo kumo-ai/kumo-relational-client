@@ -5,7 +5,7 @@
 r"""What ``PredictClient.close()`` has to release.
 
 The client owns one pool, its transport. A model backed by a driver does not
-send through that pool: the NemotronRelational driver opens its own, so closing the
+send through that pool: the Nemotron Relational driver opens its own, so closing the
 transport alone left it open for the life of the process. These cover the
 release path that closes both, and the constraint that makes it safe to
 release a pool another client may still be using.
@@ -111,7 +111,7 @@ def test_two_clients_close_independently() -> None:
 def test_nemotron_relational_adapter_close_is_inert_before_any_prediction() -> (
     None
 ):
-    r"""Closing a client that only used TabICL must not import the driver,
+    r"""Closing a client that only used Nemotron Tabular must not import the driver,
     which is an optional dependency and may not be installed.
     """
     from nemotron_predict.adapters.relational import NemotronRelationalAdapter

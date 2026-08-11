@@ -104,7 +104,7 @@ class ServingTarget:
         raise PredictError(
             f'the model served at {self.endpoint!r} does not support '
             'serving-mode invocation through the generic transport; only '
-            'NemotronRelational does',
+            'Nemotron Relational does',
             code='UNSUPPORTED_FEATURE',
         )
 

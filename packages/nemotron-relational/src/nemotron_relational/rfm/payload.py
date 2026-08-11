@@ -26,7 +26,7 @@ from nemotron_relational.api.rfm.inference import (
 from nemotron_relational.api.task import TaskType
 from nemotron_relational.api.typing import Stype
 from nemotron_relational.client.generated.tfm_api import (
-    TFM_MODEL_NEMOTRON_RELATIONAL_V1,
+    TFM_MODEL_NEMOTRON_RELATIONAL,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
     TFM_OUTPUT_FIELD_EXPLANATION,
     TFM_OUTPUT_FIELD_PREDICTION,
@@ -305,7 +305,7 @@ def _base_payload(
 
     instance_dtypes = tables.instance_column_dtypes
     return {
-        'model': TFM_MODEL_NEMOTRON_RELATIONAL_V1,
+        'model': TFM_MODEL_NEMOTRON_RELATIONAL,
         'task': _task_spec(context, tables),
         'schema': _schema_spec(context, tables),
         'context': {

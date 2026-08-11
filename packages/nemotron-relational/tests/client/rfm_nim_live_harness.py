@@ -95,7 +95,7 @@ def assert_prediction_response(
     response: requests.Response,
     request_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Validate NemotronRelational response semantics without pinning model output."""
+    """Validate Nemotron Relational response semantics without pinning model output."""
     assert response.status_code == 200
     body = assert_json_object(response)
     assert isinstance(body.get('id'), str) and body['id']
@@ -155,6 +155,6 @@ def assert_ready_and_model_available(client: LiveNimClient) -> None:
     models = assert_json_object(models_response).get('data')
     assert isinstance(models, list)
     assert any(
-        isinstance(model, dict) and model.get('id') == 'nemotron-relational-v1'
+        isinstance(model, dict) and model.get('id') == 'nemotron-relational'
         for model in models
     )

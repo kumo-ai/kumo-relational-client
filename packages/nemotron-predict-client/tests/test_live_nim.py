@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from nemotron_predict import PredictClient
-from nemotron_predict.requests import TabICLRequest
+from nemotron_predict.requests import NemotronTabularRequest
 
 _ENV_VAR = 'SDFM_NIM_BASE_URL'
 
@@ -56,7 +56,7 @@ def test_tabicl_predict_returns_expected_shape(client: PredictClient):
     )
 
     frame = client._predict(
-        TabICLRequest(
+        NemotronTabularRequest(
             context=context,
             predict=predict,
             task='classification',
@@ -89,7 +89,7 @@ def test_tabicl_predict_regression_returns_quantiles(client: PredictClient):
     )
 
     frame = client._predict(
-        TabICLRequest(
+        NemotronTabularRequest(
             context=context,
             predict=predict,
             task='regression',

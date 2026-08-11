@@ -3,6 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from nemotron_predict.adapters.relational import NemotronRelationalAdapter
-from nemotron_predict.adapters.tabicl import TabICLAdapter
+from nemotron_predict.adapters.tabular import NemotronTabularAdapter
 
-__all__ = ['NemotronRelationalAdapter', 'TabICLAdapter']
+__all__ = ['NemotronRelationalAdapter', 'NemotronTabularAdapter']

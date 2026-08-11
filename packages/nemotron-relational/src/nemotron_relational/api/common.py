@@ -18,7 +18,7 @@ class StrEnum(str, Enum):
 @dataclass(frozen=True)
 class ValidationInfo:
     r"""Represents non-critical information about automatic actions or decisions
-    taken by Kumo that the user should be aware of, but do not require
+    taken by Nemotron Relational that the user should be aware of, but do not require
     immediate attention or action.
     """
 

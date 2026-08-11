@@ -7,7 +7,7 @@ r"""The exceptions this SDK raises.
 Every call on :class:`~nemotron_predict.PredictClient` and its model handles raises
 :class:`PredictError` or one of its subclasses, so ``except PredictError`` is enough
 to catch anything the SDK reports. Building a graph is the exception: the
-NemotronRelational engine validates a graph in its own constructor, before any SDK call,
+Nemotron Relational engine validates a graph in its own constructor, before any SDK call,
 and reports problems as :class:`ValueError`.
 
 Every error carries a ``code``, a short stable string meant to be branched on.
@@ -109,7 +109,7 @@ class UnknownModelError(PredictError):
 class MissingExtraError(PredictError):
     r"""An optional dependency this call needs is not installed.
 
-    The NemotronRelational engine and the connector drivers ship as extras, so the SDK can
+    The Nemotron Relational engine and the connector drivers ship as extras, so the SDK can
     be installed without them. The message names the ``pip install`` that fixes
     it. Code: ``MISSING_EXTRA``.
     """

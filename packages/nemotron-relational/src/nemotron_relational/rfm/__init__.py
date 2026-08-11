@@ -32,7 +32,7 @@ logger = logging.getLogger('nemotron_relational_rfm')
 _SDFM_CLIENT_TOKEN = object()
 
 _DIRECT_USE_MESSAGE = (
-    'Direct use of the NemotronRelational engine is not supported. Run inference through '
+    'Direct use of the Nemotron Relational engine is not supported. Run inference through '
     'the NVIDIA SDFM SDK:\n'
     '    from nemotron_predict import PredictClient, relational\n'
     '    graph = relational.Graph.from_data(...)\n'

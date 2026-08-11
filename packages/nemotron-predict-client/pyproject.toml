@@ -4,7 +4,7 @@ dynamic = ["version"]
 authors = [
     {name = "NVIDIA"},
 ]
-description = "Client SDK for NVIDIA structured-data foundation model NIMs (TabICL, Nemotron Relational, and future adapters)"
+description = "Client SDK for NVIDIA structured-data foundation model NIMs (Nemotron Tabular, Nemotron Relational, and future adapters)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -43,7 +43,7 @@ Issues = "https://github.com/NVIDIA/nemotron-predict-client/issues"
 
 [project.optional-dependencies]
 relational = [
-    "nemotron-relational-v1>=2.24.1,<3",
+    "nemotron-relational>=2.24.1,<3",
 ]
 sqlite = [
     "nemotron-predict-connectors[sqlite]",
@@ -60,12 +60,12 @@ databricks = [
 # Invoking a served model, as opposed to `databricks` above, which is SQL data
 # access. Kept distinct so neither drags in the other.
 databricks-serving = [
-    "nemotron-relational-v1[databricks-serving]>=2.24.1,<3",
+    "nemotron-relational[databricks-serving]>=2.24.1,<3",
 ]
 # Invoking a served model, as opposed to `snowflake` above, which is SQL data
 # access. Kept distinct so neither drags in the other.
 snowflake-serving = [
-    "nemotron-relational-v1[snowflake-serving]>=2.24.1,<3",
+    "nemotron-relational[snowflake-serving]>=2.24.1,<3",
 ]
 s3 = [
     "nemotron-predict-connectors[s3]",
@@ -73,10 +73,10 @@ s3 = [
 # Deliberately not part of `all`: the explanation summary POSTs row data to a
 # third-party LLM endpoint, so installing it stays an explicit opt-in.
 explain = [
-    "nemotron-relational-v1[explain]>=2.24.1,<3",
+    "nemotron-relational[explain]>=2.24.1,<3",
 ]
 relbench = [
-    "nemotron-relational-v1[relbench]>=2.24.1,<3",
+    "nemotron-relational[relbench]>=2.24.1,<3",
 ]
 all = [
     "nemotron-predict-client[relational,sqlite,duckdb,snowflake,databricks,databricks-serving,s3]",

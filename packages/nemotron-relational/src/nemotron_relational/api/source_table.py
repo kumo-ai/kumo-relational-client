@@ -57,7 +57,7 @@ class S3SourceTable:
     #    name suffix that must be one of ".csv" or ".parquet"
     s3_path: str
 
-    # Internal: S3 connector ID, if we are working with a Kumo-owned named S3
+    # Internal: S3 connector ID, if we are working with a Nemotron Relational-owned named S3
     # connector:
     connector_id: str | None = None
     source_table_name: TableName | None = None
@@ -139,7 +139,7 @@ class GCSSourceTable:
     #    name suffix that must be one of ".csv" or ".parquet"
     gcs_path: str
 
-    # Internal: GCS connector ID, if we are working with a Kumo-owned named GCS
+    # Internal: GCS connector ID, if we are working with a Nemotron Relational-owned named GCS
     # connector:
     connector_id: str | None = None
     source_table_name: TableName | None = None
@@ -173,7 +173,7 @@ class ADLSSourceTable:
     #    name suffix that must be one of ".csv" or ".parquet"
     adls_path: str
 
-    # Internal: ADLS connector ID, if we are working with a Kumo-owned named
+    # Internal: ADLS connector ID, if we are working with a Nemotron Relational-owned named
     # ADLS connector:
     connector_id: str | None = None
     source_table_name: TableName | None = None
@@ -284,7 +284,7 @@ class SourceTableListResponse:
 class SourceColumn:
     r"""The metadata of a column in a source table. Note that a source column
     simply provides a view into the metadata of a source table. To modify
-    metadata, please create a Kumo Table and adjust the table's data and
+    metadata, please create a Nemotron Relational Table and adjust the table's data and
     semantic types.
 
     .. note::
@@ -299,7 +299,7 @@ class SourceColumn:
     """
 
     name: str
-    stype: Stype | None  # Kumo-inferred.
+    stype: Stype | None  # Nemotron Relational-inferred.
     dtype: Dtype
     is_primary: bool
 

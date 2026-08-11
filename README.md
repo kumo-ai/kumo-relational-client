@@ -11,20 +11,20 @@ Full documentation lives under [`docs/`](docs/index.md):
 - [Overview](docs/about/overview.md) — what the SDK is and when to use it
 - [Architecture](docs/about/architecture.md) — how the client, adapters, drivers, and connectors fit together
 - [Prerequisites](docs/get-started/prerequisites.md) and [Installation](docs/get-started/installation.md)
-- [Quickstart](docs/get-started/quickstart.md) — your first TabICL and NemotronRelational predictions
+- [Quickstart](docs/get-started/quickstart.md) — your first Nemotron Tabular and Nemotron Relational predictions
 - [Environment Variables](docs/reference/environment-variables.md)
 
 ## Install
 
 | Command | You get |
 | --- | --- |
-| `pip install nemotron-predict-client` | The client + every lightweight model (TabICL today). Works out of the box. |
+| `pip install nemotron-predict-client` | The client + every lightweight model (Nemotron Tabular today). Works out of the box. |
 | `pip install nemotron-predict-client[relational]` | Adds NemotronRelational (pulls the native `nemotron_relational` driver). |
 | `pip install nemotron-predict-client[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
 | `pip install nemotron-predict-client[all]` | NemotronRelational, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
 
 The rule is dependency weight, not favoritism: a model that does no client-side work
-(like TabICL, which just shapes a request the NIM runs) ships in the base wheel; a model
+(like Nemotron Tabular, which just shapes a request the NIM runs) ships in the base wheel; a model
 that does heavy client-side work (like NemotronRelational: graph building, native neighbor-sampling,
 PQL) is an opt-in extra. Data-source drivers are opt-in the same way, via the shared
 `nemotron-predict-connectors` package.
@@ -41,15 +41,15 @@ the connectors are pure Python and install anywhere.
 ## Quickstart
 
 A `PredictClient` owns one connection to a NIM. You run inference through a model handle:
-`client.relational(graph)` or `client.tabicl(context, target=, task=)`, then `.predict(...)`.
+`client.relational(graph)` or `client.tabular(context, target=, task=)`, then `.predict(...)`.
 
-TabICL (single table):
+Nemotron Tabular (single table):
 
 ```python
 from nemotron_predict import PredictClient
 
 with PredictClient(url="http://localhost:8000") as client:
-    model = client.tabicl(context_df, target="label", task="classification")
+    model = client.tabular(context_df, target="label", task="classification")
     df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
@@ -71,9 +71,9 @@ with PredictClient(url="http://localhost:8000") as client:
 Each `PredictClient` holds its own transport and registry, so multiple clients can target
 different endpoints or tenants at once, including concurrently from several threads:
 a prediction always goes to the endpoint and credential of the client that started it.
-The NemotronRelational driver underneath still keeps a process-wide configuration that each
+The Nemotron Relational driver underneath still keeps a process-wide configuration that each
 prediction reconfigures, so drive it through `PredictClient` rather than mixing in direct
-`nemotron_relational.init()` calls. `client.models()` and `client.capabilities("tabicl")` describe
+`nemotron_relational.init()` calls. `client.models()` and `client.capabilities("nemotron-tabular")` describe
 the client's own adapter registry, not the connected endpoint: a NIM serving only one of
 these models still reports both, and the mismatch surfaces as an error from the NIM on
 the first prediction. The transport pools connections and retries transient failures
@@ -106,11 +106,11 @@ nemotron-predict-client/
     │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
     │       ├── adapters/       #   one peer module per model
     │       │   ├── tabicl.py     #   single-table (no driver)
-    │       │   └── nemotron_relational.py    #   relational (lazy-wraps the NemotronRelational driver)
+    │       │   └── nemotron_relational.py    #   relational (lazy-wraps the Nemotron Relational driver)
     │       └── nemotron_relational.py      #   explicit, lazily-resolved surface onto the driver
     ├── nemotron-predict-connectors/        # shared data-source connectors (pure-python)
     │   └── src/nemotron_predict_connectors/  #   connect(), read(), quote_ident, resolve_sql; DB drivers via extras
-    └── nemotron_relational/                # the NemotronRelational driver (native build)
+    └── nemotron_relational/                # the Nemotron Relational driver (native build)
         └── src/nemotron_relational/          #   graph, samplers, native relationallib, PQL, HTTP client
 ```
 
@@ -121,9 +121,9 @@ an internal typed request that declares which model it targets; the client dispa
 that, checks it is the type that model's adapter accepts, and calls the adapter. Nothing is
 checked against `capabilities()`, which is a discovery accessor for callers, not a gate on
 the dispatch path. You reach all of this through the handles (`client.relational(...)` /
-`client.tabicl(...)`); the request types are not exported from `nemotron_predict`.
+`client.tabular(...)`); the request types are not exported from `nemotron_predict`.
 
-Both the client (flat table reads) and the NemotronRelational driver (warehouse connections for its
+Both the client (flat table reads) and the Nemotron Relational driver (warehouse connections for its
 graph samplers) sit on the shared **`nemotron-predict-connectors`** package, so each warehouse is
 reached through one place. The `sqlite`, `duckdb`, `snowflake`, and `databricks` connection
 factories are shared directly.
@@ -136,19 +136,19 @@ factories are shared directly.
 2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its own
    distribution and add a `[<model>]` extra; the adapter lazy-imports the driver so base
    installs stay light.
-3. A dependency-free model (like TabICL) needs no driver and no extra.
+3. A dependency-free model (like Nemotron Tabular) needs no driver and no extra.
 
-## Why the NemotronRelational adapter isn't symmetric with TabICL
+## Why the Nemotron Relational adapter isn't symmetric with Nemotron Tabular
 
-The internal `TabICLRequest` (`context` / `predict` / `task` / `target`) maps cleanly onto the
+The internal `NemotronTabularRequest` (`context` / `predict` / `task` / `target`) maps cleanly onto the
 Universal wire envelope, but `NemotronRelationalRequest` (`graph` / `query` / `indices`) does not — these
 are the shapes the handles build for the adapters, not a user-facing API. `NemotronRelational.predict()`
 takes a PQL query plus an entity-graph and builds/samples/sends the request as one fused
 operation — there is no standalone "build a payload from two flat DataFrames" step to call
 into. Reimplementing that outside the driver would duplicate PQL parsing, subgraph sampling,
 and point-in-time correctness logic that already lives (and is tested) there. So
-`adapters/relational.py` takes the shape NemotronRelational actually needs and normalizes the result into
-the same DataFrame shape `core.response` produces for TabICL, so callers get one consistent
+`adapters/relational.py` takes the shape Nemotron Relational actually needs and normalizes the result into
+the same DataFrame shape `core.response` produces for Nemotron Tabular, so callers get one consistent
 return type regardless of adapter.
 
 ## Sessions
@@ -157,7 +157,7 @@ A session pins `model` / `task` / `schema` / `context` on the NIM so later calls
 rows to score. Both model paths use them, and neither exposes them: they are an internal
 transport optimisation and never change a prediction.
 
-- **TabICL** — `client.tabicl(context, ...)` reuses one session for the life of the handle.
+- **Nemotron Tabular** — `client.tabular(context, ...)` reuses one session for the life of the handle.
   It is opened on the second `predict()` against the same context, so scoring a single table
   costs exactly one request as before, and every call after that carries the rows alone.
 - **NemotronRelational** — a multi-batch `predict()` opens one session for the run and deletes it at the

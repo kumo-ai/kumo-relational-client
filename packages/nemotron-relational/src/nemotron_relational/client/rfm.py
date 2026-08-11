@@ -244,37 +244,37 @@ def _prediction_item_to_ranking_rows(
 ) -> list[dict[str, Any]]:
     if item.rankings is None:
         raise ValueError(
-            'NemotronRelational ranking response is missing rankings.'
+            'Nemotron Relational ranking response is missing rankings.'
         )
     if item.prediction is not None:
         raise ValueError(
-            'NemotronRelational ranking response must not include prediction.'
+            'Nemotron Relational ranking response must not include prediction.'
         )
 
     rows: list[dict[str, Any]] = []
     for ranking in item.rankings:
         if 'id' not in ranking:
-            raise ValueError('NemotronRelational ranking item is missing id.')
+            raise ValueError('Nemotron Relational ranking item is missing id.')
         if 'score' not in ranking:
             raise ValueError(
-                'NemotronRelational ranking item is missing score.'
+                'Nemotron Relational ranking item is missing score.'
             )
         extra_fields = set(ranking) - {'id', 'score'}
         if extra_fields:
             unexpected = ', '.join(sorted(extra_fields))
             raise ValueError(
-                'NemotronRelational ranking item includes unexpected fields: '
+                'Nemotron Relational ranking item includes unexpected fields: '
                 f'{unexpected}.'
             )
         ranking_id = ranking['id']
         if not isinstance(ranking_id, str):
             raise ValueError(
-                'NemotronRelational ranking item id must be a string.'
+                'Nemotron Relational ranking item id must be a string.'
             )
         score = float(ranking['score'])
         if not math.isfinite(score):
             raise ValueError(
-                'NemotronRelational ranking item score must be finite.'
+                'Nemotron Relational ranking item score must be finite.'
             )
 
         row: dict[str, Any] = {'ENTITY': entity_id}
@@ -301,12 +301,12 @@ def _validate_identity_mappings(
     expected_count = len(entity_ids)
     if len(instance_ids) != expected_count:
         raise ValueError(
-            'NemotronRelational request identity mappings have different lengths: '
+            'Nemotron Relational request identity mappings have different lengths: '
             f'{expected_count} entities and {len(instance_ids)} instances.'
         )
     if anchor_times is not None and len(anchor_times) != expected_count:
         raise ValueError(
-            'NemotronRelational request identity mappings have different lengths: '
+            'Nemotron Relational request identity mappings have different lengths: '
             f'{expected_count} entities and {len(anchor_times)} anchor times.'
         )
 
@@ -327,7 +327,7 @@ def _correlated_prediction_rows(
     forecast_steps_by_index: dict[int, set[int]] = {}
     if not is_forecast and len(response.predictions) != expected_count:
         raise ValueError(
-            'NemotronRelational prediction response count does not match the request: '
+            'Nemotron Relational prediction response count does not match the request: '
             f'expected {expected_count}, got {len(response.predictions)}.'
         )
 
@@ -336,41 +336,41 @@ def _correlated_prediction_rows(
         row_index = item.row_index
         if row_index is None:
             raise ValueError(
-                'NemotronRelational prediction response is missing row_index.'
+                'Nemotron Relational prediction response is missing row_index.'
             )
         if row_index < 0 or row_index >= expected_count:
             raise ValueError(
-                'NemotronRelational prediction response row_index is out of range: '
+                'Nemotron Relational prediction response row_index is out of range: '
                 f'{row_index}.'
             )
         if is_forecast:
             if item.forecast_step is None:
                 raise ValueError(
-                    'NemotronRelational forecasting response is missing forecast_step.'
+                    'Nemotron Relational forecasting response is missing forecast_step.'
                 )
             if item.forecast_step <= 0:
                 raise ValueError(
-                    'NemotronRelational forecasting response forecast_step must be positive.'
+                    'Nemotron Relational forecasting response forecast_step must be positive.'
                 )
             forecast_steps = forecast_steps_by_index.setdefault(
                 row_index, set()
             )
             if item.forecast_step in forecast_steps:
                 raise ValueError(
-                    'NemotronRelational forecasting response contains duplicate '
+                    'Nemotron Relational forecasting response contains duplicate '
                     f'forecast_step {item.forecast_step} for row_index {row_index}.'
                 )
             forecast_steps.add(item.forecast_step)
         elif row_index in rows_by_index:
             raise ValueError(
-                'NemotronRelational prediction response contains duplicate row_index: '
+                'Nemotron Relational prediction response contains duplicate row_index: '
                 f'{row_index}.'
             )
 
         expected_id = str(instances[row_index])
         if item.id != expected_id:
             raise ValueError(
-                'NemotronRelational prediction response id does not match request '
+                'Nemotron Relational prediction response id does not match request '
                 f'instance_id at row_index {row_index}: expected '
                 f'{expected_id!r}, got {item.id!r}.'
             )
@@ -387,7 +387,7 @@ def _correlated_prediction_rows(
     ]
     if missing:
         raise ValueError(
-            'NemotronRelational prediction response is missing row_index values: '
+            'Nemotron Relational prediction response is missing row_index values: '
             f'{missing}.'
         )
 

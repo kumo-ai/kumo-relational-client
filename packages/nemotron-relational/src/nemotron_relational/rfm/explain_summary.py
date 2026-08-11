@@ -20,7 +20,7 @@ Provide insight to the user, make reference to specific quantitative details whi
 
 _EXPLAINABILITY = """# Explainability
 
-NemotronRelational explanations provide two complementary views of model predictions:
+Nemotron Relational explanations provide two complementary views of model predictions:
 
 1. **Global View (Cohorts):** Column-level patterns across in-context examples that reveal what data characteristics drive predictions
 1. **Local View (Subgraph):** Cell-level attribution scores showing which specific values in this entity's subgraph influenced the prediction
@@ -256,7 +256,7 @@ def generate_summary(
     model: str | None = None,
     timeout: float | None = None,
 ) -> str:
-    r"""Generate a human-readable summary of a NemotronRelational explanation.
+    r"""Generate a human-readable summary of a Nemotron Relational explanation.
 
     .. warning::
 

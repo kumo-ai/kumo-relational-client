@@ -11,19 +11,19 @@ from nemotron_predict import ModelCapabilities, PredictClient
 
 def test_client_lists_builtin_models():
     assert set(PredictClient(url='http://nim.test').models()) == {
-        'nemotron-relational-v1',
-        'tabicl',
+        'nemotron-relational',
+        'nemotron-tabular',
     }
 
 
 def test_client_reports_capabilities():
     client = PredictClient(url='http://nim.test')
-    caps = client.capabilities('tabicl')
+    caps = client.capabilities('nemotron-tabular')
     assert isinstance(caps, ModelCapabilities)
-    assert caps.model == 'tabicl'
+    assert caps.model == 'nemotron-tabular'
     assert 'classification' in caps.tasks
     assert 'prediction' in caps.outputs
-    assert caps.request_type == 'TabICLRequest'
+    assert caps.request_type == 'NemotronTabularRequest'
 
 
 def test_two_clients_have_independent_transports():

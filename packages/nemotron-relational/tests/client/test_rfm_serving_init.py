@@ -35,7 +35,7 @@ class _Workspace:
 
 
 def _init(
-    rfm_engine: Any, endpoint: str = 'nemotron-relational-v1', **kwargs: Any
+    rfm_engine: Any, endpoint: str = 'nemotron-relational', **kwargs: Any
 ) -> None:
     """Initialize the way ``PredictClient`` does, token included.
 
@@ -114,8 +114,7 @@ def test_records_the_endpoint_rather_than_a_stale_url(rfm_engine: Any) -> None:
     """
     _init(rfm_engine)
     assert (
-        rfm_engine.global_state._url
-        == 'databricks-serving:nemotron-relational-v1'
+        rfm_engine.global_state._url == 'databricks-serving:nemotron-relational'
     )
 
 
@@ -137,7 +136,7 @@ def test_a_direct_call_is_refused(rfm_engine: Any) -> None:
     """
     with pytest.raises(RuntimeError):
         rfm_engine.init_databricks_serving(
-            'nemotron-relational-v1', workspace_client=_Workspace()
+            'nemotron-relational', workspace_client=_Workspace()
         )
     assert not rfm_engine.global_state._initialized
 
@@ -146,7 +145,7 @@ def test_a_url_shaped_endpoint_is_rejected(rfm_engine: Any) -> None:
     with pytest.raises(ValueError):
         _init(
             rfm_engine,
-            'https://workspace/serving-endpoints/nemotron-relational-v1',
+            'https://workspace/serving-endpoints/nemotron-relational',
         )
     assert not rfm_engine.global_state._initialized
 

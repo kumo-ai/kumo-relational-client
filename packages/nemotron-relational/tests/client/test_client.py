@@ -21,7 +21,7 @@ def test_authenticate_accepts_universal_tfm_nim(requests_mock):
             'object': 'list',
             'data': [
                 {
-                    'id': 'nemotron-relational-v1',
+                    'id': 'nemotron-relational',
                     'object': 'model',
                 }
             ],

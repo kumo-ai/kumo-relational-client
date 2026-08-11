@@ -1,6 +1,6 @@
 ---
 title: "NVIDIA SDFM SDK Environment Variables"
-description: "Reference for the environment variables that configure the NVIDIA SDFM SDK client, the NemotronRelational driver, and the data-source connectors."
+description: "Reference for the environment variables that configure the NVIDIA SDFM SDK client, the Nemotron Relational driver, and the data-source connectors."
 template-library-version: "1.0.0"
 ---
 
@@ -8,12 +8,12 @@ template-library-version: "1.0.0"
 
 This page lists the environment variables the NVIDIA SDFM SDK reads. Most
 configuration is passed directly to `PredictClient` in code; the variables below
-cover the NemotronRelational driver's connection defaults, logging, and the data-source
+cover the Nemotron Relational driver's connection defaults, logging, and the data-source
 connectors.
 
 ## NemotronRelational Driver
 
-The NemotronRelational driver reads these variables when you use the `nemotron_relational` model
+The Nemotron Relational driver reads these variables when you use the `nemotron_relational` model
 without passing the values explicitly.
 
 | Variable | Required | Default | Description |
@@ -21,7 +21,7 @@ without passing the values explicitly.
 | `NEMOTRON_PREDICT_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. Read when the driver initializes; importing the package never connects. |
 | `RFM_API_URL` | Optional | None | An alternative to `NEMOTRON_PREDICT_API_ENDPOINT` for the same URL. Takes precedence over it when both are set. |
 | `NEMOTRON_PREDICT_API_KEY` | No | None | API key sent to the NIM as `X-API-Key`. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. It is refused on a plaintext `http://` endpoint other than localhost. |
-| `NEMOTRON_PREDICT_LOG` | No | `INFO` | Log level for the NemotronRelational driver, for example `DEBUG`, `INFO`, or `WARNING`. |
+| `NEMOTRON_PREDICT_LOG` | No | `INFO` | Log level for the Nemotron Relational driver, for example `DEBUG`, `INFO`, or `WARNING`. |
 | `NEMOTRON_PREDICT_DISABLE_SESSIONS` | No | Unset | Set to `1`/`true` to stop a multi-batch prediction from sharing one uploaded context through a NIM session. Each batch then re-uploads the full context, which the progress output reports. Only affects transport cost; predictions are unchanged. Passing `random_seed=None` has the same effect, because unseeded runs re-sample neighborhoods per batch. |
 
 ## Explanation Summary (Third-Party LLM)

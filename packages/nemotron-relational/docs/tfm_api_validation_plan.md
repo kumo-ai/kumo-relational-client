@@ -86,7 +86,7 @@ currently outside the response-model checks:
 - compare the keys emitted by `predict_request_to_json()` / `_base_payload()` to
   `PredictionRequest.properties`
 - assert all `PredictionRequest.required` keys are emitted
-- parse the spec's request examples for TabICL and Kumo-RFM and assert their
+- parse the spec's request examples for Nemotron Tabular and Nemotron Relational and assert their
   envelope shape matches the SDK's expected top-level shape
 
 This is the largest remaining blind spot once response parsing is pinned down.

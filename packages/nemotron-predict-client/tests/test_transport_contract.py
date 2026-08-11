@@ -18,7 +18,7 @@ from nemotron_predict import PredictClient
 from nemotron_predict.core import transport as transport_module
 from nemotron_predict.core.transport import _PREDICTIONS_PATH, Transport
 from nemotron_predict.errors import NimRequestError, PredictError
-from nemotron_predict.requests import ModelRequest, TabICLRequest
+from nemotron_predict.requests import ModelRequest, NemotronTabularRequest
 
 _URL = 'http://nim.example.com:8000'
 
@@ -26,7 +26,7 @@ _URL = 'http://nim.example.com:8000'
 def _canned_response(request_id: str = 'pred_123') -> dict:
     return {
         'id': request_id,
-        'model': 'tabicl',
+        'model': 'nemotron-tabular',
         'predictions': [
             {
                 'row_index': 0,
@@ -48,7 +48,7 @@ def test_predict_end_to_end_round_trip(requests_mock, context_df, predict_df):
 
     with PredictClient(url=_URL) as client:
         frame = client._predict(
-            TabICLRequest(
+            NemotronTabularRequest(
                 context=context_df,
                 predict=predict_df,
                 task='classification',
@@ -61,7 +61,7 @@ def test_predict_end_to_end_round_trip(requests_mock, context_df, predict_df):
     assert list(frame['prediction']) == ['yes', 'no']
 
     sent_payload = requests_mock.last_request.json()
-    assert sent_payload['model'] == 'tabicl'
+    assert sent_payload['model'] == 'nemotron-tabular'
     assert sent_payload['task']['target']['column_name'] == 'target_col'
 
 
@@ -77,7 +77,7 @@ def test_predict_unknown_model_raises():
 def test_predict_wrong_request_type_raises():
     @dataclass
     class _MislabelledRequest(ModelRequest):
-        model: ClassVar[str] = 'tabicl'
+        model: ClassVar[str] = 'nemotron-tabular'
 
     with pytest.raises(PredictError) as excinfo:
         PredictClient(url=_URL)._predict(_MislabelledRequest())
@@ -99,7 +99,7 @@ def test_predict_propagates_nim_error(requests_mock, context_df, predict_df):
 
     with pytest.raises(NimRequestError) as excinfo:
         PredictClient(url=_URL)._predict(
-            TabICLRequest(
+            NemotronTabularRequest(
                 context=context_df,
                 predict=predict_df,
                 task='classification',
@@ -127,7 +127,7 @@ def test_client_sends_api_key_header(requests_mock):
     https_url = 'https://nim.example.com:8000'
     requests_mock.post(https_url + '/v1/predictions', json=_canned_response())
     client = Transport(https_url, api_key='secret')
-    client.predict({'model': 'tabicl'})
+    client.predict({'model': 'nemotron-tabular'})
     assert requests_mock.last_request.headers['X-API-Key'] == 'secret'
 
 
@@ -166,7 +166,7 @@ def test_invalid_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', text='not json')
     client = Transport(_URL)
     with pytest.raises(PredictError) as excinfo:
-        client.predict({'model': 'tabicl'})
+        client.predict({'model': 'nemotron-tabular'})
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
@@ -174,7 +174,7 @@ def test_non_object_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', json=['a', 'b'])
     client = Transport(_URL)
     with pytest.raises(PredictError) as excinfo:
-        client.predict({'model': 'tabicl'})
+        client.predict({'model': 'nemotron-tabular'})
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
@@ -182,7 +182,7 @@ def test_non_object_json_error_body_is_handled(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', status_code=500, json=['boom'])
     client = Transport(_URL)
     with pytest.raises(NimRequestError) as excinfo:
-        client.predict({'model': 'tabicl'})
+        client.predict({'model': 'nemotron-tabular'})
     assert excinfo.value.status_code == 500
 
 
@@ -327,7 +327,7 @@ def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(servers):
     origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
 
     Transport(origin['url'], api_key='secret').predict(
-        {'model': 'nemotron-relational-v1'}
+        {'model': 'nemotron-relational'}
     )
 
     assert origin['headers'][0]['X-API-Key'] == 'secret'
@@ -339,7 +339,7 @@ def test_api_key_is_kept_on_a_same_origin_redirect(servers):
     origin['redirect_to'] = origin['url'] + '/v1/predictions/'
 
     Transport(origin['url'], api_key='secret').predict(
-        {'model': 'nemotron-relational-v1'}
+        {'model': 'nemotron-relational'}
     )
 
     assert len(origin['headers']) == 2
@@ -350,7 +350,7 @@ def test_redirects_are_still_followed(servers):
     origin, target = servers
     origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
 
-    body = Transport(origin['url']).predict({'model': 'nemotron-relational-v1'})
+    body = Transport(origin['url']).predict({'model': 'nemotron-relational'})
 
     assert body == {'predictions': []}
     assert len(target['headers']) == 1
@@ -364,7 +364,7 @@ def test_nim_error_string_carries_the_http_status(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'tabicl'})
+        Transport(_URL).predict({'model': 'nemotron-tabular'})
     assert str(excinfo.value) == (
         '[422 INVALID_SCHEMA] schema validation failed'
     )
@@ -376,7 +376,7 @@ def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'tabicl'})
+        Transport(_URL).predict({'model': 'nemotron-tabular'})
     assert str(excinfo.value) == '[403] Forbidden'
 
 
@@ -388,7 +388,7 @@ def test_nim_error_truncates_a_huge_response_body(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'tabicl'})
+        Transport(_URL).predict({'model': 'nemotron-tabular'})
     assert len(str(excinfo.value)) < 1024
     assert 'truncated' in str(excinfo.value)
     assert excinfo.value.status_code == 502
@@ -437,7 +437,7 @@ def test_predict_after_close_is_rejected(requests_mock, context_df, predict_df):
 
     with pytest.raises(PredictError) as excinfo:
         client._predict(
-            TabICLRequest(
+            NemotronTabularRequest(
                 context=context_df,
                 predict=predict_df,
                 task='classification',

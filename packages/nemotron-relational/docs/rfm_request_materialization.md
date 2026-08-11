@@ -60,13 +60,13 @@ features across point-in-time boundaries.
 
 Materializing from a local `Graph` performs native neighborhood sampling and
 therefore requires the compiled `nemotron_relational.relationallib` extension. Install the SDK
-with its default native build enabled; `WITH_KUMOLIB=0` is only suitable for
+with its default native build enabled; `WITH_RELATIONALLIB=0` is only suitable for
 metadata-only workflows and cannot run local materialization.
 
 For a source checkout using the published `kumo-api` dependency:
 
 ```bash
-KUMO_SDK_RELEASE=1 python -m pip install --editable .
+python -m pip install --editable .
 python -c "import nemotron_relational.relationallib"
 ```
 

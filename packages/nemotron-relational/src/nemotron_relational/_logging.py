@@ -45,7 +45,7 @@ def _install_handler(logger: logging.Logger) -> None:
 
 
 def initialize_logging() -> None:
-    r"""Initializes Kumo logging.
+    r"""Initializes Nemotron Relational logging.
 
     Touches the ``nemotron_relational`` logger and nothing else. This used to raise the
     level of ``matplotlib``, ``urllib3`` and ``snowflake`` to ``ERROR``, which

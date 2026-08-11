@@ -4,7 +4,7 @@
 
 r"""The shared ``arrays`` table encoder.
 
-``encode_table`` came out of the TabICL adapter to be shared with the
+``encode_table`` came out of the Nemotron Tabular adapter to be shared with the
 relational path, so what matters is that it still writes exactly what the
 adapter wrote. The cases here are the ones where a rewrite could plausibly
 differ and the server would still accept the result: the empty-column frame,
@@ -85,10 +85,10 @@ def test_missing_values_become_null() -> None:
 
 
 def test_the_adapter_and_the_shared_encoder_agree() -> None:
-    r"""The move this module came from: the TabICL payload builder must be
+    r"""The move this module came from: the Nemotron Tabular payload builder must be
     emitting exactly what ``encode_table`` produces.
     """
-    from nemotron_predict.adapters.tabicl import build_request
+    from nemotron_predict.adapters.tabular import build_request
 
     context = pd.DataFrame({'x': [1.0, 2.0, 3.0], 'y': [0, 1, 0]})
     predict = pd.DataFrame({'x': [4.0]})

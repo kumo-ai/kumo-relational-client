@@ -7,12 +7,12 @@ per-model adapters; heavy model drivers are optional extras.
 ## Install
 
 ```bash
-pip install nemotron-predict-client              # client + every lightweight model (TabICL)
+pip install nemotron-predict-client              # client + every lightweight model (Nemotron Tabular)
 pip install nemotron-predict-client[relational]     # adds NemotronRelational (native driver)
 pip install nemotron-predict-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
 pip install nemotron-predict-client[all]         # NemotronRelational, every data-source backend,
                                      # and [databricks-serving]
-pip install nemotron-predict-client[explain]     # NemotronRelational plus the explanation-summary LLM
+pip install nemotron-predict-client[explain]     # Nemotron Relational plus the explanation-summary LLM
                                      # client. Deliberately NOT part of [all],
                                      # because it enables the third-party data
                                      # egress described below.
@@ -23,18 +23,18 @@ pip install nemotron-predict-client[explain]     # NemotronRelational plus the e
 A `PredictClient` owns one connection to a NIM. Requests are typed per model: each
 model handle builds its own request type, and the client rejects a request the
 target model's adapter does not accept. Each adapter also checks what it knows
-it cannot serve — an unsupported task kind or output field for TabICL, an
+it cannot serve — an unsupported task kind or output field for Nemotron Tabular, an
 unknown `task_type` or a missing entity table for NemotronRelational — and raises
 `PredictError(code="INVALID_REQUEST")` before anything is sent. Everything else is
 validated by the NIM.
 
-TabICL (single table):
+Nemotron Tabular (single table):
 
 ```python
 from nemotron_predict import PredictClient
 
 with PredictClient(url='http://localhost:8000') as client:
-    model = client.tabicl(context_df, target='label', task='classification')
+    model = client.tabular(context_df, target='label', task='classification')
     df = model.predict(predict_df, outputs=['prediction', 'probabilities'])
 ```
 
@@ -110,7 +110,7 @@ with PredictClient(url='http://localhost:8000') as client:
 ```
 
 `client.models()` lists the models this client has adapters for and
-`client.capabilities("nemotron-relational-v1")` describes one of them. Both read the
+`client.capabilities("nemotron-relational")` describes one of them. Both read the
 client-side registry, not the endpoint: a NIM serving only one of these models
 still reports both, and a mismatch surfaces as an error from the NIM on the
 first prediction. The transport pools connections and retries
@@ -120,7 +120,7 @@ rather than the call as a whole, so a retried call can take up to
 `(max_retries + 1) * timeout` plus backoff. Each client holds its own transport
 and registry, so multiple clients can target different endpoints at once,
 including concurrently: a prediction always goes to the endpoint and credential
-of the client that started it. The NemotronRelational driver underneath still keeps a
+of the client that started it. The Nemotron Relational driver underneath still keeps a
 process-wide configuration that each prediction reconfigures, so drive it
 through `PredictClient` rather than mixing in direct `nemotron_relational.init()` calls.
 `close()` (or leaving the `with` block) releases the pooled connections and

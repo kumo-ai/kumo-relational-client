@@ -2,7 +2,7 @@
 
 Shared data-source connectors for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) SDK and its
 model engines. One place that knows how to reach each warehouse, so the client
-(flat table reads for TabICL) and the NemotronRelational driver (warehouse connections for
+(flat table reads for Nemotron Tabular) and the Nemotron Relational driver (warehouse connections for
 its graph samplers) don't each carry their own copy.
 
 It provides:

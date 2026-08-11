@@ -20,7 +20,7 @@ class ModelRequest:
     r"""Base class for typed per-model prediction requests.
 
     Every request declares the ``model`` id it targets, so the model handles
-    (``client.relational(...)`` / ``client.tabicl(...)``) can dispatch to the right
+    (``client.relational(...)`` / ``client.tabular(...)``) can dispatch to the right
     adapter without a loose ``**kwargs`` bag.
     """
 
@@ -28,8 +28,8 @@ class ModelRequest:
 
 
 @dataclass
-class TabICLSession:
-    r"""The server-side context a ``TabICLModel`` handle reuses across calls.
+class NemotronTabularSession:
+    r"""The server-side context a ``TabularModel`` handle reuses across calls.
 
     One of these lives on each handle so repeated ``predict`` calls against the
     same bound context upload it once instead of once per call. ``pinned`` is a
@@ -57,14 +57,14 @@ class TabICLSession:
 
 
 @dataclass
-class TabICLRequest(ModelRequest):
-    r"""A single-table TabICL prediction request.
+class NemotronTabularRequest(ModelRequest):
+    r"""A single-table Nemotron Tabular prediction request.
 
     ``context`` holds labelled rows (including the ``target`` column) and
     ``predict`` holds the unlabelled rows to score.
     """
 
-    model: ClassVar[str] = 'tabicl'
+    model: ClassVar[str] = 'nemotron-tabular'
 
     context: pd.DataFrame
     predict: pd.DataFrame
@@ -78,14 +78,14 @@ class TabICLRequest(ModelRequest):
     embedding_dtype: str | None = None
     max_results: int | None = None
     request_id: str | None = None
-    session: TabICLSession | None = field(
+    session: NemotronTabularSession | None = field(
         default=None, repr=False, compare=False
     )
 
 
 @dataclass
 class NemotronRelationalRequest(ModelRequest):
-    r"""A relational NemotronRelational prediction request.
+    r"""A relational Nemotron Relational prediction request.
 
     ``graph`` is a ``nemotron_predict.relational`` graph, ``query`` is a PQL string, and
     ``options`` forwards any additional keyword arguments to the driver's
@@ -109,7 +109,7 @@ class NemotronRelationalRequest(ModelRequest):
     machine; see ``nemotron_relational.rfm.ExplainConfig`` for the full disclosure.
     """
 
-    model: ClassVar[str] = 'nemotron-relational-v1'
+    model: ClassVar[str] = 'nemotron-relational'
 
     graph: Any
     query: str
@@ -123,7 +123,7 @@ class NemotronRelationalRequest(ModelRequest):
 
 @dataclass
 class NemotronRelationalTaskRequest(ModelRequest):
-    r"""A NemotronRelational prediction request with a caller-supplied context table.
+    r"""A Nemotron Relational prediction request with a caller-supplied context table.
 
     Where :class:`NemotronRelationalRequest` derives its in-context (train) examples from a
     PQL ``query``, this request carries them directly: ``context`` holds the
@@ -146,7 +146,7 @@ class NemotronRelationalTaskRequest(ModelRequest):
     ``batch_size`` and ``options`` behave as in :class:`NemotronRelationalRequest`.
     """
 
-    model: ClassVar[str] = 'nemotron-relational-v1'
+    model: ClassVar[str] = 'nemotron-relational'
 
     graph: Any
     context: pd.DataFrame

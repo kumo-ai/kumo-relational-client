@@ -175,7 +175,7 @@ def init(
     timeout: float | None = None,
     max_retries: int = 3,
 ) -> None:
-    r"""Initializes the NemotronRelational client against a Universal TFM NIM.
+    r"""Initializes the Nemotron Relational client against a Universal TFM NIM.
 
     NIMs are unauthenticated by contract, so ``api_key`` is optional and only
     needed when a deployment fronts the NIM with an authenticating gateway.
@@ -204,7 +204,7 @@ def init(
     )
     if not url:
         raise ValueError(
-            'NemotronRelational initialization failed since no endpoint '
+            'Nemotron Relational initialization failed since no endpoint '
             'URL was provided. Please either set the '
             "'NEMOTRON_PREDICT_API_ENDPOINT' environment variable or "
             'explicitly call `nemotron_relational.init(url=...)`.'
@@ -444,7 +444,7 @@ def init_snowflake_serving(
 
 
 def set_log_level(level: str) -> None:
-    r"""Sets the Kumo logging level."""
+    r"""Sets the Nemotron Relational logging level."""
     logging.getLogger('nemotron_relational').setLevel(level)
 
 

@@ -60,6 +60,6 @@ def test_default_client_has_builtin_models():
     from nemotron_predict import PredictClient
 
     assert set(PredictClient(url='http://nim.test').models()) == {
-        'nemotron-relational-v1',
-        'tabicl',
+        'nemotron-relational',
+        'nemotron-tabular',
     }

@@ -24,7 +24,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 VERSION_FILES = {
     'nemotron-predict-connectors': 'packages/nemotron-predict-connectors/src/nemotron_predict_connectors/__init__.py',
     'nemotron-predict-client': 'packages/nemotron-predict-client/src/nemotron_predict/_version.py',
-    'nemotron-relational-v1': 'packages/nemotron-relational/src/nemotron_relational/_version.py',
+    'nemotron-relational': 'packages/nemotron-relational/src/nemotron_relational/_version.py',
 }
 
 _VERSION_RE = re.compile(

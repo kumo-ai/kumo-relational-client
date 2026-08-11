@@ -61,7 +61,7 @@ def test_error_types_are_exported(name: str) -> None:
     [
         NimRequestError(503, code='X', message='m'),
         MissingExtraError('nemotron_relational', 'nemotron_relational'),
-        UnknownModelError('nope', ['tabicl']),
+        UnknownModelError('nope', ['nemotron-tabular']),
     ],
 )
 def test_every_error_is_catchable_as_sdfm_error(error: PredictError) -> None:

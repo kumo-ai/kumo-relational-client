@@ -694,7 +694,7 @@ def _decode_composite_entities(
 
 
 class NemotronRelational:
-    r"""Run NemotronRelational predictions over a relational graph.
+    r"""Run Nemotron Relational predictions over a relational graph.
 
     :class:`NemotronRelational` provides the prediction interface for a pre-trained
     relational foundation model. Build it from a :class:`Graph`, then issue PQL

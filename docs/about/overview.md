@@ -10,14 +10,14 @@ The NVIDIA SDFM (Structured Data Foundation Models) SDK is one Python client for
 NVIDIA's structured-data foundation model NIMs, served behind the Universal TFM
 API. A thin, model-agnostic client dispatches through per-model handles to
 per-model adapters; heavy model drivers are optional and installed only when you
-ask for them. Two models are available today: **TabICL** (single-table, in-context
+ask for them. Two models are available today: **Nemotron Tabular** (single-table, in-context
 learning) and **NemotronRelational** (relational, graph-aware in-context learning).
 
 ## Benefits
 
 - **One client for every model.** A single `PredictClient` connects to a NIM and
   serves any registered model through a handle of its own —
-  `client.tabicl(...).predict(...)` and `client.relational(...).predict(...)` —
+  `client.tabular(...).predict(...)` and `client.relational(...).predict(...)` —
   each returning the same shape of pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
   every platform. Heavy drivers, such as NemotronRelational's native graph sampler, are
@@ -40,15 +40,15 @@ learning) and **NemotronRelational** (relational, graph-aware in-context learnin
 
 ## Use Cases
 
-### Score a Single Table with TabICL
+### Score a Single Table with Nemotron Tabular
 
 Provide a table of labeled context rows and a table of rows to predict, and
-TabICL returns predictions in one forward pass — no per-dataset training.
+Nemotron Tabular returns predictions in one forward pass — no per-dataset training.
 
 ### Predict Over Relational Data with NemotronRelational
 
 Build a graph from related tables (for example, users, items, and orders), then
-express a prediction target in Predictive Query Language (PQL). NemotronRelational samples
+express a prediction target in Predictive Query Language (PQL). Nemotron Relational samples
 the relevant subgraph and returns predictions for the entities you name.
 
 ## Core Concepts
@@ -57,8 +57,8 @@ the relevant subgraph and returns predictions for the entities you name.
   SDK builds requests against this contract so one client serves both models.
 - **Model adapter.** A per-model module that shapes a typed request into the
   wire envelope and normalizes the response into a pandas DataFrame.
-- **Driver.** A model's heavy client-side runtime. NemotronRelational ships one (graph
-  building, native neighbor sampling, PQL); TabICL needs none.
+- **Driver.** A model's heavy client-side runtime. Nemotron Relational ships one (graph
+  building, native neighbor sampling, PQL); Nemotron Tabular needs none.
 - **In-context learning (ICL).** Both models predict from labeled context rows
   in a single forward pass rather than training per dataset.
 
@@ -67,7 +67,7 @@ the relevant subgraph and returns predictions for the entities you name.
 | Component | Package | Role |
 | --- | --- | --- |
 | Client SDK | `nemotron-predict-client` | The `PredictClient`, typed requests, and per-model adapters. Pure Python. |
-| NemotronRelational driver | `nemotron_relational` | Graph, samplers, native `relationallib`, and PQL for the relational model. Installed via the `[relational]` extra. |
+| Nemotron Relational driver | `nemotron_relational` | Graph, samplers, native `relationallib`, and PQL for the relational model. Installed via the `[relational]` extra. |
 | Connectors | `nemotron-predict-connectors` | Shared data-source connectors (SQLite, DuckDB, Snowflake, Databricks, S3) used by the client and the driver. |
 
 ## Learn More

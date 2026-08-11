@@ -7,7 +7,7 @@ template-library-version: "1.0.0"
 # Installation Guide for the NVIDIA SDFM SDK
 
 Install the NVIDIA SDFM SDK with pip. The base package installs the client and
-every lightweight model; optional extras add the NemotronRelational driver and data-source
+every lightweight model; optional extras add the Nemotron Relational driver and data-source
 connectors so you install only what you need.
 
 ## Prerequisites
@@ -22,7 +22,7 @@ Before you start, you must complete the following prerequisites:
 pip install "nemotron-predict-client"
 ```
 
-This installs the client and every lightweight model, including TabICL.
+This installs the client and every lightweight model, including Nemotron Tabular.
 
 ## Package Extras
 
@@ -30,10 +30,10 @@ Add extras in brackets to install additional capabilities.
 
 | Command | You get |
 | --- | --- |
-| `pip install "nemotron-predict-client"` | The client plus every lightweight model (TabICL). |
-| `pip install "nemotron-predict-client[relational]"` | Adds the NemotronRelational driver (native graph sampler and PQL). |
+| `pip install "nemotron-predict-client"` | The client plus every lightweight model (Nemotron Tabular). |
+| `pip install "nemotron-predict-client[relational]"` | Adds the Nemotron Relational driver (native graph sampler and PQL). |
 | `pip install "nemotron-predict-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
-| `pip install "nemotron-predict-client[databricks-serving]"` | Reaches a NemotronRelational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
+| `pip install "nemotron-predict-client[databricks-serving]"` | Reaches a Nemotron Relational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
 | `pip install "nemotron-predict-client[all]"` | NemotronRelational, every data-source connector, and `[databricks-serving]`. |
 
 Two extras are deliberately outside `[all]` and must be named:
@@ -43,7 +43,7 @@ Two extras are deliberately outside `[all]` and must be named:
 | `pip install "nemotron-predict-client[explain]"` | Fills in `Explanation.summary`, which POSTs row data to a third-party LLM endpoint. Kept opt-in for that reason. |
 | `pip install "nemotron-predict-client[relbench]"` | The RelBench datasets used by `Graph.from_relbench()`. |
 
-For example, to install the client with the NemotronRelational driver and Snowflake
+For example, to install the client with the Nemotron Relational driver and Snowflake
 connector:
 
 ```bash
@@ -70,7 +70,7 @@ python -c "from nemotron_predict import PredictClient; print(PredictClient(url='
 Expected output:
 
 ```text
-['nemotron-relational-v1', 'tabicl']
+['nemotron-relational', 'nemotron-tabular']
 ```
 
 If you installed the `[relational]` extra, confirm the driver's native extension
@@ -94,7 +94,7 @@ True
   prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.13,
   and no source distribution is published, so there is nothing to fall back to
   on another platform — macOS included. Install the base `nemotron-predict-client` and run
-  NemotronRelational from a Linux x86_64 host, or build the driver from source.
+  Nemotron Relational from a Linux x86_64 host, or build the driver from source.
 - **The native extension fails to import after installing `[relational]`.**
   Reinstall the `nemotron_relational` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.

@@ -9,15 +9,15 @@ import pytest
 
 from nemotron_predict import (
     PredictClient,
-    RFMModel,
-    TabICLModel,
+    RelationalModel,
+    TabularModel,
 )
 from nemotron_predict.base import ModelAdapter, ModelCapabilities
 from nemotron_predict.errors import PredictError
 from nemotron_predict.requests import (
     NemotronRelationalRequest,
     NemotronRelationalTaskRequest,
-    TabICLRequest,
+    NemotronTabularRequest,
 )
 
 
@@ -51,13 +51,13 @@ def _client_with(adapter) -> PredictClient:
 def test_rfm_returns_bound_handle():
     client = PredictClient(url='http://nim.test')
     handle = client.relational('my-graph')
-    assert isinstance(handle, RFMModel)
+    assert isinstance(handle, RelationalModel)
 
 
 def test_rfm_handle_end_to_end_through_client():
     result = pd.DataFrame({'ENTITY': [1], 'PREDICTION': [0.5]})
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, result
+        'nemotron-relational', NemotronRelationalRequest, result
     )
     client = _client_with(adapter)
 
@@ -71,7 +71,7 @@ def test_rfm_handle_end_to_end_through_client():
     assert out is result
     req = adapter.captured
     assert isinstance(req, NemotronRelationalRequest)
-    assert req.model == 'nemotron-relational-v1'
+    assert req.model == 'nemotron-relational'
     assert req.graph == 'my-graph'
     assert req.query == 'PREDICT x FOR EACH t.id'
     assert req.indices == [1, 2, 3]
@@ -81,7 +81,7 @@ def test_rfm_handle_end_to_end_through_client():
 
 def test_rfm_handle_defaults_are_minimal():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -95,7 +95,7 @@ def test_rfm_handle_defaults_are_minimal():
 
 def test_rfm_handle_only_forwards_set_options():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -113,7 +113,7 @@ def test_rfm_handle_only_forwards_set_options():
 
 def test_rfm_handle_can_silence_progress_output():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -128,7 +128,7 @@ def test_rfm_handle_forwards_engine_arguments_it_does_not_name():
     ``TypeError`` with no way through.
     """
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -139,7 +139,7 @@ def test_rfm_handle_forwards_engine_arguments_it_does_not_name():
 
 def test_rfm_task_handle_exposes_link_prediction_and_column_exclusion():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalTaskRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -162,7 +162,7 @@ def test_rfm_task_handle_exposes_link_prediction_and_column_exclusion():
 
 def test_rfm_handle_matches_typed_request():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -184,27 +184,29 @@ def test_rfm_handle_matches_typed_request():
 
 def test_tabicl_returns_bound_handle():
     client = PredictClient(url='http://nim.test')
-    handle = client.tabicl(
+    handle = client.tabular(
         pd.DataFrame({'y': [0, 1]}), target='y', task='classification'
     )
-    assert isinstance(handle, TabICLModel)
+    assert isinstance(handle, TabularModel)
 
 
 def test_tabicl_handle_end_to_end_through_client():
     result = pd.DataFrame({'prediction': [1]})
-    adapter = _CapturingAdapter('tabicl', TabICLRequest, result)
+    adapter = _CapturingAdapter(
+        'nemotron-tabular', NemotronTabularRequest, result
+    )
     client = _client_with(adapter)
 
     ctx = pd.DataFrame({'x': [1, 2], 'y': [0, 1]})
     rows = pd.DataFrame({'x': [3]})
-    out = client.tabicl(ctx, target='y', task='classification').predict(
+    out = client.tabular(ctx, target='y', task='classification').predict(
         rows, positive_class='1'
     )
 
     assert out is result
     req = adapter.captured
-    assert isinstance(req, TabICLRequest)
-    assert req.model == 'tabicl'
+    assert isinstance(req, NemotronTabularRequest)
+    assert req.model == 'nemotron-tabular'
     assert req.context.equals(ctx)
     assert req.predict.equals(rows)
     assert req.task == 'classification'
@@ -213,11 +215,13 @@ def test_tabicl_handle_end_to_end_through_client():
 
 
 def test_tabicl_handle_defaults_are_minimal():
-    adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
+    adapter = _CapturingAdapter(
+        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+    )
     client = _client_with(adapter)
 
     ctx = pd.DataFrame({'x': [1], 'y': [0]})
-    client.tabicl(ctx, target='y', task='regression').predict(
+    client.tabular(ctx, target='y', task='regression').predict(
         pd.DataFrame({'x': [2]})
     )
 
@@ -229,7 +233,7 @@ def test_tabicl_handle_defaults_are_minimal():
 
 def test_handle_still_dispatches_by_request_type():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', TabICLRequest, pd.DataFrame()
+        'nemotron-relational', NemotronTabularRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -243,12 +247,12 @@ def test_public_predict_is_not_exposed():
     client = PredictClient(url='http://nim.test')
     assert not hasattr(client, 'predict')
     assert hasattr(client, 'relational')
-    assert hasattr(client, 'tabicl')
+    assert hasattr(client, 'tabular')
 
 
 def test_rfm_handle_forwards_explain():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -261,7 +265,7 @@ def test_rfm_handle_forwards_explain():
 
 def test_rfm_handle_forwards_num_neighbors_and_num_hops():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -277,7 +281,7 @@ def test_rfm_handle_forwards_num_neighbors_and_num_hops():
 
 def test_rfm_handle_forwards_explain_config():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -287,11 +291,13 @@ def test_rfm_handle_forwards_explain_config():
 
 
 def test_tabicl_handle_forwards_request_id():
-    adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
+    adapter = _CapturingAdapter(
+        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+    )
     client = _client_with(adapter)
 
     ctx = pd.DataFrame({'x': [1], 'y': [0]})
-    client.tabicl(ctx, target='y', task='classification').predict(
+    client.tabular(ctx, target='y', task='classification').predict(
         pd.DataFrame({'x': [2]}), request_id='trace-123'
     )
 
@@ -300,7 +306,7 @@ def test_tabicl_handle_forwards_request_id():
 
 def test_rfm_handle_forwards_batch_size():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -322,7 +328,7 @@ def test_rfm_handle_batch_defaults_off():
     flipping this default silently changes how every existing call executes --
     this makes such a flip a visible, deliberate edit."""
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -335,7 +341,7 @@ def test_rfm_handle_batch_defaults_off():
 def test_rfm_handle_predict_task_end_to_end_through_client():
     result = pd.DataFrame({'ENTITY': [3], 'PREDICTION': ['pro']})
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalTaskRequest, result
+        'nemotron-relational', NemotronRelationalTaskRequest, result
     )
     client = _client_with(adapter)
 
@@ -353,7 +359,7 @@ def test_rfm_handle_predict_task_end_to_end_through_client():
     assert out is result
     req = adapter.captured
     assert isinstance(req, NemotronRelationalTaskRequest)
-    assert req.model == 'nemotron-relational-v1'
+    assert req.model == 'nemotron-relational'
     assert req.graph == 'my-graph'
     assert req.context is context
     assert req.predict is predict
@@ -365,7 +371,7 @@ def test_rfm_handle_predict_task_end_to_end_through_client():
 
 def test_rfm_handle_predict_task_defaults_are_minimal():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalTaskRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -388,7 +394,7 @@ def test_rfm_handle_predict_task_defaults_are_minimal():
 
 def test_rfm_handle_predict_task_only_forwards_set_options():
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalTaskRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -425,7 +431,7 @@ def test_tabicl_handle_rejects_a_non_frame_context(value):
     """
     client = PredictClient(url='http://nim.test')
     with pytest.raises(PredictError) as excinfo:
-        client.tabicl(value, target='y', task='classification')
+        client.tabular(value, target='y', task='classification')
     assert excinfo.value.code == 'INVALID_REQUEST'
     assert 'context must be a pandas DataFrame' in str(excinfo.value)
     assert type(value).__name__ in str(excinfo.value)
@@ -433,9 +439,11 @@ def test_tabicl_handle_rejects_a_non_frame_context(value):
 
 @pytest.mark.parametrize('value', _NOT_A_FRAME)
 def test_tabicl_handle_rejects_a_non_frame_predict(value):
-    adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
+    adapter = _CapturingAdapter(
+        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+    )
     client = _client_with(adapter)
-    handle = client.tabicl(
+    handle = client.tabular(
         pd.DataFrame({'a': [1.0], 'y': [0]}), target='y', task='classification'
     )
 
@@ -448,7 +456,7 @@ def test_tabicl_handle_rejects_a_non_frame_predict(value):
 @pytest.mark.parametrize('argument', ['context', 'predict'])
 def test_rfm_handle_predict_task_rejects_a_non_frame(argument):
     adapter = _CapturingAdapter(
-        'nemotron-relational-v1', NemotronRelationalTaskRequest, pd.DataFrame()
+        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
     frames = {
@@ -469,7 +477,7 @@ def test_a_dict_or_series_is_told_how_to_become_a_row():
     client = PredictClient(url='http://nim.test')
     for value in ({'a': 1, 'y': 0}, pd.Series({'a': 1, 'y': 0})):
         with pytest.raises(PredictError) as excinfo:
-            client.tabicl(value, target='y', task='classification')
+            client.tabular(value, target='y', task='classification')
         assert 'pd.DataFrame([row])' in str(excinfo.value)
 
 
@@ -481,11 +489,13 @@ def test_frames_and_subclasses_are_still_accepted():
     class _MyFrame(pd.DataFrame):
         pass
 
-    adapter = _CapturingAdapter('tabicl', TabICLRequest, pd.DataFrame())
+    adapter = _CapturingAdapter(
+        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+    )
     client = _client_with(adapter)
     context = _MyFrame({'a': [1.0, 2.0], 'y': [0, 1]})
 
-    client.tabicl(context, target='y', task='classification').predict(
+    client.tabular(context, target='y', task='classification').predict(
         _MyFrame({'a': [3.0]})
     )
     assert adapter.captured is not None

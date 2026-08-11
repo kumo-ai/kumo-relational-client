@@ -45,7 +45,7 @@ def nim() -> Any:
         mock.get('http://nim.test/v1/health/ready', json={'status': 'ready'})
         mock.get(
             'http://nim.test/v1/models',
-            json={'data': [{'id': 'nemotron-relational-v1'}]},
+            json={'data': [{'id': 'nemotron-relational'}]},
         )
         yield mock
 

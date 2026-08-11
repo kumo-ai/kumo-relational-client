@@ -7,7 +7,7 @@ template-library-version: "1.0.0"
 # NVIDIA SDFM SDK Documentation
 
 The NVIDIA SDFM SDK is the Python client for NVIDIA's structured-data foundation
-model NIMs (TabICL and NemotronRelational), served behind the Universal TFM API.
+model NIMs (Nemotron Tabular and NemotronRelational), served behind the Universal TFM API.
 
 ## About
 

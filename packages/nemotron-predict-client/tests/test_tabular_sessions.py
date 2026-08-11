@@ -12,11 +12,11 @@ import time
 import pandas as pd
 
 from nemotron_predict import PredictClient
-from nemotron_predict.adapters.tabicl import (
+from nemotron_predict.adapters.tabular import (
     _predict_with_session,
     build_request,
 )
-from nemotron_predict.requests import TabICLSession
+from nemotron_predict.requests import NemotronTabularSession
 
 _URL = 'http://nim.example.com:8000'
 _SESSION_ID = 'sess_2c12f086caaa'
@@ -25,7 +25,7 @@ _SESSION_ID = 'sess_2c12f086caaa'
 def _predictions() -> dict:
     return {
         'id': 'pred_1',
-        'model': 'tabicl',
+        'model': 'nemotron-tabular',
         'predictions': [
             {'row_index': 0, 'prediction': 'yes'},
             {'row_index': 1, 'prediction': 'no'},
@@ -52,7 +52,9 @@ def _paths(requests_mock) -> list[str]:
 
 
 def _handle(client, context_df):
-    return client.tabicl(context_df, target='target_col', task='classification')
+    return client.tabular(
+        context_df, target='target_col', task='classification'
+    )
 
 
 def test_repeated_predict_pins_the_context_once(
@@ -273,7 +275,7 @@ def test_pinned_digest_changes_with_the_schema(context_df, predict_df):
     r"""The digest has to be sensitive to the same things the pinned context
     is, or a session would be reused for a request it cannot answer.
     """
-    from nemotron_predict.adapters.tabicl import _pinned_digest, build_request
+    from nemotron_predict.adapters.tabular import _pinned_digest, build_request
 
     def digest(predict):
         return _pinned_digest(
@@ -317,7 +319,7 @@ def test_pinned_digest_ignores_the_per_call_sections(context_df, predict_df):
     """
     import pandas as pd
 
-    from nemotron_predict.adapters.tabicl import _pinned_digest, build_request
+    from nemotron_predict.adapters.tabular import _pinned_digest, build_request
 
     first = _pinned_digest(
         build_request(
@@ -381,7 +383,7 @@ def test_concurrent_predicts_on_one_handle_open_one_session(
 ):
     r"""tabicl-concurrent-predicts-on-one-handle-leak-sessions.md
 
-    ``TabICLSession`` is mutable state on a handle the docstring recommends
+    ``NemotronTabularSession`` is mutable state on a handle the docstring recommends
     reusing. Without a lock, every thread reads ``id is None`` at once, they all
     create, the last writer wins, and the rest are pinned on the NIM with no id
     left to release them by -- silently, and paid for by whoever calls next.
@@ -394,7 +396,7 @@ def test_concurrent_predicts_on_one_handle_open_one_session(
         outputs=['prediction'],
     )
     transport = _CountingTransport()
-    session = TabICLSession()
+    session = NemotronTabularSession()
 
     _predict_with_session(transport, payload, session)
 
@@ -440,7 +442,7 @@ def test_a_concurrent_context_change_releases_exactly_one_session(
         outputs=['prediction'],
     )
     transport = _CountingTransport(create_delay=0.0)
-    session = TabICLSession()
+    session = NemotronTabularSession()
 
     _predict_with_session(transport, payload, session)
     _predict_with_session(transport, payload, session)

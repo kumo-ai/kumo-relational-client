@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import warnings
 from types import TracebackType
 from typing import Any
 
@@ -24,18 +23,22 @@ from nemotron_predict.core.serving import (
 )
 from nemotron_predict.core.transport import Transport, redact_url
 from nemotron_predict.errors import PredictError
-from nemotron_predict.models import RFMModel, TabICLModel, require_frame
+from nemotron_predict.models import (
+    RelationalModel,
+    TabularModel,
+    require_frame,
+)
 from nemotron_predict.requests import ModelRequest
 
 
 def _default_registry() -> AdapterRegistry:
     from nemotron_predict.adapters import (
         NemotronRelationalAdapter,
-        TabICLAdapter,
+        NemotronTabularAdapter,
     )
 
     registry = AdapterRegistry()
-    registry.register(TabICLAdapter())
+    registry.register(NemotronTabularAdapter())
     registry.register(NemotronRelationalAdapter())
     return registry
 
@@ -49,7 +52,7 @@ class PredictClient:
     started it, including when clients are used concurrently from several
     threads. Use it as a context manager, or call ``close()``.
 
-    One caveat on the NemotronRelational path: the driver underneath keeps a process-wide
+    One caveat on the Nemotron Relational path: the driver underneath keeps a process-wide
     configuration, which each prediction reconfigures. Predictions are pinned
     to their own client and are unaffected, but the driver's own
     ``nemotron_relational.init()`` and anything else reading that global observe whichever
@@ -92,13 +95,13 @@ class PredictClient:
                 up to ``(max_retries + 1) * timeout`` plus backoff.
             max_retries: Transport-level retries of a transient failure (429,
                 500, 502, 503, 504, or a dropped connection) with
-                exponential backoff, on both the TabICL and the NemotronRelational path.
+                exponential backoff, on both the Nemotron Tabular and the Nemotron Relational path.
                 ``0`` disables them. ``POST /v1/sessions`` is excluded: a
                 re-sent create would orphan a pinned context on the NIM.
                 Distinct from ``predict(num_retries=...)``, which retries a
-                NemotronRelational prediction at the application level and defaults to 1.
+                Nemotron Relational prediction at the application level and defaults to 1.
             registry: The adapter registry to dispatch with. Defaults to the
-                built-in TabICL and NemotronRelational adapters.
+                built-in Nemotron Tabular and Nemotron Relational adapters.
         """
         self._configure(
             Transport(
@@ -141,7 +144,7 @@ class PredictClient:
         there is no url, api_key, verify_ssl, timeout or retry policy to give --
         the platform owns those.
 
-        >>> client = PredictClient.for_databricks_serving("nemotron-relational-v1")
+        >>> client = PredictClient.for_databricks_serving("nemotron-relational")
         >>> df = client.relational(graph).predict("PREDICT ... FOR ...", [1, 2])
 
         Args:
@@ -181,7 +184,7 @@ class PredictClient:
         api_key, verify_ssl, timeout or retry policy to give.
 
         >>> client = PredictClient.for_snowflake_serving("MYDB.MYSCHEMA.MY_MODEL_SVC")
-        >>> df = client.nemotron_relational(graph).predict("PREDICT ... FOR ...", [1, 2])
+        >>> df = client.relational(graph).predict("PREDICT ... FOR ...", [1, 2])
 
         Args:
             service: The service name, optionally qualified as
@@ -251,40 +254,26 @@ class PredictClient:
         """
         return self._transport.health_ready()
 
-    def relational(self, graph: Any) -> RFMModel:
+    def relational(self, graph: Any) -> RelationalModel:
         r"""A relational-model handle: ``client.relational(graph).predict(...)``.
 
         This is the supported way to run relational inference.
         """
-        return RFMModel(self, graph)
+        return RelationalModel(self, graph)
 
-    def kumorfm(self, graph: Any) -> RFMModel:
-        r"""Deprecated alias for :meth:`relational`.
-
-        Kept so code written against the previous name keeps working; it is
-        scheduled for removal in the next major version.
-        """
-        warnings.warn(
-            "'PredictClient.kumorfm()' is deprecated; use "
-            "'PredictClient.relational()' instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        return self.relational(graph)
-
-    def tabicl(
+    def tabular(
         self,
         context: pd.DataFrame,
         *,
         target: str,
         task: str,
-    ) -> TabICLModel:
-        r"""A TabICL handle:
-        ``client.tabicl(context, target=..., task=...).predict(rows)``.
+    ) -> TabularModel:
+        r"""A Nemotron Tabular handle:
+        ``client.tabular(context, target=..., task=...).predict(rows)``.
 
-        This is the supported way to run TabICL inference.
+        This is the supported way to run Nemotron Tabular inference.
         """
-        return TabICLModel(
+        return TabularModel(
             self, require_frame(context, 'context'), task=task, target=target
         )
 
@@ -292,9 +281,9 @@ class PredictClient:
         r"""Internal dispatch used by the model handles.
 
         Not a public API: run inference through ``client.relational(...)`` or
-        ``client.tabicl(...)``. Returns the adapter's typed result: a
+        ``client.tabular(...)``. Returns the adapter's typed result: a
         prediction ``pd.DataFrame``, or a ``nemotron_relational.rfm.rfm.Explanation`` when a
-        NemotronRelational request asks to explain.
+        Nemotron Relational request asks to explain.
         """
         self._transport._require_open()
         adapter = self._registry.get(request.model)

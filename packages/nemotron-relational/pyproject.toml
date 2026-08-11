@@ -1,5 +1,5 @@
 [project]
-name = "nemotron-relational-v1"
+name = "nemotron-relational"
 dynamic=["dependencies", "version"]
 authors=[
     {name="NVIDIA"},
@@ -124,7 +124,7 @@ filterwarnings=[
     # NOTE Entries here must not name a warning class by import path: pytest
     # resolves those while parsing this file, which imports the module before
     # any test runs. `nemotron_relational.rfm` is not importable without the compiled
-    # sampler, so such an entry breaks the whole session under WITH_KUMOLIB=0.
+    # sampler, so such an entry breaks the whole session under WITH_RELATIONALLIB=0.
     # Scope class-based filters to the tests that need them instead.
     "error::UserWarning",
     "error::DeprecationWarning",

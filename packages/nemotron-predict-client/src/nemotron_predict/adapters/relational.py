@@ -50,9 +50,7 @@ def _load_engine() -> Any:
     except ModuleNotFoundError as error:
         if error.name != 'nemotron_relational':
             raise
-        raise MissingExtraError(
-            'relational', 'nemotron-relational-v1'
-        ) from error
+        raise MissingExtraError('relational', 'nemotron-relational') from error
     return rfm_engine
 
 
@@ -194,7 +192,7 @@ def _reject_reserved_options(options: dict[str, Any]) -> None:
     reserved = _RESERVED_OPTIONS & set(options)
     if reserved:
         raise PredictError(
-            f'NemotronRelational request options contain reserved keys {sorted(reserved)}; '
+            f'Nemotron Relational request options contain reserved keys {sorted(reserved)}; '
             'set them as request fields instead',
             code='INVALID_REQUEST',
         )
@@ -274,7 +272,7 @@ def _translate_engine_error(error: Exception, url: str) -> PredictError:
     ``NimFailureError`` (a ``RuntimeError``) carrying the status and the
     problem document's ``invalid_params``. Translating here means ``except
     PredictError`` catches every failure of the prediction call itself, as it
-    already does for TabICL. It does not cover graph construction: the engine
+    already does for Nemotron Tabular. It does not cover graph construction: the engine
     validates the graph in its own constructor, outside this call, so a graph
     that fails validation still surfaces the engine's ``ValueError``.
 
@@ -318,7 +316,7 @@ def _translate_engine_error(error: Exception, url: str) -> PredictError:
     if isinstance(error, (ValueError, TypeError, LookupError)):
         return PredictError(str(error), code='INVALID_REQUEST')
     return PredictError(
-        f'The nemotron-relational-v1 prediction at {url} failed unexpectedly with '
+        f'The nemotron-relational prediction at {url} failed unexpectedly with '
         f'{type(error).__name__}: {error}',
         code='INTERNAL_ERROR',
     )
@@ -484,7 +482,7 @@ def _coerce_result(
 
 
 class NemotronRelationalAdapter(ModelAdapter):
-    name = 'nemotron-relational-v1'
+    name = 'nemotron-relational'
     request_type = (NemotronRelationalRequest, NemotronRelationalTaskRequest)
 
     def __init__(self) -> None:
@@ -492,7 +490,7 @@ class NemotronRelationalAdapter(ModelAdapter):
 
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
-            model='nemotron-relational-v1',
+            model='nemotron-relational',
             request_type=request_type_names(self.request_type),
             tasks=RFM_TASK_TYPES,
             outputs=('prediction', 'probabilities', 'explanation'),

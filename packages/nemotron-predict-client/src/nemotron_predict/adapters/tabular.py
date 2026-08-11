@@ -18,7 +18,10 @@ from nemotron_predict.base import ModelAdapter, ModelCapabilities
 from nemotron_predict.core.response import parse_prediction_response
 from nemotron_predict.core.transport import Transport, redact_url
 from nemotron_predict.errors import NimRequestError, PredictError
-from nemotron_predict.requests import TabICLRequest, TabICLSession
+from nemotron_predict.requests import (
+    NemotronTabularRequest,
+    NemotronTabularSession,
+)
 from nemotron_predict.wire import (
     encode_table,
     infer_tfm_dtype,
@@ -42,11 +45,11 @@ _WIRE_TASK_KINDS = {
     'multiclass_classification': 'classification',
 }
 
-# TabICL builds its KV cache for a fixed number of classes; beyond that the
+# Nemotron Tabular builds its KV cache for a fixed number of classes; beyond that the
 # model raises and the NIM answers with an opaque 500.
 _MAX_CLASSES = 10
 
-# Fields TabICL can produce per task kind. Anything else is accepted by the
+# Fields Nemotron Tabular can produce per task kind. Anything else is accepted by the
 # contract but dropped server-side without comment.
 _OUTPUT_FIELDS = {
     'classification': ('prediction', 'probabilities'),
@@ -116,7 +119,7 @@ def _validate_outputs(outputs: Any, wire_task: str) -> None:
     ]
     if unsupported:
         raise PredictError(
-            f'TabICL does not produce {unsupported} for a {wire_task} task; '
+            f'Nemotron Tabular does not produce {unsupported} for a {wire_task} task; '
             f'supported output fields: {list(_OUTPUT_FIELDS[wire_task])}',
             code='INVALID_REQUEST',
         )
@@ -181,12 +184,12 @@ def build_request(
         )
     if len(context) == 0:
         raise PredictError(
-            'context is empty; TabICL needs at least one labelled row',
+            'context is empty; Nemotron Tabular needs at least one labelled row',
             code='INVALID_REQUEST',
         )
     if len(predict) == 0:
         raise PredictError(
-            'predict is empty; TabICL needs at least one row to score',
+            'predict is empty; Nemotron Tabular needs at least one row to score',
             code='INVALID_REQUEST',
         )
 
@@ -226,7 +229,7 @@ def build_request(
         )
         if len(classes) > _MAX_CLASSES:
             raise PredictError(
-                f'TabICL supports at most {_MAX_CLASSES} classes; context '
+                f'Nemotron Tabular supports at most {_MAX_CLASSES} classes; context '
                 f'target {target!r} has {len(classes)}',
                 code='INVALID_REQUEST',
             )
@@ -264,7 +267,7 @@ def build_request(
     }
 
     return {
-        'model': 'tabicl',
+        'model': 'nemotron-tabular',
         'task': task_spec,
         'schema': schema,
         'context': {
@@ -325,7 +328,7 @@ def delete_session_quietly(transport: Transport, session_id: str) -> None:
 def _acquire_session(
     transport: Transport,
     payload: dict[str, Any],
-    session: TabICLSession,
+    session: NemotronTabularSession,
     pinned: str,
 ) -> tuple[str | None, str | None]:
     r"""Decide, under ``session.lock``, which session id should serve this call.
@@ -365,7 +368,7 @@ def _acquire_session(
 def _refresh_session(
     transport: Transport,
     payload: dict[str, Any],
-    session: TabICLSession,
+    session: NemotronTabularSession,
     stale_id: str,
 ) -> str:
     r"""Re-pin the context after the NIM forgot ``stale_id``.
@@ -384,7 +387,7 @@ def _refresh_session(
 def _predict_with_session(
     transport: Transport,
     payload: dict[str, Any],
-    session: TabICLSession,
+    session: NemotronTabularSession,
 ) -> dict[str, Any]:
     r"""Scores ``payload`` against ``session``'s pinned context when that is
     cheaper than sending the context again, and stateless otherwise.
@@ -422,13 +425,13 @@ def _predict_with_session(
         )
 
 
-class TabICLAdapter(ModelAdapter):
-    name = 'tabicl'
-    request_type = TabICLRequest
+class NemotronTabularAdapter(ModelAdapter):
+    name = 'nemotron-tabular'
+    request_type = NemotronTabularRequest
 
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
-            model='tabicl',
+            model='nemotron-tabular',
             request_type=self.request_type.__name__,
             tasks=tuple(sorted(_TASK_KINDS)),
             outputs=('prediction', 'probabilities', 'quantiles'),
@@ -437,7 +440,7 @@ class TabICLAdapter(ModelAdapter):
     def predict(
         self,
         transport: Transport,
-        request: TabICLRequest,
+        request: NemotronTabularRequest,
     ) -> pd.DataFrame:
         payload = build_request(
             context=request.context,

@@ -19,7 +19,10 @@ from nemotron_predict.errors import (
     PredictError,
     UnknownModelError,
 )
-from nemotron_predict.models import RFMModel, TabICLModel
+from nemotron_predict.models import (
+    RelationalModel,
+    TabularModel,
+)
 
 __all__ = [
     'MissingExtraError',
@@ -27,8 +30,8 @@ __all__ = [
     'NimRequestError',
     'PredictClient',
     'PredictError',
-    'RFMModel',
-    'TabICLModel',
+    'RelationalModel',
+    'TabularModel',
     'UnknownModelError',
     '__version__',
     'read',

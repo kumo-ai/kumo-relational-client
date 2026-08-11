@@ -97,7 +97,7 @@ else
     mkdir -p "$(dirname "$VENV_DIR")"
     python3 -m venv --clear "$VENV_DIR"
     "$PYTHON" -m pip install --upgrade pip
-    KUMO_SDK_RELEASE=1 WITH_KUMOLIB=0 \
+    WITH_RELATIONALLIB=0 \
       "$PYTHON" -m pip install --editable "${REPO_ROOT}[test]"
     printf '%s\n' "$fingerprint" >"$STAMP"
   fi

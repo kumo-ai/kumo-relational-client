@@ -620,7 +620,7 @@ class ConditionNodeTypeValidator(NodeTypeValidator):
                 ValidationWarning(
                     message=f'{node.get_location().message_start}: '
                     f'Operator {node.op.value} is deprecated '
-                    f'and will be removed in future versions of Kumo. '
+                    f'and will be removed in future versions of Nemotron Relational. '
                     f'Please use operator `IN` instead.',
                     title='Operation Deprecated',
                 )
@@ -918,7 +918,7 @@ class TypeValidator:
                         title='Invalid target type',
                         message=f'{message}: '
                         f'Target label has data type '
-                        f'{parsed_query.target_ast.dtype}, which Kumo '
+                        f'{parsed_query.target_ast.dtype}, which Nemotron Relational '
                         f'currently cannot predict.',
                     )
                 )
@@ -964,7 +964,7 @@ class TypeValidator:
                     title='Invalid target type',
                     message=f'{message}: '
                     f'Target label has semantic type '
-                    f'{parsed_query.target_ast.stype}, which Kumo currently '
+                    f'{parsed_query.target_ast.stype}, which Nemotron Relational currently '
                     f'cannot predict.',
                 )
             )

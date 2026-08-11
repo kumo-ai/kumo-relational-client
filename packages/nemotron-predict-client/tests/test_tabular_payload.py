@@ -9,7 +9,7 @@ import pandas as pd
 import pytest
 from conftest import canonical_examples_available, load_canonical_example
 
-from nemotron_predict.adapters.tabicl import build_request
+from nemotron_predict.adapters.tabular import build_request
 from nemotron_predict.errors import PredictError
 
 
@@ -76,7 +76,7 @@ def test_build_request_matches_canonical_example(
     outputs,
     extra,
 ):
-    canonical = load_canonical_example('tabicl', example_file)
+    canonical = load_canonical_example('nemotron-tabular', example_file)
     context = _dataframe_from_table(canonical['context']['instance_table'])
     predict = _dataframe_from_table(canonical['predict']['instance_table'])
 
@@ -534,7 +534,7 @@ def _context_frame():
 def test_an_object_predict_column_does_not_retype_the_context(predict_column):
     # Regression: the union was taken over both frames, so an ``object`` or
     # all-null predict column re-typed the context's real ``int64`` feature as
-    # strings and TabICL answered as though it were categorical. Nothing was
+    # strings and Nemotron Tabular answered as though it were categorical. Nothing was
     # logged.
     context = _context_frame()
     predict = pd.DataFrame(
@@ -610,7 +610,7 @@ def test_outputs_given_as_a_bare_string_is_named(context_df, predict_df):
 
     ``outputs`` is documented as a list. A bare string is iterable, so it used
     to be checked character by character and reported as
-    "TabICL does not produce ['p', 'r', 'e', ...]".
+    "Nemotron Tabular does not produce ['p', 'r', 'e', ...]".
     """
     with pytest.raises(PredictError) as excinfo:
         build_request(
