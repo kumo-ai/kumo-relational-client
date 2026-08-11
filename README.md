@@ -1,4 +1,4 @@
-# nvidia-sdfm
+# nemotron-predict-client
 
 One client SDK for NVIDIA structured-data foundation model NIMs, served behind the
 Universal TFM API. A thin, model-agnostic client dispatches to per-model adapters;
@@ -11,76 +11,76 @@ Full documentation lives under [`docs/`](docs/index.md):
 - [Overview](docs/about/overview.md) — what the SDK is and when to use it
 - [Architecture](docs/about/architecture.md) — how the client, adapters, drivers, and connectors fit together
 - [Prerequisites](docs/get-started/prerequisites.md) and [Installation](docs/get-started/installation.md)
-- [Quickstart](docs/get-started/quickstart.md) — your first TabICL and KumoRFM predictions
+- [Quickstart](docs/get-started/quickstart.md) — your first TabICL and NemotronRelational predictions
 - [Environment Variables](docs/reference/environment-variables.md)
 
 ## Install
 
 | Command | You get |
 | --- | --- |
-| `pip install nvidia-sdfm` | The client + every lightweight model (TabICL today). Works out of the box. |
-| `pip install nvidia-sdfm[kumorfm]` | Adds KumoRFM (pulls the native `kumorfm` driver). |
-| `pip install nvidia-sdfm[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
-| `pip install nvidia-sdfm[all]` | KumoRFM, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
+| `pip install nemotron-predict-client` | The client + every lightweight model (TabICL today). Works out of the box. |
+| `pip install nemotron-predict-client[nemotron_relational]` | Adds NemotronRelational (pulls the native `nemotron_relational` driver). |
+| `pip install nemotron-predict-client[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
+| `pip install nemotron-predict-client[all]` | NemotronRelational, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
 
 The rule is dependency weight, not favoritism: a model that does no client-side work
 (like TabICL, which just shapes a request the NIM runs) ships in the base wheel; a model
-that does heavy client-side work (like KumoRFM: graph building, native neighbor-sampling,
+that does heavy client-side work (like NemotronRelational: graph building, native neighbor-sampling,
 PQL) is an opt-in extra. Data-source drivers are opt-in the same way, via the shared
-`sdfm-connectors` package.
+`nemotron-predict-connectors` package.
 
 Two extras stay outside `[all]` and have to be asked for by name. `[explain]` fills in
 `Explanation.summary`, which POSTs row data to a third-party LLM endpoint, so installing it
 is a deliberate act; `[relbench]` pulls the RelBench datasets in for `Graph.from_relbench()`.
 
-`[kumorfm]` is a native build. Prebuilt wheels are published for Linux x86-64
+`[nemotron_relational]` is a native build. Prebuilt wheels are published for Linux x86-64
 (`manylinux_2_28`) on CPython 3.10-3.13 only, and no source distribution is published, so
-`pip install "nvidia-sdfm[kumorfm]"` resolves on that platform alone. The base client and
+`pip install "nemotron-predict-client[nemotron_relational]"` resolves on that platform alone. The base client and
 the connectors are pure Python and install anywhere.
 
 ## Quickstart
 
-A `SDFMClient` owns one connection to a NIM. You run inference through a model handle:
-`client.kumorfm(graph)` or `client.tabicl(context, target=, task=)`, then `.predict(...)`.
+A `PredictClient` owns one connection to a NIM. You run inference through a model handle:
+`client.relational(graph)` or `client.tabicl(context, target=, task=)`, then `.predict(...)`.
 
 TabICL (single table):
 
 ```python
-from nvidia_sdfm import SDFMClient
+from nemotron_predict import PredictClient
 
-with SDFMClient(url="http://localhost:8000") as client:
+with PredictClient(url="http://localhost:8000") as client:
     model = client.tabicl(context_df, target="label", task="classification")
     df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
-KumoRFM (relational) — needs `nvidia-sdfm[kumorfm]`:
+NemotronRelational (relational) — needs `nemotron-predict-client[nemotron_relational]`:
 
 ```python
-from nvidia_sdfm import SDFMClient, kumorfm
+from nemotron_predict import PredictClient, relational
 
-graph = kumorfm.Graph.from_data({"users": df1, "items": df2, "orders": df3})
+graph = relational.Graph.from_data({"users": df1, "items": df2, "orders": df3})
 
-with SDFMClient(url="http://localhost:8000") as client:
-    df = client.kumorfm(graph).predict(
+with PredictClient(url="http://localhost:8000") as client:
+    df = client.relational(graph).predict(
         "PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1",
         indices=[...],
         run_mode="fast",
     )
 ```
 
-Each `SDFMClient` holds its own transport and registry, so multiple clients can target
+Each `PredictClient` holds its own transport and registry, so multiple clients can target
 different endpoints or tenants at once, including concurrently from several threads:
 a prediction always goes to the endpoint and credential of the client that started it.
-The KumoRFM driver underneath still keeps a process-wide configuration that each
-prediction reconfigures, so drive it through `SDFMClient` rather than mixing in direct
-`kumorfm.init()` calls. `client.models()` and `client.capabilities("tabicl")` describe
+The NemotronRelational driver underneath still keeps a process-wide configuration that each
+prediction reconfigures, so drive it through `PredictClient` rather than mixing in direct
+`nemotron_relational.init()` calls. `client.models()` and `client.capabilities("tabicl")` describe
 the client's own adapter registry, not the connected endpoint: a NIM serving only one of
 these models still reports both, and the mismatch surfaces as an error from the NIM on
 the first prediction. The transport pools connections and retries transient failures
 (429, 500, 502, 503, 504) with backoff; tune it per client with
-`SDFMClient(url, timeout=30, max_retries=3)`.
+`PredictClient(url, timeout=30, max_retries=3)`.
 
-`from nvidia_sdfm import kumorfm` is a neutral, explicitly-exported surface for the
+`from nemotron_predict import relational` is a neutral, explicitly-exported surface for the
 driver's `Graph`, `Table`, etc. for building graphs; you never import the driver package directly.
 
 ## Repository layout
@@ -89,16 +89,16 @@ A monorepo workspace; every independently released distribution lives under `pac
 with the same `src/` + `tests/` convention:
 
 ```text
-nvidia-sdfm-sdk/
+nemotron-predict-client/
 ├── pyproject.toml              # workspace root: shared tooling only, builds nothing
 ├── e2e/                        # cross-distribution live harnesses
 ├── docs/                       # user-facing documentation
 ├── examples/                   # runnable notebooks and scripts
 ├── scripts/                    # release and maintenance tooling
 └── packages/
-    ├── nvidia-sdfm/            # the client SDK (pure-python, universal wheel)
-    │   └── src/nvidia_sdfm/
-    │       ├── client.py       #   SDFMClient: the entry point and its registry
+    ├── nemotron-predict-client/            # the client SDK (pure-python, universal wheel)
+    │   └── src/nemotron_predict/
+    │       ├── client.py       #   PredictClient: the entry point and its registry
     │       ├── models.py       #   the per-model handles the client hands back
     │       ├── requests.py     #   the internal typed requests handles build
     │       ├── errors.py       #   the exception hierarchy
@@ -106,48 +106,48 @@ nvidia-sdfm-sdk/
     │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
     │       ├── adapters/       #   one peer module per model
     │       │   ├── tabicl.py     #   single-table (no driver)
-    │       │   └── kumorfm.py    #   relational (lazy-wraps the KumoRFM driver)
-    │       └── kumorfm.py      #   explicit, lazily-resolved surface onto the driver
-    ├── sdfm-connectors/        # shared data-source connectors (pure-python)
-    │   └── src/sdfm_connectors/  #   connect(), read(), quote_ident, resolve_sql; DB drivers via extras
-    └── kumorfm/                # the KumoRFM driver (native build)
-        └── src/kumorfm/          #   graph, samplers, native kumolib, PQL, HTTP client
+    │       │   └── nemotron_relational.py    #   relational (lazy-wraps the NemotronRelational driver)
+    │       └── nemotron_relational.py      #   explicit, lazily-resolved surface onto the driver
+    ├── nemotron-predict-connectors/        # shared data-source connectors (pure-python)
+    │   └── src/nemotron_predict_connectors/  #   connect(), read(), quote_ident, resolve_sql; DB drivers via extras
+    └── nemotron_relational/                # the NemotronRelational driver (native build)
+        └── src/nemotron_relational/          #   graph, samplers, native relationallib, PQL, HTTP client
 ```
 
 Two orthogonal axes: the **adapter layer** is symmetric (every model is a peer module
-implementing `ModelAdapter`, registered in the `SDFMClient`'s `AdapterRegistry`); a **driver**
+implementing `ModelAdapter`, registered in the `PredictClient`'s `AdapterRegistry`); a **driver**
 package holds a model's heavy runtime, and a model wraps zero or one of them. Each model has
 an internal typed request that declares which model it targets; the client dispatches on
 that, checks it is the type that model's adapter accepts, and calls the adapter. Nothing is
 checked against `capabilities()`, which is a discovery accessor for callers, not a gate on
-the dispatch path. You reach all of this through the handles (`client.kumorfm(...)` /
-`client.tabicl(...)`); the request types are not exported from `nvidia_sdfm`.
+the dispatch path. You reach all of this through the handles (`client.relational(...)` /
+`client.tabicl(...)`); the request types are not exported from `nemotron_predict`.
 
-Both the client (flat table reads) and the KumoRFM driver (warehouse connections for its
-graph samplers) sit on the shared **`sdfm-connectors`** package, so each warehouse is
+Both the client (flat table reads) and the NemotronRelational driver (warehouse connections for its
+graph samplers) sit on the shared **`nemotron-predict-connectors`** package, so each warehouse is
 reached through one place. The `sqlite`, `duckdb`, `snowflake`, and `databricks` connection
 factories are shared directly.
 
 ## Adding a model
 
-1. Add `packages/nvidia-sdfm/src/nvidia_sdfm/adapters/<model>.py` implementing
+1. Add `packages/nemotron-predict-client/src/nemotron_predict/adapters/<model>.py` implementing
    `ModelAdapter`, and register it in `_default_registry()` in
-   `packages/nvidia-sdfm/src/nvidia_sdfm/client.py`. The core never changes.
+   `packages/nemotron-predict-client/src/nemotron_predict/client.py`. The core never changes.
 2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its own
    distribution and add a `[<model>]` extra; the adapter lazy-imports the driver so base
    installs stay light.
 3. A dependency-free model (like TabICL) needs no driver and no extra.
 
-## Why the KumoRFM adapter isn't symmetric with TabICL
+## Why the NemotronRelational adapter isn't symmetric with TabICL
 
 The internal `TabICLRequest` (`context` / `predict` / `task` / `target`) maps cleanly onto the
-Universal wire envelope, but `KumoRFMRequest` (`graph` / `query` / `indices`) does not — these
-are the shapes the handles build for the adapters, not a user-facing API. `KumoRFM.predict()`
+Universal wire envelope, but `NemotronRelationalRequest` (`graph` / `query` / `indices`) does not — these
+are the shapes the handles build for the adapters, not a user-facing API. `NemotronRelational.predict()`
 takes a PQL query plus an entity-graph and builds/samples/sends the request as one fused
 operation — there is no standalone "build a payload from two flat DataFrames" step to call
 into. Reimplementing that outside the driver would duplicate PQL parsing, subgraph sampling,
 and point-in-time correctness logic that already lives (and is tested) there. So
-`adapters/kumorfm.py` takes the shape KumoRFM actually needs and normalizes the result into
+`adapters/nemotron_relational.py` takes the shape NemotronRelational actually needs and normalizes the result into
 the same DataFrame shape `core.response` produces for TabICL, so callers get one consistent
 return type regardless of adapter.
 
@@ -160,7 +160,7 @@ transport optimisation and never change a prediction.
 - **TabICL** — `client.tabicl(context, ...)` reuses one session for the life of the handle.
   It is opened on the second `predict()` against the same context, so scoring a single table
   costs exactly one request as before, and every call after that carries the rows alone.
-- **KumoRFM** — a multi-batch `predict()` opens one session for the run and deletes it at the
+- **NemotronRelational** — a multi-batch `predict()` opens one session for the run and deletes it at the
   end. Set `KUMORFM_DISABLE_SESSIONS=1` to force the stateless path.
 
 Both fall back to `POST /v1/predictions` when the NIM answers 404/405/501 on session creation,
@@ -182,7 +182,7 @@ additional terms.
 
 The one third-party exception is `mermaid.js`, which is vendored into this
 repository as source at
-`packages/kumorfm/src/kumorfm/rfm/assets/mermaid.min.js` for offline graph
+`packages/nemotron-relational/src/nemotron_relational/rfm/assets/mermaid.min.js` for offline graph
 visualization. It is MIT-licensed and is itself a bundle: the components
 embedded inside it, including DOMPurify (Apache-2.0 and Mozilla Public License
 2.0), are enumerated with their copyrights in the third-party section at the end

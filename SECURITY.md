@@ -14,8 +14,8 @@ minimal steps or script that reproduce the issue, and what an attacker gains.
 
 ## Supported versions
 
-The SDK is distributed as three packages — `nvidia-sdfm`, `kumorfm`, and
-`sdfm-connectors` — released together. Only the latest released version of each
+The SDK is distributed as three packages — `nemotron-predict-client`, `nemotron_relational`, and
+`nemotron-predict-connectors` — released together. Only the latest released version of each
 receives security fixes; there are no long-term-support branches. Fixes ship in
 a new release rather than as patches to older ones.
 
@@ -30,7 +30,7 @@ Please read them before filing.
   over plaintext `http://` to a non-localhost host.
 - **The endpoint you configure is trusted with your data.** Prediction context
   — including the raw cell values of the tables in your graph — is sent to the
-  URL you pass to `SDFMClient`. `predict(..., explain=True)` may additionally
+  URL you pass to `PredictClient`. `predict(..., explain=True)` may additionally
   call an OpenAI-compatible endpoint; see
   [Environment Variables](docs/reference/environment-variables.md).
 - **Data-source arguments are trusted input.** Connection settings, table names,

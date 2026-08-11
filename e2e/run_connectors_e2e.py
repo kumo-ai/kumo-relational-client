@@ -12,13 +12,17 @@ import pandas as pd
 sys.path.insert(
     0,
     os.path.join(
-        os.path.dirname(__file__), '..', 'packages', 'nvidia-sdfm', 'src'
+        os.path.dirname(__file__),
+        '..',
+        'packages',
+        'nemotron-predict-client',
+        'src',
     ),
 )
-import nvidia_sdfm as sdfm
-from nvidia_sdfm import SDFMClient
+import nemotron_predict as sdfm
+from nemotron_predict import PredictClient
 
-_client: SDFMClient | None = None
+_client: PredictClient | None = None
 
 
 def predict_tabicl(*, context, predict, task, target, **kwargs):
@@ -237,7 +241,7 @@ def main() -> None:
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
     global _client
-    _client = SDFMClient(url=BASE_URL)
+    _client = PredictClient(url=BASE_URL)
 
     for step in (
         local_csv_connector,

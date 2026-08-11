@@ -1,6 +1,6 @@
 # Changelog
 
-## nvidia-sdfm 0.3.0 · kumorfm 2.28.0 · sdfm-connectors 0.4.0
+## nemotron-predict-client 0.3.0 · nemotron_relational 2.28.0 · nemotron-predict-connectors 0.4.0
 
 Prepares the SDK for release as open source. Alongside the licensing and
 contribution scaffolding, this closes the defects found by testing the SDK
@@ -9,12 +9,12 @@ first-party module.
 
 ### Fixed — read this before upgrading
 
-- **Python 3.10 was broken.** `kumorfm` imported `typing.assert_never`, which
-  is 3.11+, so `import kumorfm` failed on the floor all three packages declare.
-- **A credential in the endpoint URL reached `nvidia-sdfm`'s error messages,
+- **Python 3.10 was broken.** `nemotron_relational` imported `typing.assert_never`, which
+  is 3.11+, so `import nemotron_relational` failed on the floor all three packages declare.
+- **A credential in the endpoint URL reached `nemotron-predict-client`'s error messages,
   logs and reprs.** `https://user:token@host` is a supported way to address a
   deployment; the userinfo is now stripped everywhere the URL is rendered, as
-  `kumorfm` already did.
+  `nemotron_relational` already did.
 - `sample_rows` accepted any value: its bound returned the `ValueError` instead
   of raising it, so the exception was stored as the field.
 - `Graph.from_relbench` could not name 22 of the 33 published RelBench
@@ -28,23 +28,23 @@ first-party module.
 
 ### Added
 
-- **A root exception per package.** `kumorfm.KumoRFMError` and
-  `sdfm_connectors.ConnectorError` are now the single base each package raises
+- **A root exception per package.** `nemotron_relational.NemotronRelationalError` and
+  `nemotron_predict_connectors.ConnectorError` are now the single base each package raises
   from; `MissingBackendError` joins the latter. Every class keeps the built-in
   it derived from, so existing `except ValueError` / `except RuntimeError`
   keeps working.
 - Connection-time failures are typed (`AuthenticationError`,
   `NimUnreachableError`, `NimTimeoutError`) and translated at the
-  `nvidia-sdfm` boundary, so a wrong API key or an unreachable NIM is caught by
-  `except SdfmError` instead of escaping as a bare `ValueError`.
+  `nemotron-predict-client` boundary, so a wrong API key or an unreachable NIM is caught by
+  `except PredictError` instead of escaping as a bare `ValueError`.
 - Reading a warehouse raises `GraphConstructionError` rather than the driver's
   own exception, which shared no base with anything else the SDK raises.
-- **Python 3.13 wheels.** `kumorfm` builds and tests cp310 through cp313.
+- **Python 3.13 wheels.** `nemotron_relational` builds and tests cp310 through cp313.
 - Composite primary keys, and quoted identifiers in predictive queries.
 
 ### Changed
 
-- `import kumorfm` no longer reconfigures logging for the whole process. It had
+- `import nemotron_relational` no longer reconfigures logging for the whole process. It had
   raised `matplotlib`, `urllib3` and `snowflake` to `ERROR`, and installed a
   handler even where the application had already configured one.
 - Errors that reported a caller's mistake through an interpreter's internals
@@ -55,10 +55,10 @@ first-party module.
 - Multiclass classification is reachable from `predict()`; the reference said
   otherwise.
 
-## nvidia-sdfm 0.2.1 · kumorfm 2.24.1 · sdfm-connectors 0.3.0
+## nemotron-predict-client 0.2.1 · nemotron_relational 2.24.1 · nemotron-predict-connectors 0.3.0
 
 Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and
-contain none of them. `nvidia-sdfm 0.2.1` requires `kumorfm>=2.24.1` so it
+contain none of them. `nemotron-predict-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
 cannot resolve the affected build.
 
 The outcome of a full audit of the SDK's public surface — every connector, every
@@ -67,38 +67,38 @@ the error handling around each. 78 findings were reported and fixed.
 
 ### Removed — read this before upgrading
 
-The typed-request surface `nvidia-sdfm` 0.1.0 exported was replaced by the model
+The typed-request surface `nemotron-predict-client` 0.1.0 exported was replaced by the model
 handles. Code written against 0.1.0 that used it will not import.
 
-- `nvidia_sdfm.ModelRequest`, `TabICLRequest`, `KumoRFMRequest`, `ModelAdapter`
+- `nemotron_predict.ModelRequest`, `TabICLRequest`, `NemotronRelationalRequest`, `ModelAdapter`
   and `AdapterRegistry` are no longer exported; the request types are an
   implementation detail of the handles. Use `client.tabicl(...)` /
-  `client.kumorfm(...)`.
-- `SDFMClient.predict(request)` and `SDFMClient.register(adapter)` are internal
+  `client.relational(...)`.
+- `PredictClient.predict(request)` and `PredictClient.register(adapter)` are internal
   (`_predict` / `_register`). Run inference through the handles, and pass a
-  custom registry with `SDFMClient(url, registry=...)`.
-- `nvidia_sdfm.kumorfm` no longer exports `KumoRFM`, `LocalGraph`,
+  custom registry with `PredictClient(url, registry=...)`.
+- `nemotron_predict.relational` no longer exports `NemotronRelational`, `LocalGraph`,
   `MaterializedPredictionRequest` or `TaskTable`. Direct engine use is refused,
   and nothing on the supported surface returns or accepts the other two — the
   shim now carries what a caller can actually reach. Build graphs with
-  `nvidia_sdfm.kumorfm.Graph` and predict through `client.kumorfm(graph)`.
+  `nemotron_predict.relational.Graph` and predict through `client.relational(graph)`.
   `Dtype`, `Stype` and `ViewConversionWarning` were added in their place.
 - `Graph.visualize(backend=...)` — visualization is Mermaid-only; the parameter
   is replaced by `height=`.
-- `kumorfm.rfm.init()` raises `RuntimeError` unless called by `SDFMClient`.
-  Construct an `SDFMClient` instead.
+- `nemotron_relational.rfm.init()` raises `RuntimeError` unless called by `PredictClient`.
+  Construct an `PredictClient` instead.
 
 ### Compatibility
 
 Everything else on the supported surface is unchanged, verified by an AST diff of
-the public API against the 0.1.0 tag (`ed86392`): `SDFMClient`'s constructor and
-its `tabicl` / `kumorfm` / `models` / `capabilities` / `health_ready` / `close`
+the public API against the 0.1.0 tag (`ed86392`): `PredictClient`'s constructor and
+its `tabicl` / `nemotron_relational` / `models` / `capabilities` / `health_ready` / `close`
 methods, `RFMModel.predict` and `predict_task`, `TabICLModel.predict`, every
-`Graph.from_*`, `KumoRFM`'s methods, and `read` / `connect` / `quote_ident` /
+`Graph.from_*`, `NemotronRelational`'s methods, and `read` / `connect` / `quote_ident` /
 `read_table` / `resolve_sql`. Every other signature change is an added parameter
 with a default, so an existing call site is unaffected: `driver_options=` on the
 Snowflake and Databricks `connect`, `database=` on the SQLite and DuckDB ones,
-and `timeout=` / `max_retries=` on `kumorfm.init`.
+and `timeout=` / `max_retries=` on `nemotron_relational.init`.
 
 ### Behaviour changes to check before upgrading
 
@@ -108,9 +108,9 @@ produced a wrong or silently-degraded result.
 - **Multiclass `CLASS` column keeps its target's dtype** instead of always being
   `str`. `result['CLASS'] == '5'` becomes `result['CLASS'] == 5`. Previously
   `CLASS` could not be joined back to the table it names without a manual cast.
-- **Client-side validation failures on the KumoRFM path raise `SdfmError`**
+- **Client-side validation failures on the NemotronRelational path raise `PredictError`**
   (code `INVALID_REQUEST`) rather than a bare `ValueError`, matching the contract
-  TabICL already followed. Messages are unchanged. The `kumorfm` driver surface is
+  TabICL already followed. Messages are unchanged. The `nemotron_relational` driver surface is
   unaffected: `NimFailureError` subclasses `RuntimeError` and `InvalidResponseError`
   subclasses `ValueError`.
 - **Four cases that used to succeed silently now raise**: a `.json` or `.tsv` file
@@ -124,16 +124,16 @@ produced a wrong or silently-degraded result.
   backend with declared foreign keys it used to add them anyway, so a caller who
   pinned the graph's shape got extra edges — and therefore different predictions.
   `edges=None` is unchanged and still applies them.
-- **`SDFMClient(max_retries=...)` now governs the KumoRFM transport too**, which
+- **`PredictClient(max_retries=...)` now governs the NemotronRelational transport too**, which
   previously used a fixed policy of its own. A caller who raised it will see
   transient failures retried where they were not before, and one who set `0` will
-  see them surface immediately; failures on the KumoRFM path therefore take longer
+  see them surface immediately; failures on the NemotronRelational path therefore take longer
   or shorter to surface than in 0.1.0 according to what was asked for.
 - **A caller mistake the engine reports as a `KeyError`** — a typo in
   `exclude_cols_dict`, a feature column present in `context` but not `predict` —
-  is `SdfmError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
+  is `PredictError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
   invitation to file a bug. Code branching on `.code` for those inputs sees the new
-  value; `except SdfmError` is unaffected.
+  value; `except PredictError` is unaffected.
 - **A malformed create-session response is `INVALID_RESPONSE`**, not
   `INVALID_REQUEST`, matching the prediction path.
 
@@ -148,7 +148,7 @@ produced a wrong or silently-degraded result.
 - Timezone-aware timestamps are converted to UTC rather than having their offset
   dropped, so tables in different zones no longer land on the same instant.
 - Int64 values outside the JS-safe range are encoded as base-10 strings on the
-  KumoRFM path, as the contract requires; they previously failed with HTTP 422.
+  NemotronRelational path, as the contract requires; they previously failed with HTTP 422.
 - `random_seed` now produces identical payloads across processes. Set iteration
   order leaked Python's per-process string hashing into the request.
 - `random_seed` is honoured by the SQL samplers, or refused explicitly.
@@ -165,7 +165,7 @@ produced a wrong or silently-degraded result.
 - Response bodies are read under a 64 MiB cap, so a hostile server cannot force
   unbounded decompression.
 - `read('local', path=...)` refuses URI schemes instead of fetching remote URLs.
-- `KumoClient` refuses to send credentials over plaintext HTTP, matching `Transport`,
+- `RelationalClient` refuses to send credentials over plaintext HTTP, matching `Transport`,
   and importing the package no longer opens a connection.
 - Added `SECURITY.md`.
 
@@ -174,7 +174,7 @@ produced a wrong or silently-degraded result.
 - Raw `TypeError`, `KeyError` and `AssertionError` no longer escape the public API.
 - The NIM's RFC-9457 `invalid_params` detail — which names the exact table, row and
   column rejected — is surfaced instead of discarded.
-- `SDFMClient(timeout=..., max_retries=...)` reaches the KumoRFM path; it was
+- `PredictClient(timeout=..., max_retries=...)` reaches the NemotronRelational path; it was
   silently ignored there.
 - `validate()` reports a graph inconsistency as `ValueError` naming the edge, rather
   than `KeyError` from a column lookup.
@@ -199,7 +199,7 @@ produced a wrong or silently-degraded result.
 
 ### Added
 
-- KumoRFM sessions upload a batched job's context once instead of per batch.
+- NemotronRelational sessions upload a batched job's context once instead of per batch.
 - TabICL reuses an uploaded context across predictions on the same handle,
   reducing a repeat call to about 1% of its former size with identical results.
   A handle shared across threads now opens one session rather than one per
@@ -209,19 +209,19 @@ produced a wrong or silently-degraded result.
   keywords through to the engine instead of raising `TypeError`.
 - Unsigned integer columns are accepted at every width. Only `uint8` was, so
   `astype('uint32')` — or reading an unsigned Parquet column — refused the table.
-- `nvidia_sdfm.kumorfm` exports `ViewConversionWarning`, so the diagnostics that
+- `nemotron_predict.relational` exports `ViewConversionWarning`, so the diagnostics that
   view-based graph construction raises can be filtered without importing the
   driver package directly.
 
 ### Changed
 
-- `sdfm-connectors` and `kumorfm` minimum versions were raised in `nvidia-sdfm`'s
+- `nemotron-predict-connectors` and `nemotron_relational` minimum versions were raised in `nemotron-predict-client`'s
   requirements so the client cannot resolve against pre-audit releases.
-- Linting covers all three packages; it previously skipped the `kumorfm` package
+- Linting covers all three packages; it previously skipped the `nemotron_relational` package
   entirely.
-- Removed unreferenced Kumo-Enterprise modules from the `kumorfm` wheel.
+- Removed unreferenced Kumo-Enterprise modules from the `nemotron_relational` wheel.
 - Corrected README and `docs/` claims that the code did not support: requests are
   not validated against a NIM's advertised capabilities, there is no public
   `client.predict`, `client.models()` lists the local registry rather than
   discovering what a NIM serves, no macOS wheels are built, and
-  `nvidia-sdfm[all]` deliberately excludes `[explain]` and `[relbench]`.
+  `nemotron-predict-client[all]` deliberately excludes `[explain]` and `[relbench]`.

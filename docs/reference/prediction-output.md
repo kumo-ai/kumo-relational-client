@@ -1,6 +1,6 @@
 ---
 title: "NVIDIA SDFM SDK Prediction Output"
-description: "Reference for the shape and columns of the DataFrame returned by KumoRFM predictions, which vary by task type."
+description: "Reference for the shape and columns of the DataFrame returned by NemotronRelational predictions, which vary by task type."
 template-library-version: "1.0.0"
 ---
 
@@ -49,7 +49,7 @@ change the number of rows.
 Binary classification, three entities in, three rows out:
 
 ```python
-frame = client.kumorfm(graph).predict(
+frame = client.relational(graph).predict(
     'PREDICT COUNT(orders.*, 0, 30, days) > 0 FOR EACH users.user_id',
     indices=['u1', 'u2', 'u3'],
 )
@@ -60,7 +60,7 @@ frame = client.kumorfm(graph).predict(
 Multiclass over three classes, two entities in, **six** rows out:
 
 ```python
-frame = client.kumorfm(graph).predict_task(
+frame = client.relational(graph).predict_task(
     context=context_df,
     predict=predict_df,
     task_type='multiclass_classification',
@@ -79,7 +79,7 @@ winners = frame[frame['PREDICTED']]  # one row per entity
 Temporal link prediction with `RANK TOP 3`, three entities in, nine rows out:
 
 ```python
-frame = client.kumorfm(graph).predict(
+frame = client.relational(graph).predict(
     'PREDICT LIST_DISTINCT(orders.item_id, 0, 30, days) RANK TOP 3 '
     'FOR EACH users.user_id',
     indices=['u1', 'u2', 'u3'],
@@ -103,7 +103,7 @@ context = pd.DataFrame(
         'ANCHOR_TIMESTAMP': [...],
     }
 )
-frame = client.kumorfm(graph).predict_task(
+frame = client.relational(graph).predict_task(
     context=context,
     predict=predict_df,
     task_type='temporal_link_prediction',
@@ -118,7 +118,7 @@ A predictive query whose target is a categorical column is a multiclass task,
 so `predict()` reaches it as well as `predict_task()`:
 
 ```python
-frame = client.kumorfm(graph).predict(
+frame = client.relational(graph).predict(
     'PREDICT users.segment FOR users.user_id IN (0, 1, 2)'
 )  # 3 entities x N classes
 ```
@@ -129,7 +129,7 @@ directly.
 
 ## Explanations
 
-When `explain` is set, the call returns a `kumorfm` `Explanation` instead of a
+When `explain` is set, the call returns a `nemotron_relational` `Explanation` instead of a
 `DataFrame`. The frame described above is still available on its `prediction`
 attribute, with the same shape rules.
 
@@ -138,7 +138,7 @@ An explanation covers exactly one entity. That entity has to be selected with
 not valid PQL:
 
 ```python
-explanation = client.kumorfm(graph).predict(
+explanation = client.relational(graph).predict(
     'PREDICT COUNT(orders.*, 0, 30, days) > 0 FOR users.user_id IN (0, 1)',
     indices=[0],
     explain=True,

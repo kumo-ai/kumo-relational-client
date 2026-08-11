@@ -1,10 +1,10 @@
-# Workspace root for the nvidia-sdfm monorepo. This builds no package; each
+# Workspace root for the nemotron-predict-client monorepo. This builds no package; each
 # independently released distribution lives under packages/ with its own
 # pyproject.toml:
 #
-#   packages/nvidia-sdfm     - the client SDK (pure-python)
-#   packages/sdfm-connectors - shared data-source connectors (pure-python)
-#   packages/kumorfm         - the KumoRFM driver (native build)
+#   packages/nemotron-predict-client     - the client SDK (pure-python)
+#   packages/nemotron-predict-connectors - shared data-source connectors (pure-python)
+#   packages/nemotron-relational         - the NemotronRelational driver (native build)
 #
 # This file carries only shared tooling configuration. Each package's
 # [tool.ruff] extends this file, so the lint baseline below applies to every
@@ -43,7 +43,7 @@ ignore = [
     # Line length is the formatter's job. `ruff format` already wraps
     # everything it is allowed to wrap; what E501 reports on top of that is the
     # set of things it must not touch -- a generated SHA256, a URL, or the LLM
-    # prompt template in kumorfm/rfm/explain_summary.py, where rewrapping the
+    # prompt template in nemotron_relational/rfm/explain_summary.py, where rewrapping the
     # string would change the text sent to the model. Enforced by
     # `ruff format --check` in CI instead.
     "E501",
@@ -57,7 +57,7 @@ ignore = [
 # Import order inside a package __init__ is load-bearing here: several of them
 # import a submodule that imports a name back out of the partly-initialized
 # package, and the hand-written order is what keeps that resolvable. Sorting
-# them raises ImportError on kumorfm.rfm.backend.local. This preserves the
+# them raises ImportError on nemotron_relational.rfm.backend.local. This preserves the
 # `skip = ["__init__.py"]` the repo's isort config already carried. Untangling
 # the cycles themselves is tracked separately.
 "**/__init__.py" = ["I001"]
@@ -87,8 +87,8 @@ ignore = [
 "**/tests/client/test_client_security.py" = ["N815"]
 # ANTLR's `ErrorListener` calls `syntaxError(...)` by that exact name.
 "**/tests/test_pql_quoted_identifiers.py" = ["N802"]
-# The fake class mirrors `kumorfm.exceptions.HTTPException`.
-"**/tests/test_kumorfm_serving_branch.py" = ["N818"]
+# The fake class mirrors `nemotron_relational.exceptions.HTTPException`.
+"**/tests/test_nemotron_relational_serving_branch.py" = ["N818"]
 # Examples are read as much as they are run: they print, they annotate
 # nothing, and a notebook cell re-imports what an earlier cell already
 # imported so it can be run on its own. Linting them still catches the things

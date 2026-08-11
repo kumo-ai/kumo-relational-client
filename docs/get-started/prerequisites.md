@@ -13,8 +13,8 @@ following requirements.
 
 ### Compute
 
-The base client (`nvidia-sdfm`) is pure Python and has no special hardware
-requirements. The KumoRFM driver performs graph sampling on the CPU of the
+The base client (`nemotron-predict-client`) is pure Python and has no special hardware
+requirements. The NemotronRelational driver performs graph sampling on the CPU of the
 machine that runs the client; the model itself runs on the NIM's GPU, not on
 your client machine.
 
@@ -22,7 +22,7 @@ your client machine.
 
 ### Operating System
 
-The KumoRFM driver ships prebuilt binary wheels for the following platforms:
+The NemotronRelational driver ships prebuilt binary wheels for the following platforms:
 
 | Platform | Supported |
 | --- | --- |
@@ -30,9 +30,9 @@ The KumoRFM driver ships prebuilt binary wheels for the following platforms:
 | Everything else, including macOS | No — build from source |
 
 No source distribution is published either, so `pip install
-"nvidia-sdfm[kumorfm]"` resolves on Linux x86_64 only. On any other platform,
-install the base `nvidia-sdfm` — it is pure Python, as are the connectors, and
-installs on anything running Python 3.10 or later — and run KumoRFM from a Linux
+"nemotron-predict-client[nemotron_relational]"` resolves on Linux x86_64 only. On any other platform,
+install the base `nemotron-predict-client` — it is pure Python, as are the connectors, and
+installs on anything running Python 3.10 or later — and run NemotronRelational from a Linux
 x86_64 host.
 
 ### Runtime Dependencies
@@ -47,16 +47,16 @@ install only when you request the matching extra.
 
 ## Verified Configurations
 
-- Python 3.12 on Linux x86_64, installing `nvidia-sdfm[kumorfm]`.
-- Python 3.12 on macOS arm64, installing the base `nvidia-sdfm`.
+- Python 3.12 on Linux x86_64, installing `nemotron-predict-client[nemotron_relational]`.
+- Python 3.12 on macOS arm64, installing the base `nemotron-predict-client`.
 
 ## Network Access
 
 ### NIM Endpoint Access
 
 At runtime, the client needs network access to a Universal TFM API NIM. Set the
-endpoint when you create the client, or through the `KUMO_API_ENDPOINT`
-environment variable for the KumoRFM path.
+endpoint when you create the client, or through the `NEMOTRON_PREDICT_API_ENDPOINT`
+environment variable for the NemotronRelational path.
 
 ## Pre-Installation Checklist
 
@@ -67,10 +67,10 @@ Before you continue to installation, confirm the following:
 
 ## Troubleshoot Prerequisites
 
-- **`No matching distribution found for kumorfm`.** Your platform or Python
+- **`No matching distribution found for nemotron_relational`.** Your platform or Python
   version is outside the wheel matrix (Linux x86_64, Python 3.10–3.13), and no
   source distribution is published to fall back to. Install the base
-  `nvidia-sdfm` without the `[kumorfm]` extra, or use a supported host and
+  `nemotron-predict-client` without the `[nemotron_relational]` extra, or use a supported host and
   interpreter.
 - **Cannot reach the package index.** Confirm you are connected to the NVIDIA
   network, then retry the install.

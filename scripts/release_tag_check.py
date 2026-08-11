@@ -5,7 +5,7 @@
 """Guard: a release tag must match the tagged package's declared version.
 
 Release tags have the form ``<distribution>/v<version>`` (for example
-``nvidia-sdfm/v0.1.0``). The publish jobs upload whatever version the package
+``nemotron-predict-client/v0.1.0``). The publish jobs upload whatever version the package
 files declare, so a tag that disagrees with ``__version__`` would publish a
 release under the wrong name. This check fails the pipeline first.
 
@@ -22,9 +22,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 VERSION_FILES = {
-    'sdfm-connectors': 'packages/sdfm-connectors/src/sdfm_connectors/__init__.py',
-    'nvidia-sdfm': 'packages/nvidia-sdfm/src/nvidia_sdfm/_version.py',
-    'kumorfm': 'packages/kumorfm/src/kumorfm/_version.py',
+    'nemotron-predict-connectors': 'packages/nemotron-predict-connectors/src/nemotron_predict_connectors/__init__.py',
+    'nemotron-predict-client': 'packages/nemotron-predict-client/src/nemotron_predict/_version.py',
+    'nemotron_relational': 'packages/nemotron-relational/src/nemotron_relational/_version.py',
 }
 
 _VERSION_RE = re.compile(

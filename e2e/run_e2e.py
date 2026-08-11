@@ -18,12 +18,16 @@ from sklearn.datasets import load_breast_cancer, load_wine
 sys.path.insert(
     0,
     os.path.join(
-        os.path.dirname(__file__), '..', 'packages', 'nvidia-sdfm', 'src'
+        os.path.dirname(__file__),
+        '..',
+        'packages',
+        'nemotron-predict-client',
+        'src',
     ),
 )
-from nvidia_sdfm import SDFMClient
+from nemotron_predict import PredictClient
 
-_client: SDFMClient | None = None
+_client: PredictClient | None = None
 
 
 def predict_tabicl(*, context, predict, task, target, **kwargs):
@@ -359,7 +363,7 @@ def real_dataset_mixed_dtypes() -> None:
     predict_full = sample.iloc[2500:]
     predict = predict_full.drop(columns=['income']).reset_index(drop=True)
 
-    from nvidia_sdfm.adapters.tabicl import build_request
+    from nemotron_predict.adapters.tabicl import build_request
 
     payload = build_request(
         context=context,
@@ -694,7 +698,7 @@ def main() -> None:
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
     global _client
-    _client = SDFMClient(url=BASE_URL)
+    _client = PredictClient(url=BASE_URL)
 
     for step in (
         management_endpoints,

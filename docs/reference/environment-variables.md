@@ -1,28 +1,28 @@
 ---
 title: "NVIDIA SDFM SDK Environment Variables"
-description: "Reference for the environment variables that configure the NVIDIA SDFM SDK client, the KumoRFM driver, and the data-source connectors."
+description: "Reference for the environment variables that configure the NVIDIA SDFM SDK client, the NemotronRelational driver, and the data-source connectors."
 template-library-version: "1.0.0"
 ---
 
 # NVIDIA SDFM SDK Environment Variables
 
 This page lists the environment variables the NVIDIA SDFM SDK reads. Most
-configuration is passed directly to `SDFMClient` in code; the variables below
-cover the KumoRFM driver's connection defaults, logging, and the data-source
+configuration is passed directly to `PredictClient` in code; the variables below
+cover the NemotronRelational driver's connection defaults, logging, and the data-source
 connectors.
 
-## KumoRFM Driver
+## NemotronRelational Driver
 
-The KumoRFM driver reads these variables when you use the `kumorfm` model
+The NemotronRelational driver reads these variables when you use the `nemotron_relational` model
 without passing the values explicitly.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `KUMO_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. Read when the driver initializes; importing the package never connects. |
-| `RFM_API_URL` | Optional | None | An alternative to `KUMO_API_ENDPOINT` for the same URL. Takes precedence over it when both are set. |
-| `KUMO_API_KEY` | No | None | API key sent to the NIM as `X-API-Key`. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. It is refused on a plaintext `http://` endpoint other than localhost. |
-| `KUMO_LOG` | No | `INFO` | Log level for the KumoRFM driver, for example `DEBUG`, `INFO`, or `WARNING`. |
-| `KUMORFM_DISABLE_SESSIONS` | No | Unset | Set to `1`/`true` to stop a multi-batch prediction from sharing one uploaded context through a NIM session. Each batch then re-uploads the full context, which the progress output reports. Only affects transport cost; predictions are unchanged. Passing `random_seed=None` has the same effect, because unseeded runs re-sample neighborhoods per batch. |
+| `NEMOTRON_PREDICT_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. Read when the driver initializes; importing the package never connects. |
+| `RFM_API_URL` | Optional | None | An alternative to `NEMOTRON_PREDICT_API_ENDPOINT` for the same URL. Takes precedence over it when both are set. |
+| `NEMOTRON_PREDICT_API_KEY` | No | None | API key sent to the NIM as `X-API-Key`. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. It is refused on a plaintext `http://` endpoint other than localhost. |
+| `NEMOTRON_PREDICT_LOG` | No | `INFO` | Log level for the NemotronRelational driver, for example `DEBUG`, `INFO`, or `WARNING`. |
+| `NEMOTRON_PREDICT_DISABLE_SESSIONS` | No | Unset | Set to `1`/`true` to stop a multi-batch prediction from sharing one uploaded context through a NIM session. Each batch then re-uploads the full context, which the progress output reports. Only affects transport cost; predictions are unchanged. Passing `random_seed=None` has the same effect, because unseeded runs re-sample neighborhoods per batch. |
 
 ## Explanation Summary (Third-Party LLM)
 
@@ -31,20 +31,20 @@ attribution without a natural-language summary, the SDK generates that summary
 itself by calling an OpenAI-compatible chat-completions endpoint. The request
 carries the predictive query, the returned predictions, the cohort analysis and
 the subgraph attribution, which includes the raw cell values of the explained
-entity's subgraph. Unless `KUMORFM_EXPLAIN_LLM_BASE_URL` is set, the destination
+entity's subgraph. Unless `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` is set, the destination
 is OpenAI's `https://api.openai.com/v1/`, a non-NVIDIA service.
 
-Nothing is sent when no API key is discoverable or the `nvidia-sdfm[explain]`
+Nothing is sent when no API key is discoverable or the `nemotron-predict-client[explain]`
 extra is not installed. To disable the call while keeping the structured explanation,
 pass `explain=dict(skip_summary=True)`.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `KUMORFM_EXPLAIN_LLM_API_KEY` | No | None | API key for the summary endpoint. **Falls back to `OPENAI_API_KEY`**, so a key exported for another tool enables the call. |
-| `OPENAI_API_KEY` | No | None | Fallback API key, read when `KUMORFM_EXPLAIN_LLM_API_KEY` is unset. |
-| `KUMORFM_EXPLAIN_LLM_BASE_URL` | No | OpenAI (`https://api.openai.com/v1/`) | Base URL of any OpenAI-compatible endpoint, including a self-hosted one. Set this to keep the data inside your own network. |
-| `KUMORFM_EXPLAIN_LLM_MODEL` | Conditional | `gpt-4.1-mini-2025-04-14` | Model name. Required when `KUMORFM_EXPLAIN_LLM_BASE_URL` is set. |
-| `KUMORFM_EXPLAIN_LLM_TIMEOUT` | No | `20` | Request timeout in seconds. |
+| `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` | No | None | API key for the summary endpoint. **Falls back to `OPENAI_API_KEY`**, so a key exported for another tool enables the call. |
+| `OPENAI_API_KEY` | No | None | Fallback API key, read when `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` is unset. |
+| `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` | No | OpenAI (`https://api.openai.com/v1/`) | Base URL of any OpenAI-compatible endpoint, including a self-hosted one. Set this to keep the data inside your own network. |
+| `NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL` | Conditional | `gpt-4.1-mini-2025-04-14` | Model name. Required when `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` is set. |
+| `NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT` | No | `20` | Request timeout in seconds. |
 
 ## Databricks Connector
 

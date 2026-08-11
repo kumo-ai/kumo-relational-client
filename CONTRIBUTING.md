@@ -1,4 +1,4 @@
-# Contributing to nvidia-sdfm
+# Contributing to nemotron-predict-client
 
 Thanks for your interest in contributing. This project is licensed under the
 [Apache License 2.0](./LICENSE), and we welcome external contributions.
