@@ -363,7 +363,7 @@ def real_dataset_mixed_dtypes() -> None:
     predict_full = sample.iloc[2500:]
     predict = predict_full.drop(columns=['income']).reset_index(drop=True)
 
-    from nemotron_predict.adapters.tabicl import build_request
+    from nemotron_predict.adapters.tabular import build_request
 
     payload = build_request(
         context=context,
