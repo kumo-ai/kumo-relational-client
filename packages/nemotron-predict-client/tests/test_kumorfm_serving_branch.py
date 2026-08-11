@@ -25,7 +25,7 @@ import pandas as pd
 import pytest
 
 from nemotron_predict.adapters.relational import NemotronRelationalAdapter
-from nemotron_predict.core.serving import ServingTarget
+from nemotron_predict.core.serving import DatabricksServingTarget
 from nemotron_predict.core.transport import Transport
 from nemotron_predict.errors import PredictError
 from nemotron_predict.requests import NemotronRelationalRequest
@@ -123,7 +123,9 @@ def test_serving_target_initializes_by_endpoint_name(
 ) -> None:
     """The branch under test: a ServingTarget must not be sent through the
     URL-based init, which would read attributes that raise by design."""
-    target = ServingTarget('nemotron-relational-v1', workspace_client='WS')
+    target = DatabricksServingTarget(
+        'nemotron-relational-v1', platform_client='WS'
+    )
     NemotronRelationalAdapter().predict(target, _request())
 
     assert 'init_databricks_serving' in engine.calls
@@ -143,7 +145,7 @@ def test_serving_target_never_reads_url_or_api_key(
     """ServingTarget.url raises. If the adapter duck-typed instead of checking
     the type, this is where it would blow up."""
     NemotronRelationalAdapter().predict(
-        ServingTarget('nemotron-relational-v1'), _request()
+        DatabricksServingTarget('nemotron-relational-v1'), _request()
     )
     sent = engine.calls['init_databricks_serving']
     assert (
@@ -169,7 +171,7 @@ def test_both_paths_reach_the_same_predict(
 ) -> None:
     """Only initialization differs; inference must be identical."""
     NemotronRelationalAdapter().predict(
-        ServingTarget('nemotron-relational-v1'), _request()
+        DatabricksServingTarget('nemotron-relational-v1'), _request()
     )
     serving = engine.calls['predict']
 
@@ -224,13 +226,13 @@ def test_the_repr_does_not_render_the_workspace_client() -> None:
     """A real WorkspaceClient renders its workspace host; an injected one
     renders whatever it likes, including credentials."""
     from nemotron_predict import PredictClient
-    from nemotron_predict.core.serving import ServingTarget
+    from nemotron_predict.core.serving import DatabricksServingTarget
 
     class _Leaky:
         def __repr__(self) -> str:
             return "WorkspaceClient(token='dapi-SECRET', host='acme.databricks.com')"
 
-    target = ServingTarget('nemotron-relational-v1', _Leaky())
+    target = DatabricksServingTarget('nemotron-relational-v1', _Leaky())
     assert 'dapi-SECRET' not in repr(target)
     assert 'acme.databricks.com' not in repr(target)
     assert 'dapi-SECRET' not in repr(
@@ -262,7 +264,9 @@ def test_both_construction_paths_populate_the_same_fields() -> None:
             lambda c: c.health_ready(), 'UNSUPPORTED_FEATURE', id='health_ready'
         ),
         pytest.param(
-            lambda c: ServingTarget('nemotron-relational-v1').predict({}),
+            lambda c: DatabricksServingTarget('nemotron-relational-v1').predict(
+                {}
+            ),
             'UNSUPPORTED_FEATURE',
             id='predict',
         ),
@@ -378,7 +382,7 @@ def test_engine_init_failures_are_translated_at_the_boundary(
 
     with pytest.raises(PredictError) as caught:
         NemotronRelationalAdapter().predict(
-            ServingTarget('nemotron-relational-v1'), _request()
+            DatabricksServingTarget('nemotron-relational-v1'), _request()
         )
     assert caught.value.code == code
     assert says in caught.value.message
@@ -415,7 +419,7 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
 
     with pytest.raises(PredictError) as excinfo:
         NemotronRelationalAdapter().predict(
-            ServingTarget('nemotron-relational-v1'), _request()
+            DatabricksServingTarget('nemotron-relational-v1'), _request()
         )
 
     message = str(excinfo.value)

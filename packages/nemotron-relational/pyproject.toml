@@ -45,6 +45,11 @@ Issues = "https://github.com/NVIDIA/nemotron-predict-client/issues"
 databricks-serving=[
     "databricks-sdk>=0.68.0,<1.0",
 ]
+# The Snowflake counterpart, separate from the `snowflake` extra below for the
+# same reason: reading a warehouse and invoking a served model are unrelated.
+snowflake-serving=[
+    "snowflake-snowpark-python>=1.20",
+]
 test=[
     "packaging",
     "pytest",

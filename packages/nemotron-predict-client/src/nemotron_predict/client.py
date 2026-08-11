@@ -17,7 +17,11 @@ from nemotron_predict.base import (
     PredictResult,
     request_type_names,
 )
-from nemotron_predict.core.serving import ServingTarget
+from nemotron_predict.core.serving import (
+    DatabricksServingTarget,
+    ServingTarget,
+    SnowflakeServingTarget,
+)
 from nemotron_predict.core.transport import Transport, redact_url
 from nemotron_predict.errors import PredictError
 from nemotron_predict.models import RFMModel, TabICLModel, require_frame
@@ -158,7 +162,46 @@ class PredictClient:
         ambient configuration as ``PredictError``.
         """
         return cls._from_transport(
-            ServingTarget(endpoint, workspace_client),
+            DatabricksServingTarget(endpoint, workspace_client),
+            registry,
+        )
+
+    @classmethod
+    def for_snowflake_serving(
+        cls,
+        service: str,
+        *,
+        session: Any | None = None,
+        registry: AdapterRegistry | None = None,
+    ) -> PredictClient:
+        r"""A client for a model served on Snowpark Container Services.
+
+        The Snowflake counterpart to :meth:`for_databricks_serving`. A model
+        service is invoked as a SQL method over a session, so there is no url,
+        api_key, verify_ssl, timeout or retry policy to give.
+
+        >>> client = PredictClient.for_snowflake_serving("KUMO.RFM.KUMO_RFM_SVC")
+        >>> df = client.nemotron_relational(graph).predict("PREDICT ... FOR ...", [1, 2])
+
+        Args:
+            service: The service name, optionally qualified as
+                ``DATABASE.SCHEMA.SERVICE``.
+            session: An existing Snowpark ``Session`` or
+                ``snowflake.connector`` connection. When omitted the active
+                Snowpark session is used, which is how a Snowflake notebook
+                connects without handling credentials.
+            registry: As for the constructor.
+
+        Raises:
+            PredictError: with ``code='INVALID_CONFIGURATION'`` if ``service`` is
+                empty, is not a string, or is not a bare, optionally qualified
+                service name.
+
+        Nothing here contacts Snowflake, so nothing here can fail on
+        authentication. A missing session surfaces at the first ``predict``.
+        """
+        return cls._from_transport(
+            SnowflakeServingTarget(service, session),
             registry,
         )
 

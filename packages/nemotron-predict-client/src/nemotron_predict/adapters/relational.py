@@ -5,7 +5,8 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING, Any
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import pandas as pd
 
@@ -83,6 +84,41 @@ def _engine_http_error_types() -> tuple[type[BaseException], ...]:
     return (HTTPException,)
 
 
+class _ServingPlatform(NamedTuple):
+    """How one managed platform is reached and what it needs installed.
+
+    The extra and the dependency travel with the initializer because they are
+    only ever needed together: the ``ImportError`` they answer is raised by the
+    initializer itself.
+    """
+
+    initialize: Callable[[Any, ServingTarget], None]
+    extra: str
+    dependency: str
+
+
+_SERVING_PLATFORMS: dict[str, _ServingPlatform] = {
+    'databricks': _ServingPlatform(
+        initialize=lambda engine, target: engine.init_databricks_serving(
+            target.endpoint,
+            workspace_client=target.platform_client,
+            _token=engine._SDFM_CLIENT_TOKEN,
+        ),
+        extra='databricks-serving',
+        dependency='databricks-sdk',
+    ),
+    'snowflake': _ServingPlatform(
+        initialize=lambda engine, target: engine.init_snowflake_serving(
+            target.endpoint,
+            session=target.platform_client,
+            _token=engine._SDFM_CLIENT_TOKEN,
+        ),
+        extra='snowflake-serving',
+        dependency='snowflake-snowpark-python',
+    ),
+}
+
+
 def _init_serving(rfm_engine: Any, target: ServingTarget) -> None:
     r"""Initialize the engine against a serving endpoint.
 
@@ -93,16 +129,16 @@ def _init_serving(rfm_engine: Any, target: ServingTarget) -> None:
     installed ``nemotron-predict-client[databricks-serving]`` never asked for and cannot
     act on.
     """
-    try:
-        rfm_engine.init_databricks_serving(
-            target.endpoint,
-            workspace_client=target.workspace_client,
-            _token=rfm_engine._SDFM_CLIENT_TOKEN,
+    platform = _SERVING_PLATFORMS.get(target.kind)
+    if platform is None:
+        raise PredictError(
+            f'unknown serving platform {target.kind!r}',
+            code='INVALID_CONFIGURATION',
         )
+    try:
+        platform.initialize(rfm_engine, target)
     except ImportError as error:
-        raise MissingExtraError(
-            'databricks-serving', 'databricks-sdk'
-        ) from error
+        raise MissingExtraError(platform.extra, platform.dependency) from error
     except ValueError as error:
         raise PredictError(str(error), code='INVALID_CONFIGURATION') from error
     except _engine_http_error_types() as error:

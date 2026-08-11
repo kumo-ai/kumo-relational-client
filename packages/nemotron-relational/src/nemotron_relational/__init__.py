@@ -58,16 +58,18 @@ class GlobalState(metaclass=Singleton):
     _timeout: float | None = None
     _max_retries: int = 3
     _client_factory: Callable[[], Any] | None = None
+    _serving_kind: str | None = None
     _serving_endpoint: str | None = None
-    _serving_workspace: Any | None = None
+    _serving_platform_client: Any | None = None
     _serving_overrides: dict[str, Any] | None = None
 
     thread_local: threading.local = field(default_factory=threading.local)
 
     def clear(self) -> None:
         self._client_factory = None
+        self._serving_kind = None
         self._serving_endpoint = None
-        self._serving_workspace = None
+        self._serving_platform_client = None
         self._serving_overrides = None
         if hasattr(self.thread_local, '_client'):
             try:
@@ -93,7 +95,7 @@ class GlobalState(metaclass=Singleton):
             self._max_retries,
             self._client_factory is not None,
             self._serving_endpoint,
-            id(self._serving_workspace),
+            id(self._serving_platform_client),
             tuple(sorted((self._serving_overrides or {}).items())),
         )
 
@@ -300,7 +302,7 @@ def init_databricks_serving(
         unchanged = (
             global_state._client_factory is not None
             and endpoint == global_state._serving_endpoint
-            and workspace_client is global_state._serving_workspace
+            and workspace_client is global_state._serving_platform_client
             and overrides == global_state._serving_overrides
         )
         if unchanged:
@@ -329,8 +331,9 @@ def init_databricks_serving(
     global_state._client_factory = lambda: DatabricksServingClient(
         endpoint, workspace_client, **overrides
     )
+    global_state._serving_kind = 'databricks'
     global_state._serving_endpoint = endpoint
-    global_state._serving_workspace = workspace_client
+    global_state._serving_platform_client = workspace_client
     global_state._serving_overrides = overrides
     global_state.thread_local._client = probe
     global_state.thread_local._client_config = global_state._config
@@ -340,6 +343,103 @@ def init_databricks_serving(
         "endpoint '%s'",
         __version__,
         endpoint,
+    )
+
+
+def init_snowflake_serving(
+    service: str,
+    *,
+    session: Any | None = None,
+    method: str = 'PREDICT',
+    max_request_bytes: int | None = None,
+    timeout: float | None = None,
+    log_level: str = 'INFO',
+) -> None:
+    r"""Initialize against a model served on Snowpark Container Services.
+
+    The Snowflake counterpart to :func:`init_databricks_serving`. A model
+    service is invoked as a SQL method on the service over a session, so there
+    is no URL, no ``api_key``, and no readiness probe.
+
+    Re-initializing with identical arguments is a no-op, as for :func:`init`,
+    and the unchanged check runs before anything is constructed so that
+    repeating the call cannot resolve a session again.
+
+    Args:
+        service: The service name, optionally qualified as
+            ``DATABASE.SCHEMA.SERVICE``.
+        session: An existing Snowpark ``Session`` or ``snowflake.connector``
+            connection. When omitted the active Snowpark session is used, which
+            is how a Snowflake notebook connects without handling credentials.
+        method: The service method to call. ``PREDICT`` is what the model
+            registry generates for a ``CustomModel``.
+        max_request_bytes: Overrides the client-side payload cap. Omit to use
+            the transport's own default, which tracks the platform limit.
+        timeout: Overrides the per-statement timeout, in seconds.
+        log_level: As for :func:`init`.
+
+    Raises:
+        ValueError: if ``service`` is empty or is not a bare, optionally
+            qualified service name, or if an override is out of range.
+        ImportError: if the ``snowflake-serving`` extra is not installed and no
+            ``session`` was supplied.
+        HTTPException: if no session was supplied and no active Snowflake
+            session exists.
+    """
+    overrides: dict[str, Any] = {
+        name: value
+        for name, value in (
+            ('max_request_bytes', max_request_bytes),
+            ('timeout', timeout),
+        )
+        if value is not None
+    }
+    overrides['method'] = method
+
+    if global_state.initialized:
+        unchanged = (
+            global_state._client_factory is not None
+            and global_state._serving_kind == 'snowflake'
+            and service == global_state._serving_endpoint
+            and session is global_state._serving_platform_client
+            and overrides == global_state._serving_overrides
+        )
+        if unchanged:
+            set_log_level(
+                os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
+                or os.getenv('KUMO_LOG')
+                or log_level
+            )
+            return
+
+    from nemotron_relational.client.snowflake_serving import (
+        SnowflakeServingClient,
+    )
+
+    probe = SnowflakeServingClient(service, session, **overrides)
+
+    set_log_level(
+        os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
+        or os.getenv('KUMO_LOG')
+        or log_level
+    )
+
+    if global_state.initialized:
+        global_state.clear()
+
+    global_state._client_factory = lambda: SnowflakeServingClient(
+        service, session, **overrides
+    )
+    global_state._serving_kind = 'snowflake'
+    global_state._serving_endpoint = service
+    global_state._serving_platform_client = session
+    global_state._serving_overrides = overrides
+    global_state.thread_local._client = probe
+
+    logging.getLogger('nemotron_relational').info(
+        'Initialized KumoRFM SDK v%s against Snowflake model service %r',
+        __version__,
+        service,
     )
 
 

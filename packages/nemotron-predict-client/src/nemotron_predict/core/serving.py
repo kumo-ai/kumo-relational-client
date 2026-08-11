@@ -19,7 +19,7 @@ to nowhere.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 from nemotron_predict.errors import PredictError
 
@@ -41,7 +41,9 @@ class ServingTarget:
     """
 
     endpoint: str
-    workspace_client: Any | None = field(default=None, repr=False)
+    kind: ClassVar[str] = ''
+
+    platform_client: Any | None = field(default=None, repr=False)
     _closed: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -105,3 +107,21 @@ class ServingTarget:
             'NemotronRelational does',
             code='UNSUPPORTED_FEATURE',
         )
+
+
+@dataclass(frozen=True)
+class DatabricksServingTarget(ServingTarget):
+    """A model served by Databricks Model Serving, addressed by endpoint name."""
+
+    kind: ClassVar[str] = 'databricks'
+
+
+@dataclass(frozen=True)
+class SnowflakeServingTarget(ServingTarget):
+    """A model served on Snowpark Container Services, addressed by service name.
+
+    ``platform_client`` is a Snowpark ``Session`` or a ``snowflake.connector``
+    connection rather than a Databricks ``WorkspaceClient``.
+    """
+
+    kind: ClassVar[str] = 'snowflake'

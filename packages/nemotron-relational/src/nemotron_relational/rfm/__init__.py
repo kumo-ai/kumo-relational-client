@@ -208,6 +208,44 @@ def init_databricks_serving(
 
 LocalGraph = Graph  # NOTE Backward compatibility - do not use anymore.
 
+
+def init_snowflake_serving(
+    service: str,
+    *,
+    session: object | None = None,
+    method: str = 'PREDICT',
+    max_request_bytes: int | None = None,
+    timeout: float | None = None,
+    log_level: str = 'INFO',
+    _token: object | None = None,
+) -> None:
+    """Initialize against a model served on Snowpark Container Services.
+
+    The Snowflake counterpart to :func:`init_databricks_serving`. A service is
+    invoked as a SQL method over a session, so there is no URL to resolve.
+
+    Gated like :func:`init`: the engine is reachable only through
+    ``PredictClient``, so both entry points must refuse a direct call rather than
+    leaving one of them as a way around the boundary.
+    """
+    if _token is not _SDFM_CLIENT_TOKEN:
+        raise RuntimeError(_DIRECT_USE_MESSAGE)
+    with global_state._lock:
+        nemotron_relational.init_snowflake_serving(
+            service,
+            session=session,
+            method=method,
+            max_request_bytes=max_request_bytes,
+            timeout=timeout,
+            log_level=log_level,
+        )
+        global_state._url = f'snowflake-serving:{service}'
+        global_state._initialized = True
+
+
+LocalGraph = Graph  # NOTE Backward compatibility - do not use anymore.
+
+
 __all__ = [
     'ExplainConfig',
     'Explanation',
@@ -226,4 +264,5 @@ __all__ = [
     'init',
     'init_client',
     'init_databricks_serving',
+    'init_snowflake_serving',
 ]

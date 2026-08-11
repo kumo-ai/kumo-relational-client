@@ -62,6 +62,11 @@ databricks = [
 databricks-serving = [
     "nemotron-relational-v1[databricks-serving]>=2.24.1,<3",
 ]
+# Invoking a served model, as opposed to `snowflake` above, which is SQL data
+# access. Kept distinct so neither drags in the other.
+snowflake-serving = [
+    "nemotron-relational-v1[snowflake-serving]>=2.24.1,<3",
+]
 s3 = [
     "nemotron-predict-connectors[s3]",
 ]

@@ -462,9 +462,9 @@ def test_predict_after_close_is_rejected(requests_mock, context_df, predict_df):
 
 
 def _serving_target():
-    from nemotron_predict.core.serving import ServingTarget
+    from nemotron_predict.core.serving import DatabricksServingTarget
 
-    return ServingTarget('an-endpoint', object())
+    return DatabricksServingTarget('an-endpoint', object())
 
 
 def _http_transport():

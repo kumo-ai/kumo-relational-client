@@ -33,6 +33,7 @@ from typing import Any
 
 from nemotron_relational.client.endpoints import Endpoint
 from nemotron_relational.client.generated.tfm_api import TFMOperations
+from nemotron_relational.client.transport import ServingResponse
 from nemotron_relational.exceptions import HTTPException
 
 __all__ = ['DatabricksServingClient', 'ServingResponse']
@@ -54,30 +55,6 @@ DEFAULT_TIMEOUT_SECONDS = 300.0
 _SDK_BODY_LOGGER = 'databricks.sdk.core'
 
 _ERROR_CODE_RE = re.compile(r'^[A-Z][A-Z0-9_]{0,63}$')
-
-
-class ServingResponse:
-    r"""A serving reply in the shape the RFM path reads.
-
-    There is no HTTP exchange here, so there is no ``requests.Response`` to
-    return; this carries the four members ``raise_on_error`` and
-    ``RFMAPI.predict`` consume, and nothing else.
-    """
-
-    def __init__(self, status_code: int, body: str) -> None:
-        self.status_code = status_code
-        self._body = body
-
-    @property
-    def ok(self) -> bool:
-        return self.status_code < 400
-
-    @property
-    def text(self) -> str:
-        return self._body
-
-    def json(self) -> Any:
-        return json.loads(self._body)
 
 
 def _validate_endpoint_name(name: str) -> str:
