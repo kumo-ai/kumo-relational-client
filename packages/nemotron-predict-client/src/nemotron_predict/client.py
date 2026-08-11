@@ -180,7 +180,7 @@ class PredictClient:
         service is invoked as a SQL method over a session, so there is no url,
         api_key, verify_ssl, timeout or retry policy to give.
 
-        >>> client = PredictClient.for_snowflake_serving("KUMO.RFM.KUMO_RFM_SVC")
+        >>> client = PredictClient.for_snowflake_serving("MYDB.MYSCHEMA.MY_MODEL_SVC")
         >>> df = client.nemotron_relational(graph).predict("PREDICT ... FOR ...", [1, 2])
 
         Args:

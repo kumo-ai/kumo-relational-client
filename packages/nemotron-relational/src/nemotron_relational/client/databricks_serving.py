@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""Invoke Kumo RFM through a Databricks Model Serving endpoint.
+r"""Invoke Nemotron Relational through a Databricks Model Serving endpoint.
 
 The RFM execution path is unchanged: it still calls ``_request`` and reads
 ``ok`` / ``status_code`` / ``text`` / ``json()``. What changes is everything
@@ -117,7 +117,7 @@ def _error_code_of(error: BaseException) -> str | None:
 
 
 class DatabricksServingClient:
-    r"""Address a Kumo RFM model served as a Databricks Model Serving endpoint.
+    r"""Address a Nemotron Relational model served as a Databricks Model Serving endpoint.
 
     Args:
         endpoint: The serving endpoint **name**.

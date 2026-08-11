@@ -18,12 +18,12 @@ class TFMOperation:
     summary: str | None = None
 
 
-TFM_MODEL_KUMO_RFM: Final[str] = 'kumo-rfm'
+TFM_MODEL_KUMO_RFM: Final[str] = 'nemotron-relational-v1'
 TFM_MODEL_NEMOTRON_RELATIONAL_V1: Final[str] = 'nemotron-relational-v1'
 TFM_MODEL_TABICL: Final[str] = 'tabicl'
 TFM_MODEL_VALUES: Final[tuple[str, ...]] = (
     'tabicl',
-    'kumo-rfm',
+    'nemotron-relational-v1',
     'nemotron-relational-v1',
 )
 TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'

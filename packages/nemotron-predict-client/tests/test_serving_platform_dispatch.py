@@ -4,7 +4,7 @@
 
 """Routing a serving target to the platform that serves it.
 
-``test_kumorfm_serving_branch.py`` covers the Databricks branch end to end.
+``test_relational_serving_branch.py`` covers the Databricks branch end to end.
 What is covered here is the table it dispatches through, which is the part a
 third platform will touch: that each platform is described in one place, and
 that a target which names no platform is refused rather than served by whichever

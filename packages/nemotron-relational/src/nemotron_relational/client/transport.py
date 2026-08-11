@@ -4,7 +4,7 @@
 
 """What the RFM path requires of a transport, and the reply it reads back.
 
-:class:`~nemotron_relational.client.client.KumoClient` speaks HTTP to a Universal TFM NIM
+:class:`~nemotron_relational.client.client.Client` speaks HTTP to a Universal TFM NIM
 and hands back a ``requests.Response``. A managed-platform transport invokes a
 model served by name and hands back a :class:`ServingResponse` -- no HTTP
 session, no base URL, no ``requests.Response``. None of them derives from

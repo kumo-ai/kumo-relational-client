@@ -437,7 +437,7 @@ def init_snowflake_serving(
     global_state.thread_local._client = probe
 
     logging.getLogger('nemotron_relational').info(
-        'Initialized KumoRFM SDK v%s against Snowflake model service %r',
+        'Initialized Nemotron Predict SDK v%s against Snowflake model service %r',
         __version__,
         service,
     )
