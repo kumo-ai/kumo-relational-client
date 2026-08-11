@@ -60,7 +60,7 @@ def test_a_bad_endpoint_leaves_state_untouched() -> None:
     """
     with pytest.raises(ValueError):
         nemotron_relational.init_databricks_serving(
-            'https://workspace/serving-endpoints/kumo-rfm',
+            'https://workspace/serving-endpoints/relational-endpoint',
             workspace_client=_Workspace(),
         )
     assert not nemotron_relational.global_state.initialized
@@ -94,10 +94,13 @@ def test_changed_arguments_still_rebuild_the_client() -> None:
     first_client = nemotron_relational.global_state.client
 
     nemotron_relational.init_databricks_serving(
-        'kumo-rfm-2', workspace_client=_Workspace()
+        'relational-endpoint-2', workspace_client=_Workspace()
     )
     assert nemotron_relational.global_state.client is not first_client
-    assert nemotron_relational.global_state.client.endpoint == 'kumo-rfm-2'
+    assert (
+        nemotron_relational.global_state.client.endpoint
+        == 'relational-endpoint-2'
+    )
 
 
 def test_transport_overrides_reach_the_client() -> None:
@@ -175,7 +178,7 @@ def test_serving_reinit_replaces_cached_clients_in_other_threads() -> None:
     assert not errors
 
     nemotron_relational.init_databricks_serving(
-        'kumo-rfm-2', workspace_client=_Workspace()
+        'relational-endpoint-2', workspace_client=_Workspace()
     )
     reconfigured.set()
     thread.join(timeout=5)
@@ -184,7 +187,7 @@ def test_serving_reinit_replaces_cached_clients_in_other_threads() -> None:
     assert not errors
     assert len(seen) == 2
     assert seen[0] is not seen[1]
-    assert seen[1].endpoint == 'kumo-rfm-2'
+    assert seen[1].endpoint == 'relational-endpoint-2'
 
 
 # -- the raw-NIM path is unchanged ----------------------------------------

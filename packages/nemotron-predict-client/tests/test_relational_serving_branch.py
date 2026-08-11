@@ -294,7 +294,7 @@ _BAD_ENDPOINTS = [
         id='userinfo-credentials',
     ),
     pytest.param('acme.databricks.com/serving?token=dapiTOK', id='token-query'),
-    pytest.param('kumo-rfm\n', id='trailing-newline'),
+    pytest.param('relational-endpoint\n', id='trailing-newline'),
     pytest.param('kumo#rfm', id='fragment'),
 ]
 

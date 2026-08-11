@@ -117,7 +117,8 @@ Two endpoints are read rather than predicted against, and not by the same
 caller. `PredictClient.health_ready()` issues `GET /v1/health/ready` and reports
 whether it answered 200. The NemotronRelational driver checks more before its first
 prediction: it reads `/v1/health/ready` for a ready status and then
-`/v1/models`, and fails if the endpoint does not advertise `kumo-rfm`. Nothing
+`/v1/models`, and fails if the endpoint does not advertise
+`nemotron-relational-v1`. Nothing
 on the TabICL path reads `/v1/models`.
 
 ## External Integration Points
@@ -126,7 +127,8 @@ on the TabICL path reads `/v1/models`.
   the shared `nemotron-predict-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
 - **NIM endpoint.** Any NIM that implements the Universal TFM API. The NemotronRelational
-  path additionally requires the endpoint to advertise `kumo-rfm` in
+  path additionally requires the endpoint to advertise
+  `nemotron-relational-v1` in
   `/v1/models`.
 - **Databricks Model Serving.** `PredictClient.for_databricks_serving(name)`
   targets a named serving endpoint through the Databricks SDK. There is no base

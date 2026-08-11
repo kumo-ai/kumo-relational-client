@@ -160,11 +160,11 @@ def test_no_path_is_appended_to_anything() -> None:
 @pytest.mark.parametrize(
     'bad',
     [
-        'https://workspace.cloud.databricks.com/serving-endpoints/kumo-rfm',
-        'workspace/kumo-rfm',
-        'kumo-rfm?x=1',
-        'kumo-rfm#frag',
-        ' kumo-rfm',
+        'https://workspace.cloud.databricks.com/serving-endpoints/relational-endpoint',
+        'workspace/relational-endpoint',
+        'relational-endpoint?x=1',
+        'relational-endpoint#frag',
+        ' relational-endpoint',
         '',
     ],
 )
