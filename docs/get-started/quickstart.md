@@ -15,7 +15,7 @@ typed handle.
 Before you start, you must complete the following prerequisites:
 
 1. Install the SDK. For the relational example, install the NemotronRelational extra:
-   `pip install "nemotron-predict-client[nemotron_relational]"`.
+   `pip install "nemotron-predict-client[relational]"`.
 2. Identify the URL of a running Universal TFM API NIM.
 
 ## Quickstart Steps
@@ -48,7 +48,7 @@ print(predictions.head())
 ### NemotronRelational: Relational Data
 
 Build a graph from related tables, then express the target in PQL. This example
-requires the `[nemotron_relational]` extra:
+requires the `[relational]` extra:
 
 ```python
 from nemotron_predict import PredictClient, relational

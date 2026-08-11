@@ -67,7 +67,7 @@ the relevant subgraph and returns predictions for the entities you name.
 | Component | Package | Role |
 | --- | --- | --- |
 | Client SDK | `nemotron-predict-client` | The `PredictClient`, typed requests, and per-model adapters. Pure Python. |
-| NemotronRelational driver | `nemotron_relational` | Graph, samplers, native `relationallib`, and PQL for the relational model. Installed via the `[nemotron_relational]` extra. |
+| NemotronRelational driver | `nemotron_relational` | Graph, samplers, native `relationallib`, and PQL for the relational model. Installed via the `[relational]` extra. |
 | Connectors | `nemotron-predict-connectors` | Shared data-source connectors (SQLite, DuckDB, Snowflake, Databricks, S3) used by the client and the driver. |
 
 ## Learn More

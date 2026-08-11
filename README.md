@@ -19,7 +19,7 @@ Full documentation lives under [`docs/`](docs/index.md):
 | Command | You get |
 | --- | --- |
 | `pip install nemotron-predict-client` | The client + every lightweight model (TabICL today). Works out of the box. |
-| `pip install nemotron-predict-client[nemotron_relational]` | Adds NemotronRelational (pulls the native `nemotron_relational` driver). |
+| `pip install nemotron-predict-client[relational]` | Adds NemotronRelational (pulls the native `nemotron_relational` driver). |
 | `pip install nemotron-predict-client[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
 | `pip install nemotron-predict-client[all]` | NemotronRelational, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
 
@@ -33,9 +33,9 @@ Two extras stay outside `[all]` and have to be asked for by name. `[explain]` fi
 `Explanation.summary`, which POSTs row data to a third-party LLM endpoint, so installing it
 is a deliberate act; `[relbench]` pulls the RelBench datasets in for `Graph.from_relbench()`.
 
-`[nemotron_relational]` is a native build. Prebuilt wheels are published for Linux x86-64
+`[relational]` is a native build. Prebuilt wheels are published for Linux x86-64
 (`manylinux_2_28`) on CPython 3.10-3.13 only, and no source distribution is published, so
-`pip install "nemotron-predict-client[nemotron_relational]"` resolves on that platform alone. The base client and
+`pip install "nemotron-predict-client[relational]"` resolves on that platform alone. The base client and
 the connectors are pure Python and install anywhere.
 
 ## Quickstart
@@ -53,7 +53,7 @@ with PredictClient(url="http://localhost:8000") as client:
     df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
-NemotronRelational (relational) — needs `nemotron-predict-client[nemotron_relational]`:
+NemotronRelational (relational) — needs `nemotron-predict-client[relational]`:
 
 ```python
 from nemotron_predict import PredictClient, relational
@@ -147,7 +147,7 @@ takes a PQL query plus an entity-graph and builds/samples/sends the request as o
 operation — there is no standalone "build a payload from two flat DataFrames" step to call
 into. Reimplementing that outside the driver would duplicate PQL parsing, subgraph sampling,
 and point-in-time correctness logic that already lives (and is tested) there. So
-`adapters/nemotron_relational.py` takes the shape NemotronRelational actually needs and normalizes the result into
+`adapters/relational.py` takes the shape NemotronRelational actually needs and normalizes the result into
 the same DataFrame shape `core.response` produces for TabICL, so callers get one consistent
 return type regardless of adapter.
 

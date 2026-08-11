@@ -50,7 +50,7 @@ def _load_engine() -> Any:
         if error.name != 'nemotron_relational':
             raise
         raise MissingExtraError(
-            'nemotron_relational', 'nemotron_relational'
+            'relational', 'nemotron-relational-v1'
         ) from error
     return rfm_engine
 
@@ -282,7 +282,7 @@ def _translate_engine_error(error: Exception, url: str) -> PredictError:
     if isinstance(error, (ValueError, TypeError, LookupError)):
         return PredictError(str(error), code='INVALID_REQUEST')
     return PredictError(
-        f'The kumo-rfm prediction at {url} failed unexpectedly with '
+        f'The nemotron-relational-v1 prediction at {url} failed unexpectedly with '
         f'{type(error).__name__}: {error}',
         code='INTERNAL_ERROR',
     )

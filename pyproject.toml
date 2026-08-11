@@ -88,7 +88,7 @@ ignore = [
 # ANTLR's `ErrorListener` calls `syntaxError(...)` by that exact name.
 "**/tests/test_pql_quoted_identifiers.py" = ["N802"]
 # The fake class mirrors `nemotron_relational.exceptions.HTTPException`.
-"**/tests/test_nemotron_relational_serving_branch.py" = ["N818"]
+"**/tests/test_kumorfm_serving_branch.py" = ["N818"]
 # Examples are read as much as they are run: they print, they annotate
 # nothing, and a notebook cell re-imports what an earlier cell already
 # imported so it can be run on its own. Linting them still catches the things

@@ -51,7 +51,7 @@ def _import(module_name: str) -> Any:
         if error.name != 'nemotron_relational':
             raise
         raise MissingExtraError(
-            'nemotron_relational', 'nemotron_relational'
+            'relational', 'nemotron-relational-v1'
         ) from error
     return module
 

@@ -12,7 +12,7 @@ It is imported as `nemotron_relational` and is normally installed transitively v
 `nemotron_relational` extra rather than on its own:
 
 ```bash
-pip install nemotron-predict-client[nemotron_relational]      # pulls the nemotron_relational driver
+pip install nemotron-predict-client[relational]      # pulls the nemotron_relational driver
 ```
 
 It can also be installed on its own, for the graph, sampler and PQL machinery.
@@ -20,7 +20,7 @@ Predicting is not available that way: the engine's entry points refuse a direct
 call, so a prediction has to go through `nemotron-predict-client`.
 
 ```bash
-pip install nemotron_relational
+pip install nemotron-relational-v1
 # optional data backends:
 pip install "nemotron-relational-v1[duckdb]"      # or [sqlite] / [snowflake] / [databricks]
 # optional features:

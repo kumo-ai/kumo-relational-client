@@ -30,7 +30,7 @@ The NemotronRelational driver ships prebuilt binary wheels for the following pla
 | Everything else, including macOS | No — build from source |
 
 No source distribution is published either, so `pip install
-"nemotron-predict-client[nemotron_relational]"` resolves on Linux x86_64 only. On any other platform,
+"nemotron-predict-client[relational]"` resolves on Linux x86_64 only. On any other platform,
 install the base `nemotron-predict-client` — it is pure Python, as are the connectors, and
 installs on anything running Python 3.10 or later — and run NemotronRelational from a Linux
 x86_64 host.
@@ -47,7 +47,7 @@ install only when you request the matching extra.
 
 ## Verified Configurations
 
-- Python 3.12 on Linux x86_64, installing `nemotron-predict-client[nemotron_relational]`.
+- Python 3.12 on Linux x86_64, installing `nemotron-predict-client[relational]`.
 - Python 3.12 on macOS arm64, installing the base `nemotron-predict-client`.
 
 ## Network Access
@@ -70,7 +70,7 @@ Before you continue to installation, confirm the following:
 - **`No matching distribution found for nemotron_relational`.** Your platform or Python
   version is outside the wheel matrix (Linux x86_64, Python 3.10–3.13), and no
   source distribution is published to fall back to. Install the base
-  `nemotron-predict-client` without the `[nemotron_relational]` extra, or use a supported host and
+  `nemotron-predict-client` without the `[relational]` extra, or use a supported host and
   interpreter.
 - **Cannot reach the package index.** Confirm you are connected to the NVIDIA
   network, then retry the install.

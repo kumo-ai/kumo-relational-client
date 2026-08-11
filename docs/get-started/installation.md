@@ -31,7 +31,7 @@ Add extras in brackets to install additional capabilities.
 | Command | You get |
 | --- | --- |
 | `pip install "nemotron-predict-client"` | The client plus every lightweight model (TabICL). |
-| `pip install "nemotron-predict-client[nemotron_relational]"` | Adds the NemotronRelational driver (native graph sampler and PQL). |
+| `pip install "nemotron-predict-client[relational]"` | Adds the NemotronRelational driver (native graph sampler and PQL). |
 | `pip install "nemotron-predict-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
 | `pip install "nemotron-predict-client[databricks-serving]"` | Reaches a NemotronRelational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
 | `pip install "nemotron-predict-client[all]"` | NemotronRelational, every data-source connector, and `[databricks-serving]`. |
@@ -55,7 +55,7 @@ pip install "nemotron-predict-client[relational,snowflake]"
 If you use `uv`, add the dependency with:
 
 ```bash
-uv add "nemotron-predict-client[nemotron_relational]"
+uv add "nemotron-predict-client[relational]"
 ```
 
 ## Installation Verification
@@ -73,7 +73,7 @@ Expected output:
 ['nemotron-relational-v1', 'tabicl']
 ```
 
-If you installed the `[nemotron_relational]` extra, confirm the driver's native extension
+If you installed the `[relational]` extra, confirm the driver's native extension
 loads:
 
 ```bash
@@ -90,12 +90,12 @@ True
 
 - **`No matching distribution found for nemotron-predict-client`.** Confirm your Python is
   3.10 or newer and that `pip` can reach your configured package index.
-- **`No matching distribution found for nemotron_relational`.** The `[nemotron_relational]` extra has
+- **`No matching distribution found for nemotron_relational`.** The `[relational]` extra has
   prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.13,
   and no source distribution is published, so there is nothing to fall back to
   on another platform — macOS included. Install the base `nemotron-predict-client` and run
   NemotronRelational from a Linux x86_64 host, or build the driver from source.
-- **The native extension fails to import after installing `[nemotron_relational]`.**
+- **The native extension fails to import after installing `[relational]`.**
   Reinstall the `nemotron_relational` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.
 
