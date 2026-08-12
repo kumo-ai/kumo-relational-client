@@ -1,6 +1,16 @@
 # Changelog
 
-## nemotron-predict-client 0.3.0 · nemotron_relational 2.28.0 · nemotron-predict-connectors 0.4.0
+## 1.0.0 — all three packages
+
+The first release under the `nemotron-*` names, and the first public one. All
+three packages now share a single version: they are released together and only
+ever tested against each other, so independent numbering carried information
+nobody could act on. Earlier numbering (`nemotron-predict-client` 0.x,
+`nemotron_relational` 2.x, `nemotron-predict-connectors` 0.x) was published
+under the previous distribution names and stops here.
+
+The models are addressed as `nemotron-tabular` and `nemotron-relational`. The
+older ids `tabicl`, `kumo-rfm` and `nemotron-relational-v1` are not accepted.
 
 Prepares the SDK for release as open source. Alongside the licensing and
 contribution scaffolding, this closes the defects found by testing the SDK

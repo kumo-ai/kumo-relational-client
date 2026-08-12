@@ -11,7 +11,7 @@ from nemotron_predict_connectors.sql import (
     resolve_sql,
 )
 
-__version__ = '0.4.0'
+__version__ = '1.0.0'
 
 __all__ = [
     'ConnectorError',

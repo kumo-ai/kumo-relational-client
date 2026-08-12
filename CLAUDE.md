@@ -25,7 +25,8 @@ anywhere.
 from nemotron_predict import PredictClient
 
 with PredictClient(url='http://localhost:8000') as client:
-    df = client.tabular(context_df, target='label', task='classification').predict(rows)
+    model = client.tabular(context_df, target='label', task='classification')
+    df = model.predict(rows)
 ```
 
 `client.tabular(...)` returns a `TabularModel` and sends `nemotron-tabular`.
