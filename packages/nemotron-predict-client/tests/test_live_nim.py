@@ -12,7 +12,7 @@ import pytest
 from nemotron_predict import PredictClient
 from nemotron_predict.requests import NemotronTabularRequest
 
-_ENV_VAR = 'SDFM_NIM_BASE_URL'
+_ENV_VAR = 'NEMOTRON_PREDICT_NIM_BASE_URL'
 
 pytestmark = [
     pytest.mark.live_nim,

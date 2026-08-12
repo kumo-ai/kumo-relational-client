@@ -73,7 +73,7 @@ def test_read_local_without_data_or_path_raises():
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
 
 
-def test_query_failure_maps_to_sdfm_error_with_code(tmp_path):
+def test_query_failure_maps_to_predict_error_with_code(tmp_path):
     database = str(tmp_path / 'db.sqlite')
     with sqlite3.connect(database) as connection:
         pd.DataFrame({'a': [1]}).to_sql('items', connection, index=False)
@@ -83,7 +83,7 @@ def test_query_failure_maps_to_sdfm_error_with_code(tmp_path):
     assert excinfo.value.details['sql'] == 'SELECT * FROM missing'
 
 
-def test_connect_failure_maps_to_sdfm_error_with_code(tmp_path):
+def test_connect_failure_maps_to_predict_error_with_code(tmp_path):
     database = tmp_path / 'not-a-database.duckdb'
     database.write_text('this is not a duckdb database')
     with pytest.raises(PredictError) as excinfo:

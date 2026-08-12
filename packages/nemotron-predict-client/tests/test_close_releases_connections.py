@@ -130,7 +130,7 @@ def test_nemotron_relational_adapter_releases_the_engine_it_opened(
     token = object()
 
     class _Engine:
-        _SDFM_CLIENT_TOKEN = token
+        _CLIENT_TOKEN = token
 
         @staticmethod
         def close_client(_token: object | None = None) -> None:
@@ -156,7 +156,7 @@ def test_nemotron_relational_adapter_does_not_release_twice(
     released: list[object] = []
 
     class _Engine:
-        _SDFM_CLIENT_TOKEN = object()
+        _CLIENT_TOKEN = object()
 
         @staticmethod
         def close_client(_token: object | None = None) -> None:

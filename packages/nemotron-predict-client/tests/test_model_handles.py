@@ -422,9 +422,7 @@ _NOT_A_FRAME = [
 
 @pytest.mark.parametrize('value', _NOT_A_FRAME)
 def test_tabicl_handle_rejects_a_non_frame_context(value):
-    r"""client-non-dataframe-tables-raise-a-bare-attributeerror.md
-
-    These are the shapes a pandas user reaches for before building a frame.
+    """These are the shapes a pandas user reaches for before building a frame.
     Each used to reach ``frame.columns`` inside the adapter and raise
     ``AttributeError``, which ``except PredictError`` does not catch and which
     names neither the argument nor the type it should have been.

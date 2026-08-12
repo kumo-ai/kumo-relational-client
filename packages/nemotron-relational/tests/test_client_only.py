@@ -58,7 +58,7 @@ def test_authorized_init_passes_the_guard(monkeypatch):
         raising=False,
     )
     try:
-        rfm_engine.init(url='http://x', _token=rfm_engine._SDFM_CLIENT_TOKEN)
+        rfm_engine.init(url='http://x', _token=rfm_engine._CLIENT_TOKEN)
         assert rfm_engine.global_state._initialized is True
         assert calls['url'] == 'http://x'
     finally:
@@ -66,7 +66,7 @@ def test_authorized_init_passes_the_guard(monkeypatch):
 
 
 @requires_engine
-def test_client_access_without_init_redirects_to_sdfmclient():
+def test_client_access_without_init_redirects_to_predict_client():
     rfm_engine.global_state.reset()
     with pytest.raises(RuntimeError, match='PredictClient'):
         _ = rfm_engine.global_state.client
@@ -97,7 +97,7 @@ def test_client_cache_follows_the_current_endpoint(monkeypatch):
         rfm_engine.init(
             url=config[0],
             api_key=config[1],
-            _token=rfm_engine._SDFM_CLIENT_TOKEN,
+            _token=rfm_engine._CLIENT_TOKEN,
         )
         client = nemotron_relational.global_state.client
         return (client._url, client._api_key)

@@ -30,7 +30,7 @@ from nemotron_predict.errors import MissingExtraError, PredictError
 class _Engine:
     """Records which initializer ran and with what."""
 
-    _SDFM_CLIENT_TOKEN = object()
+    _CLIENT_TOKEN = object()
 
     def __init__(self) -> None:
         self.calls: dict[str, dict] = {}
@@ -96,7 +96,7 @@ def test_a_missing_dependency_names_that_platforms_own_extra(kind) -> None:
     platform = _SERVING_PLATFORMS[kind]
 
     class _Bare:
-        _SDFM_CLIENT_TOKEN = object()
+        _CLIENT_TOKEN = object()
 
         def __getattr__(self, name):
             def raise_import_error(*args, **kwargs):

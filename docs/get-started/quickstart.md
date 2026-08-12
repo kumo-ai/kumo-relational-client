@@ -1,10 +1,10 @@
 ---
-title: "Quickstart for the NVIDIA SDFM SDK"
-description: "Run your first Nemotron Tabular and Nemotron Relational predictions against a Universal TFM API NIM using the NVIDIA SDFM SDK."
+title: "Quickstart for the NVIDIA Nemotron Predict SDK"
+description: "Run your first Nemotron Tabular and Nemotron Relational predictions against a Universal TFM API NIM using the NVIDIA Nemotron Predict SDK."
 template-library-version: "1.0.0"
 ---
 
-# Quickstart for the NVIDIA SDFM SDK
+# Quickstart for the NVIDIA Nemotron Predict SDK
 
 This quickstart shows you how to connect to a NIM and run a prediction with each
 model. A `PredictClient` owns one connection to a NIM, and each model has its own
@@ -86,5 +86,5 @@ code `TRANSPORT_ERROR` if the endpoint cannot be reached at all.
 
 ## Next Steps
 
-- Learn how the pieces fit together in the [NVIDIA SDFM SDK Architecture](../about/architecture.md).
-- Configure the client and drivers with the [NVIDIA SDFM SDK Environment Variables](../reference/environment-variables.md).
+- Learn how the pieces fit together in the [NVIDIA Nemotron Predict SDK Architecture](../about/architecture.md).
+- Configure the client and drivers with the [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md).

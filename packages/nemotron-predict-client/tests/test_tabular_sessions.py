@@ -134,9 +134,7 @@ def test_nim_without_session_routes_stays_stateless(
 def test_create_session_failure_falls_back_to_the_stateless_path(
     requests_mock, context_df, predict_df
 ):
-    r"""client-retried-session-create-orphans-sessions.md
-
-    A session is an optimisation. Failing the caller's prediction because the
+    """A session is an optimisation. Failing the caller's prediction because the
     optimisation failed is the wrong trade, so any create failure -- not only
     the 404/405/501 that mean "no session routes here" -- serves the call
     statelessly. The 507 here is not a latching condition, so the next call
@@ -165,9 +163,7 @@ def test_create_session_failure_falls_back_to_the_stateless_path(
 def test_transport_failure_on_create_falls_back_to_the_stateless_path(
     requests_mock, context_df, predict_df
 ):
-    r"""client-retried-session-create-orphans-sessions.md
-
-    A ``TRANSPORT_ERROR`` on create used to propagate and fail the prediction
+    """A ``TRANSPORT_ERROR`` on create used to propagate and fail the prediction
     outright, even though the stateless path would have answered it.
     """
     requests_mock.post(_URL + '/v1/predictions', json=_predictions())
@@ -381,9 +377,7 @@ class _CountingTransport:
 def test_concurrent_predicts_on_one_handle_open_one_session(
     context_df, predict_df
 ):
-    r"""tabicl-concurrent-predicts-on-one-handle-leak-sessions.md
-
-    ``NemotronTabularSession`` is mutable state on a handle the docstring recommends
+    """``NemotronTabularSession`` is mutable state on a handle the docstring recommends
     reusing. Without a lock, every thread reads ``id is None`` at once, they all
     create, the last writer wins, and the rest are pinned on the NIM with no id
     left to release them by -- silently, and paid for by whoever calls next.

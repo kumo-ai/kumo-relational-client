@@ -63,7 +63,7 @@ def _graph(path: Path) -> Graph:
 
 
 def test_validate_mismatched_data_type_families(tmp_path: Path) -> None:
-    # Regression test for `graph-validate-dtype-check-local-only.md`: the
+    # Regression test: the
     # foreign key/primary key data type check used to run on the local backend
     # only, so SQL-backed graphs passed validation and failed inside the
     # sampler with a bare `TypeError` instead.
@@ -83,7 +83,7 @@ def test_validate_compatible_data_type_families(tmp_path: Path) -> None:
 
 
 def test_random_seed_warns_once(tmp_path: Path) -> None:
-    # Regression test for `sampler-random-seed-ignored-on-sql-backends.md`:
+    # Regression test:
     # SQLite cannot seed `ORDER BY RANDOM()`, which must be surfaced to the
     # caller rather than dropped silently.
     graph = _graph(_create_database(tmp_path / 'seed.db', 'INTEGER'))
@@ -112,9 +112,7 @@ def test_random_seed_does_not_warn_without_seed(tmp_path: Path) -> None:
 def test_discovery_on_an_empty_database_names_what_it_searched(
     tmp_path: Path,  #
 ) -> None:
-    r"""graph-empty-graph-on-bad-path-or-schema.md
-
-    A database with nothing in it -- what a mistyped path used to produce,
+    """A database with nothing in it -- what a mistyped path used to produce,
     since sqlite creates on connect -- returned a valid-looking empty graph
     that failed much later as "At least one table needs to be added to the
     graph", pointing at the caller's table list rather than the path.

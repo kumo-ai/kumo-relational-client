@@ -108,7 +108,7 @@ addopts = ["-q"]
 # gets un-marked rather than sitting there silently.
 xfail_strict = true
 markers = [
-    "live_nim: opt-in live TFM NIM tests using SDFM_NIM_BASE_URL",
+    "live_nim: opt-in live TFM NIM tests using NEMOTRON_PREDICT_NIM_BASE_URL",
 ]
 
 [tool.ruff]

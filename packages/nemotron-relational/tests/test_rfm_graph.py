@@ -534,9 +534,7 @@ def test_validate_non_key_foreign_key_dtype_message(
 def test_validate_names_the_edge_left_behind_by_remove_column(
     sample_dfs: dict[str, pd.DataFrame],  #
 ) -> None:
-    r"""graph-dangling-edge-after-remove-column.md
-
-    ``Table.remove_column`` has no back-reference to the graph, so dropping a
+    """``Table.remove_column`` has no back-reference to the graph, so dropping a
     linked foreign key leaves the edge behind. The column lookup in
     ``validate`` then raised ``KeyError`` -- the wrong type for a graph
     consistency failure, and uncatchable by the ``except ValueError`` the
@@ -575,9 +573,7 @@ def test_empty_edges_suppress_inference_unlike_none(
 def test_empty_edges_suppress_catalog_foreign_keys_too(
     tmp_path: Any,  #
 ) -> None:
-    r"""graph-edges-empty-does-not-suppress-catalog-links.md
-
-    ``edges=[]`` is documented as "these edges and no others". It suppressed
+    """``edges=[]`` is documented as "these edges and no others". It suppressed
     the heuristic ``infer_links`` pass but not the one in ``Graph.__init__``
     that reads foreign keys straight out of the source catalog, so on any
     warehouse that declares them an explicit edge list still picked up edges

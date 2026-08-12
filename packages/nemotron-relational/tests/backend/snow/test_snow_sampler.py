@@ -19,7 +19,7 @@ class _FakeConnection:
 
 
 def test_paramstyle_restored_on_error() -> None:
-    # Regression test for `sampler-snowflake-paramstyle-not-restored.md`: the
+    # Regression test: the
     # connection is usually owned by the caller, so a failed query must not
     # leave it stuck in 'qmark' mode.
     connection = cast(Connection, cast(Any, _FakeConnection()))

@@ -30,7 +30,7 @@ from nemotron_predict.core.transport import Transport
 from nemotron_predict.errors import PredictError
 from nemotron_predict.requests import NemotronRelationalRequest
 
-_SDFM_CLIENT_TOKEN = object()
+_CLIENT_TOKEN = object()
 
 # Everything here runs against a stub. The one exception is the cross-layer
 # agreement test, which has to import nemotron_relational's real validator -- a stub cannot
@@ -97,7 +97,7 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
         'init_databricks_serving', {'endpoint': endpoint, **kw}
     )
     module.NemotronRelational = _NemotronRelational
-    module._SDFM_CLIENT_TOKEN = _SDFM_CLIENT_TOKEN
+    module._CLIENT_TOKEN = _CLIENT_TOKEN
 
     parent = types.ModuleType('nemotron_relational')
     parent.rfm = module

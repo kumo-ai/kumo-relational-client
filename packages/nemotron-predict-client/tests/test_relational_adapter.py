@@ -91,7 +91,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         'verify_ssl': client.verify_ssl,
         'timeout': client.timeout,
         'max_retries': client.max_retries,
-        '_token': rfm_engine._SDFM_CLIENT_TOKEN,
+        '_token': rfm_engine._CLIENT_TOKEN,
     }
     assert captured['graph'] == 'fake-graph'
     assert captured['predict']['query'] == 'PREDICT target FOR entity=1'
@@ -217,7 +217,7 @@ def test_adapter_authorizes_engine_init(monkeypatch, client):
         client, NemotronRelationalRequest(graph='g', query='PREDICT x')
     )
 
-    assert captured['_token'] is rfm_engine._SDFM_CLIENT_TOKEN
+    assert captured['_token'] is rfm_engine._CLIENT_TOKEN
 
 
 def test_nemotron_relational_shim_does_not_expose_driver():
@@ -502,7 +502,7 @@ def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
 
 
 @requires_engine
-def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
+def test_client_predict_explain_returns_explanation(monkeypatch):
     """Exercise issue #19: client.relational(graph).predict(explain=True)."""
     from nemotron_relational.rfm.rfm import Explanation
 
@@ -530,8 +530,8 @@ def test_sdfm_client_predict_explain_returns_explanation(monkeypatch):
         'nemotron_predict.core.transport.Transport.health_ready',
         lambda self: True,
     )
-    with PredictClient(url='http://127.0.0.1:18001') as sdfm:
-        result = sdfm.relational('fake-graph').predict(
+    with PredictClient(url='http://127.0.0.1:18001') as client:
+        result = client.relational('fake-graph').predict(
             'PREDICT t FOR e=1', explain=True
         )
 
@@ -677,8 +677,6 @@ def _predict(client):
 
 @requires_engine
 def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
-    r"""client-rfm-path-never-raises-sdfmerror.md +
-    rfm-nim-validation-details-discarded.md"""
     from nemotron_relational.exceptions import NimFailureError
 
     params = [
@@ -709,7 +707,6 @@ def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
 def test_nim_failure_without_a_status_becomes_a_transport_error(
     monkeypatch, client
 ):
-    r"""client-rfm-path-never-raises-sdfmerror.md"""
     from nemotron_relational.exceptions import NimFailureError
 
     _failing_engine(
@@ -726,7 +723,7 @@ def test_nim_failure_without_a_status_becomes_a_transport_error(
 
 @requires_engine
 def test_unexpected_engine_failure_becomes_internal_error(monkeypatch, client):
-    r"""client-rfm-path-never-raises-sdfmerror.md: no bare exception escapes."""
+    """No bare exception escapes."""
     _failing_engine(monkeypatch, RuntimeError('the wheels came off'))
 
     with pytest.raises(PredictError) as excinfo:
@@ -739,9 +736,7 @@ def test_unexpected_engine_failure_becomes_internal_error(monkeypatch, client):
 
 @requires_engine
 def test_engine_lookup_failure_becomes_invalid_request(monkeypatch, client):
-    r"""rfm-caller-input-keyerror-reported-as-internal-error.md
-
-    A name the caller supplied that the engine looked up and did not find is a
+    """A name the caller supplied that the engine looked up and did not find is a
     caller mistake, not an SDK failure, however deep the lookup happened. The
     key is reported unwrapped rather than as ``KeyError``'s ``repr``.
     """
@@ -756,9 +751,7 @@ def test_engine_lookup_failure_becomes_invalid_request(monkeypatch, client):
 
 @requires_engine
 def test_malformed_response_becomes_invalid_response(monkeypatch, client):
-    r"""client-rfm-path-never-raises-sdfmerror.md
-
-    A malformed server response is the server's fault, so it must not be
+    """A malformed server response is the server's fault, so it must not be
     reported as a bad request.
     """
     from nemotron_relational.exceptions import InvalidResponseError
@@ -779,9 +772,7 @@ def test_malformed_response_becomes_invalid_response(monkeypatch, client):
 
 @requires_engine
 def test_engine_validation_error_keeps_its_message(monkeypatch, client):
-    r"""client-rfm-path-never-raises-sdfmerror.md
-
-    Client-side validation the engine performs is already actionable, so it
+    """Client-side validation the engine performs is already actionable, so it
     must not be relabelled as an internal SDK failure.
     """
     _failing_engine(
@@ -796,7 +787,7 @@ def test_engine_validation_error_keeps_its_message(monkeypatch, client):
 
 
 @requires_engine
-def test_adapter_sdfm_error_is_not_rewrapped(monkeypatch, client):
+def test_adapter_predict_error_is_not_rewrapped(monkeypatch, client):
     original = PredictError('already ours', code='INVALID_REQUEST')
     _failing_engine(monkeypatch, original)
 
@@ -807,7 +798,6 @@ def test_adapter_sdfm_error_is_not_rewrapped(monkeypatch, client):
 
 @requires_engine
 def test_num_retries_applies_without_batch_size(monkeypatch, client):
-    r"""rfm-num-retries-silent-noop.md"""
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
@@ -837,7 +827,6 @@ def test_num_retries_applies_without_batch_size(monkeypatch, client):
 
 @requires_engine
 def test_zero_num_retries_enters_no_context(monkeypatch, client):
-    r"""rfm-num-retries-silent-noop.md"""
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
@@ -867,7 +856,7 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
 
 @requires_engine
 def test_adapter_rejects_negative_num_retries(monkeypatch, client):
-    r"""rfm-num-retries-silent-noop.md: rejected on both paths, not just batch."""
+    """Rejected on both paths, not just batch."""
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
 
@@ -1234,9 +1223,7 @@ def test_unknown_attribute_still_raises():
 
 @requires_engine
 def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
-    r"""rfm-no-way-to-silence-progress-output.md
-
-    The graph-materialization banner is owned by ``NemotronRelational.__init__``, and a
+    """The graph-materialization banner is owned by ``NemotronRelational.__init__``, and a
     handle builds a fresh engine model per prediction -- so forwarding
     ``verbose`` only to ``predict`` still left that banner on stdout on every
     single call, which live verification caught.
@@ -1373,9 +1360,7 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
 
 @requires_engine
 def test_predict_task_names_a_feature_column_missing_from_predict(client):
-    r"""rfm-caller-input-keyerror-reported-as-internal-error.md
-
-    Anything in ``context`` beyond entity/target/time becomes a task feature,
+    """Anything in ``context`` beyond entity/target/time becomes a task feature,
     and the engine then reads the same column out of ``predict``. Present in
     only one frame it raised a bare ``KeyError`` naming the column but not the
     constraint, which the classifier could only report as an internal failure.

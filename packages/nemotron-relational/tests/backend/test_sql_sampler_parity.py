@@ -141,9 +141,7 @@ def _related_payload(graph: rfm.Graph) -> tuple[dict, dict]:
     'ignore:.*does not support seeded random sampling.*:UserWarning'
 )
 def test_nullable_integer_column_survives_subgraph_traversal(sql_graph):
-    r"""data-nullable-int64-widened-in-sql-subgraph-sampler.md
-
-    ``_by_pkey``/``_by_fkey`` converted their Arrow result with a bare
+    """``_by_pkey``/``_by_fkey`` converted their Arrow result with a bare
     ``to_pandas()``, so one NULL widened the whole integer column to
     ``float64`` and rounded every value past 2**53 -- silently, because the
     declared dtype was rewritten to match the corrupted values.
@@ -163,9 +161,7 @@ def test_nullable_integer_column_survives_subgraph_traversal(sql_graph):
 
 
 def test_neighbor_order_breaks_ties_on_the_primary_key(sql_graph):
-    r"""sampler-sql-payload-column-order-nondeterministic.md
-
-    ``_by_fkey`` keeps the first ``num_neighbors`` rows of each partition, so
+    """``_by_fkey`` keeps the first ``num_neighbors`` rows of each partition, so
     ordering on the time column alone lets the engine choose arbitrarily
     between rows sharing a timestamp. ``ORDER BY <fkey>`` cannot break that
     tie: the partition is keyed by the foreign key, so it holds one value.
@@ -177,9 +173,7 @@ def test_neighbor_order_breaks_ties_on_the_primary_key(sql_graph):
 
 
 def test_projection_order_is_independent_of_set_iteration(sql_graph):
-    r"""sampler-sql-payload-column-order-nondeterministic.md
-
-    The projection list was built by iterating a ``set``, whose order depends
+    """The projection list was built by iterating a ``set``, whose order depends
     on the per-process string hash seed.
     """
     sampler = rfm.NemotronRelational(sql_graph, verbose=False)._sampler
@@ -195,7 +189,6 @@ def test_projection_order_is_independent_of_set_iteration(sql_graph):
 
 
 def test_unknown_column_cannot_reintroduce_set_ordering(sql_graph):
-    r"""sampler-sql-payload-column-order-nondeterministic.md"""
     sampler = rfm.NemotronRelational(sql_graph, verbose=False)._sampler
     columns = {'amount', 'zzz_unknown', 'aaa_unknown'}
     ordered = sampler._ordered_columns('orders', columns)

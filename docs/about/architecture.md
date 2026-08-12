@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA SDFM SDK Architecture"
-description: "How the NVIDIA SDFM SDK is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
+title: "NVIDIA Nemotron Predict SDK Architecture"
+description: "How the NVIDIA Nemotron Predict SDK is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA SDFM SDK Architecture
+# NVIDIA Nemotron Predict SDK Architecture
 
-The NVIDIA SDFM SDK separates a small, universal client from the heavy runtimes
+The NVIDIA Nemotron Predict SDK separates a small, universal client from the heavy runtimes
 that individual models need. The client is symmetric across models — every model
 is a peer adapter — while a model's optional driver holds its client-side compute.
 
@@ -136,6 +136,6 @@ on the Nemotron Tabular path reads `/v1/models`.
 
 ## Related Topics
 
-- [NVIDIA SDFM SDK Documentation](overview.md)
-- [Quickstart for the NVIDIA SDFM SDK](../get-started/quickstart.md)
-- [NVIDIA SDFM SDK Environment Variables](../reference/environment-variables.md)
+- [NVIDIA Nemotron Predict SDK Documentation](overview.md)
+- [Quickstart for the NVIDIA Nemotron Predict SDK](../get-started/quickstart.md)
+- [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md)

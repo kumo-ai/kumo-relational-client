@@ -514,9 +514,7 @@ def test_nim_failure_error_timeout_points_at_the_timeout_setting() -> None:
 
 
 def test_nim_failure_error_client_error_is_not_an_sdk_bug_report() -> None:
-    r"""rfm-nim-validation-details-discarded.md
-
-    A 4xx is about the request the caller sent, so it is reported as a rejected
+    """A 4xx is about the request the caller sent, so it is reported as a rejected
     request rather than routed to the SDK's issue tracker.
     """
     from nemotron_relational.exceptions import HTTPException
@@ -534,9 +532,7 @@ def test_nim_failure_error_client_error_is_not_an_sdk_bug_report() -> None:
 
 
 def test_nim_failure_error_surfaces_invalid_params() -> None:
-    r"""rfm-nim-validation-details-discarded.md
-
-    The NIM names the exact table, row and column it rejected; the top-level
+    """The NIM names the exact table, row and column it rejected; the top-level
     ``detail`` is often only "Request validation failed."
     """
     import json
@@ -568,7 +564,6 @@ def test_nim_failure_error_surfaces_invalid_params() -> None:
 
 
 def test_nim_failure_error_caps_invalid_params() -> None:
-    r"""rfm-nim-validation-details-discarded.md"""
     import json
 
     from nemotron_relational.exceptions import HTTPException
@@ -593,7 +588,7 @@ def test_nim_failure_error_caps_invalid_params() -> None:
 
 
 def test_nim_failure_error_unclassifiable_still_invites_an_issue() -> None:
-    r"""rfm-nim-validation-details-discarded.md: the invitation is reserved."""
+    """The invitation is reserved."""
     from nemotron_relational.rfm.rfm import _nim_failure_error
 
     msg = str(_nim_failure_error(RuntimeError('something odd'), explain=False))
@@ -601,7 +596,7 @@ def test_nim_failure_error_unclassifiable_still_invites_an_issue() -> None:
 
 
 def test_nim_failure_error_is_a_runtime_error() -> None:
-    r"""client-rfm-path-never-raises-sdfmerror.md: existing callers keep working."""
+    """Existing callers keep working."""
     from nemotron_relational.exceptions import HTTPException, NimFailureError
     from nemotron_relational.rfm.rfm import _nim_failure_error
 

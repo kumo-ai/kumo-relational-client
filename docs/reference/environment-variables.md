@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA SDFM SDK Environment Variables"
-description: "Reference for the environment variables that configure the NVIDIA SDFM SDK client, the Nemotron Relational driver, and the data-source connectors."
+title: "NVIDIA Nemotron Predict SDK Environment Variables"
+description: "Reference for the environment variables that configure the NVIDIA Nemotron Predict SDK client, the Nemotron Relational driver, and the data-source connectors."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA SDFM SDK Environment Variables
+# NVIDIA Nemotron Predict SDK Environment Variables
 
-This page lists the environment variables the NVIDIA SDFM SDK reads. Most
+This page lists the environment variables the NVIDIA Nemotron Predict SDK reads. Most
 configuration is passed directly to `PredictClient` in code; the variables below
 cover the Nemotron Relational driver's connection defaults, logging, and the data-source
 connectors.
@@ -67,5 +67,5 @@ it borrows the active session's connection.
 
 ## Related Topics
 
-- [Installation Guide for the NVIDIA SDFM SDK](../get-started/installation.md)
-- [Quickstart for the NVIDIA SDFM SDK](../get-started/quickstart.md)
+- [Installation Guide for the NVIDIA Nemotron Predict SDK](../get-started/installation.md)
+- [Quickstart for the NVIDIA Nemotron Predict SDK](../get-started/quickstart.md)

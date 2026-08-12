@@ -606,9 +606,7 @@ def test_widening_refuses_to_round_ids_past_the_float64_mantissa():
 
 
 def test_outputs_given_as_a_bare_string_is_named(context_df, predict_df):
-    r"""client-non-dataframe-tables-raise-a-bare-attributeerror.md
-
-    ``outputs`` is documented as a list. A bare string is iterable, so it used
+    """``outputs`` is documented as a list. A bare string is iterable, so it used
     to be checked character by character and reported as
     "Nemotron Tabular does not produce ['p', 'r', 'e', ...]".
     """
@@ -626,7 +624,7 @@ def test_outputs_given_as_a_bare_string_is_named(context_df, predict_df):
 
 
 @pytest.mark.parametrize('outputs', [None, 123, ['prediction', 1]])
-def test_malformed_outputs_raise_sdfm_error(context_df, predict_df, outputs):
+def test_malformed_outputs_raise_predict_error(context_df, predict_df, outputs):
     with pytest.raises(PredictError) as excinfo:
         build_request(
             context=context_df,
@@ -652,7 +650,7 @@ def test_outputs_as_a_list_or_tuple_is_still_accepted(context_df, predict_df):
 
 
 @pytest.mark.parametrize('levels', ['bad', 0.5, [0.1, 'bad'], [float('nan')]])
-def test_malformed_quantile_levels_raise_sdfm_error(
+def test_malformed_quantile_levels_raise_predict_error(
     context_df,
     predict_df,
     levels,

@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA SDFM SDK Documentation"
-description: "Overview of the NVIDIA SDFM SDK, the Python client for structured-data foundation model NIMs served behind the Universal TFM API."
+title: "NVIDIA Nemotron Predict SDK Documentation"
+description: "Overview of the NVIDIA Nemotron Predict SDK, the Python client for structured-data foundation model NIMs served behind the Universal TFM API."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA SDFM SDK Documentation
+# NVIDIA Nemotron Predict SDK Documentation
 
-The NVIDIA SDFM (Structured Data Foundation Models) SDK is one Python client for
+The NVIDIA Nemotron Predict SDK is one Python client for
 NVIDIA's structured-data foundation model NIMs, served behind the Universal TFM
 API. A thin, model-agnostic client dispatches through per-model handles to
 per-model adapters; heavy model drivers are optional and installed only when you
@@ -33,10 +33,10 @@ learning) and **Nemotron Relational** (relational, graph-aware in-context learni
 
 ## Skip Ahead
 
-- To install the SDK, refer to [Installation Guide for the NVIDIA SDFM SDK](../get-started/installation.md).
-- To run your first prediction, refer to [Quickstart for the NVIDIA SDFM SDK](../get-started/quickstart.md).
-- To understand how the SDK is put together, refer to [NVIDIA SDFM SDK Architecture](architecture.md).
-- To look up configuration, refer to [NVIDIA SDFM SDK Environment Variables](../reference/environment-variables.md).
+- To install the SDK, refer to [Installation Guide for the NVIDIA Nemotron Predict SDK](../get-started/installation.md).
+- To run your first prediction, refer to [Quickstart for the NVIDIA Nemotron Predict SDK](../get-started/quickstart.md).
+- To understand how the SDK is put together, refer to [NVIDIA Nemotron Predict SDK Architecture](architecture.md).
+- To look up configuration, refer to [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md).
 
 ## Use Cases
 
@@ -53,7 +53,7 @@ the relevant subgraph and returns predictions for the entities you name.
 
 ## Core Concepts
 
-- **Universal TFM API.** The shared HTTP contract every SDFM NIM implements. The
+- **Universal TFM API.** The shared HTTP contract every structured-data NIM implements. The
   SDK builds requests against this contract so one client serves both models.
 - **Model adapter.** A per-model module that shapes a typed request into the
   wire envelope and normalizes the response into a pandas DataFrame.
@@ -72,7 +72,7 @@ the relevant subgraph and returns predictions for the entities you name.
 
 ## Learn More
 
-- [Installation Guide for the NVIDIA SDFM SDK](../get-started/installation.md)
-- [Quickstart for the NVIDIA SDFM SDK](../get-started/quickstart.md)
-- [NVIDIA SDFM SDK Architecture](architecture.md)
-- [NVIDIA SDFM SDK Environment Variables](../reference/environment-variables.md)
+- [Installation Guide for the NVIDIA Nemotron Predict SDK](../get-started/installation.md)
+- [Quickstart for the NVIDIA Nemotron Predict SDK](../get-started/quickstart.md)
+- [NVIDIA Nemotron Predict SDK Architecture](architecture.md)
+- [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md)

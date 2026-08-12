@@ -87,7 +87,6 @@ def test_read_local_rejects_both_data_and_path(tmp_path):
 
 
 def test_read_local_rejects_unknown_kwarg():
-    r"""connectors-local-source-raw-typeerror.md"""
     with pytest.raises(ConnectorError) as excinfo:
         read('local', data={'a': [1]}, bogus=1)
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
@@ -95,7 +94,7 @@ def test_read_local_rejects_unknown_kwarg():
 
 
 def test_read_local_rejects_storage_options():
-    r"""connectors-local-source-raw-typeerror.md: valid for s3, not for local."""
+    """Valid for s3, not for local."""
     with pytest.raises(ConnectorError) as excinfo:
         read('local', path='table.csv', storage_options={})
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
@@ -103,7 +102,6 @@ def test_read_local_rejects_storage_options():
 
 @pytest.mark.parametrize('name', ['table.json', 'table.tsv', 'table.orc'])
 def test_read_local_rejects_unsupported_format(tmp_path, name):
-    r"""connectors-unsupported-format-silent-csv-fallback.md"""
     path = tmp_path / name
     pd.DataFrame({'a': [1, 2, 3], 'b': ['x', 'y', 'z']}).to_json(path)
     with pytest.raises(ConnectorError) as excinfo:
@@ -113,7 +111,7 @@ def test_read_local_rejects_unsupported_format(tmp_path, name):
 
 
 def test_read_local_accepts_parquet_aliases(tmp_path):
-    r"""connectors-unsupported-format-silent-csv-fallback.md: '.pq' is Parquet."""
+    """'.pq' is Parquet."""
     path = tmp_path / 'table.pq'
     pd.DataFrame({'a': [1, 2, 3]}).to_parquet(path)
     assert read('local', path=str(path)).shape == (3, 1)
@@ -126,7 +124,7 @@ def test_read_local_accepts_compressed_csv(tmp_path):
 
 
 def test_read_local_format_override_reads_suffixless_file(tmp_path):
-    r"""connectors-unsupported-format-silent-csv-fallback.md: escape hatch."""
+    """Escape hatch."""
     path = tmp_path / 'table'
     pd.DataFrame({'a': [1, 2]}).to_csv(path, index=False)
     assert read('local', path=str(path), format='csv').shape == (2, 1)
@@ -136,7 +134,6 @@ def test_read_local_format_override_reads_suffixless_file(tmp_path):
 
 
 def test_read_local_parquet_directory_without_trailing_slash(tmp_path):
-    r"""connectors-unsupported-format-silent-csv-fallback.md"""
     dataset = tmp_path / 'dataset'
     dataset.mkdir()
     pd.DataFrame({'a': [1, 2, 3]}).to_parquet(dataset / 'part-0.parquet')
@@ -144,7 +141,6 @@ def test_read_local_parquet_directory_without_trailing_slash(tmp_path):
 
 
 def test_read_sqlite_missing_database_is_not_found(tmp_path):
-    r"""connectors-sqlite-creates-missing-database-file.md"""
     database = tmp_path / 'typo.sqlite'
     with pytest.raises(ConnectorError) as excinfo:
         read('sqlite', database=str(database), table='items')
@@ -153,7 +149,6 @@ def test_read_sqlite_missing_database_is_not_found(tmp_path):
 
 
 def test_read_sqlite_rejects_database_and_uri_together(tmp_path):
-    r"""connectors-database-uri-precedence-and-connect-asymmetry.md"""
     first, second = str(tmp_path / 'a.sqlite'), str(tmp_path / 'b.sqlite')
     for database in (first, second):
         with sqlite3.connect(database) as connection:
@@ -164,7 +159,6 @@ def test_read_sqlite_rejects_database_and_uri_together(tmp_path):
 
 
 def test_read_table_runs_in_the_caller_duckdb_session():
-    r"""connectors-duckdb-cursor-loses-caller-session.md"""
     import duckdb
 
     connection = duckdb.connect()
@@ -253,9 +247,7 @@ def test_read_table_falls_back_to_pandas_fetch_without_arrow_result():
 
 
 def test_read_local_accepts_a_path_object(tmp_path):
-    r"""connectors-local-path-object-raw-crash.md
-
-    ``_require_local_path`` ran ``urlparse`` on the raw argument, so a
+    """``_require_local_path`` ran ``urlparse`` on the raw argument, so a
     ``pathlib.Path`` -- which the sibling ``sqlite``/``duckdb`` connectors
     accept, and which ``pandas`` reads -- raised ``AttributeError`` from
     inside ``urllib``, escaping the connector's error contract entirely.
@@ -269,9 +261,7 @@ def test_read_local_accepts_a_path_object(tmp_path):
 
 
 def test_read_local_rejects_a_non_path_argument():
-    r"""connectors-local-path-object-raw-crash.md
-
-    Coercion must not turn the contract break into a different one: an
+    """Coercion must not turn the contract break into a different one: an
     argument that is neither ``str`` nor ``os.PathLike`` still raises the
     SDK's own error with a stable code.
     """
@@ -281,10 +271,8 @@ def test_read_local_rejects_a_non_path_argument():
 
 
 def test_read_local_still_rejects_a_remote_uri_given_as_a_path(tmp_path):
-    r"""connectors-local-path-object-raw-crash.md
-
-    The coercion runs before the scheme guard, so the guard must still see a
-    URI as a URI. See security-local-connector-fetches-arbitrary-urls.md.
+    """The coercion runs before the scheme guard, so the guard must still see a
+    URI as a URI. See .
     """
     with pytest.raises(ConnectorError) as excinfo:
         read('local', path='https://example.com/rows.csv')
@@ -292,9 +280,7 @@ def test_read_local_still_rejects_a_remote_uri_given_as_a_path(tmp_path):
 
 
 def test_read_duckdb_missing_database_is_not_found(tmp_path):
-    r"""connectors-duckdb-missing-file-silently-created.md
-
-    The "a read must not write" guard landed on sqlite only; duckdb
+    """The "a read must not write" guard landed on sqlite only; duckdb
     still created an empty database for a mistyped path and then blamed the
     table.
     """
@@ -307,7 +293,6 @@ def test_read_duckdb_missing_database_is_not_found(tmp_path):
 
 
 def test_duckdb_in_memory_database_is_unaffected():
-    r"""connectors-duckdb-missing-file-silently-created.md"""
     pytest.importorskip('duckdb')
     frame = read('duckdb', database=':memory:', query='SELECT 1 AS a')
     assert frame.shape == (1, 1)

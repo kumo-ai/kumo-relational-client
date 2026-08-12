@@ -36,7 +36,7 @@ def predict_tabicl(*, context, predict, task, target, **kwargs):
     return handle.predict(predict, **kwargs)
 
 
-BASE_URL = os.environ.get('SDFM_NIM_BASE_URL', '').rstrip('/')
+BASE_URL = os.environ.get('NEMOTRON_PREDICT_NIM_BASE_URL', '').rstrip('/')
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -694,7 +694,7 @@ def concurrency() -> None:
 
 def main() -> None:
     if not BASE_URL:
-        print('Set SDFM_NIM_BASE_URL to run the e2e checks.')
+        print('Set NEMOTRON_PREDICT_NIM_BASE_URL to run the e2e checks.')
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
     global _client

@@ -42,7 +42,7 @@ def _sample(sampler: DuckDBSampler, random_seed: int | None) -> list[int]:
 
 
 def test_random_seed_is_reproducible(graph: Graph) -> None:
-    # Regression test for `sampler-random-seed-ignored-on-sql-backends.md`:
+    # Regression test:
     # DuckDB supports `USING SAMPLE ... REPEATABLE (seed)`, so reusing a seed
     # must draw the same in-context examples.
     sampler = DuckDBSampler(graph, verbose=False)
@@ -63,9 +63,7 @@ def test_unseeded_sample_is_random(graph: Graph) -> None:
 def test_discovery_on_an_empty_database_names_what_it_searched(
     tmp_path: Path,  #
 ) -> None:
-    r"""graph-duckdb-empty-discovery-not-rejected.md
-
-    ``_require_discovered_tables`` was wired into three of the four discovery
+    """``_require_discovered_tables`` was wired into three of the four discovery
     constructors. DuckDB, which needs it most because it creates a database
     rather than failing on a mistyped path, was the one left out.
     """
@@ -79,9 +77,7 @@ def test_discovery_on_an_empty_database_names_what_it_searched(
 def test_missing_database_is_reported_rather_than_created(
     tmp_path: Path,  #
 ) -> None:
-    r"""graph-duckdb-empty-discovery-not-rejected.md
-
-    DuckDB creates a database for a missing path by default, so the shared
+    """DuckDB creates a database for a missing path by default, so the shared
     connector's existence guard must run before opening it. A read must not
     write.
     """

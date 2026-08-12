@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-r"""``exclude_cols_dict`` is a public ``predict_task`` argument.
+"""``exclude_cols_dict`` is a public ``predict_task`` argument.
 
-rfm-caller-input-keyerror-reported-as-internal-error.md: a typo in it used to
+a typo in it used to
 delete straight out of the sampler's stype map and raise a bare ``KeyError``,
 which the SDK could only classify as ``INTERNAL_ERROR`` -- telling the user to
 file a bug against the SDK for their own typo. Raising ``ValueError`` here puts

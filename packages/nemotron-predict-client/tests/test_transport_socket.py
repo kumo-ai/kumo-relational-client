@@ -236,9 +236,7 @@ def test_closed_transport_stops_issuing_requests():
 
 
 def test_a_slow_session_create_is_not_retried():
-    r"""client-retried-session-create-orphans-sessions.md
-
-    Creating a session fits and pins the context before the response is
+    """Creating a session fits and pins the context before the response is
     written, so a read timeout that hides the answer from the client leaves the
     session behind on the NIM. Retrying makes one such orphan per attempt, and
     the client keeps at most the last id, so the earlier ones can never be

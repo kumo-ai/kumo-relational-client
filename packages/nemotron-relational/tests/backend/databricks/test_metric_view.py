@@ -1006,7 +1006,7 @@ measures:
 def test_from_databricks_metric_view_rejected_join_does_not_leak_column() -> (
     None
 ):
-    # Regression test for `graph-metric-view-rejected-join-mutates-tables.md`:
+    # Regression test:
     # a join that is reported as not added must not graft its key column onto
     # the fact table, where it can go on to become the graph's time column.
     describe_rows = _metric_view(
@@ -1032,7 +1032,7 @@ def test_from_databricks_metric_view_rejected_join_does_not_leak_column() -> (
 
 
 def test_from_databricks_metric_view_rejected_join_keeps_expression() -> None:
-    # Regression test for `graph-metric-view-rejected-join-mutates-tables.md`:
+    # Regression test:
     # a join that is reported as not added must not replace a declared
     # dimension with its physical source column.
     describe_rows = _metric_view(
@@ -1098,7 +1098,7 @@ def test_from_databricks_metric_view_drops_a_hostile_expression() -> None:
 
 
 def test_from_databricks_case_insensitive_identifiers() -> None:
-    # Regression test for `graph-warehouse-identifier-case-sensitivity.md`:
+    # Regression test:
     # `information_schema` compares string literals case-sensitively, so
     # identifiers must be canonicalized rather than compared verbatim.
     graph = Graph.from_databricks(
@@ -1142,7 +1142,7 @@ def test_from_databricks_unknown_table() -> None:
 def test_from_databricks_metric_view_tracks_internal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Regression test for `graph-warehouse-connection-never-closed.md`: a
+    # Regression test: a
     # connection the SDK opened is a connection the SDK owns and closes.
     connection = _FakeConnection()
     monkeypatch.setattr(
@@ -1298,9 +1298,7 @@ def test_live_metric_view_qualified_name(
 
 
 def test_conversion_messages_survive_a_warnings_as_errors_policy() -> None:
-    r"""graph-view-conversion-diagnostics-only-as-warnings.md
-
-    Partial conversion is the normal outcome for a metric view, and the
+    """Partial conversion is the normal outcome for a metric view, and the
     diagnostics used to exist only as one aggregated ``UserWarning``: under
     ``-W error`` the constructor raised instead of returning, and the fully
     built graph was unrecoverable. They are now on the graph as well, and the
@@ -1339,9 +1337,7 @@ def test_conversion_messages_are_empty_for_a_plain_graph() -> None:
 
 
 def test_from_databricks_rejects_a_schema_with_no_tables() -> None:
-    r"""graph-empty-graph-on-bad-path-or-schema.md
-
-    A mistyped schema name discovers nothing, and used to yield a
+    """A mistyped schema name discovers nothing, and used to yield a
     valid-looking empty graph that fails much later without naming the schema.
     """
     with pytest.raises(ValueError, match='No tables found'):
@@ -1431,10 +1427,7 @@ def test_conversion_warning_is_attributed_to_the_caller() -> None:
 
 
 def test_information_schema_lookups_stay_pushdown_friendly() -> None:
-    r"""Regression test for
-    `graph-databricks-lower-predicate-defeats-pushdown.md`.
-
-    Folding the *column* is case-insensitive but not sargable: Unity Catalog
+    """Folding the *column* is case-insensitive but not sargable: Unity Catalog
     cannot push the predicate down, so a metadata point look-up degrades into a
     scan of every column of every table in the catalog -- measured live at 31s
     per table against 0.5s, growing with catalog size. Fold the literal
@@ -1475,10 +1468,7 @@ def test_information_schema_lookups_stay_pushdown_friendly() -> None:
 
 
 def test_metric_view_drops_a_type_mismatched_relationship(monkeypatch) -> None:
-    r"""Regression test for
-    `graph-view-conversion-aborts-on-one-bad-relationship.md`.
-
-    A view constructor converts partially by contract. A relationship whose
+    """A view constructor converts partially by contract. A relationship whose
     keys have incompatible data types is one more unconvertible element: it is
     dropped and reported, not raised, so the tables and the well-formed edges
     of the view survive.

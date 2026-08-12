@@ -19,7 +19,7 @@ sys.path.insert(
         'src',
     ),
 )
-import nemotron_predict as sdfm
+import nemotron_predict
 from nemotron_predict import PredictClient
 
 _client: PredictClient | None = None
@@ -31,9 +31,9 @@ def predict_tabicl(*, context, predict, task, target, **kwargs):
     return handle.predict(predict, **kwargs)
 
 
-BASE_URL = os.environ.get('SDFM_NIM_BASE_URL', '').rstrip('/')
+BASE_URL = os.environ.get('NEMOTRON_PREDICT_NIM_BASE_URL', '').rstrip('/')
 DATA_DIR = os.environ.get(
-    'SDFM_DATA_DIR', os.path.join(os.path.dirname(__file__), 'data')
+    'NEMOTRON_PREDICT_DATA_DIR', os.path.join(os.path.dirname(__file__), 'data')
 )
 
 RESULTS: list[tuple[str, bool, str]] = []
@@ -105,7 +105,9 @@ def classify_job_outcomes(frame: pd.DataFrame, source: str) -> None:
 
 def local_csv_connector() -> None:
     section('local connector: job_outcomes.csv -> tabicl classification')
-    frame = sdfm.read('local', path=os.path.join(DATA_DIR, 'job_outcomes.csv'))
+    frame = nemotron_predict.read(
+        'local', path=os.path.join(DATA_DIR, 'job_outcomes.csv')
+    )
     check(
         'local: read returns DataFrame',
         isinstance(frame, pd.DataFrame),
@@ -116,7 +118,7 @@ def local_csv_connector() -> None:
 
 def sqlite_connector() -> None:
     section('sqlite connector: gpu_metrics_daily -> tabicl regression')
-    frame = sdfm.read(
+    frame = nemotron_predict.read(
         'sqlite',
         database=os.path.join(DATA_DIR, 'gpu_fleet.sqlite'),
         query='SELECT avg_util_pct, avg_sm_active_pct, avg_tensor_active_pct, '
@@ -162,7 +164,7 @@ def sqlite_connector() -> None:
 
 def duckdb_connector() -> None:
     section('duckdb connector: gpu_allocations -> tabicl regression')
-    frame = sdfm.read(
+    frame = nemotron_predict.read(
         'duckdb',
         database=os.path.join(DATA_DIR, 'gpu_fleet_smoke.duckdb'),
         query='SELECT gpu_hours, allocation_type, mig_profile, '
@@ -215,7 +217,7 @@ def snowflake_connector() -> None:
     section(
         'snowflake connector: full-scale JOB_OUTCOMES -> tabicl classification'
     )
-    frame = sdfm.read(
+    frame = nemotron_predict.read(
         'snowflake',
         account=os.environ['SNOWFLAKE_ACCOUNT'],
         user=os.environ['SNOWFLAKE_USER'],
@@ -237,7 +239,7 @@ def snowflake_connector() -> None:
 
 def main() -> None:
     if not BASE_URL:
-        print('Set SDFM_NIM_BASE_URL to run the connector checks.')
+        print('Set NEMOTRON_PREDICT_NIM_BASE_URL to run the connector checks.')
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
     global _client

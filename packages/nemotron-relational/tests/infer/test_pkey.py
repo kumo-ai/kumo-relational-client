@@ -13,9 +13,7 @@ from nemotron_relational.rfm.infer.pkey import infer_primary_key
 
 
 def test_ambiguous_primary_key_warning_names_the_tied_candidates() -> None:
-    r"""graph-ambiguous-primary-key-warning-lists-nothing.md
-
-    ``max_score`` used to be bound to a ``(name, score)`` tuple and compared
+    """``max_score`` used to be bound to a ``(name, score)`` tuple and compared
     against a float, so the list of tied candidates was always empty and the
     message told the user to choose without saying from what.
     """
@@ -72,9 +70,7 @@ def _star_schema() -> dict[str, pd.DataFrame]:
 
 
 def test_declined_primary_key_is_reported_after_link_inference() -> None:
-    r"""graph-primary-key-inference-misses-common-ids.md
-
-    Uniqueness contributes at most 3.0 against a ``>= 4`` cut, so only a name
+    """Uniqueness contributes at most 3.0 against a ``>= 4`` cut, so only a name
     matching the table's can carry a candidate. ``sales_orders.order_id`` is
     unique, uncontested and still declined, which costs the graph every edge
     into that table.
@@ -129,9 +125,7 @@ def test_a_unique_foreign_key_is_not_reported_as_a_missing_primary_key() -> (
 
 
 def test_a_local_declined_key_claims_uniqueness_outright() -> None:
-    r"""graph-declined-pk-warning-claims-uniqueness-from-sample.md
-
-    A ``LocalTable``'s sample is the whole frame, so the claim is exact and the
+    """A ``LocalTable``'s sample is the whole frame, so the claim is exact and the
     wording stays unqualified.
     """
     from nemotron_relational.rfm import Graph
@@ -145,9 +139,7 @@ def test_a_local_declined_key_claims_uniqueness_outright() -> None:
 
 
 def test_a_sampled_declined_key_says_so(tmp_path: Any) -> None:
-    r"""graph-declined-pk-warning-claims-uniqueness-from-sample.md
-
-    Every SQL backend caps the sample at ``Table._NUM_SAMPLE_ROWS``, so a
+    """Every SQL backend caps the sample at ``Table._NUM_SAMPLE_ROWS``, so a
     foreign key that merely happens to be distinct in the rows read looks
     exactly like a key candidate. ``basket_id`` here is unique across the first
     1,000 rows and repeats afterwards -- 1,500 distinct values in 5,000 rows --

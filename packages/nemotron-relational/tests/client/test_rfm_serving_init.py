@@ -45,7 +45,7 @@ def _init(
     rfm_engine.init_databricks_serving(
         endpoint,
         workspace_client=_Workspace(),
-        _token=rfm_engine._SDFM_CLIENT_TOKEN,
+        _token=rfm_engine._CLIENT_TOKEN,
         **kwargs,
     )
 

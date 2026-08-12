@@ -2,9 +2,9 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""``inference_config`` must not swallow a misspelled key.
+"""``inference_config`` must not swallow a misspelled key.
 
-rfm-inference-config-typo-silently-ignored.md: pydantic's default is
+pydantic's default is
 ``extra='ignore'``, so ``output_typ='mean'`` used to return the *median* with
 no diagnostic -- on a zero-inflated target, a column of ``0.0`` where the
 caller asked for a mean. Nothing forwards an unknown key (the wire payload is

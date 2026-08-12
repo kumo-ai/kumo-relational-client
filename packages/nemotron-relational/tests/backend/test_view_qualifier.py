@@ -43,9 +43,7 @@ from nemotron_relational.rfm.graph import (
 def test_own_table_qualifier_is_stripped_outside_string_literals(
     expr, expected
 ):
-    r"""graph-semantic-view-qualifier-stripped-inside-string-literal.md
-
-    ``ORDERS.`` inside a literal is data. Stripping it rewrote the expression
+    """``ORDERS.`` inside a literal is data. Stripping it rewrote the expression
     to compare against a different value -- still valid SQL, so nothing
     downstream could tell that what the SDK runs is not what the view declares.
     Double quotes stay in scope: ``"USERS".NAME`` is a quoted-identifier

@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA SDFM SDK Prerequisites"
-description: "Hardware, software, and network prerequisites for installing and using the NVIDIA SDFM SDK."
+title: "NVIDIA Nemotron Predict SDK Prerequisites"
+description: "Hardware, software, and network prerequisites for installing and using the NVIDIA Nemotron Predict SDK."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA SDFM SDK Prerequisites
+# NVIDIA Nemotron Predict SDK Prerequisites
 
-Before you install the NVIDIA SDFM SDK, make sure your environment meets the
+Before you install the NVIDIA Nemotron Predict SDK, make sure your environment meets the
 following requirements.
 
 ## Hardware
@@ -77,4 +77,4 @@ Before you continue to installation, confirm the following:
 
 ## Next Steps
 
-- Continue to the [Installation Guide for the NVIDIA SDFM SDK](installation.md).
+- Continue to the [Installation Guide for the NVIDIA Nemotron Predict SDK](installation.md).

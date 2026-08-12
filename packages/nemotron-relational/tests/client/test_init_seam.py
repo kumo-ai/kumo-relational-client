@@ -67,7 +67,7 @@ def test_a_bad_endpoint_leaves_state_untouched() -> None:
 
 
 def test_repeated_init_does_not_rebuild_the_client() -> None:
-    """Building the transport resolves Databricks credentials, and the SDFM
+    """Building the transport resolves Databricks credentials, and the Nemotron Predict
     adapter re-initializes on every predict. An unchanged re-init must be a
     no-op rather than a fresh authentication per scored partition.
     """

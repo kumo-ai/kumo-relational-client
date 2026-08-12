@@ -29,11 +29,11 @@ from .rfm import (
 
 logger = logging.getLogger('nemotron_relational_rfm')
 
-_SDFM_CLIENT_TOKEN = object()
+_CLIENT_TOKEN = object()
 
 _DIRECT_USE_MESSAGE = (
     'Direct use of the Nemotron Relational engine is not supported. Run inference through '
-    'the NVIDIA SDFM SDK:\n'
+    'the NVIDIA Nemotron Predict SDK:\n'
     '    from nemotron_predict import PredictClient, relational\n'
     '    graph = relational.Graph.from_data(...)\n'
     '    with PredictClient(url=...) as client:\n'
@@ -107,7 +107,7 @@ def init(
     max_retries: int = 3,
     _token: object | None = None,
 ) -> None:
-    if _token is not _SDFM_CLIENT_TOKEN:
+    if _token is not _CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
         _configure(url, api_key, verify_ssl, log_level, timeout, max_retries)
@@ -128,7 +128,7 @@ def close_client(_token: object | None = None) -> None:
 
     Does nothing if this thread never built a client.
     """
-    if _token is not _SDFM_CLIENT_TOKEN:
+    if _token is not _CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
         thread_local = nemotron_relational.global_state.thread_local
@@ -167,7 +167,7 @@ def init_client(
     the global again later. Pass it to :class:`~nemotron_relational.rfm.NemotronRelational` as
     ``_client``.
     """
-    if _token is not _SDFM_CLIENT_TOKEN:
+    if _token is not _CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
         _configure(url, api_key, verify_ssl, log_level, timeout, max_retries)
@@ -192,7 +192,7 @@ def init_databricks_serving(
     ``PredictClient``, so both entry points must refuse a direct call rather than
     leaving one of them as a way around the boundary.
     """
-    if _token is not _SDFM_CLIENT_TOKEN:
+    if _token is not _CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
         nemotron_relational.init_databricks_serving(
@@ -228,7 +228,7 @@ def init_snowflake_serving(
     ``PredictClient``, so both entry points must refuse a direct call rather than
     leaving one of them as a way around the boundary.
     """
-    if _token is not _SDFM_CLIENT_TOKEN:
+    if _token is not _CLIENT_TOKEN:
         raise RuntimeError(_DIRECT_USE_MESSAGE)
     with global_state._lock:
         nemotron_relational.init_snowflake_serving(

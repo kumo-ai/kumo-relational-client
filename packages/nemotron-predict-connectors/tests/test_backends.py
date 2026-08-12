@@ -45,7 +45,6 @@ def test_borrowed_connection_rejecting_attribute_writes_is_not_owned():
 
 
 def test_check_connect_args_suggests_the_intended_name():
-    r"""connectors-unknown-connect-kwargs-silently-ignored.md"""
     with pytest.raises(ConnectorError) as excinfo:
         check_connect_args('snowflake', {'shema': 'X'}, {'schema', 'database'})
     assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
@@ -65,9 +64,7 @@ def test_check_connect_args_accepts_known_arguments():
     ],
 )
 def test_connect_rejects_unknown_kwargs(backend, module, typo, intended):
-    r"""connectors-unknown-connect-kwargs-silently-ignored.md
-
-    Both drivers accept ``**kwargs`` and silently drop what they do not know,
+    """Both drivers accept ``**kwargs`` and silently drop what they do not know,
     so the typo must be rejected before a connection is attempted.
     """
     pytest.importorskip(module)
@@ -148,7 +145,6 @@ def test_snowflake_driver_options_credentials_suppress_borrowing(monkeypatch):
 
 
 def test_snowflake_borrows_session_when_no_auth_arguments(monkeypatch):
-    r"""connectors-snowflake-session-borrowing-all-or-nothing.md"""
     pytest.importorskip('snowflake.connector')
     from nemotron_predict_connectors.backends import snowflake as backend
 
@@ -162,9 +158,7 @@ def test_snowflake_borrows_session_when_no_auth_arguments(monkeypatch):
 
 
 def test_snowflake_rejects_session_arguments_on_a_borrowed_session(monkeypatch):
-    r"""connectors-snowflake-session-borrowing-all-or-nothing.md
-
-    Previously this fell through to a credential-less connect that failed with
+    """Previously this fell through to a credential-less connect that failed with
     the driver's unrelated "User is empty" message.
     """
     pytest.importorskip('snowflake.connector')
@@ -196,7 +190,6 @@ def test_snowflake_credentials_still_open_their_own_connection(monkeypatch):
 def test_snowflake_no_arguments_and_no_session_explains_requirements(
     monkeypatch,
 ):
-    r"""connectors-snowflake-session-borrowing-all-or-nothing.md"""
     pytest.importorskip('snowflake.connector')
     from nemotron_predict_connectors.backends import snowflake as backend
 
@@ -219,9 +212,7 @@ def test_snowflake_no_arguments_and_no_session_explains_requirements(
     'argument', ['connection_name', 'connections_file_path']
 )
 def test_snowflake_allows_named_connection_arguments(argument):
-    r"""connectors-connect-allowlist-rejects-valid-driver-args.md
-
-    ``DEFAULT_CONFIGURATION`` is the driver's config-parameter table and omits
+    """``DEFAULT_CONFIGURATION`` is the driver's config-parameter table and omits
     the two constructor-only parameters that select a named connection from a
     TOML file -- the secrets-file-free auth path. The guard rejected them as
     typos, and ``connection_name`` was already listed in the connector's own
@@ -234,7 +225,6 @@ def test_snowflake_allows_named_connection_arguments(argument):
 
 
 def test_snowflake_allow_list_covers_every_auth_argument():
-    r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
     snowflake = pytest.importorskip(
         'nemotron_predict_connectors.backends.snowflake'
     )
@@ -242,7 +232,6 @@ def test_snowflake_allow_list_covers_every_auth_argument():
 
 
 def test_snowflake_still_rejects_a_misspelled_argument():
-    r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
     snowflake = pytest.importorskip(
         'nemotron_predict_connectors.backends.snowflake'
     )
@@ -264,9 +253,7 @@ def test_snowflake_still_rejects_a_misspelled_argument():
     ],
 )
 def test_databricks_allows_kwargs_routed_arguments(argument):
-    r"""connectors-connect-allowlist-rejects-valid-driver-args.md
-
-    The driver routes its documented OAuth parameters through ``**kwargs``,
+    """The driver routes its documented OAuth parameters through ``**kwargs``,
     where ``inspect.signature`` cannot see them, so a signature-only
     allow-list rejected the whole non-PAT auth path.
     """
@@ -277,7 +264,6 @@ def test_databricks_allows_kwargs_routed_arguments(argument):
 
 
 def test_databricks_still_rejects_a_misspelled_argument():
-    r"""connectors-connect-allowlist-rejects-valid-driver-args.md"""
     databricks = pytest.importorskip(
         'nemotron_predict_connectors.backends.databricks'
     )

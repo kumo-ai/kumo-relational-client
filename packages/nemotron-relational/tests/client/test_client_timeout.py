@@ -95,7 +95,7 @@ def test_init_forwards_the_timeout_to_the_request_client():
     try:
         with _serve() as url:
             rfm_engine.init(
-                url=url, timeout=7.0, _token=rfm_engine._SDFM_CLIENT_TOKEN
+                url=url, timeout=7.0, _token=rfm_engine._CLIENT_TOKEN
             )
             assert nemotron_relational.global_state.client._timeout == 7.0
     finally:
@@ -104,7 +104,7 @@ def test_init_forwards_the_timeout_to_the_request_client():
 
 
 def test_max_retries_reaches_the_transport_policy():
-    r"""quality-max-retries-not-reaching-rfm-path.md /
+    """/
     client-max-retries-never-reaches-the-nemotron_relational-path.md
 
     `PredictClient(max_retries=...)` is documented without a model qualifier, next
@@ -130,7 +130,7 @@ def test_max_retries_reaches_the_transport_policy():
 
 
 def test_a_server_chosen_retry_after_is_capped():
-    r"""urllib3's own ceiling is six hours, which a `Retry-After` header on a
+    r"""Urllib3's own ceiling is six hours, which a `Retry-After` header on a
     retried request could park the caller for.
     """
     policy = (
@@ -144,9 +144,7 @@ def test_a_server_chosen_retry_after_is_capped():
 
 
 def test_session_create_is_held_out_of_the_post_retries():
-    r"""client-retried-session-create-orphans-sessions.md
-
-    Creating a session pins the context before the response is written, so a
+    """Creating a session pins the context before the response is written, so a
     re-sent create strands one pinned context per attempt. The routes below it
     are replayable and keep the full policy.
     """
@@ -187,7 +185,7 @@ def test_init_forwards_max_retries_to_the_request_client():
     try:
         with _serve() as url:
             rfm_engine.init(
-                url=url, max_retries=5, _token=rfm_engine._SDFM_CLIENT_TOKEN
+                url=url, max_retries=5, _token=rfm_engine._CLIENT_TOKEN
             )
             assert nemotron_relational.global_state.client._max_retries == 5
     finally:

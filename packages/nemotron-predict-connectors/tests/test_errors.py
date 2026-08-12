@@ -123,7 +123,7 @@ def test_require_driver_returns_module():
 
 def test_require_driver_missing_module_raises_missing_backend():
     with pytest.raises(MissingBackendError) as excinfo:
-        require_driver('fake', 'fake-driver', 'sdfm_no_such_module')
+        require_driver('fake', 'fake-driver', 'nemotron_no_such_module')
     assert excinfo.value.driver == 'fake-driver'
 
 

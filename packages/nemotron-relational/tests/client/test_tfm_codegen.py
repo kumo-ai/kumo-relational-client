@@ -33,8 +33,8 @@ from nemotron_relational.client.rfm import (
 # The Universal TFM OpenAPI contract is not vendored here, so the tests that
 # replay it skip unless a checkout is pointed at explicitly. The default is the
 # sibling-directory layout the maintainers use; anyone else sets
-# SDFM_CONTRACT_DIR.
-_ENV_CONTRACT_DIR = 'SDFM_CONTRACT_DIR'
+# NEMOTRON_PREDICT_CONTRACT_DIR.
+_ENV_CONTRACT_DIR = 'NEMOTRON_PREDICT_CONTRACT_DIR'
 CANONICAL_SPEC = (
     Path(os.environ.get(_ENV_CONTRACT_DIR, '../structured-data-api'))
     / 'nim-sd.openapi.yaml'

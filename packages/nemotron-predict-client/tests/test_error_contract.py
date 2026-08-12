@@ -64,7 +64,7 @@ def test_error_types_are_exported(name: str) -> None:
         UnknownModelError('nope', ['nemotron-tabular']),
     ],
 )
-def test_every_error_is_catchable_as_sdfm_error(error: PredictError) -> None:
+def test_every_error_is_catchable_as_predict_error(error: PredictError) -> None:
     with pytest.raises(PredictError):
         raise error
 

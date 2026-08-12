@@ -739,7 +739,6 @@ def test_batch_mode(
 def test_optimize_warns_on_a_backend_that_ignores_it(
     user_store_graph: Graph,
 ) -> None:
-    r"""sampler-optimize-flag-silently-dropped.md"""
     with pytest.warns(UserWarning, match="'optimize=True' has no effect"):
         NemotronRelational(user_store_graph, verbose=False, optimize=True)
 
@@ -759,7 +758,6 @@ def test_optimize_left_unset_does_not_warn(user_store_graph: Graph) -> None:
 def test_batch_mode_restores_state_after_an_exception(
     user_store_graph: Graph,
 ) -> None:
-    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     with pytest.raises(RuntimeError, match='user code blew up'):
         with model.batch_mode(batch_size=25, num_retries=3):
@@ -771,7 +769,6 @@ def test_batch_mode_restores_state_after_an_exception(
 def test_retry_restores_state_after_an_exception(
     user_store_graph: Graph,
 ) -> None:
-    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     with pytest.raises(RuntimeError), model.retry(7):
         raise RuntimeError('boom')
@@ -781,7 +778,6 @@ def test_retry_restores_state_after_an_exception(
 def test_nested_batch_mode_honours_the_inner_retry_count(
     user_store_graph: Graph,
 ) -> None:
-    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     with model.retry(2):
         assert model._num_retries == 2
@@ -792,7 +788,6 @@ def test_nested_batch_mode_honours_the_inner_retry_count(
 
 
 def test_batch_mode_rejects_a_non_max_string(user_store_graph: Graph) -> None:
-    r"""rfm-batch-mode-context-managers-missing-try-finally.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     with pytest.raises(ValueError, match="'batch_size' must be a positive int"):
         with model.batch_mode(batch_size='MAX'):
@@ -805,7 +800,6 @@ def test_predict_rejects_a_non_timestamp_anchor_time(
     ltv: ValidatedPredictiveQuery,
     anchor_time: Any,
 ) -> None:
-    r"""rfm-bare-assertionerror-empty-message.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
     with pytest.raises(
@@ -820,7 +814,6 @@ def test_predict_anchor_time_string_hint_names_the_timestamp_call(
     user_store_graph: Graph,
     ltv: ValidatedPredictiveQuery,
 ) -> None:
-    r"""rfm-bare-assertionerror-empty-message.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
     with pytest.raises(TypeError, match="pd.Timestamp\\('2024-10-01'\\)"):
@@ -835,7 +828,6 @@ def test_predict_rejects_non_positive_max_pq_iterations(
     ltv: ValidatedPredictiveQuery,
     max_pq_iterations: int,
 ) -> None:
-    r"""rfm-bare-assertionerror-empty-message.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
     with pytest.raises(
@@ -855,7 +847,6 @@ def test_predict_rejects_out_of_range_num_hops(
     ltv: ValidatedPredictiveQuery,
     num_hops: int,
 ) -> None:
-    r"""rfm-negative-num-hops-becomes-max-hops.md"""
     model = NemotronRelational(user_store_graph, verbose=False)
     model._client = MockAPI()  # type: ignore
     with pytest.raises(ValueError, match="'num_hops' must be between 1 and"):
@@ -1366,9 +1357,7 @@ def test_link_prediction_class_column_keeps_the_target_key_dtype(
 
 
 def test_over_cap_batch_size_suggests_a_value_under_the_cap() -> None:
-    r"""rfm-batch-size-hint-exceeds-link-pred-cap.md
-
-    The message hard-coded ``batch_size=500`` as its worked example. Temporal
+    """The message hard-coded ``batch_size=500`` as its worked example. Temporal
     link prediction caps at 200, so following the suggestion verbatim
     reproduced the identical error including the identical suggestion. Checked
     for every task type, since the cap is per task type.

@@ -165,9 +165,7 @@ def test_sql_payload_column_order_is_identical_across_processes(
     backend,
     tmp_path,
 ) -> None:
-    r"""sampler-sql-payload-column-order-nondeterministic.md
-
-    The SQL samplers built their ``SELECT`` projection by iterating a
+    """The SQL samplers built their ``SELECT`` projection by iterating a
     ``set[str]``, so the column order of every table in the request -- and the
     prediction derived from it -- changed with the per-process string hash
     seed. The existing local-backend test could not catch this: the leak is

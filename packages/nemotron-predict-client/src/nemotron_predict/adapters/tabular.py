@@ -69,7 +69,7 @@ _SESSION_UNSUPPORTED_STATUS = frozenset({404, 405, 501})
 
 
 def _new_request_id() -> str:
-    return f'sdfm_{uuid.uuid4().hex[:12]}'
+    return f'nemotron_{uuid.uuid4().hex[:12]}'
 
 
 def _check_columns(name: str, frame: pd.DataFrame) -> None:

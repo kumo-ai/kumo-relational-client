@@ -33,7 +33,7 @@ def _clean_state() -> Any:
 
 @pytest.fixture
 def token() -> object:
-    return rfm_engine._SDFM_CLIENT_TOKEN
+    return rfm_engine._CLIENT_TOKEN
 
 
 @pytest.fixture

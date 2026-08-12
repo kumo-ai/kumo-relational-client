@@ -120,7 +120,7 @@ def test_returns_a_serving_response() -> None:
 
 
 def test_has_no_authenticate_method() -> None:
-    """authenticate() probes /v1/health/ready and /v1/models. A named serving
+    """Authenticate() probes /v1/health/ready and /v1/models. A named serving
     endpoint advertises neither, so the method must not exist here at all.
     """
     client, _ = _client()
@@ -476,7 +476,7 @@ def test_a_non_enum_error_code_is_withheld() -> None:
 
 
 def test_silences_the_sdk_body_logger() -> None:
-    """databricks-sdk logs full request and response bodies at DEBUG, and RFM
+    """Databricks-sdk logs full request and response bodies at DEBUG, and RFM
     payloads carry sampled customer rows.
     """
     sdk_logger = logging.getLogger('databricks.sdk.core')

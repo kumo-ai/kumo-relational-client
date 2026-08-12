@@ -100,7 +100,7 @@ _SERVING_PLATFORMS: dict[str, _ServingPlatform] = {
         initialize=lambda engine, target: engine.init_databricks_serving(
             target.endpoint,
             workspace_client=target.platform_client,
-            _token=engine._SDFM_CLIENT_TOKEN,
+            _token=engine._CLIENT_TOKEN,
         ),
         extra='databricks-serving',
         dependency='databricks-sdk',
@@ -109,7 +109,7 @@ _SERVING_PLATFORMS: dict[str, _ServingPlatform] = {
         initialize=lambda engine, target: engine.init_snowflake_serving(
             target.endpoint,
             session=target.platform_client,
-            _token=engine._SDFM_CLIENT_TOKEN,
+            _token=engine._CLIENT_TOKEN,
         ),
         extra='snowflake-serving',
         dependency='snowflake-snowpark-python',
@@ -528,7 +528,7 @@ class NemotronRelationalAdapter(ModelAdapter):
                     verify_ssl=transport.verify_ssl,
                     timeout=transport.timeout,
                     max_retries=transport.max_retries,
-                    _token=engine._SDFM_CLIENT_TOKEN,
+                    _token=engine._CLIENT_TOKEN,
                 )
             except _engine_init_error_types() as error:
                 raise _translate_init_error(error) from error
@@ -592,4 +592,4 @@ class NemotronRelationalAdapter(ModelAdapter):
             return
         self._opened_engine_client = False
         engine = _load_engine()
-        engine.close_client(_token=engine._SDFM_CLIENT_TOKEN)
+        engine.close_client(_token=engine._CLIENT_TOKEN)

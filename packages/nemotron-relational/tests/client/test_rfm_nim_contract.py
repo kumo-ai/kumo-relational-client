@@ -526,9 +526,7 @@ class _StubResponse:
 
 
 def test_non_json_prediction_body_is_an_invalid_response_error() -> None:
-    r"""client-rfm-path-never-raises-sdfmerror.md
-
-    A body that will never parse must not be reported as a transient failure
+    """A body that will never parse must not be reported as a transient failure
     the caller should retry.
     """
     from nemotron_relational.exceptions import InvalidResponseError
@@ -547,7 +545,7 @@ def test_non_json_prediction_body_is_an_invalid_response_error() -> None:
 
 
 def test_prediction_item_missing_id_is_an_invalid_response_error() -> None:
-    r"""client-rfm-path-never-raises-sdfmerror.md: no bare KeyError escapes."""
+    """No bare KeyError escapes."""
     from nemotron_relational.exceptions import InvalidResponseError
 
     response = _StubResponse(

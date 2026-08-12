@@ -15,8 +15,8 @@ import pytest
 # Universal TFM OpenAPI contract, to check this client encodes what the
 # contract says. The examples are not vendored here, so the tests skip unless
 # a checkout is pointed at explicitly. The default is the sibling-directory
-# layout the maintainers use; anyone else sets SDFM_CONTRACT_DIR.
-_ENV_CONTRACT_DIR = 'SDFM_CONTRACT_DIR'
+# layout the maintainers use; anyone else sets NEMOTRON_PREDICT_CONTRACT_DIR.
+_ENV_CONTRACT_DIR = 'NEMOTRON_PREDICT_CONTRACT_DIR'
 CANONICAL_SPEC_DIR = Path(
     os.environ.get(_ENV_CONTRACT_DIR, '../structured-data-api')
 )

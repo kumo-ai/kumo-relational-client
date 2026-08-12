@@ -223,7 +223,7 @@ def test_from_snowflake_semantic_view_keeps_self_qualified_columns() -> None:
 
 
 def test_from_snowflake_case_insensitive_identifiers() -> None:
-    # Regression test for `graph-warehouse-identifier-case-sensitivity.md`:
+    # Regression test:
     # Snowflake folds unquoted identifiers to upper case, so a name typed in
     # any other case must still resolve.
     graph = Graph.from_snowflake(
@@ -296,7 +296,7 @@ def test_from_snowflake_reports_unresolvable_object_as_missing_table() -> None:
 def test_from_snowflake_tracks_internal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Regression test for `graph-warehouse-connection-never-closed.md`: a
+    # Regression test: a
     # connection the SDK opened is a connection the SDK owns and closes.
     connection = _FakeConnection()
     monkeypatch.setattr(
@@ -385,10 +385,7 @@ def test_from_snowflake_semantic_view_closes_internal_connection_on_error(
 def test_semantic_view_drops_a_type_mismatched_relationship(
     monkeypatch,
 ) -> None:
-    r"""Regression test for
-    `graph-view-conversion-aborts-on-one-bad-relationship.md`.
-
-    A production semantic view declared a relationship between a NUMBER
+    """A production semantic view declared a relationship between a NUMBER
     foreign key and a TEXT primary key. Detecting that is right; aborting on it
     threw away 9 tables and 21 well-formed edges, in a view the caller does not
     own and cannot repair. The relationship is dropped and reported instead,
