@@ -34,7 +34,7 @@ Add extras in brackets to install additional capabilities.
 | `pip install "nemotron-predict-client[relational]"` | Adds the Nemotron Relational driver (native graph sampler and PQL). |
 | `pip install "nemotron-predict-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
 | `pip install "nemotron-predict-client[databricks-serving]"` | Reaches a Nemotron Relational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
-| `pip install "nemotron-predict-client[all]"` | NemotronRelational, every data-source connector, and `[databricks-serving]`. |
+| `pip install "nemotron-predict-client[all]"` | Nemotron Relational, every data-source connector, and `[databricks-serving]`. |
 
 Two extras are deliberately outside `[all]` and must be named:
 

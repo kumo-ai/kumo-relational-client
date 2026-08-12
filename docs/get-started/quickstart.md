@@ -45,7 +45,7 @@ with PredictClient(url='http://localhost:8000') as client:
 print(predictions.head())
 ```
 
-### NemotronRelational: Relational Data
+### Nemotron Relational: Relational Data
 
 Build a graph from related tables, then express the target in PQL. This example
 requires the `[relational]` extra:

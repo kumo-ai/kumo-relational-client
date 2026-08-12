@@ -68,7 +68,7 @@ core does not change.
 
 A driver is a model's heavy client-side runtime, packaged as its own
 distribution. The Nemotron Relational driver (`nemotron_relational`) performs graph building, native
-neighbor sampling through a compiled extension, and PQL parsing. The NemotronRelational
+neighbor sampling through a compiled extension, and PQL parsing. The Nemotron Relational
 adapter lazy-imports this driver, so base installs stay lightweight and
 platform-independent. Nemotron Tabular requires no driver.
 
@@ -80,7 +80,7 @@ platform-independent. Nemotron Tabular requires no driver.
    the type the model's adapter accepts and dispatches to it. Nothing is checked
    against `capabilities()`, which describes the client-side adapter for callers
    who ask and is not consulted on this path.
-3. The adapter builds the Universal TFM API request. For NemotronRelational, the driver
+3. The adapter builds the Universal TFM API request. For Nemotron Relational, the driver
    parses the PQL query, samples the relevant subgraph, and materializes the
    request; for Nemotron Tabular, the adapter serializes the context and predict tables
    directly.
@@ -126,7 +126,7 @@ on the Nemotron Tabular path reads `/v1/models`.
 - **Data sources.** Both the client and the Nemotron Relational driver read tables through
   the shared `nemotron-predict-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
-- **NIM endpoint.** Any NIM that implements the Universal TFM API. The NemotronRelational
+- **NIM endpoint.** Any NIM that implements the Universal TFM API. The Nemotron Relational
   path additionally requires the endpoint to advertise
   `nemotron-relational` in
   `/v1/models`.

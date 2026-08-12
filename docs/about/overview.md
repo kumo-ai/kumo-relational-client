@@ -11,7 +11,7 @@ NVIDIA's structured-data foundation model NIMs, served behind the Universal TFM
 API. A thin, model-agnostic client dispatches through per-model handles to
 per-model adapters; heavy model drivers are optional and installed only when you
 ask for them. Two models are available today: **Nemotron Tabular** (single-table, in-context
-learning) and **NemotronRelational** (relational, graph-aware in-context learning).
+learning) and **Nemotron Relational** (relational, graph-aware in-context learning).
 
 ## Benefits
 
@@ -20,7 +20,7 @@ learning) and **NemotronRelational** (relational, graph-aware in-context learnin
   `client.tabular(...).predict(...)` and `client.relational(...).predict(...)` —
   each returning the same shape of pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
-  every platform. Heavy drivers, such as NemotronRelational's native graph sampler, are
+  every platform. Heavy drivers, such as Nemotron Relational's native graph sampler, are
   opt-in extras.
 - **NIM-first and secure by default.** The client talks to a NIM you control;
   your data stays on your infrastructure, and authentication is owned by the
@@ -45,7 +45,7 @@ learning) and **NemotronRelational** (relational, graph-aware in-context learnin
 Provide a table of labeled context rows and a table of rows to predict, and
 Nemotron Tabular returns predictions in one forward pass — no per-dataset training.
 
-### Predict Over Relational Data with NemotronRelational
+### Predict Over Relational Data with Nemotron Relational
 
 Build a graph from related tables (for example, users, items, and orders), then
 express a prediction target in Predictive Query Language (PQL). Nemotron Relational samples

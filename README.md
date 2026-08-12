@@ -19,13 +19,13 @@ Full documentation lives under [`docs/`](docs/index.md):
 | Command | You get |
 | --- | --- |
 | `pip install nemotron-predict-client` | The client + every lightweight model (Nemotron Tabular today). Works out of the box. |
-| `pip install nemotron-predict-client[relational]` | Adds NemotronRelational (pulls the native `nemotron_relational` driver). |
+| `pip install nemotron-predict-client[relational]` | Adds Nemotron Relational (pulls the native `nemotron_relational` driver). |
 | `pip install nemotron-predict-client[sqlite]` | Read tables from a data source (`[sqlite]` / `[duckdb]` / `[snowflake]` / `[databricks]` / `[s3]`). |
-| `pip install nemotron-predict-client[all]` | NemotronRelational, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
+| `pip install nemotron-predict-client[all]` | Nemotron Relational, every data-source backend, and `[databricks-serving]`. Not `[explain]` or `[relbench]` — see below. |
 
 The rule is dependency weight, not favoritism: a model that does no client-side work
 (like Nemotron Tabular, which just shapes a request the NIM runs) ships in the base wheel; a model
-that does heavy client-side work (like NemotronRelational: graph building, native neighbor-sampling,
+that does heavy client-side work (like Nemotron Relational: graph building, native neighbor-sampling,
 PQL) is an opt-in extra. Data-source drivers are opt-in the same way, via the shared
 `nemotron-predict-connectors` package.
 
@@ -53,7 +53,7 @@ with PredictClient(url="http://localhost:8000") as client:
     df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
-NemotronRelational (relational) — needs `nemotron-predict-client[relational]`:
+Nemotron Relational (relational) — needs `nemotron-predict-client[relational]`:
 
 ```python
 from nemotron_predict import PredictClient, relational
@@ -160,7 +160,7 @@ transport optimisation and never change a prediction.
 - **Nemotron Tabular** — `client.tabular(context, ...)` reuses one session for the life of the handle.
   It is opened on the second `predict()` against the same context, so scoring a single table
   costs exactly one request as before, and every call after that carries the rows alone.
-- **NemotronRelational** — a multi-batch `predict()` opens one session for the run and deletes it at the
+- **Nemotron Relational** — a multi-batch `predict()` opens one session for the run and deletes it at the
   end. Set `KUMORFM_DISABLE_SESSIONS=1` to force the stateless path.
 
 Both fall back to `POST /v1/predictions` when the NIM answers 404/405/501 on session creation,

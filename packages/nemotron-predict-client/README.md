@@ -8,9 +8,9 @@ per-model adapters; heavy model drivers are optional extras.
 
 ```bash
 pip install nemotron-predict-client              # client + every lightweight model (Nemotron Tabular)
-pip install nemotron-predict-client[relational]     # adds NemotronRelational (native driver)
+pip install nemotron-predict-client[relational]     # adds Nemotron Relational (native driver)
 pip install nemotron-predict-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
-pip install nemotron-predict-client[all]         # NemotronRelational, every data-source backend,
+pip install nemotron-predict-client[all]         # Nemotron Relational, every data-source backend,
                                      # and [databricks-serving]
 pip install nemotron-predict-client[explain]     # Nemotron Relational plus the explanation-summary LLM
                                      # client. Deliberately NOT part of [all],
@@ -24,7 +24,7 @@ A `PredictClient` owns one connection to a NIM. Requests are typed per model: ea
 model handle builds its own request type, and the client rejects a request the
 target model's adapter does not accept. Each adapter also checks what it knows
 it cannot serve — an unsupported task kind or output field for Nemotron Tabular, an
-unknown `task_type` or a missing entity table for NemotronRelational — and raises
+unknown `task_type` or a missing entity table for Nemotron Relational — and raises
 `PredictError(code="INVALID_REQUEST")` before anything is sent. Everything else is
 validated by the NIM.
 
@@ -38,7 +38,7 @@ with PredictClient(url='http://localhost:8000') as client:
     df = model.predict(predict_df, outputs=['prediction', 'probabilities'])
 ```
 
-NemotronRelational (relational) — needs `nemotron-predict-client[relational]`:
+Nemotron Relational (relational) — needs `nemotron-predict-client[relational]`:
 
 ```python
 from nemotron_predict import PredictClient, relational
@@ -126,7 +126,7 @@ through `PredictClient` rather than mixing in direct `nemotron_relational.init()
 `close()` (or leaving the `with` block) releases the pooled connections and
 retires the client; use a new `PredictClient` afterwards.
 
-`from nemotron_predict import relational` is the supported surface onto the NemotronRelational
+`from nemotron_predict import relational` is the supported surface onto the Nemotron Relational
 driver (`Graph`, `LocalTable`, `Stype`, `Dtype`, `ExplainConfig`, ...); you
 never import the driver package directly. The model itself is not on that
 surface — you reach it through `client.relational(graph)`.

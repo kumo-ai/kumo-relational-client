@@ -11,7 +11,7 @@ configuration is passed directly to `PredictClient` in code; the variables below
 cover the Nemotron Relational driver's connection defaults, logging, and the data-source
 connectors.
 
-## NemotronRelational Driver
+## Nemotron Relational Driver
 
 The Nemotron Relational driver reads these variables when you use the `nemotron_relational` model
 without passing the values explicitly.
