@@ -91,7 +91,7 @@ class DuckDBSampler(SQLSampler):
             for table_name, columns in index_dict.items():
                 source_name = self.source_name_dict[table_name]
                 for column in columns:
-                    name = f'kumo_index_{table_name}_{column}'
+                    name = f'nemotron_index_{table_name}_{column}'
                     sql = (
                         f'CREATE INDEX IF NOT EXISTS {quote_ident(name)}\n'
                         f'ON {source_name}({quote_ident(column)})'

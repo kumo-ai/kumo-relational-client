@@ -79,8 +79,7 @@ class ArrayDtype:
 
 @dataclass(repr=False)
 class ASTNode(ABC):
-    r"""A base class for all abstract syntax tree nodes in
-    :class:`~kumo.pquery.PredictiveQuery`.
+    r"""A base class for all abstract syntax tree nodes in a predictive query.
 
     Args:
         children: Any children of this node. Default is an

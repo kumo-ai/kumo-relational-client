@@ -266,9 +266,9 @@ def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(
     origin, target = redirect_servers
     origin['redirect_to'] = target['url'] + '/v1/health/ready'
 
-    RelationalClient(origin['url'], api_key='SECRET-KUMO-KEY').authenticate()
+    RelationalClient(origin['url'], api_key='SECRET-TEST-KEY').authenticate()
 
-    assert origin['headers'][0]['X-API-Key'] == 'SECRET-KUMO-KEY'
+    assert origin['headers'][0]['X-API-Key'] == 'SECRET-TEST-KEY'
     assert target['headers']
     assert all(
         headers.get('X-API-Key') is None for headers in target['headers']
@@ -281,11 +281,11 @@ def test_api_key_is_kept_on_a_same_origin_redirect(
     origin, _ = redirect_servers
     origin['redirect_to'] = origin['url'] + '/v1/health/ready/'
 
-    RelationalClient(origin['url'], api_key='SECRET-KUMO-KEY').authenticate()
+    RelationalClient(origin['url'], api_key='SECRET-TEST-KEY').authenticate()
 
     assert len(origin['headers']) >= 2
     assert all(
-        headers['X-API-Key'] == 'SECRET-KUMO-KEY'
+        headers['X-API-Key'] == 'SECRET-TEST-KEY'
         for headers in origin['headers']
     )
 

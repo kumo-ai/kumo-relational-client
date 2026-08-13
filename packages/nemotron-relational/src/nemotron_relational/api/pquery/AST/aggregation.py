@@ -17,8 +17,7 @@ from nemotron_relational.api.typing import AggregationType, TimeUnit
 
 @dataclass(repr=False)
 class Aggregation(ASTNode):
-    r"""An generic aggregation description within
-    :class:`~kumo.pquery.PredictiveQuery`.
+    r"""A generic aggregation description within a predictive query.
 
     Args:
         target: The ASTNode defining the target to be aggregated.

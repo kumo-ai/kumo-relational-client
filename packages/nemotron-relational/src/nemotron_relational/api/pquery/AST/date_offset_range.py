@@ -23,7 +23,7 @@ class DateOffsetRange:
             treated as -inf.
         end: End of the interval.
         unit: Time unit of the time interval. See
-            :class:`kumo.typing.TimeUnit` for valid values.
+            :class:`~nemotron_relational.api.typing.TimeUnit` for valid values.
             (default: 'days')
     """
 

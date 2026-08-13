@@ -161,7 +161,7 @@ transport optimisation and never change a prediction.
   It is opened on the second `predict()` against the same context, so scoring a single table
   costs exactly one request as before, and every call after that carries the rows alone.
 - **Nemotron Relational** — a multi-batch `predict()` opens one session for the run and deletes it at the
-  end. Set `KUMORFM_DISABLE_SESSIONS=1` to force the stateless path.
+  end. Set `NEMOTRON_PREDICT_DISABLE_SESSIONS=1` to force the stateless path.
 
 Both fall back to `POST /v1/predictions` when the NIM answers 404/405/501 on session creation,
 and both re-pin the context transparently if a session expires.

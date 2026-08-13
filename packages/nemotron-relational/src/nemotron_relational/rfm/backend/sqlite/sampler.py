@@ -100,7 +100,7 @@ class SQLiteSampler(SQLSampler):
             with verbose as logger, self._connection.cursor() as cursor:
                 for table_name, indices in index_dict.items():
                     for index in indices:
-                        name = f'kumo_index_{table_name}_{"_".join(index)}'
+                        name = f'nemotron_index_{table_name}_{"_".join(index)}'
                         name = quote_ident(name)
                         columns = ', '.join(quote_ident(v) for v in index)
                         columns += ' DESC' if len(index) > 1 else ''

@@ -123,7 +123,6 @@ When implementing the visitor, three functions are particularly relevant: `node.
 ## Grammar and parsing for Code Editor
 
 `PQLGrammar.g4` was additionally used to create a separate parser, [LRParser](https://lezer.codemirror.net/docs/ref/#lr.LRParser), for the purposes of autocompletion and syntax highlighting in the code editor component in the UI.
-A detailed explanation for what the separate parser is used for and how it was adapted for our needs is covered in `kumo` repository, in file `ui/src/utils/PQLParsing/README.md`.
 
 The main takeaways are: 1. for the code editor purposes, all of the antlr code files are generated separately using `antlr4ts`, 2. all of the code files in the frontend are completely independent of the files in the backend.
 
@@ -140,4 +139,3 @@ npm run compile-grammar-to-ts
 ```
 
 More info about running npm scripts can be found [here](https://docs.npmjs.com/cli/v10/commands/npm-run-script). Running the `compile-grammar-to-ts` script can generate the code files in case they are missing or re-generate them in case changes to the grammar file are introduced.
-A detailed explanation for is covered in `kumo` repository, in file `ui/src/utils/PQLParsing/README.md`.

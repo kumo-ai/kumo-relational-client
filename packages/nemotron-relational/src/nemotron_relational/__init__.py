@@ -128,10 +128,7 @@ class GlobalState(metaclass=Singleton):
         """
         if (
             not self.initialized
-            and (
-                os.getenv('NEMOTRON_PREDICT_API_ENDPOINT')
-                or os.getenv('KUMO_API_ENDPOINT')
-            )
+            and (os.getenv('NEMOTRON_PREDICT_API_ENDPOINT'))
             and 'pytest' not in sys.modules
         ):
             init()
@@ -186,22 +183,10 @@ def init(
     leaves requests unbounded. ``max_retries`` bounds the transport-level
     retries of a transient failure; ``0`` disables them.
     """
-    set_log_level(
-        os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
-        or os.getenv('KUMO_LOG')
-        or log_level
-    )
+    set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
 
-    api_key = (
-        api_key
-        or os.getenv('NEMOTRON_PREDICT_API_KEY')
-        or os.getenv('KUMO_API_KEY')
-    )
-    url = (
-        url
-        or os.getenv('NEMOTRON_PREDICT_API_ENDPOINT')
-        or os.getenv('KUMO_API_ENDPOINT')
-    )
+    api_key = api_key or os.getenv('NEMOTRON_PREDICT_API_KEY')
+    url = url or os.getenv('NEMOTRON_PREDICT_API_ENDPOINT')
     if not url:
         raise ValueError(
             'Nemotron Relational initialization failed since no endpoint '
@@ -306,11 +291,7 @@ def init_databricks_serving(
             and overrides == global_state._serving_overrides
         )
         if unchanged:
-            set_log_level(
-                os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
-                or os.getenv('KUMO_LOG')
-                or log_level
-            )
+            set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
             return
 
     from nemotron_relational.client.databricks_serving import (
@@ -319,11 +300,7 @@ def init_databricks_serving(
 
     probe = DatabricksServingClient(endpoint, workspace_client, **overrides)
 
-    set_log_level(
-        os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
-        or os.getenv('KUMO_LOG')
-        or log_level
-    )
+    set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
 
     if global_state.initialized:
         global_state.clear()
@@ -405,11 +382,7 @@ def init_snowflake_serving(
             and overrides == global_state._serving_overrides
         )
         if unchanged:
-            set_log_level(
-                os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
-                or os.getenv('KUMO_LOG')
-                or log_level
-            )
+            set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
             return
 
     from nemotron_relational.client.snowflake_serving import (
@@ -418,11 +391,7 @@ def init_snowflake_serving(
 
     probe = SnowflakeServingClient(service, session, **overrides)
 
-    set_log_level(
-        os.getenv(_ENV_NEMOTRON_PREDICT_LOG)
-        or os.getenv('KUMO_LOG')
-        or log_level
-    )
+    set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
 
     if global_state.initialized:
         global_state.clear()

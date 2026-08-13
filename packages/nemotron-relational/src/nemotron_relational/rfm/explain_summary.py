@@ -282,21 +282,13 @@ def generate_summary(
     """
     if timeout is None:
         timeout = _env_float(
-            'NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT',
-            'KUMORFM_EXPLAIN_LLM_TIMEOUT',
-            _DEFAULT_TIMEOUT,
+            'NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT', _DEFAULT_TIMEOUT
         )
-    base_url = base_url or _env(
-        'NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL', 'KUMORFM_EXPLAIN_LLM_BASE_URL'
-    )
+    base_url = base_url or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL')
     api_key = api_key or _env(
-        'NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY',
-        'KUMORFM_EXPLAIN_LLM_API_KEY',
-        'OPENAI_API_KEY',
+        'NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'OPENAI_API_KEY'
     )
-    model_set = model or _env(
-        'NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL', 'KUMORFM_EXPLAIN_LLM_MODEL'
-    )
+    model_set = model or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL')
     model = model_set or _DEFAULT_MODEL
 
     if client is None:

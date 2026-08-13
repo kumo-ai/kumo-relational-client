@@ -9,9 +9,7 @@ from nemotron_predict import PredictClient
 from nemotron_relational import rfm
 from nemotron_relational.testing.databricks import connect
 
-nim_url = (
-    os.environ.get('RFM_API_URL') or os.environ['NEMOTRON_PREDICT_API_ENDPOINT']
-)
+nim_url = os.environ['NEMOTRON_PREDICT_API_ENDPOINT']
 
 connection = connect(
     catalog='kumo_test_catalogue',

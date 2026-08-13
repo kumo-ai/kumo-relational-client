@@ -107,11 +107,7 @@ def _sessions_disabled_by_env() -> bool:
     r"""Opt-out kill switch: set ``NEMOTRON_PREDICT_DISABLE_SESSIONS`` to force the
     stateless per-batch path even for multi-batch jobs.
     """
-    value = (
-        os.environ.get('NEMOTRON_PREDICT_DISABLE_SESSIONS')
-        or os.environ.get('KUMORFM_DISABLE_SESSIONS')
-        or ''
-    )
+    value = os.environ.get('NEMOTRON_PREDICT_DISABLE_SESSIONS') or ''
     return value.strip().lower() in (
         '1',
         'true',

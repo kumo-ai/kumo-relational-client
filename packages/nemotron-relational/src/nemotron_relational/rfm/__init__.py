@@ -77,12 +77,7 @@ def _configure(
     timeout: float | None,
     max_retries: int = 3,
 ) -> None:
-    resolved_url = (
-        url
-        or os.getenv('RFM_API_URL')
-        or os.getenv('NEMOTRON_PREDICT_API_ENDPOINT')
-        or os.getenv('KUMO_API_ENDPOINT')
-    )
+    resolved_url = url or os.getenv('NEMOTRON_PREDICT_API_ENDPOINT')
 
     nemotron_relational.init(
         url=resolved_url,
