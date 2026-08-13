@@ -1,18 +1,21 @@
 # Maintainers
 
-Maintainers review and merge changes, cut releases, and are the escalation path
-for anything this repository does not answer.
+Maintainers review and merge changes, cut releases, and are the escalation
+path for anything this repository does not answer. All maintainers cover the
+whole repository; there are no per-area owners.
 
-| Name | Area | GitHub | Contact |
-| --- | --- | --- | --- |
-| Manush Murali | Client, packaging, releases | [@Manushpm8](https://github.com/Manushpm8) | manushm@nvidia.com |
-| Alex Porter | Wire contract, PQL | — | aporter@nvidia.com |
-| Isaac Gutierrez | NIM contract and live validation | — | igutierrez@nvidia.com |
-| Alan Krumholz | Relational driver | — | akrumholznud@nvidia.com |
+| Name | GitHub | Contact |
+| --- | --- | --- |
+| Manush Murali | [@Manushpm8](https://github.com/Manushpm8) | manushm@nvidia.com |
+| Alex Porter | [@am-porter](https://github.com/am-porter) | aporter@nvidia.com |
+| Matthias Fey | [@rusty1s](https://github.com/rusty1s) | mfey@nvidia.com |
+| Adi Wadaskar | [@adi-kumo](https://github.com/adi-kumo) | awadaskar@nvidia.com |
+| Isaac Gutierrez | [@kumo-isaac](https://github.com/kumo-isaac) | igutierrez@nvidia.com |
+| Alan Krumholz | [@alan-kumo](https://github.com/alan-kumo) | akrumholznud@nvidia.com |
 
-Maintainers without a handle listed are not yet on this repository, so
-`.github/CODEOWNERS` cannot route reviews to them: GitHub ignores an owner it
-cannot resolve. Reach them by email until they appear here.
+Pull requests are routed to the code owners in
+[`.github/CODEOWNERS`](.github/CODEOWNERS): Manush, Alex, Matthias and Adi.
+Every maintainer may review and merge.
 
 ## Escalation
 

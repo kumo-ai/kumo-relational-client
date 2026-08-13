@@ -1,16 +1,5 @@
-# Review routing. GitHub requests a review from an owner automatically, and
-# silently ignores any owner it cannot resolve, so only handles with access to
-# this repository belong here. Add maintainers as they are onboarded.
+# Review routing. GitHub requests a review from an owner automatically and
+# silently ignores any owner it cannot resolve, so an entry only takes effect
+# once that account has access to this repository.
 
-*                                   @Manushpm8
-
-# The wire contract and the released surface change together with the NIM.
-/packages/nemotron-predict-client/src/nemotron_predict/core/  @Manushpm8
-/packages/nemotron-relational/src/nemotron_relational/api/    @Manushpm8
-
-# Licensing and attribution were reviewed for the open-source release, and the
-# third-party list has to keep matching what the vendored bundle contains.
-/LICENSE                            @Manushpm8
-/NOTICE                             @Manushpm8
-/packages/*/LICENSE                 @Manushpm8
-/packages/*/NOTICE                  @Manushpm8
+*  @Manushpm8 @am-porter @rusty1s @adi-kumo
