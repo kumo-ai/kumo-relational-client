@@ -1,16 +1,29 @@
 # Security
 
+NVIDIA is dedicated to the security and trust of our software products and
+services, including all source code repositories managed through our
+organization.
+
 ## Reporting a vulnerability
 
-Please do **not** open a public issue or pull request for a security problem.
+Please do **not** report security vulnerabilities through GitHub. If a potential
+security issue is inadvertently reported via a public issue or pull request,
+NVIDIA maintainers may limit public discussion and redirect the reporter to the
+appropriate private disclosure channels.
 
-Report suspected vulnerabilities in this project to the NVIDIA Product Security
-Incident Response Team (PSIRT), following the process described at
-<https://www.nvidia.com/en-us/security/psirt-policies/>. PSIRT will acknowledge
-the report and coordinate the investigation, fix, and disclosure.
+To report a potential vulnerability:
+
+- Web: [Security Vulnerability Submission Form](https://www.nvidia.com/object/submit-security-vulnerability.html)
+- Email: <psirt@nvidia.com>, optionally encrypted with the
+  [NVIDIA public PGP key](https://www.nvidia.com/en-us/security/pgp-key)
 
 A report is most useful when it includes the affected package and version, the
-minimal steps or script that reproduce the issue, and what an attacker gains.
+type of vulnerability, the minimal steps or script that reproduce it, and what
+an attacker gains.
+
+NVIDIA does not run a bug bounty programme, but does acknowledge externally
+reported issues addressed under its coordinated disclosure policy. See the
+[PSIRT policies](https://www.nvidia.com/en-us/security/psirt-policies/) page.
 
 ## Supported versions
 

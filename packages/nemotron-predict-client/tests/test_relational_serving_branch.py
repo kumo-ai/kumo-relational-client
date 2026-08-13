@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The adapter's serving-mode branch, without the native RFM engine.
+"""The adapter's serving-mode branch, without the native relational driver.
 
 ``test_nemotron_relational_adapter.py`` skips everything when ``nemotron_relational.rfm`` is unusable,
 which on a machine without the compiled ``relationallib`` is everything. That is the

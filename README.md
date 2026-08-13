@@ -1,8 +1,28 @@
-# nemotron-predict-client
+# NVIDIA Nemotron Predict SDK
 
-One client SDK for NVIDIA structured-data foundation model NIMs, served behind the
-Universal TFM API. A thin, model-agnostic client dispatches to per-model adapters;
-heavy model drivers are optional, installed only when you ask for them.
+One Python client for NVIDIA's structured-data foundation model NIMs. Make
+tabular and relational predictions against a NIM endpoint, without training a
+model per dataset.
+
+A thin, model-agnostic client dispatches to per-model adapters; heavy model
+drivers are optional, installed only when you ask for them. Inference happens in
+the NIM, not here: this package builds a request, sends it, and gives you back a
+DataFrame.
+
+```bash
+pip install nemotron-predict-client
+```
+
+## Requirements
+
+- **Python** 3.10 to 3.13
+- **A reachable NIM** serving `nemotron-tabular` or `nemotron-relational`. The
+  SDK does not run a model locally and never downloads weights.
+- **OS/arch** — the client and connectors are pure Python and install anywhere.
+  The `[relational]` extra is a native build, published as `manylinux_2_28`
+  wheels for Linux x86-64 on CPython 3.10-3.13 only, with no source
+  distribution.
+- **No GPU** is needed on the client. The NIM owns that.
 
 ## Documentation
 
@@ -89,7 +109,7 @@ A monorepo workspace; every independently released distribution lives under `pac
 with the same `src/` + `tests/` convention:
 
 ```text
-nemotron-predict-client/
+nemotron-predict-sdk/
 ├── pyproject.toml              # workspace root: shared tooling only, builds nothing
 ├── e2e/                        # cross-distribution live harnesses
 ├── docs/                       # user-facing documentation
@@ -105,12 +125,13 @@ nemotron-predict-client/
     │       ├── core/           #   HTTP transport, response parsing, connectors, dtypes
     │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
     │       ├── adapters/       #   one peer module per model
-    │       │   ├── tabicl.py     #   single-table (no driver)
-    │       │   └── nemotron_relational.py    #   relational (lazy-wraps the Nemotron Relational driver)
-    │       └── nemotron_relational.py      #   explicit, lazily-resolved surface onto the driver
+    │       │   ├── tabular.py    #   single-table (no driver)
+    │       │   └── relational.py #   relational (lazy-wraps the Nemotron Relational driver)
+    │       ├── wire/           #   the on-the-wire request and response shapes
+    │       └── relational.py   #   explicit, lazily-resolved surface onto the driver
     ├── nemotron-predict-connectors/        # shared data-source connectors (pure-python)
     │   └── src/nemotron_predict_connectors/  #   connect(), read(), quote_ident, resolve_sql; DB drivers via extras
-    └── nemotron_relational/                # the Nemotron Relational driver (native build)
+    └── nemotron-relational/                # the Nemotron Relational driver (native build)
         └── src/nemotron_relational/          #   graph, samplers, native relationallib, PQL, HTTP client
 ```
 
@@ -166,12 +187,36 @@ transport optimisation and never change a prediction.
 Both fall back to `POST /v1/predictions` when the NIM answers 404/405/501 on session creation,
 and both re-pin the context transparently if a session expires.
 
-## License & Contributing
+## Contributing
+
+External contributions are welcome under the Developer Certificate of Origin.
+Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md), and please read
+[`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
+
+```bash
+git clone https://github.com/NVIDIA/nemotron-predict-sdk.git
+cd nemotron-predict-sdk
+python -m pip install -e './packages/nemotron-predict-client[test]'
+python -m pytest packages/nemotron-predict-client/tests -m 'not live_nim' -q
+```
+
+## Governance and support
+
+- Who decides what, and how a change gets merged: [`GOVERNANCE.md`](./GOVERNANCE.md)
+- Maintainers and the escalation path: [`MAINTAINERS.md`](./MAINTAINERS.md)
+- Support level and where to ask: [`SUPPORT.md`](./SUPPORT.md)
+- Release history: [`CHANGELOG.md`](./CHANGELOG.md)
+
+## Security
+
+Please do **not** open a public issue for a security problem. Vulnerability
+reporting goes to NVIDIA PSIRT; see [`SECURITY.md`](./SECURITY.md), which also
+records what is a deliberate design decision rather than a vulnerability.
+
+## License
 
 This project is released under the [Apache License 2.0](./LICENSE); third-party
-components are listed in [`NOTICE`](./NOTICE). External contributions are
-welcome under the Developer Certificate of Origin, see
-[`CONTRIBUTING.md`](./CONTRIBUTING.md).
+components are listed in [`NOTICE`](./NOTICE).
 
 ### Licensing
 
