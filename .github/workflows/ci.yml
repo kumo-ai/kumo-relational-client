@@ -112,7 +112,6 @@ jobs:
       - run: >-
           python -c "import nemotron_relational.relationallib as relationallib;
           assert hasattr(relationallib.NeighborSampler, 'seed')"
-      # Some tests invoke scripts/ and read paths relative to the working directory.
       - run: python -m pytest tests --quiet --disable-warnings -m 'not live_nim'
         working-directory: packages/nemotron-relational
 
@@ -129,8 +128,6 @@ jobs:
       - run: >-
           WITH_RELATIONALLIB=0 python -m pip install --editable
           './packages/nemotron-relational[test]'
-      # test_rfm_serving_init only means anything where the native extension is
-      # absent, so this is the only job that can run it.
       - run: >-
           python -m pytest tests/client/test_rfm_nim_contract.py
           tests/client/test_rfm_nim_hardening_cases.py
@@ -172,6 +169,7 @@ jobs:
       WITH_RELATIONALLIB: '1'
     steps:
       - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
       - run: |
           for PYTAG in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313; do
             "/opt/python/${PYTAG}/bin/python" -m pip install --upgrade pip build
@@ -183,8 +181,6 @@ jobs:
           done
           /opt/python/cp312-cp312/bin/python -m pip install twine
           /opt/python/cp312-cp312/bin/python -m twine check dist/*
-      # No sdist is published, so a version with no wheel must fail resolution
-      # rather than fall back to building from source.
       - run: test "$(find dist -name '*.tar.gz' | wc -l)" -eq 0
       - uses: actions/upload-artifact@v4
         with:
