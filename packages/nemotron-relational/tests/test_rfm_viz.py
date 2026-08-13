@@ -56,6 +56,17 @@ def test_bundled_mermaid_js() -> None:
     assert 'globalThis["mermaid"]' in js
 
 
+def test_bundled_mermaid_is_not_vulnerable() -> None:
+    """Mermaid below 11.15.0 injects HTML from `classDef` (GHSA-ghcm-xqfw-q4vr).
+
+    The bundle is vendored, so nothing else would notice it being rolled back
+    to a version carrying the advisory.
+    """
+    found = re.findall(r'version:"(\d+)\.(\d+)\.(\d+)"', viz._mermaid_js())
+    assert found, 'no version string in the bundle'
+    assert max(tuple(int(p) for p in v) for v in found) >= (11, 15, 0)
+
+
 def test_to_html_is_self_contained(sample_graph: Graph) -> None:
     source = sample_graph._to_mermaid()
     doc = viz.to_html(source)

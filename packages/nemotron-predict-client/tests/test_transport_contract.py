@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 import threading
+import warnings
 from collections.abc import Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -501,3 +502,23 @@ def test_require_open_refuses_after_close(build):
         target._require_open()
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
     assert 'closed' in str(excinfo.value)
+
+
+def test_disabling_tls_verification_warns_for_a_real_host():
+    with pytest.warns(UserWarning, match='verification is disabled'):
+        Transport('https://nim.example.com', verify_ssl=False).close()
+
+
+def test_disabling_tls_verification_is_quiet_on_loopback():
+    """A local NIM behind a self-signed certificate is ordinary."""
+    with warnings.catch_warnings():
+        warnings.simplefilter('error')
+        Transport('https://localhost:8000', verify_ssl=False).close()
+
+
+def test_the_warning_does_not_carry_the_credential():
+    with pytest.warns(UserWarning) as caught:
+        Transport(
+            'https://user:secret@nim.example.com', verify_ssl=False
+        ).close()
+    assert 'secret' not in str(caught[0].message)

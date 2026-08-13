@@ -110,7 +110,7 @@ def test_generate_summary_passes_context_and_returns_text() -> None:
 
 def test_missing_extra_message_when_openai_absent(monkeypatch: Any) -> None:
     monkeypatch.setitem(sys.modules, 'openai', None)
-    monkeypatch.setenv('OPENAI_API_KEY', 'k')
+    monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'k')
     assert (
         generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_NEEDS_EXTRA_MESSAGE
     )
@@ -210,19 +210,18 @@ def test_uses_openai_env(monkeypatch: Any) -> None:
     monkeypatch.setenv(
         'NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL', 'https://openai.example/v1'
     )
-    monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
+    monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'explain-key')
     monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL', 'm')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['base_url'] == 'https://openai.example/v1'
-    assert call['api_key'] == 'openai-key'
+    assert call['api_key'] == 'explain-key'
     assert call['model'] == 'm'
 
 
 @requires_openai
-def test_explain_api_key_takes_precedence_over_openai_key(
-    monkeypatch: Any,
-) -> None:
+def test_an_ambient_openai_key_is_never_used(monkeypatch: Any) -> None:
+    """A key exported for another tool must not send rows to a third party."""
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
     monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'explain-key')
     monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL', 'm')
@@ -232,15 +231,18 @@ def test_explain_api_key_takes_precedence_over_openai_key(
 
 
 @requires_openai
-def test_falls_back_to_openai_key(monkeypatch: Any) -> None:
+def test_does_not_fall_back_to_the_openai_key(monkeypatch: Any) -> None:
+    """With only OPENAI_API_KEY set, no request is made at all."""
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
     call = _capture_make_client(monkeypatch)
-    generate_summary('q', 'p', ['c'], ['s'])
-    assert call['api_key'] == 'openai-key'
+    result = generate_summary('q', 'p', ['c'], ['s'])
+    assert call == {}
+    assert result == SUMMARY_UNAVAILABLE_MESSAGE
 
 
-# The egress above is opt-out, so it has to be discoverable from the docstrings
-# a caller reads.
+# The egress has to be discoverable from the docstrings a caller reads, and
+# only the dedicated variable may enable it: an ambient OPENAI_API_KEY set for
+# some other tool must not start sending rows to a third party.
 
 
 def test_explain_config_docstring_discloses_the_egress() -> None:
@@ -249,7 +251,7 @@ def test_explain_config_docstring_discloses_the_egress() -> None:
     doc = ExplainConfig.__doc__ or ''
     assert 'api.openai.com' in doc
     assert 'cell values' in doc
-    assert 'OPENAI_API_KEY' in doc
+    assert 'NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY' in doc
     assert 'skip_summary=True' in doc
 
 
@@ -265,7 +267,7 @@ def test_explicit_args_override_env(monkeypatch: Any) -> None:
     monkeypatch.setenv(
         'NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL', 'https://env.example/v1'
     )
-    monkeypatch.setenv('OPENAI_API_KEY', 'env-key')
+    monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'env-key')
     call = _capture_make_client(monkeypatch)
     generate_summary(
         'q',
@@ -285,7 +287,7 @@ def test_explicit_args_override_env(monkeypatch: Any) -> None:
 
 @requires_openai
 def test_timeout_defaults_to_20_and_reads_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('OPENAI_API_KEY', 'k')
+    monkeypatch.setenv('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'k')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['timeout'] == 20.0

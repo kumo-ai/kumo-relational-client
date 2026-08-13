@@ -39,8 +39,7 @@ pass `explain=dict(skip_summary=True)`.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` | No | None | API key for the summary endpoint. **Falls back to `OPENAI_API_KEY`**, so a key exported for another tool enables the call. |
-| `OPENAI_API_KEY` | No | None | Fallback API key, read when `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` is unset. |
+| `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` | No | None | API key for the summary endpoint. Setting it is what enables the call, which sends the rows behind a prediction to that endpoint. There is no fallback to any other key. |
 | `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` | No | OpenAI (`https://api.openai.com/v1/`) | Base URL of any OpenAI-compatible endpoint, including a self-hosted one. Set this to keep the data inside your own network. |
 | `NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL` | Conditional | `gpt-4.1-mini-2025-04-14` | Model name. Required when `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` is set. |
 | `NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT` | No | `20` | Request timeout in seconds. |

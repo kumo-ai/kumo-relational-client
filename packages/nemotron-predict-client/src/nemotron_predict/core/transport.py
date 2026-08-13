@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import warnings
 from typing import Any
 from urllib.parse import quote, urlparse
 
@@ -78,6 +79,27 @@ def scrub_userinfo(text: str) -> str:
     quoted into transport errors, which echo back whatever URL was requested.
     """
     return _USERINFO_RE.sub('', text)
+
+
+def _warn_if_verification_disabled(url: str, verify_ssl: bool) -> None:
+    """Warn when TLS verification is turned off against a real host.
+
+    A local NIM over a self-signed certificate is a normal thing to do, so
+    loopback stays quiet. Anywhere else the connection can be intercepted, and
+    an example copied out of an internal environment is how that reaches
+    production.
+    """
+    if verify_ssl:
+        return
+    host = (urlparse(url).hostname or '').lower()
+    if host in _LOCAL_HOSTS:
+        return
+    warnings.warn(
+        f'TLS certificate verification is disabled for {redact_url(url)}. '
+        'The connection can be intercepted and any API key read off it. '
+        'Set verify_ssl=True and trust the endpoint certificate instead.',
+        stacklevel=3,
+    )
 
 
 def _validate_url(url: str, api_key: str | None) -> None:
@@ -310,6 +332,7 @@ class Transport:
     ) -> None:
         _validate_url(url, api_key)
         _validate_limits(timeout, max_retries)
+        _warn_if_verification_disabled(url, verify_ssl)
         self._url = url.rstrip('/')
         self._api_key = api_key
         self._verify_ssl = verify_ssl

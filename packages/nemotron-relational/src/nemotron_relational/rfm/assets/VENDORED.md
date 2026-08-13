@@ -3,8 +3,8 @@
 ## mermaid.min.js
 
 - Project: https://github.com/mermaid-js/mermaid
-- Version: 11.12.1 (browser IIFE bundle, `dist/mermaid.min.js`)
-- Source: https://cdn.jsdelivr.net/npm/mermaid@11.12.1/dist/mermaid.min.js
+- Version: 11.15.0 (browser IIFE bundle, `dist/mermaid.min.js`)
+- Source: https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js
 - License: MIT (see `MERMAID_LICENSE`)
 
 Bundled so that `Graph.visualize()` renders entirely offline: no system

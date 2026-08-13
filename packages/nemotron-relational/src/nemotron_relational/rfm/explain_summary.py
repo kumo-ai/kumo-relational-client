@@ -152,10 +152,12 @@ SUMMARY_NEEDS_EXTRA_MESSAGE = (
 )
 
 SUMMARY_UNAVAILABLE_MESSAGE = (
-    'Natural-language explanation summary needs an API key. Set OPENAI_API_KEY '
-    '(the default is OpenAI gpt-4.1-mini); for another OpenAI-compatible '
-    'endpoint set NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY, NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL and '
-    'NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL. ' + _STRUCTURED_NOTE
+    'Natural-language explanation summary needs an API key. Set '
+    'NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY, which sends the rows behind the '
+    'prediction to the summary endpoint (the default is OpenAI gpt-4.1-mini, a '
+    'non-NVIDIA service). For another OpenAI-compatible endpoint also set '
+    'NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL and NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL. '
+    + _STRUCTURED_NOTE
 )
 
 SUMMARY_NEEDS_MODEL_MESSAGE = (
@@ -272,7 +274,7 @@ def generate_summary(
     Built for OpenAI (default model ``gpt-4.1-mini``), it works with any
     OpenAI-compatible chat-completions endpoint. Configure once via the
     environment: the API key from ``NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY`` (else
-    ``OPENAI_API_KEY``), plus ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` (for another
+    ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` (for another
     endpoint), ``NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL``, and ``NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT``
     (seconds); or pass ``base_url`` / ``api_key`` / ``model`` / ``timeout`` (or
     an already-built ``client``), which take precedence. A slow model just needs
@@ -285,9 +287,9 @@ def generate_summary(
             'NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT', _DEFAULT_TIMEOUT
         )
     base_url = base_url or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL')
-    api_key = api_key or _env(
-        'NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY', 'OPENAI_API_KEY'
-    )
+    # No ambient-key fallback: a key exported for an unrelated tool must not be
+    # enough to start sending row values to a third party.
+    api_key = api_key or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY')
     model_set = model or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL')
     model = model_set or _DEFAULT_MODEL
 

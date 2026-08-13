@@ -224,13 +224,13 @@ mermaid, used for offline graph visualization.
 That file is a bundle. The components below are embedded inside it, as
 enumerated by mermaid's own bundled license manifest.
 
-  DOMPurify 3.2.6
+  DOMPurify 3.4.0
   Copyright (c) Cure53 and other contributors
   License: dual-licensed under the Apache License 2.0 AND the Mozilla Public
   License 2.0. This distribution relies on the Apache License 2.0 option, whose
   full text appears above. The Mozilla Public License 2.0 option is called out
   here explicitly; its text is at https://mozilla.org/MPL/2.0/.
-  https://github.com/cure53/DOMPurify/blob/3.2.6/LICENSE
+  https://github.com/cure53/DOMPurify/blob/3.4.0/LICENSE
 
   js-yaml 4.1.0
   License: MIT (full text below)
@@ -274,16 +274,10 @@ enumerated by mermaid's own bundled license manifest.
     dagre-d3-es                        License: MIT
     dayjs                              License: MIT
     katex                              License: MIT
-    khroma
-      Copyright (c) 2019-present Fabio Spampinato, Andrew Maney
-      License: MIT. This project declares no license field in its package
-      metadata, so the license is taken from the license file at its v2.1.0 tag.
-      https://github.com/fabiospampinato/khroma/blob/v2.1.0/license
     marked                             License: MIT
     roughjs                            License: MIT
     stylis                             License: MIT
     ts-dedent                          License: MIT
-    uuid                               License: MIT
 
 MIT License, as it applies to the MIT-licensed components listed above:
 

@@ -226,7 +226,7 @@ def snowflake_connector() -> None:
         warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
         query='SELECT ACTUAL_RUNTIME_HOURS, QUEUE_WAIT_MINUTES, MEAN_MFU_PCT, '
         'GPU_HOURS, PREEMPTED_COUNT, STATUS '
-        'FROM MY_DATABASE.GPU_FLEET.JOB_OUTCOMES SAMPLE (5000 ROWS)',
+        'FROM MY_DATABASE.MY_SCHEMA.JOB_OUTCOMES SAMPLE (5000 ROWS)',
     )
     check(
         'snowflake: read returns DataFrame',

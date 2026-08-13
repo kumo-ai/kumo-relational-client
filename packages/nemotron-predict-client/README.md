@@ -79,9 +79,9 @@ with PredictClient(url='http://localhost:8000') as client:
 > Unless `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` points elsewhere, that endpoint is
 > OpenAI's `https://api.openai.com/v1/` (model `gpt-4.1-mini-2025-04-14`, or
 > `NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL`), a non-NVIDIA service. The API key is read from
-> `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` and **falls back to the ambient
-> `OPENAI_API_KEY`**, so a key exported for an unrelated tool is enough to
-> enable this.
+> `NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY` and nothing else. Setting that one
+> variable is what turns the call on; a key exported for another tool, such as
+> `OPENAI_API_KEY`, does not enable it.
 >
 > Nothing is sent if no key is discoverable or the `nemotron-predict-client[explain]` extra
 > is not installed — which is why that extra is not part of `[all]`.

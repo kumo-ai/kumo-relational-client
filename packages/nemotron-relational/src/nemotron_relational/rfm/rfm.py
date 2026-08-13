@@ -184,9 +184,8 @@ class ExplainConfig(CastMixin):
         OpenAI-compatible chat-completions endpoint. Unless
         ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` points somewhere else, that endpoint
         is OpenAI's ``https://api.openai.com/v1/``, a non-NVIDIA service. The
-        key is read from ``NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY`` and falls back to the
-        ambient ``OPENAI_API_KEY``, so a key exported for an unrelated tool is
-        enough to enable this.
+        key is read from ``NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY`` only. Setting
+        that variable is what turns the call on; no other key enables it.
 
         Pass ``skip_summary=True`` (e.g.
         ``predict(..., explain=dict(skip_summary=True))``) to turn it off. The
@@ -198,7 +197,7 @@ class ExplainConfig(CastMixin):
         skip_summary: Whether to skip generating a human-readable summary of
             the explanation. The summary's LLM endpoint is configured once via
             the environment: the API key from ``NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY``
-            (else ``OPENAI_API_KEY``), ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` (for
+            ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` (for
             any OpenAI-compatible endpoint, including a self-hosted one),
             ``NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini-2025-04-14``) and
             ``NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT`` (default 20s).

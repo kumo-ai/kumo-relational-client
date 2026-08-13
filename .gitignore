@@ -22,3 +22,15 @@ e2e/adult.data
 # Local audit workspace: defect reports written against unreleased code, kept
 # out of the published repository.
 bugs/
+
+# Credentials. Nothing here is ever intentional in a commit, and a public repo
+# is an unforgiving place to find that out.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa
+id_ed25519
+*_rsa
