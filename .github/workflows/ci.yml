@@ -1,6 +1,11 @@
-# Public CI. Mirrors the checks the SDK was released under: lint, the three
-# test suites, and a manylinux wheel that has to import on every Python the
-# packages claim to support.
+# Public CI, mirroring the checks the SDK is released under.
+#
+# The three packages depend on each other and are not on a public index, so
+# every job installs them from the working tree, in dependency order:
+# connectors, then the relational driver, then the client. Installing the
+# client alone makes pip look for `nemotron-predict-connectors` on PyPI, where
+# it does not exist. Backend extras are installed so their tests import rather
+# than failing at collection; tests needing a live warehouse still skip.
 name: CI
 
 on:
@@ -17,8 +22,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Every first-party Python tree. This is an explicit list rather than `.`
-  # because a path that matches no file makes ruff pass vacuously.
   LINT_PATHS: >-
     packages/nemotron-relational/src packages/nemotron-relational/tests
     packages/nemotron-relational/examples
@@ -35,7 +38,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # Pinned: an unpinned linter turns an upstream release into a red build.
       - run: python -m pip install 'ruff==0.16.*'
       - name: Assert every lint path resolves to at least one file
         run: |
@@ -48,8 +50,6 @@ jobs:
             fi
           done
       - run: ruff check $LINT_PATHS
-      # The formatter owns line length and quote style, so E501 is off in the
-      # lint rules and this is what enforces them.
       - run: ruff format --check --diff $LINT_PATHS
       - name: Every package ships the licence and notice
         run: |
@@ -62,18 +62,6 @@ jobs:
             done
           done
 
-  client-tests:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - run: python -m pip install -e './packages/nemotron-predict-client[test]'
-      - run: >-
-          python -m pytest packages/nemotron-predict-client/tests
-          -m 'not live_nim' -q
-
   connectors-tests:
     runs-on: ubuntu-latest
     steps:
@@ -81,8 +69,28 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install -e './packages/nemotron-predict-connectors[test]'
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-predict-connectors[sqlite,duckdb,s3,test]'
       - run: python -m pytest packages/nemotron-predict-connectors/tests -q
+
+  client-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-predict-connectors[sqlite,duckdb]'
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-predict-client[sqlite,duckdb,test]'
+      - run: python -c "import nemotron_predict; from nemotron_predict import relational"
+      - run: >-
+          python -m pytest packages/nemotron-predict-client/tests
+          -m 'not live_nim' -q
 
   relational-tests:
     runs-on: ubuntu-latest
@@ -91,32 +99,100 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # The explain extra pulls in `openai`. Without it a block of tests skips
-      # silently, which is how a broken explain path reaches a release.
       - run: |
-          python -m pip install -e './packages/nemotron-predict-connectors'
-          python -m pip install -e './packages/nemotron-relational[test,explain]'
-      # Some tests invoke scripts/ and read paths relative to the working
-      # directory, so they run from the package root.
-      - run: python -m pytest tests -m 'not live_nim' -q
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential cmake ninja-build
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-predict-connectors[databricks,duckdb]'
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-relational[test,explain,databricks,databricks-serving,duckdb]'
+      - run: >-
+          python -c "import nemotron_relational.relationallib as relationallib;
+          assert hasattr(relationallib.NeighborSampler, 'seed')"
+      # Some tests invoke scripts/ and read paths relative to the working directory.
+      - run: python -m pytest tests --quiet --disable-warnings -m 'not live_nim'
         working-directory: packages/nemotron-relational
 
-  wheel:
+  relational-contract-tests:
+    runs-on: ubuntu-latest
+    env:
+      WITH_RELATIONALLIB: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --editable './packages/nemotron-predict-connectors'
+      - run: >-
+          WITH_RELATIONALLIB=0 python -m pip install --editable
+          './packages/nemotron-relational[test]'
+      # test_rfm_serving_init only means anything where the native extension is
+      # absent, so this is the only job that can run it.
+      - run: >-
+          python -m pytest tests/client/test_rfm_nim_contract.py
+          tests/client/test_rfm_nim_hardening_cases.py
+          tests/client/test_rfm_nim_live_harness.py
+          tests/client/test_rfm_serving_init.py -q
+        working-directory: packages/nemotron-relational
+
+  integration-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build the manylinux wheels
-        run: |
-          docker run --rm -v "$PWD":/io -w /io/packages/nemotron-relational \
-            quay.io/pypa/manylinux_2_28_x86_64 \
-            /bin/bash -c '/opt/python/cp312-cp312/bin/pip wheel . -w /io/wheelhouse --no-deps'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential cmake ninja-build
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-predict-connectors[sqlite,duckdb]'
+      - run: python -m pip install --editable './packages/nemotron-relational'
+      - run: >-
+          python -m pip install --editable
+          './packages/nemotron-predict-client[relational,sqlite,duckdb,test]'
+      - run: >-
+          python -c "import nemotron_predict; from nemotron_predict import relational;
+          import nemotron_relational.relationallib as k;
+          assert hasattr(k.NeighborSampler, 'seed'); relational.Graph;
+          assert not hasattr(relational, 'NemotronRelational')"
+      - run: >-
+          python -m pytest packages/nemotron-predict-client/tests
+          -m 'not live_nim' -q
+
+  wheels:
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    env:
+      WITH_RELATIONALLIB: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          for PYTAG in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313; do
+            "/opt/python/${PYTAG}/bin/python" -m pip install --upgrade pip build
+            "/opt/python/${PYTAG}/bin/python" -m build --wheel \
+              --outdir wheelhouse packages/nemotron-relational
+          done
+          for wheel in wheelhouse/nemotron_relational-*.whl; do
+            auditwheel repair "$wheel" --wheel-dir dist
+          done
+          /opt/python/cp312-cp312/bin/python -m pip install twine
+          /opt/python/cp312-cp312/bin/python -m twine check dist/*
+      # No sdist is published, so a version with no wheel must fail resolution
+      # rather than fall back to building from source.
+      - run: test "$(find dist -name '*.tar.gz' | wc -l)" -eq 0
       - uses: actions/upload-artifact@v4
         with:
           name: wheels
-          path: wheelhouse/*.whl
+          path: dist/*.whl
 
   wheel-imports:
-    needs: wheel
+    needs: wheels
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -130,10 +206,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: wheels
-          path: wheelhouse
-      - name: Install the built wheel and import it
-        run: |
-          python -m pip install ./packages/nemotron-predict-connectors
-          python -m pip install --no-index --find-links wheelhouse nemotron-relational \
-            || python -m pip install wheelhouse/*.whl
-          python -c "import nemotron_relational; print(nemotron_relational.__version__)"
+          path: dist
+      - run: python -m pip install ./packages/nemotron-predict-connectors
+      - run: python -m pip install dist/nemotron_relational-*-cp$(echo "${{ matrix.python }}" | tr -d .)-*.whl
+      - run: >-
+          python -c "import nemotron_relational.relationallib as relationallib;
+          assert hasattr(relationallib.NeighborSampler, 'seed')"
+      - run: python -c "from nemotron_relational.rfm import Graph, NemotronRelational"
