@@ -1,4 +1,4 @@
-# nemotron_relational.api — provenance
+# nemotron_relational.api: provenance
 
 This tree began as a copy of the internal `kumo-api` wire-type package,
 internalized so the client is self-contained (no external `kumo-api` dependency)
@@ -37,13 +37,13 @@ internalized code, not as an instruction for re-syncing.
   `jobs.py`, `online_serving.py`, `distilled_model_plan.py`,
   `data_snapshot.py`, `rbac.py`. Nothing in `nemotron_relational`, `nemotron_predict` or
   `nemotron_predict_connectors` imports them, and they describe batch jobs, serving
-  endpoints, snapshots and RBAC — none of which this client offers.
+  endpoints, snapshots and RBAC, none of which this client offers.
 - `model_plan.py`, `encoder.py` and `train.py` dropped: they describe model
   architectures, encoders and training jobs for a service that trains models,
   and this client sends in-context examples to a NIM and trains nothing.
 - `rfm/pquery.py`, `rfm/explain.py` and four of the five `explain/` modules
   dropped: server-side query and explanation types that nothing outside `api/`
-  names. Only `explain/gradient.py` is reachable — it backs
+  names. Only `explain/gradient.py` is reachable, it backs
   `Explanation.feature_importance`.
 - `column_analysis.py` and `subgraph.py` dropped for the same reason.
 - Internal identifiers removed from shipped docstrings and comments: a private
@@ -52,15 +52,15 @@ internalized code, not as an instruction for re-syncing.
 
 ## Files this client owns outright
 
-These were never upstream's to define — each names only the subset of `api/`
+These were never upstream's to define, each names only the subset of `api/`
 this client actually uses, and the re-sync used to preserve them explicitly:
 
-- `rfm/__init__.py` and `explain/__init__.py` — re-export only the subset used
+- `rfm/__init__.py` and `explain/__init__.py`: re-export only the subset used
   here.
-- `rfm/requests.py` — keeps only the prediction request and response. Upstream
+- `rfm/requests.py`: keeps only the prediction request and response. Upstream
   also defined validate/parse/evaluate types; this client only ever POSTs a
   prediction.
-- `pquery/AST/column.py` — renders a column back to the query text that names
+- `pquery/AST/column.py`: renders a column back to the query text that names
   it, quoting a name the bare identifier cannot spell. See `../pql/SOURCE.md`.
 
 `RunMode` and `MissingType` were the only two names reachable from the dropped

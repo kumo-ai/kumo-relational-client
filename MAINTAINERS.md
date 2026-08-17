@@ -19,7 +19,7 @@ Every maintainer may review and merge.
 
 ## Escalation
 
-For a security issue, do not contact maintainers directly — follow
+For a security issue, do not contact maintainers directly. Follow
 [SECURITY.md](SECURITY.md), which routes to NVIDIA PSIRT.
 
 For anything else, open an issue first. Direct email is for things that cannot

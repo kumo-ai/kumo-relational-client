@@ -27,7 +27,7 @@ def test_timedelta_to_pquery_hours() -> None:
 
 
 def test_timedelta_to_pquery_prefers_days_over_hours() -> None:
-    # 24h, 48h etc. are whole days — should return days, not hours
+    # 24h, 48h etc. are whole days, so this returns days, not hours
     assert _timedelta_to_pquery(Timedelta('24h')) == (1, 'days')
     assert _timedelta_to_pquery(Timedelta('48h')) == (2, 'days')
 
@@ -39,7 +39,7 @@ def test_timedelta_to_pquery_minutes() -> None:
 
 
 def test_timedelta_to_pquery_prefers_hours_over_minutes() -> None:
-    # 60min, 120min etc. are whole hours — should return hours, not minutes
+    # 60min, 120min etc. are whole hours, so this returns hours, not minutes
     assert _timedelta_to_pquery(Timedelta('60min')) == (1, 'hours')
     assert _timedelta_to_pquery(Timedelta('120min')) == (2, 'hours')
 
@@ -102,7 +102,7 @@ def test_infer_timedelta_no_warning_on_uniform() -> None:
 
 
 def test_infer_timedelta_too_short_raises() -> None:
-    # All series have only 1 element — no deltas can be computed
+    # All series have only 1 element, so no deltas can be computed
     series = pd.Series(
         [
             pd.to_datetime(['2024-01-01']),

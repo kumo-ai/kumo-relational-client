@@ -63,10 +63,10 @@ names the exact `pip install` that fixes it.
 
 ## Where to read next
 
-- `docs/get-started/` — install, prerequisites, quickstart.
-- `docs/about/` — what the client is and how a request flows.
-- `docs/reference/` — environment variables and prediction output shapes.
-- `examples/nemotron_relational_quickstart.ipynb` — a worked end-to-end notebook.
+- `docs/get-started/`: install, prerequisites, quickstart.
+- `docs/about/`: what the client is and how a request flows.
+- `docs/reference/`: environment variables and prediction output shapes.
+- `examples/nemotron_relational_quickstart.ipynb`: a worked end-to-end notebook.
 
 ## Running the tests
 

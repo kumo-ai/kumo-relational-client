@@ -16,8 +16,8 @@ learning) and **Nemotron Relational** (relational, graph-aware in-context learni
 ## Benefits
 
 - **One client for every model.** A single `PredictClient` connects to a NIM and
-  serves any registered model through a handle of its own —
-  `client.tabular(...).predict(...)` and `client.relational(...).predict(...)` —
+  serves any registered model through a handle of its own,
+  `client.tabular(...).predict(...)` and `client.relational(...).predict(...)`,
   each returning the same shape of pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
   every platform. Heavy drivers, such as Nemotron Relational's native graph sampler, are
@@ -27,8 +27,8 @@ learning) and **Nemotron Relational** (relational, graph-aware in-context learni
   deployment rather than the API contract.
 - **Typed, discoverable calls.** Each model's handle is fully typed, so your
   editor autocompletes the arguments that model takes, and the adapter rejects
-  what it can see is wrong — an unsupported task, an output field the task
-  cannot produce, a missing column — before anything is sent. What only the NIM
+  what it can see is wrong, an unsupported task, an output field the task
+  cannot produce, a missing column, before anything is sent. What only the NIM
   can judge is judged there.
 
 ## Skip Ahead
@@ -43,7 +43,8 @@ learning) and **Nemotron Relational** (relational, graph-aware in-context learni
 ### Score a Single Table with Nemotron Tabular
 
 Provide a table of labeled context rows and a table of rows to predict, and
-Nemotron Tabular returns predictions in one forward pass — no per-dataset training.
+Nemotron Tabular returns predictions in one forward pass, with no per-dataset
+training.
 
 ### Predict Over Relational Data with Nemotron Relational
 

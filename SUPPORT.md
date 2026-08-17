@@ -24,15 +24,15 @@ A bug report is most useful with the package versions (`pip show
 nemotron-predict-client nemotron-predict-connectors nemotron-relational`), the
 Python version and platform, the smallest script that reproduces the problem,
 and the full traceback. `PredictError` and its subclasses carry a stable `code`
-field — include it.
+field, include it.
 
 ## Which package
 
 Three packages are released together and share a version:
 
-- `nemotron-predict-client` — the client and its model handles
-- `nemotron-predict-connectors` — reading source tables from warehouses
-- `nemotron-relational` — the relational driver, graph building and PQL
+- `nemotron-predict-client`: the client and its model handles
+- `nemotron-predict-connectors`: reading source tables from warehouses
+- `nemotron-relational`: the relational driver, graph building and PQL
 
 If you are unsure which is at fault, file against the repository; triage is our
 job, not yours.

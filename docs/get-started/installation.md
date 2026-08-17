@@ -93,7 +93,7 @@ True
 - **`No matching distribution found for nemotron_relational`.** The `[relational]` extra has
   prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.13,
   and no source distribution is published, so there is nothing to fall back to
-  on another platform — macOS included. Install the base `nemotron-predict-client` and run
+  on another platform, macOS included. Install the base `nemotron-predict-client` and run
   Nemotron Relational from a Linux x86_64 host, or build the driver from source.
 - **The native extension fails to import after installing `[relational]`.**
   Reinstall the `nemotron_relational` wheel for your exact Python version, and confirm your

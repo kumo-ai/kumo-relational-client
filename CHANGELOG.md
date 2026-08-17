@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — all three packages
+## 1.0.0: all three packages
 
 The first release under the `nemotron-*` names, and the first public one. All
 three packages now share a single version: they are released together and only
@@ -17,7 +17,7 @@ contribution scaffolding, this closes the defects found by testing the client
 end to end against a live NIM, and by a file-by-file review of every
 first-party module.
 
-### Fixed — read this before upgrading
+### Fixed: read this before upgrading
 
 - **Python 3.10 was broken.** `nemotron_relational` imported `typing.assert_never`, which
   is 3.11+, so `import nemotron_relational` failed on the floor all three packages declare.
@@ -71,11 +71,11 @@ Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and
 contain none of them. `nemotron-predict-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
 cannot resolve the affected build.
 
-The outcome of a full audit of the client's public surface — every connector, every
+The outcome of a full audit of the client's public surface, every connector, every
 graph-construction path, every sampler, all five task types, the HTTP client, and
 the error handling around each. 78 findings were reported and fixed.
 
-### Removed — read this before upgrading
+### Removed: read this before upgrading
 
 The typed-request surface `nemotron-predict-client` 0.1.0 exported was replaced by the model
 handles. Code written against 0.1.0 that used it will not import.
@@ -89,11 +89,11 @@ handles. Code written against 0.1.0 that used it will not import.
   custom registry with `PredictClient(url, registry=...)`.
 - `nemotron_predict.relational` no longer exports `NemotronRelational`, `LocalGraph`,
   `MaterializedPredictionRequest` or `TaskTable`. Direct engine use is refused,
-  and nothing on the supported surface returns or accepts the other two — the
+  and nothing on the supported surface returns or accepts the other two, the
   shim now carries what a caller can actually reach. Build graphs with
   `nemotron_predict.relational.Graph` and predict through `client.relational(graph)`.
   `Dtype`, `Stype` and `ViewConversionWarning` were added in their place.
-- `Graph.visualize(backend=...)` — visualization is Mermaid-only; the parameter
+- `Graph.visualize(backend=...)`: visualization is Mermaid-only; the parameter
   is replaced by `height=`.
 - `nemotron_relational.rfm.init()` raises `RuntimeError` unless called by `PredictClient`.
   Construct an `PredictClient` instead.
@@ -128,33 +128,33 @@ produced a wrong or silently-degraded result.
   (which used to be created), and an API key sent over plaintext HTTP.
 - **An unknown key in `inference_config` is rejected** instead of dropped. A typo
   such as `output_typ='mean'` used to return the *median* with no diagnostic. No
-  call can depend on the dropped key having had an effect — by construction it had
+  call can depend on the dropped key having had an effect, by construction it had
   none, since only the declared fields reach the wire.
 - **`edges=[]` now means "these edges and no others"**, as its docstring says. On a
   backend with declared foreign keys it used to add them anyway, so a caller who
-  pinned the graph's shape got extra edges — and therefore different predictions.
+  pinned the graph's shape got extra edges, and therefore different predictions.
   `edges=None` is unchanged and still applies them.
 - **`PredictClient(max_retries=...)` now governs the NemotronRelational transport too**, which
   previously used a fixed policy of its own. A caller who raised it will see
   transient failures retried where they were not before, and one who set `0` will
   see them surface immediately; failures on the NemotronRelational path therefore take longer
   or shorter to surface than in 0.1.0 according to what was asked for.
-- **A caller mistake the engine reports as a `KeyError`** — a typo in
-  `exclude_cols_dict`, a feature column present in `context` but not `predict` —
+- **A caller mistake the engine reports as a `KeyError`**: a typo in
+  `exclude_cols_dict`, a feature column present in `context` but not `predict`,
   is `PredictError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
   invitation to file a bug. Code branching on `.code` for those inputs sees the new
   value; `except PredictError` is unaffected.
 - **A malformed create-session response is `INVALID_RESPONSE`**, not
   `INVALID_REQUEST`, matching the prediction path.
 
-### Fixed — wrong results
+### Fixed: wrong results
 
 - TabICL no longer applies the context frame's dtype to the predict frame, which
   truncated fractional values (`[1.9, 2.5, 3.7]` was sent as `[1, 2, 3]`) and could
   change the predicted class.
 - A nullable integer column no longer widens to `float64` and corrupts large ids
   (`9007199254740993` became `9007199254740992`), which affected nullable foreign
-  keys — the join keys that become graph edges.
+  keys, the join keys that become graph edges.
 - Timezone-aware timestamps are converted to UTC rather than having their offset
   dropped, so tables in different zones no longer land on the same instant.
 - Int64 values outside the JS-safe range are encoded as base-10 strings on the
@@ -163,7 +163,7 @@ produced a wrong or silently-degraded result.
   order leaked Python's per-process string hashing into the request.
 - `random_seed` is honoured by the SQL samplers, or refused explicitly.
 
-### Fixed — security
+### Fixed: security
 
 - Entity ids are parameter-bound rather than interpolated into SQL, and discovery
   queries quote their identifiers.
@@ -179,11 +179,11 @@ produced a wrong or silently-degraded result.
   and importing the package no longer opens a connection.
 - Added `SECURITY.md`.
 
-### Fixed — errors and diagnostics
+### Fixed: errors and diagnostics
 
 - Raw `TypeError`, `KeyError` and `AssertionError` no longer escape the public API.
-- The NIM's RFC-9457 `invalid_params` detail — which names the exact table, row and
-  column rejected — is surfaced instead of discarded.
+- The NIM's RFC-9457 `invalid_params` detail, which names the exact table, row and
+  column rejected, is surfaced instead of discarded.
 - `PredictClient(timeout=..., max_retries=...)` reaches the NemotronRelational path; it was
   silently ignored there.
 - `validate()` reports a graph inconsistency as `ValueError` naming the edge, rather
@@ -218,7 +218,7 @@ produced a wrong or silently-degraded result.
 - `RFMModel.predict` / `predict_task` accept `verbose`, and pass unrecognised
   keywords through to the engine instead of raising `TypeError`.
 - Unsigned integer columns are accepted at every width. Only `uint8` was, so
-  `astype('uint32')` — or reading an unsigned Parquet column — refused the table.
+  `astype('uint32')`, or reading an unsigned Parquet column, refused the table.
 - `nemotron_predict.relational` exports `ViewConversionWarning`, so the diagnostics that
   view-based graph construction raises can be filtered without importing the
   driver package directly.

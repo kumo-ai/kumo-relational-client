@@ -23,8 +23,8 @@ pip install nemotron-predict-client[explain]     # Nemotron Relational plus the 
 A `PredictClient` owns one connection to a NIM. Requests are typed per model: each
 model handle builds its own request type, and the client rejects a request the
 target model's adapter does not accept. Each adapter also checks what it knows
-it cannot serve — an unsupported task kind or output field for Nemotron Tabular, an
-unknown `task_type` or a missing entity table for Nemotron Relational — and raises
+it cannot serve, an unsupported task kind or output field for Nemotron Tabular, an
+unknown `task_type` or a missing entity table for Nemotron Relational, and raises
 `PredictError(code="INVALID_REQUEST")` before anything is sent. Everything else is
 validated by the NIM.
 
@@ -38,7 +38,7 @@ with PredictClient(url='http://localhost:8000') as client:
     df = model.predict(predict_df, outputs=['prediction', 'probabilities'])
 ```
 
-Nemotron Relational (relational) — needs `nemotron-predict-client[relational]`:
+Nemotron Relational (relational), needs `nemotron-predict-client[relational]`:
 
 ```python
 from nemotron_predict import PredictClient, relational
@@ -70,12 +70,12 @@ with PredictClient(url='http://localhost:8000') as client:
     attribution = result.details
 ```
 
-> **Data egress warning — the explanation summary calls a third-party LLM.**
+> **Data egress warning, the explanation summary calls a third-party LLM.**
 > When the backend returns structured attribution without a summary (which is
 > what the NIM does today), the client generates `result.summary` itself by POSTing
 > the predictive query, the returned predictions, the cohort analysis and the
-> subgraph attribution — **including the raw cell values of the explained
-> entity's subgraph** — to an OpenAI-compatible chat-completions endpoint.
+> subgraph attribution, **including the raw cell values of the explained
+> entity's subgraph**, to an OpenAI-compatible chat-completions endpoint.
 > Unless `NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL` points elsewhere, that endpoint is
 > OpenAI's `https://api.openai.com/v1/` (model `gpt-4.1-mini-2025-04-14`, or
 > `NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL`), a non-NVIDIA service. The API key is read from
@@ -84,7 +84,7 @@ with PredictClient(url='http://localhost:8000') as client:
 > `OPENAI_API_KEY`, does not enable it.
 >
 > Nothing is sent if no key is discoverable or the `nemotron-predict-client[explain]` extra
-> is not installed — which is why that extra is not part of `[all]`.
+> is not installed, which is why that extra is not part of `[all]`.
 > `result.summary` then carries a message saying so, and the structured
 > attribution on `result.details` is unaffected. To keep the data on the machine
 > while still getting that attribution, disable the summary explicitly:
@@ -129,7 +129,7 @@ retires the client; use a new `PredictClient` afterwards.
 `from nemotron_predict import relational` is the supported surface onto the Nemotron Relational
 driver (`Graph`, `LocalTable`, `Stype`, `Dtype`, `ExplainConfig`, ...); you
 never import the driver package directly. The model itself is not on that
-surface — you reach it through `client.relational(graph)`.
+surface, you reach it through `client.relational(graph)`.
 
 ## Adding a model
 

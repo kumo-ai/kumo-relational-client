@@ -7,14 +7,14 @@ its graph samplers) don't each carry their own copy.
 
 It provides:
 
-- `connect(backend, **kwargs)` — open a connection to `sqlite` / `duckdb` /
+- `connect(backend, **kwargs)`: open a connection to `sqlite` / `duckdb` /
   `snowflake` / `databricks` (one driver per backend).
-- `read(source, **kwargs) -> DataFrame` — read a table or query as a flat pandas
+- `read(source, **kwargs) -> DataFrame`: read a table or query as a flat pandas
   DataFrame (also handles `local` DataFrames / CSV / Parquet, and `s3` object
   URIs: `read('s3', path='s3://bucket/table.parquet', storage_options=...)`).
-- `read_table(connection, table=…, query=…) -> DataFrame` — driver-agnostic
+- `read_table(connection, table=…, query=…) -> DataFrame`: driver-agnostic
   fetch over an open connection, in that connection's own session.
-- `quote_ident(ident, char='"')` and `resolve_sql(table=…, query=…)` — SQL
+- `quote_ident(ident, char='"')` and `resolve_sql(table=…, query=…)`: SQL
   identifier quoting and a safe table/query guard.
 
 File reads (`local` and `s3`) accept `.csv` / `.txt` (optionally compressed) and
@@ -26,14 +26,14 @@ recognised suffix.
 The two file-backed backends, `sqlite` and `duckdb`, accept `database=` and
 `uri=` as aliases for the same argument (supplying both is an error). The two
 warehouse backends, `snowflake` and `databricks`, are addressed by connection
-keywords instead, and reject any their driver does not declare —
+keywords instead, and reject any their driver does not declare,
 `driver_options={...}` passes anything else straight through. The
 `snowflake` backend reuses an active Snowpark session when no authentication
 arguments are given; a borrowed session cannot be reconfigured, so passing
 session-scoped arguments such as `schema=` alongside it is an error.
 
 `table=` accepts only plain, unquoted, dot-separated ASCII identifiers, and
-interpolates them as written — so they are subject to each backend's default
+interpolates them as written, so they are subject to each backend's default
 case folding (Snowflake upper-cases, Databricks lower-cases). A name that needs
 quoting (spaces, non-ASCII characters, a leading digit) is rejected with
 `INVALID_CONNECTOR_ARGS`. A reserved word such as `select` is a plain

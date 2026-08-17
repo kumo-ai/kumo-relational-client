@@ -27,13 +27,13 @@ The Nemotron Relational driver ships prebuilt binary wheels for the following pl
 | Platform | Supported |
 | --- | --- |
 | Linux x86_64 (glibc 2.28+, `manylinux_2_28`) | Yes |
-| Everything else, including macOS | No — build from source |
+| Everything else, including macOS | No, build from source |
 
 No source distribution is published either, so `pip install
 "nemotron-predict-client[relational]"` resolves on Linux x86_64 only. On any other platform,
-install the base `nemotron-predict-client` — it is pure Python, as are the connectors, and
-installs on anything running Python 3.10 or later — and run Nemotron Relational from a Linux
-x86_64 host.
+install the base `nemotron-predict-client` and run Nemotron Relational from a Linux
+x86_64 host. The base client is pure Python, as are the connectors, so it installs
+on anything running Python 3.10 or later.
 
 ### Runtime Dependencies
 
