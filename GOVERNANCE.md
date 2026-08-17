@@ -2,7 +2,7 @@
 
 ## Who decides
 
-The SDK is maintained by NVIDIA. Maintainers are listed in
+The client is maintained by NVIDIA. Maintainers are listed in
 [MAINTAINERS.md](MAINTAINERS.md) and hold final say on what is merged, on the
 public API, and on release timing.
 
@@ -23,7 +23,7 @@ model that does not exist.
 
 ## What gets accepted
 
-Changes are judged on whether they make the SDK more correct, clearer, or
+Changes are judged on whether they make the client more correct, clearer, or
 better tested, and on whether they can be maintained afterwards.
 
 The client deliberately stays thin: it builds a request, sends it to a NIM, and

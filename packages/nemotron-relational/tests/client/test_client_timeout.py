@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""The socket timeout the SDK client configures must reach the wire.
+r"""The socket timeout the client client configures must reach the wire.
 
 ``requests_mock`` mounts its own adapter and never opens a socket, so these
 tests talk to a local ``http.server`` that stalls before replying.

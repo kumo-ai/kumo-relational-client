@@ -82,7 +82,7 @@ class RFMAPI:
         prediction rows.
 
         A ``200`` with no ``session_id`` is an ``InvalidResponseError``, like a
-        malformed prediction body: the request that produced it is the SDK's
+        malformed prediction body: the request that produced it is the client's
         own generated payload, so the caller cannot have influenced whether the
         server echoes an id and must not be told they did.
         """
@@ -428,7 +428,7 @@ def _prediction_item_to_multiclass_rows(
     r"""One row per class (CLASS, SCORE, PREDICTED), sorted by score descending.
 
     Matches the long, per-class layout users had for multi-class classification
-    on the SaaS SDK, which is easier to read than a wide column-per-class table.
+    on the SaaS client, which is easier to read than a wide column-per-class table.
     """
     predicted = None if item.prediction is None else str(item.prediction)
     ranked = sorted(

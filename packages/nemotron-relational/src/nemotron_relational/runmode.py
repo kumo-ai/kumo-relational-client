@@ -2,10 +2,10 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""Types the SDK owns that the internalized ``nemotron_relational.api`` tree used to hold.
+r"""Types the client owns that the internalized ``nemotron_relational.api`` tree used to hold.
 
 Both come from upstream ``kumo-api``'s ``model_plan.py``, which was dropped as
-unreachable (see ``api/SOURCE.md``). They are the only two names in it this SDK
+unreachable (see ``api/SOURCE.md``). They are the only two names in it this client
 reaches, and they are used across the runtime, so they live here.
 """
 
@@ -15,7 +15,7 @@ from nemotron_relational.api.common import StrEnum
 class RunMode(StrEnum):
     r"""How much in-context data a prediction is given.
 
-    The mode caps the number of in-context examples the SDK collects and also
+    The mode caps the number of in-context examples the client collects and also
     selects the per-hop neighbour fanout, trading accuracy against latency and
     payload size. It is sent as ``inference.run_mode``.
 

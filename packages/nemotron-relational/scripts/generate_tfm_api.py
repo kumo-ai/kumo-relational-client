@@ -3,10 +3,10 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate the minimal TFM API bindings used by the SDK.
+"""Generate the minimal TFM API bindings used by the client.
 
 This is intentionally small and first-party. It reads the canonical OpenAPI
-spec and emits endpoint and enum metadata needed by the SDK without depending on
+spec and emits endpoint and enum metadata needed by the client without depending on
 an external OpenAPI client generator.
 """
 
@@ -43,7 +43,7 @@ HTTP_METHODS = {
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description='Generate SDK TFM API metadata from an OpenAPI spec.'
+        description='Generate client TFM API metadata from an OpenAPI spec.'
     )
     parser.add_argument(
         '--spec',

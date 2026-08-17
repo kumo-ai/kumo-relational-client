@@ -1,6 +1,6 @@
 # nemotron-predict-client
 
-Client SDK for NVIDIA structured-data foundation model NIMs served behind the
+Client client for NVIDIA structured-data foundation model NIMs served behind the
 Universal TFM API. A thin, model-agnostic client dispatches typed requests to
 per-model adapters; heavy model drivers are optional extras.
 
@@ -57,7 +57,7 @@ Set `explain=True` to get a `relational` `Explanation` instead of a bare
 DataFrame. The predicted rows stay on `result.prediction`; `result.details`
 carries the driver's structured attribution (feature cohorts and subgraphs).
 `result.summary` is a natural-language string, either from the backend or, when
-the backend returns structured attribution only, generated locally by the SDK
+the backend returns structured attribution only, generated locally by the client
 (see the warning below).
 
 ```python
@@ -72,7 +72,7 @@ with PredictClient(url='http://localhost:8000') as client:
 
 > **Data egress warning — the explanation summary calls a third-party LLM.**
 > When the backend returns structured attribution without a summary (which is
-> what the NIM does today), the SDK generates `result.summary` itself by POSTing
+> what the NIM does today), the client generates `result.summary` itself by POSTing
 > the predictive query, the returned predictions, the cohort analysis and the
 > subgraph attribution — **including the raw cell values of the explained
 > entity's subgraph** — to an OpenAI-compatible chat-completions endpoint.

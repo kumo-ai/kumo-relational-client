@@ -2,12 +2,12 @@
 
 This plan lists the minimum validations needed to keep
 `scripts/generate_tfm_api.py`, the generated `nemotron_relational/client/generated/tfm_api.py`
-models, and the handwritten SDK adapters aligned with the canonical OpenAPI spec
+models, and the handwritten client adapters aligned with the canonical OpenAPI spec
 from the `structured-data-api` repo at `../structured-data-api/nim-sd.openapi.yaml`.
 
 ## Why this exists
 
-The SDK intentionally uses a small first-party generator instead of a full
+The client intentionally uses a small first-party generator instead of a full
 OpenAPI client generator. Endpoint metadata, enum constants, and schema names are
 derived from the spec, but `PredictionItem` and `PredictionResponse` are still
 hand-rendered by `_response_model_lines()`.
@@ -30,7 +30,7 @@ Use strict field parity for generated response models:
   the spec allows `additionalProperties: true`.
 
 This gives a clear failure when the spec adds, removes, or renames a modeled
-response field and the SDK has not been updated.
+response field and the client has not been updated.
 
 ## Must-have validations
 
@@ -62,7 +62,7 @@ For each example:
 - assert key coercions still hold, such as stringified item ids, float
   probability values, tuple embeddings/scores, and dict explanations/metadata
 
-This catches documented wire JSON that the SDK can no longer parse.
+This catches documented wire JSON that the client can no longer parse.
 
 ### 3. Adapter field coverage
 
@@ -87,7 +87,7 @@ currently outside the response-model checks:
   `PredictionRequest.properties`
 - assert all `PredictionRequest.required` keys are emitted
 - parse the spec's request examples for Nemotron Tabular and Nemotron Relational and assert their
-  envelope shape matches the SDK's expected top-level shape
+  envelope shape matches the client's expected top-level shape
 
 This is the largest remaining blind spot once response parsing is pinned down.
 

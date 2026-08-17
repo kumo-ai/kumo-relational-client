@@ -23,7 +23,7 @@ class Stype(StrEnum):
 
     A semantic type denotes the semantic meaning of a column, and determines
     the preprocessing that is applied to the column. Semantic types can be
-    passed to methods in the SDK as strings (*e.g.* ``"numerical"``).
+    passed to methods in the client as strings (*e.g.* ``"numerical"``).
 
     .. note::
 
@@ -89,7 +89,7 @@ class Dtype(StrEnum):
     r"""The data type of a column.
 
     A data type represents how the data of a column is physically stored. Data
-    types can be passed to methods in the SDK as strings (*e.g.* ``"int"``).
+    types can be passed to methods in the client as strings (*e.g.* ``"int"``).
 
     Attributes:
         bool: A boolean column.

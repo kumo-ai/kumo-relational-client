@@ -12,8 +12,8 @@ under the previous distribution names and stops here.
 The models are addressed as `nemotron-tabular` and `nemotron-relational`. The
 older ids `tabicl`, `kumo-rfm` and `nemotron-relational-v1` are not accepted.
 
-Prepares the SDK for release as open source. Alongside the licensing and
-contribution scaffolding, this closes the defects found by testing the SDK
+Prepares the client for release as open source. Alongside the licensing and
+contribution scaffolding, this closes the defects found by testing the client
 end to end against a live NIM, and by a file-by-file review of every
 first-party module.
 
@@ -48,7 +48,7 @@ first-party module.
   `nemotron-predict-client` boundary, so a wrong API key or an unreachable NIM is caught by
   `except PredictError` instead of escaping as a bare `ValueError`.
 - Reading a warehouse raises `GraphConstructionError` rather than the driver's
-  own exception, which shared no base with anything else the SDK raises.
+  own exception, which shared no base with anything else the client raises.
 - **Python 3.13 wheels.** `nemotron_relational` builds and tests cp310 through cp313.
 - Composite primary keys, and quoted identifiers in predictive queries.
 
@@ -71,7 +71,7 @@ Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and
 contain none of them. `nemotron-predict-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
 cannot resolve the affected build.
 
-The outcome of a full audit of the SDK's public surface — every connector, every
+The outcome of a full audit of the client's public surface — every connector, every
 graph-construction path, every sampler, all five task types, the HTTP client, and
 the error handling around each. 78 findings were reported and fixed.
 

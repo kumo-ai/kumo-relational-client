@@ -29,7 +29,7 @@ It performs no retries because it performs no network operation.
 
 `materialize_task()` and `predict_task()` accept `random_seed`, which defaults
 to `42`. For local graphs, reusing a seed resets the native neighborhood
-sampler for every generated request batch. Given the same SDK commit, graph
+sampler for every generated request batch. Given the same client commit, graph
 data, ordered task rows, batching, and request options, repeated calls produce
 semantically identical payloads and batch provenance. Live prediction and
 materialization share this seed path. Passing `None` opts out of reseeding and
@@ -41,7 +41,7 @@ For link prediction, related-table rows in a materialized request are the RHS
 candidates returned by relational neighborhood sampling. Context target lists
 remain supervision on the instance table; serialization does not turn target
 IDs that were absent from the sampled neighborhood into synthetic related-table
-rows. This matches the original NemotronRelational SDK behavior and avoids assigning an
+rows. This matches the original NemotronRelational client behavior and avoids assigning an
 unsampled target a feature row from another instance or anchor time.
 
 Consequently, a sampled context neighborhood can contain no positive RHS
@@ -59,7 +59,7 @@ features across point-in-time boundaries.
 ## Local installation prerequisite
 
 Materializing from a local `Graph` performs native neighborhood sampling and
-therefore requires the compiled `nemotron_relational.relationallib` extension. Install the SDK
+therefore requires the compiled `nemotron_relational.relationallib` extension. Install the client
 with its default native build enabled; `WITH_RELATIONALLIB=0` is only suitable for
 metadata-only workflows and cannot run local materialization.
 
@@ -104,13 +104,13 @@ restores request order. The request-local `instance_ids` passed to that method
 are generated transport keys used only for correlation validation; they are
 not user entity values.
 
-Interactive `ENTITY` values come from the SDK's private, ordered
+Interactive `ENTITY` values come from the client's private, ordered
 `entity_ids` mapping. Native driver entity output and response `id` do not
 determine public entity identity. Replay tooling should retain the raw
 `row_index` and validate the raw response `id` against the request's
 transport `instance_id`.
 
-The SDK does not hash payloads because canonical JSON encoding, artifact
+The client does not hash payloads because canonical JSON encoding, artifact
 immutability, and hashing belong to the benchmark artifact producer. The
 producer must canonicalize and hash the exact materialized payload before
 replay and reject responses with missing, duplicate, out-of-range, or
@@ -152,5 +152,5 @@ fully sanitized local graph before any request batch is generated or sent.
 
 Every serialized context and prediction instance or related table is checked
 independently against the Universal TFM 10,000-row limit. This check is
-separate from the existing 30 MiB payload limit. The SDK reports the batch,
+separate from the existing 30 MiB payload limit. The client reports the batch,
 table path, actual count, and limit and does not truncate or resample data.

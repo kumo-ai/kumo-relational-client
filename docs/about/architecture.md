@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA Nemotron Predict SDK Architecture"
-description: "How the NVIDIA Nemotron Predict SDK is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
+title: "NVIDIA Nemotron Predict Client Architecture"
+description: "How the NVIDIA Nemotron Predict Client is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Predict SDK Architecture
+# NVIDIA Nemotron Predict Client Architecture
 
-The NVIDIA Nemotron Predict SDK separates a small, universal client from the heavy runtimes
+The NVIDIA Nemotron Predict Client separates a small, universal client from the heavy runtimes
 that individual models need. The client is symmetric across models — every model
 is a peer adapter — while a model's optional driver holds its client-side compute.
 
@@ -94,7 +94,7 @@ platform-independent. Nemotron Tabular requires no driver.
 
 ## Deployment Topologies
 
-The SDK is a client library; it connects to a NIM you deploy and operate.
+The client is a client library; it connects to a NIM you deploy and operate.
 
 - **Local NIM.** Point `PredictClient(url=...)` at a NIM running on `localhost`.
 - **Networked NIM.** Point the client at any reachable NIM endpoint. If the
@@ -105,13 +105,13 @@ The SDK is a client library; it connects to a NIM you deploy and operate.
 
 ## Service Interactions
 
-The SDK speaks the Universal TFM API. Every prediction is a
+The client speaks the Universal TFM API. Every prediction is a
 `POST /v1/predictions`, except that Nemotron Relational switches to the session routes
 under `/v1/sessions` when a prediction splits into more than one batch and is
 reproducible: sessions upload the context once and reuse it across the batches,
 so they need a `random_seed`, and they are skipped when an explanation is
 requested. Standard NIM management endpoints are provided by the NIM runtime,
-not by the SDK.
+not by the client.
 
 Two endpoints are read rather than predicted against, and not by the same
 caller. `PredictClient.health_ready()` issues `GET /v1/health/ready` and reports
@@ -136,6 +136,6 @@ on the Nemotron Tabular path reads `/v1/models`.
 
 ## Related Topics
 
-- [NVIDIA Nemotron Predict SDK Documentation](overview.md)
-- [Quickstart for the NVIDIA Nemotron Predict SDK](../get-started/quickstart.md)
-- [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md)
+- [NVIDIA Nemotron Predict Client Documentation](overview.md)
+- [Quickstart for the NVIDIA Nemotron Predict Client](../get-started/quickstart.md)
+- [NVIDIA Nemotron Predict Client Environment Variables](../reference/environment-variables.md)

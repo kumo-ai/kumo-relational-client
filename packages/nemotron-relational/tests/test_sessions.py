@@ -296,9 +296,9 @@ def test_rfmapi_create_session_returns_id(mock_api: Any) -> None:
 
 def test_rfmapi_create_session_requires_id(mock_api: Any) -> None:
     """A ``200`` with no ``session_id`` is the server breaking the contract: the
-    request that produced it is the SDK's own generated payload, so the caller
+    request that produced it is the client's own generated payload, so the caller
     cannot have influenced it. Raising the classified type is what puts it in
-    the ``INVALID_RESPONSE`` branch of the SDK's error classifier rather than
+    the ``INVALID_RESPONSE`` branch of the client's error classifier rather than
     the ``ValueError`` one, which blames the request.
     """
     mock_api.post(f'{MOCK_URL}/v1/sessions', json={'ttl_seconds': 3600})

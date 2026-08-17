@@ -223,7 +223,7 @@ def init(
     global_state._max_retries = max_retries
 
     logging.getLogger('nemotron_relational').info(
-        "Initialized NemotronRelational SDK v%s against deployment '%s'",
+        "Initialized NemotronRelational client v%s against deployment '%s'",
         __version__,
         redact_url(url),
     )
@@ -316,7 +316,7 @@ def init_databricks_serving(
     global_state.thread_local._client_config = global_state._config
 
     logging.getLogger('nemotron_relational').info(
-        'Initialized NemotronRelational SDK v%s against Databricks Model Serving '
+        'Initialized NemotronRelational client v%s against Databricks Model Serving '
         "endpoint '%s'",
         __version__,
         endpoint,
@@ -406,7 +406,7 @@ def init_snowflake_serving(
     global_state.thread_local._client = probe
 
     logging.getLogger('nemotron_relational').info(
-        'Initialized Nemotron Predict SDK v%s against Snowflake model service %r',
+        'Initialized Nemotron Predict Client v%s against Snowflake model service %r',
         __version__,
         service,
     )

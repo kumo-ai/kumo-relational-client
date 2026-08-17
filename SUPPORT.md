@@ -2,7 +2,7 @@
 
 ## Support level
 
-**Maintained.** The SDK is developed and released by NVIDIA alongside the
+**Maintained.** The client is developed and released by NVIDIA alongside the
 Nemotron structured-data foundation model NIMs. Issues and pull requests are
 reviewed, and fixes ship in the next release of all three packages.
 
@@ -14,9 +14,9 @@ Apache-2.0 licence the code is released under.
 
 | What you have | Where to take it |
 | --- | --- |
-| A bug, or behaviour that contradicts the documentation | [GitHub issue](https://github.com/NVIDIA/nemotron-predict-sdk/issues) |
-| A question about usage | [GitHub issue](https://github.com/NVIDIA/nemotron-predict-sdk/issues) with the `question` label |
-| A feature request | [GitHub issue](https://github.com/NVIDIA/nemotron-predict-sdk/issues) describing the problem, not only the proposed fix |
+| A bug, or behaviour that contradicts the documentation | [GitHub issue](https://github.com/NVIDIA/nemotron-predict-client/issues) |
+| A question about usage | [GitHub issue](https://github.com/NVIDIA/nemotron-predict-client/issues) with the `question` label |
+| A feature request | [GitHub issue](https://github.com/NVIDIA/nemotron-predict-client/issues) describing the problem, not only the proposed fix |
 | A suspected security vulnerability | **Not GitHub.** Follow [SECURITY.md](SECURITY.md) |
 | A problem with the NIM itself rather than the client | Your NVIDIA support channel for that NIM |
 

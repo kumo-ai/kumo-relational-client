@@ -1,6 +1,6 @@
 # nemotron-predict-connectors
 
-Shared data-source connectors for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) SDK and its
+Shared data-source connectors for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) client and its
 model engines. One place that knows how to reach each warehouse, so the client
 (flat table reads for Nemotron Tabular) and the Nemotron Relational driver (warehouse connections for
 its graph samplers) don't each carry their own copy.

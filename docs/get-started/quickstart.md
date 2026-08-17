@@ -1,10 +1,10 @@
 ---
-title: "Quickstart for the NVIDIA Nemotron Predict SDK"
-description: "Run your first Nemotron Tabular and Nemotron Relational predictions against a Universal TFM API NIM using the NVIDIA Nemotron Predict SDK."
+title: "Quickstart for the NVIDIA Nemotron Predict Client"
+description: "Run your first Nemotron Tabular and Nemotron Relational predictions against a Universal TFM API NIM using the NVIDIA Nemotron Predict Client."
 template-library-version: "1.0.0"
 ---
 
-# Quickstart for the NVIDIA Nemotron Predict SDK
+# Quickstart for the NVIDIA Nemotron Predict Client
 
 This quickstart shows you how to connect to a NIM and run a prediction with each
 model. A `PredictClient` owns one connection to a NIM, and each model has its own
@@ -14,7 +14,7 @@ typed handle.
 
 Before you start, you must complete the following prerequisites:
 
-1. Install the SDK. For the relational example, install the Nemotron Relational extra:
+1. Install the client. For the relational example, install the Nemotron Relational extra:
    `pip install "nemotron-predict-client[relational]"`.
 2. Identify the URL of a running Universal TFM API NIM.
 
@@ -86,5 +86,5 @@ code `TRANSPORT_ERROR` if the endpoint cannot be reached at all.
 
 ## Next Steps
 
-- Learn how the pieces fit together in the [NVIDIA Nemotron Predict SDK Architecture](../about/architecture.md).
-- Configure the client and drivers with the [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md).
+- Learn how the pieces fit together in the [NVIDIA Nemotron Predict Client Architecture](../about/architecture.md).
+- Configure the client and drivers with the [NVIDIA Nemotron Predict Client Environment Variables](../reference/environment-variables.md).

@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# SDK-owned, not upstream's: this re-exports only the subset of api/ the SDK
+# client-owned, not upstream's: this re-exports only the subset of api/ the client
 # uses. Upstream also re-exported the server-side query and explanation types,
 # which nothing outside api/ names. See api/SOURCE.md.
 

@@ -19,7 +19,7 @@ returns as a bare "request failed". It is deliberately not the dispatcher's
 30 MiB model-boundary cap, which a request between the two would pass locally
 and fail remotely.
 
-``DEFAULT_TIMEOUT_SECONDS`` is far above the SDK default because a serving
+``DEFAULT_TIMEOUT_SECONDS`` is far above the client default because a serving
 endpoint scales to zero and a cold start outlasts ~60s.
 """
 

@@ -737,7 +737,7 @@ def test_unexpected_engine_failure_becomes_internal_error(monkeypatch, client):
 @requires_engine
 def test_engine_lookup_failure_becomes_invalid_request(monkeypatch, client):
     """A name the caller supplied that the engine looked up and did not find is a
-    caller mistake, not an SDK failure, however deep the lookup happened. The
+    caller mistake, not a client failure, however deep the lookup happened. The
     key is reported unwrapped rather than as ``KeyError``'s ``repr``.
     """
     _failing_engine(monkeypatch, KeyError('nope'))
@@ -773,7 +773,7 @@ def test_malformed_response_becomes_invalid_response(monkeypatch, client):
 @requires_engine
 def test_engine_validation_error_keeps_its_message(monkeypatch, client):
     """Client-side validation the engine performs is already actionable, so it
-    must not be relabelled as an internal SDK failure.
+    must not be relabelled as an internal client failure.
     """
     _failing_engine(
         monkeypatch,
@@ -1195,7 +1195,7 @@ def test_task_types_match_engine_task_type_enum():
 
 def test_stype_and_dtype_belong_to_the_supported_namespace():
     # The documented way to correct an inferred semantic type is
-    # graph[table][column].stype = nemotron_relational.Stype.categorical, and the SDK
+    # graph[table][column].stype = nemotron_relational.Stype.categorical, and the client
     # presents nemotron_predict.relational as the supported namespace. Membership is
     # asserted separately from resolution because it holds with or without the
     # engine installed -- this runs in the job that has neither.

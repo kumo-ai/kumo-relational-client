@@ -225,7 +225,7 @@ def _engine_init_error_types() -> tuple[type[BaseException], ...]:
 
 
 def _translate_init_error(error: BaseException) -> PredictError:
-    r"""Map a connection-time engine failure onto this SDK's hierarchy.
+    r"""Map a connection-time engine failure onto this client's hierarchy.
 
     Establishing the connection happens outside the prediction call, so these
     failures used to escape as the engine's bare ``ValueError`` and no
@@ -266,7 +266,7 @@ def _describe(transport: Transport | ServingTarget) -> str:
 
 
 def _translate_engine_error(error: Exception, url: str) -> PredictError:
-    r"""Map a driver failure onto this SDK's own exception hierarchy.
+    r"""Map a driver failure onto this client's own exception hierarchy.
 
     The driver cannot depend on ``nemotron_predict``, so its NIM failures arrive as
     ``NimFailureError`` (a ``RuntimeError``) carrying the status and the

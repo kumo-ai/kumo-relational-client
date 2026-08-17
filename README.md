@@ -1,4 +1,4 @@
-# NVIDIA Nemotron Predict SDK
+# NVIDIA Nemotron Predict Client
 
 One Python client for NVIDIA's structured-data foundation model NIMs. Make
 tabular and relational predictions against a NIM endpoint, without training a
@@ -17,7 +17,7 @@ pip install nemotron-predict-client
 
 - **Python** 3.10 to 3.13
 - **A reachable NIM** serving `nemotron-tabular` or `nemotron-relational`. The
-  SDK does not run a model locally and never downloads weights.
+  client does not run a model locally and never downloads weights.
 - **OS/arch** — the client and connectors are pure Python and install anywhere.
   The `[relational]` extra is a native build, published as `manylinux_2_28`
   wheels for Linux x86-64 on CPython 3.10-3.13 only, with no source
@@ -28,7 +28,7 @@ pip install nemotron-predict-client
 
 Full documentation lives under [`docs/`](docs/index.md):
 
-- [Overview](docs/about/overview.md) — what the SDK is and when to use it
+- [Overview](docs/about/overview.md) — what the client is and when to use it
 - [Architecture](docs/about/architecture.md) — how the client, adapters, drivers, and connectors fit together
 - [Prerequisites](docs/get-started/prerequisites.md) and [Installation](docs/get-started/installation.md)
 - [Quickstart](docs/get-started/quickstart.md) — your first Nemotron Tabular and Nemotron Relational predictions
@@ -109,14 +109,14 @@ A monorepo workspace; every independently released distribution lives under `pac
 with the same `src/` + `tests/` convention:
 
 ```text
-nemotron-predict-sdk/
+nemotron-predict-client/
 ├── pyproject.toml              # workspace root: shared tooling only, builds nothing
 ├── e2e/                        # cross-distribution live harnesses
 ├── docs/                       # user-facing documentation
 ├── examples/                   # runnable notebooks and scripts
 ├── scripts/                    # release and maintenance tooling
 └── packages/
-    ├── nemotron-predict-client/            # the client SDK (pure-python, universal wheel)
+    ├── nemotron-predict-client/            # the client client (pure-python, universal wheel)
     │   └── src/nemotron_predict/
     │       ├── client.py       #   PredictClient: the entry point and its registry
     │       ├── models.py       #   the per-model handles the client hands back
@@ -194,8 +194,8 @@ Start with [`CONTRIBUTING.md`](./CONTRIBUTING.md), and please read
 [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md).
 
 ```bash
-git clone https://github.com/NVIDIA/nemotron-predict-sdk.git
-cd nemotron-predict-sdk
+git clone https://github.com/NVIDIA/nemotron-predict-client.git
+cd nemotron-predict-client
 python -m pip install -e './packages/nemotron-predict-client[test]'
 python -m pytest packages/nemotron-predict-client/tests -m 'not live_nim' -q
 ```

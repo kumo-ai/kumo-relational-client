@@ -5,7 +5,7 @@
 """The Nemotron Relational engine may only be initialized by nemotron_predict.PredictClient.
 
 Direct `rfm.init(...)` + `NemotronRelational(graph).predict(...)` against a NIM used to
-bypass the supported SDK surface (issue #22). These tests lock in that the
+bypass the supported client surface (issue #22). These tests lock in that the
 engine now redirects any non-adapter caller to PredictClient.
 """
 

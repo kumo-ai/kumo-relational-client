@@ -1,7 +1,7 @@
 # nemotron_relational.api — provenance
 
 This tree began as a copy of the internal `kumo-api` wire-type package,
-internalized so the SDK is self-contained (no external `kumo-api` dependency)
+internalized so the client is self-contained (no external `kumo-api` dependency)
 for the open-source release.
 
 **Upstream is gone.** `kumo-api` has been deleted, so this is now the only
@@ -23,7 +23,7 @@ internalized code, not as an instruction for re-syncing.
 ## Changes made against that baseline
 
 - All internal `kumoapi.*` imports rewritten to `nemotron_relational.api.*`.
-- `rfm/protos/` (protobuf `.proto` definitions) dropped: the SDK uses the JSON
+- `rfm/protos/` (protobuf `.proto` definitions) dropped: the client uses the JSON
   wire format only and never exercises the protobuf code paths, and the
   generated `_pb2` modules are build-time artifacts not shipped in source.
 - The methods that imported `rfm/protos/` dropped with it, since every one of
@@ -37,10 +37,10 @@ internalized code, not as an instruction for re-syncing.
   `jobs.py`, `online_serving.py`, `distilled_model_plan.py`,
   `data_snapshot.py`, `rbac.py`. Nothing in `nemotron_relational`, `nemotron_predict` or
   `nemotron_predict_connectors` imports them, and they describe batch jobs, serving
-  endpoints, snapshots and RBAC — none of which this SDK offers.
+  endpoints, snapshots and RBAC — none of which this client offers.
 - `model_plan.py`, `encoder.py` and `train.py` dropped: they describe model
   architectures, encoders and training jobs for a service that trains models,
-  and this SDK sends in-context examples to a NIM and trains nothing.
+  and this client sends in-context examples to a NIM and trains nothing.
 - `rfm/pquery.py`, `rfm/explain.py` and four of the five `explain/` modules
   dropped: server-side query and explanation types that nothing outside `api/`
   names. Only `explain/gradient.py` is reachable — it backs
@@ -50,15 +50,15 @@ internalized code, not as an instruction for re-syncing.
   planning-tool URL on `BigQueryCredentials`, and four TODOs naming individual
   engineers.
 
-## Files this SDK owns outright
+## Files this client owns outright
 
 These were never upstream's to define — each names only the subset of `api/`
-this SDK actually uses, and the re-sync used to preserve them explicitly:
+this client actually uses, and the re-sync used to preserve them explicitly:
 
 - `rfm/__init__.py` and `explain/__init__.py` — re-export only the subset used
   here.
 - `rfm/requests.py` — keeps only the prediction request and response. Upstream
-  also defined validate/parse/evaluate types; this SDK only ever POSTs a
+  also defined validate/parse/evaluate types; this client only ever POSTs a
   prediction.
 - `pquery/AST/column.py` — renders a column back to the query text that names
   it, quoting a name the bare identifier cannot spell. See `../pql/SOURCE.md`.

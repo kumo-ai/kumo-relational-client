@@ -1,6 +1,6 @@
 # nemotron_relational
 
-The Nemotron Relational driver for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) SDK.
+The Nemotron Relational driver for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) client.
 
 This distribution provides the heavy, client-side machinery a Nemotron Relational prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
@@ -8,7 +8,7 @@ the neighbor samplers (local native `relationallib`, plus DuckDB / SQLite / Snow
 Databricks backends), the PQL parser, and the HTTP client that talks to a Universal
 TFM NIM.
 
-It is imported as `nemotron_relational` and is normally installed transitively via the SDK's
+It is imported as `nemotron_relational` and is normally installed transitively via the client's
 `nemotron_relational` extra rather than on its own:
 
 ```bash
@@ -32,7 +32,7 @@ pip install "nemotron-relational[codegen]"     # regenerate the TFM API client (
 Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
 (`manylinux_2_28` x86-64); no source distribution is published.
 
-Application code should import the SDK's neutral surface, not this package
+Application code should import the client's neutral surface, not this package
 directly:
 
 ```python

@@ -1,12 +1,12 @@
 ---
-title: "Installation Guide for the NVIDIA Nemotron Predict SDK"
-description: "Install the NVIDIA Nemotron Predict SDK and its optional model drivers and data-source connectors from the NVIDIA internal package index."
+title: "Installation Guide for the NVIDIA Nemotron Predict Client"
+description: "Install the NVIDIA Nemotron Predict Client and its optional model drivers and data-source connectors from the NVIDIA internal package index."
 template-library-version: "1.0.0"
 ---
 
-# Installation Guide for the NVIDIA Nemotron Predict SDK
+# Installation Guide for the NVIDIA Nemotron Predict Client
 
-Install the NVIDIA Nemotron Predict SDK with pip. The base package installs the client and
+Install the NVIDIA Nemotron Predict Client with pip. The base package installs the client and
 every lightweight model; optional extras add the Nemotron Relational driver and data-source
 connectors so you install only what you need.
 
@@ -14,7 +14,7 @@ connectors so you install only what you need.
 
 Before you start, you must complete the following prerequisites:
 
-1. Confirm your environment meets the [NVIDIA Nemotron Predict SDK Prerequisites](prerequisites.md).
+1. Confirm your environment meets the [NVIDIA Nemotron Predict Client Prerequisites](prerequisites.md).
 
 ## Installation Methods
 
@@ -101,5 +101,5 @@ True
 
 ## Next Steps
 
-- Run your first prediction with the [Quickstart for the NVIDIA Nemotron Predict SDK](quickstart.md).
-- Review configurable settings in the [NVIDIA Nemotron Predict SDK Environment Variables](../reference/environment-variables.md).
+- Run your first prediction with the [Quickstart for the NVIDIA Nemotron Predict Client](quickstart.md).
+- Review configurable settings in the [NVIDIA Nemotron Predict Client Environment Variables](../reference/environment-variables.md).

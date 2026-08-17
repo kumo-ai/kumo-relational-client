@@ -100,7 +100,7 @@ def test_a_missing_dependency_names_that_platforms_own_extra(kind) -> None:
 
         def __getattr__(self, name):
             def raise_import_error(*args, **kwargs):
-                raise ImportError('no vendor SDK here')
+                raise ImportError('no vendor client here')
 
             return raise_import_error
 

@@ -283,7 +283,7 @@ def test_the_cap_measures_the_escaped_wire_body_not_the_inner_payload() -> None:
 
 
 def test_what_is_measured_is_what_is_sent() -> None:
-    """The serialized dataframe_records body actually handed to the SDK is
+    """The serialized dataframe_records body actually handed to the client is
     within the cap, not merely the payload the cap was computed from.
     """
     wire = _wire_size(QUOTE_DENSE)
@@ -509,7 +509,7 @@ def test_the_sdk_logger_floor_is_raised_not_overwritten() -> None:
 def test_the_timeout_reaches_a_self_constructed_workspace_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Serving endpoints scale to zero; the SDK's ~60s default turns a normal
+    """Serving endpoints scale to zero; the client's ~60s default turns a normal
     cold start into a timeout.
     """
     sdk = pytest.importorskip('databricks.sdk', reason='databricks-sdk absent')
@@ -539,7 +539,7 @@ def test_the_default_timeout_allows_for_a_cold_start() -> None:
     )
 
     assert DEFAULT_TIMEOUT_SECONDS > 60, (
-        'the SDK default already is ~60s; a shorter floor cannot survive a '
+        'the client default already is ~60s; a shorter floor cannot survive a '
         'scale-to-zero wake-up'
     )
 
@@ -584,7 +584,7 @@ def test_missing_extra_reports_the_extra_to_install() -> None:
         builtins.__import__ = real_import
 
 
-# -- grounded against the real SDK type ------------------------------------
+# -- grounded against the real client type ------------------------------------
 
 
 def test_the_prediction_path_tracks_the_generated_spec() -> None:
@@ -616,7 +616,7 @@ def test_the_error_mapping_is_grounded_in_the_real_sdk_names(
     class_name: str, expected: int
 ) -> None:
     """The mapping matches on class names, so a renamed class degrades to 503
-    silently. These are the names as the installed SDK actually spells them.
+    silently. These are the names as the installed client actually spells them.
     """
     errors = pytest.importorskip(
         'databricks.sdk.errors', reason='databricks-sdk not installed'
@@ -627,7 +627,7 @@ def test_the_error_mapping_is_grounded_in_the_real_sdk_names(
 def test_reads_a_real_query_endpoint_response() -> None:
     """The fake WorkspaceClient above returns a hand-made dict. If that shape
     were wrong the whole suite would be confidently wrong in both directions,
-    so this pins it to the SDK's actual return type.
+    so this pins it to the client's actual return type.
 
     Skipped when databricks-sdk is absent; that is the same condition under
     which the transport itself cannot run.
@@ -647,7 +647,7 @@ def test_reads_a_real_query_endpoint_response() -> None:
 
 
 def test_the_query_signature_matches_what_the_transport_sends() -> None:
-    """A future SDK that renames dataframe_records would break every call; the
+    """A future client that renames dataframe_records would break every call; the
     fake would keep passing because it accepts **kwargs.
     """
     import inspect

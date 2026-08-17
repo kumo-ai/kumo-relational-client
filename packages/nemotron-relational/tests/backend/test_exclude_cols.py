@@ -5,8 +5,8 @@
 
 a typo in it used to
 delete straight out of the sampler's stype map and raise a bare ``KeyError``,
-which the SDK could only classify as ``INTERNAL_ERROR`` -- telling the user to
-file a bug against the SDK for their own typo. Raising ``ValueError`` here puts
+which the client could only classify as ``INTERNAL_ERROR`` -- telling the user to
+file a bug against the client for their own typo. Raising ``ValueError`` here puts
 it in the ``INVALID_REQUEST`` branch and names what is wrong.
 """
 

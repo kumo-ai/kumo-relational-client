@@ -145,7 +145,7 @@ _STRUCTURED_NOTE = (
 )
 
 # Names the extra on the distribution users install (`nemotron-predict-client`), not on this
-# engine package, which the SDK documents as an implementation detail.
+# engine package, which the client documents as an implementation detail.
 SUMMARY_NEEDS_EXTRA_MESSAGE = (
     "Natural-language explanation summary needs the 'explain' extra: "
     "pip install 'nemotron-predict-client[explain]'. " + _STRUCTURED_NOTE

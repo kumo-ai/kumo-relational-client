@@ -4,7 +4,7 @@
 
 r"""Guards on what the RFM transport accepts back from a NIM.
 
-Both cases here are about a response the SDK does not control: an error body
+Both cases here are about a response the client does not control: an error body
 large enough to be unreadable, and a session id chosen by the server.
 """
 

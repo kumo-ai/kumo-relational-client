@@ -2,12 +2,12 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""The exceptions this SDK raises.
+r"""The exceptions this client raises.
 
 Every call on :class:`~nemotron_predict.PredictClient` and its model handles raises
 :class:`PredictError` or one of its subclasses, so ``except PredictError`` is enough
-to catch anything the SDK reports. Building a graph is the exception: the
-Nemotron Relational engine validates a graph in its own constructor, before any SDK call,
+to catch anything the client reports. Building a graph is the exception: the
+Nemotron Relational engine validates a graph in its own constructor, before any client call,
 and reports problems as :class:`ValueError`.
 
 Every error carries a ``code``, a short stable string meant to be branched on.
@@ -60,7 +60,7 @@ def format_invalid_params(params: Sequence[Any] | None) -> str:
 
 
 class PredictError(Exception):
-    r"""Base class for every error this SDK raises.
+    r"""Base class for every error this client raises.
 
     Attributes:
         message: The human-readable description, without the code prefix.
@@ -109,7 +109,7 @@ class UnknownModelError(PredictError):
 class MissingExtraError(PredictError):
     r"""An optional dependency this call needs is not installed.
 
-    The Nemotron Relational engine and the connector drivers ship as extras, so the SDK can
+    The Nemotron Relational engine and the connector drivers ship as extras, so the client can
     be installed without them. The message names the ``pip install`` that fixes
     it. Code: ``MISSING_EXTRA``.
     """

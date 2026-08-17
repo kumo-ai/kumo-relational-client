@@ -1,7 +1,7 @@
 # nemotron_relational.pql — provenance
 
 This tree began as a copy of the internal `kumo-pql` parser package,
-internalized so the SDK is self-contained (no external `kumo-pql` dependency)
+internalized so the client is self-contained (no external `kumo-pql` dependency)
 for the open-source release.
 
 **Upstream is gone.** `kumo-pql` has been deleted, so this is now the only copy
@@ -18,7 +18,7 @@ internalized code, not as an instruction for re-syncing.
 |---|---|
 | Upstream package | `kumo-pql` |
 | Commit | `4c8fc57` (tip of `main`; `kumo-pql` was never tagged) |
-| Scope taken | `grammar/`, `parser/`, `validator/` — the SDK runtime parse path only |
+| Scope taken | `grammar/`, `parser/`, `validator/` — the client runtime parse path only |
 
 `rewriting/` was not imported by the parse path and was not taken.
 

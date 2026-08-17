@@ -148,7 +148,7 @@ def _validate_random_seed(value: Any) -> int | None:
 
 class RelationalModel:
     r"""A Nemotron Relational handle bound to a graph, offering the familiar
-    ``model.predict(query, ...)`` call from the old SDK.
+    ``model.predict(query, ...)`` call from the old client.
 
     Returned by :meth:`PredictClient.nemotron_relational`. It is a thin, stateless wrapper: the
     graph is supplied once, and each :meth:`predict` builds a

@@ -6,7 +6,7 @@ authors=[
 ]
 license = "Apache-2.0"
 license-files=["LICENSE", "NOTICE"]
-description="Relational driver (graph building, samplers, PQL, native neighbor-sampler) for the NVIDIA Nemotron Predict SDK"
+description="Relational driver (graph building, samplers, PQL, native neighbor-sampler) for the NVIDIA Nemotron Predict Client"
 readme="README.md"
 # Upper bound matches the interpreters CI builds and imports wheels for
 # (cp310..cp313 on manylinux_2_28 x86-64): this package ships binary wheels
@@ -136,7 +136,7 @@ filterwarnings=[
 markers = [
     "integration: integration tests",
     "live_nim: opt-in live NemotronRelational NIM tests using RFM_NIM_BASE_URL",
-    "live_nim_smoke: fast public SDK and NIM boundary validation",
+    "live_nim_smoke: fast public client and NIM boundary validation",
     "live_nim_full: extended task, validation, recovery, and session coverage",
 ]
 

@@ -569,7 +569,7 @@ class RfmValidator:
         if isinstance(node, Condition):
             permit_list_distinct = False
             # DEMO deployment uses GE which cannot serve keys
-            # SDK deployments have no such limitation
+            # client deployments have no such limitation
             permit_fkey = not self.query_validation_type.is_demo()
             permit_pkey = not self.query_validation_type.is_demo()
         if isinstance(node, Column) and col_name(node.fqn) != '*':

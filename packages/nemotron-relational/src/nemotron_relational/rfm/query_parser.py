@@ -16,7 +16,7 @@ def _name_the_identity(
 ) -> None:
     r"""Lets a query name a table whose identity spans several columns.
 
-    Such a table is keyed on a column this SDK derives, and asking a caller to
+    Such a table is keyed on a column this client derives, and asking a caller to
     spell that is asking them to know an implementation detail. Any column of
     the identity therefore names the identity, and the derived column keeps
     working for a query already written against it.
@@ -51,7 +51,7 @@ def parse_query_locally(
     except ImportError as exc:
         raise ValueError(
             'String predictive queries require the vendored parser runtime '
-            'dependencies. Install the SDK with its runtime dependencies, '
+            'dependencies. Install the client with its runtime dependencies, '
             'or pass a ValidatedPredictiveQuery instead.'
         ) from exc
 

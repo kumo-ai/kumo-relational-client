@@ -3,12 +3,12 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Demo the NemotronRelational SDK against a local Universal TFM NIM.
+"""Demo the NemotronRelational client against a local Universal TFM NIM.
 
 This example intentionally does not hand-build the Universal TFM prediction
 payload. The user-facing prediction flow is:
 
-1. Initialize the SDK.
+1. Initialize the client.
 2. Build a Graph from local tables.
 3. Call NemotronRelational.predict(...) with a predictive query.
 
@@ -124,8 +124,8 @@ def run_sdk_route_descriptors(
     timeout: float,
     max_body_chars: int,
 ) -> None:
-    """Show low-level SDK route descriptors for non-predict NIM routes."""
-    print('\n=== SDK route descriptors for NIM metadata ===')
+    """Show low-level client route descriptors for non-predict NIM routes."""
+    print('\n=== client route descriptors for NIM metadata ===')
     client = RelationalClient(base_url, api_key=api_key)
 
     endpoint_examples = (
@@ -168,7 +168,7 @@ def _truncate(text: str, max_chars: int) -> str:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Demo the NemotronRelational SDK against a Universal TFM NIM.',
+        description='Demo the NemotronRelational client against a Universal TFM NIM.',
     )
     parser.add_argument(
         '--base-url',

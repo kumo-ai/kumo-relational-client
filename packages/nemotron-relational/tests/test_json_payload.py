@@ -527,7 +527,7 @@ def test_explain_matches_live_nim_shape_with_no_summary(
     mock_api: Any,
 ) -> None:
     r"""Captured kumo_rfm_v2_1 shape from a live NIM driver: structured
-    attribution only, no server summary. With ``skip_summary`` the SDK leaves
+    attribution only, no server summary. With ``skip_summary`` the client leaves
     ``summary`` empty and the rich details and typed accessors stay available.
     """
     from nemotron_relational.rfm.rfm import ExplainConfig

@@ -4,7 +4,7 @@ dynamic = ["version"]
 authors = [
     {name = "NVIDIA"},
 ]
-description = "Client SDK for NVIDIA structured-data foundation model NIMs (Nemotron Tabular, Nemotron Relational, and future adapters)"
+description = "Client client for NVIDIA structured-data foundation model NIMs (Nemotron Tabular, Nemotron Relational, and future adapters)"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

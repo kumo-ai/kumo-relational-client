@@ -27,7 +27,7 @@ reported issues addressed under its coordinated disclosure policy. See the
 
 ## Supported versions
 
-The SDK is distributed as three packages — `nemotron-predict-client`, `nemotron_relational`, and
+The client is distributed as three packages — `nemotron-predict-client`, `nemotron_relational`, and
 `nemotron-predict-connectors` — released together. Only the latest released version of each
 receives security fixes; there are no long-term-support branches. Fixes ship in
 a new release rather than as patches to older ones.

@@ -4,7 +4,7 @@ dynamic = ["version"]
 authors = [
     {name = "NVIDIA"},
 ]
-description = "Shared data-source connectors (connect, read, SQL quoting) for the nemotron-predict-client SDK and its engines"
+description = "Shared data-source connectors (connect, read, SQL quoting) for the nemotron-predict-client client and its engines"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"

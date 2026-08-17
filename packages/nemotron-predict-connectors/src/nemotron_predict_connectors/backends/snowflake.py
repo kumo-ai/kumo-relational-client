@@ -125,12 +125,12 @@ def connect(
 
 
 def _connect_without_arguments() -> Connection:
-    r"""Connect with no arguments, explaining what this SDK expects on failure.
+    r"""Connect with no arguments, explaining what this client expects on failure.
 
     With no arguments the driver falls back to its own default-connection file,
     whose absence it reports as "Default connection with name 'default' cannot
     be found", a feature this package never mentions. The fallback still works
-    where it is configured; only the failure is re-stated in the SDK's terms.
+    where it is configured; only the failure is re-stated in the client's terms.
     """
     try:
         connection = snowflake_connector.connect()

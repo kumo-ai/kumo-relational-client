@@ -1,6 +1,6 @@
 # Working in this repository
 
-The NVIDIA Nemotron Predict SDK is the Python client for NVIDIA's structured-data
+The NVIDIA Nemotron Predict Client is the Python client for NVIDIA's structured-data
 foundation models, served behind the Universal TFM API by a NIM. It does not
 serve models itself: every prediction is an HTTP call to a NIM you point it at.
 
@@ -64,7 +64,7 @@ names the exact `pip install` that fixes it.
 ## Where to read next
 
 - `docs/get-started/` — install, prerequisites, quickstart.
-- `docs/about/` — what the SDK is and how a request flows.
+- `docs/about/` — what the client is and how a request flows.
 - `docs/reference/` — environment variables and prediction output shapes.
 - `examples/nemotron_relational_quickstart.ipynb` — a worked end-to-end notebook.
 

@@ -5,7 +5,7 @@
 r"""The error surface a caller can rely on.
 
 Two things are being pinned: that ``except PredictError`` catches everything the
-SDK raises and each subclass is importable to branch on, and that a NIM's
+client raises and each subclass is importable to branch on, and that a NIM's
 per-field validation diagnosis reaches the message instead of being buried in
 ``details``.
 """

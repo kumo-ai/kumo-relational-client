@@ -7,7 +7,7 @@ import os
 from setuptools import setup
 
 # ``kumo-api`` and ``kumo-pql`` are internalized under ``nemotron_relational.api`` and
-# ``nemotron_relational.pql`` (see their SOURCE.md files), so the SDK carries no external
+# ``nemotron_relational.pql`` (see their SOURCE.md files), so the client carries no external
 # ``kumo-api`` dependency. ``pydantic`` used to arrive transitively via
 # ``kumo-api``; it is now declared directly.
 

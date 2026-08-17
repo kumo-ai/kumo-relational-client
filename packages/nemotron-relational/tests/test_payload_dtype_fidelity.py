@@ -323,7 +323,7 @@ def test_every_column_spelling_is_sent_the_way_it_is_declared(case) -> None:
 
 def test_decimal_column_is_a_number_not_a_string() -> None:
     # Regression: `dtype: 'string'` beside `stype: 'numerical'` is what the NIM
-    # answers with an HTTP 500 the SDK then reports as GPU capacity pressure.
+    # answers with an HTTP 500 the client then reports as GPU capacity pressure.
     graph, payload = feature_payload(
         [Decimal(f'{index}.1234') for index in range(NUM_USERS)]
     )

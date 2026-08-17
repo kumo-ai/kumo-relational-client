@@ -398,7 +398,7 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
     ``except`` block, so the raise replaced the very failure being reported:
     every engine error arrived as 'the serving endpoint has no URL' and the
     real cause was discarded. Found while debugging a NIM BAD_REQUEST that the
-    SDK reported as a configuration problem.
+    client reported as a configuration problem.
     """
 
     class _Failing:

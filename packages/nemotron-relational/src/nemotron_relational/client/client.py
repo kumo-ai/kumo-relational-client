@@ -91,7 +91,7 @@ def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
 def _validate_url(url: str, api_key: str | None) -> None:
     r"""Mirrors ``nemotron_predict.core.transport._validate_url``.
 
-    This client carries every Nemotron Relational prediction, so the guard the SDK
+    This client carries every Nemotron Relational prediction, so the guard the client
     documents has to hold here too rather than only on the path that happens
     to construct a ``Transport`` first.
     """
@@ -119,7 +119,7 @@ def _validate_url(url: str, api_key: str | None) -> None:
 def redact_url(url: str | None) -> str | None:
     r"""Strip any userinfo from ``url`` so it is safe to log or display.
 
-    ``https://user:token@host/path`` is a legal way to point the SDK at a
+    ``https://user:token@host/path`` is a legal way to point the client at a
     deployment, and the credential is in the URL itself. Anywhere a URL reaches
     a log line, an error message or a repr, it goes through here first.
     """
@@ -253,7 +253,7 @@ def _raise_init_error(url: str, exc: BaseException) -> NoReturn:
             ) from exc
         raise ClientInitializationError(
             f'NIM at {shown!r} returned HTTP {status_code} while '
-            f'initializing the SDK. Response: {body}'
+            f'initializing the client. Response: {body}'
         ) from exc
     if isinstance(exc, requests.exceptions.Timeout):
         raise NimTimeoutError(
@@ -372,7 +372,7 @@ class RelationalClient:
             raise ValueError(
                 f'Endpoint {redact_url(self._url)!r} did not advertise '
                 "the 'nemotron-relational' "
-                "model at '/v1/models'. Point the SDK at a Universal TFM NIM "
+                "model at '/v1/models'. Point the client at a Universal TFM NIM "
                 'serving NemotronRelational.'
             )
 

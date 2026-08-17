@@ -71,7 +71,7 @@ if [[ -n "${RFM_NIM_PYTHON:-}" ]]; then
   PYTHON="$RFM_NIM_PYTHON"
   [[ -x "$PYTHON" ]] || { echo "error: Python is not executable: $PYTHON" >&2; exit 2; }
   "$PYTHON" -c 'import pytest, requests, nemotron_relational' >/dev/null || {
-    echo 'error: RFM_NIM_PYTHON is missing the SDK live-test dependencies' >&2
+    echo 'error: RFM_NIM_PYTHON is missing the client live-test dependencies' >&2
     exit 2
   }
 else

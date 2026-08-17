@@ -517,7 +517,7 @@ def test_nim_failure_error_timeout_points_at_the_timeout_setting() -> None:
 
 def test_nim_failure_error_client_error_is_not_an_sdk_bug_report() -> None:
     """A 4xx is about the request the caller sent, so it is reported as a rejected
-    request rather than routed to the SDK's issue tracker.
+    request rather than routed to the client's issue tracker.
     """
     from nemotron_relational.exceptions import HTTPException
     from nemotron_relational.rfm.rfm import _nim_failure_error

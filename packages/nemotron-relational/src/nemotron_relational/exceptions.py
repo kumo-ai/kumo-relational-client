@@ -9,7 +9,7 @@ from typing import Any
 class NemotronRelationalError(Exception):
     r"""Base class for every error this package raises.
 
-    ``except NemotronRelationalError`` is the one catch that covers the whole SDK. Each
+    ``except NemotronRelationalError`` is the one catch that covers the whole client. Each
     subclass also keeps the built-in base it historically raised
     (:class:`ValueError`, :class:`RuntimeError`), so code written against the
     older, rootless hierarchy keeps working unchanged.
@@ -53,7 +53,7 @@ class GraphConstructionError(NemotronRelationalError):
     a warehouse raised whatever that driver raises -- a
     ``databricks.sql.exc.ServerOperationError``, a
     ``snowflake.connector.errors.ProgrammingError`` -- none of which share a
-    base with anything else this SDK raises, so building a graph could not be
+    base with anything else this client raises, so building a graph could not be
     guarded by the same ``except`` as using one.
     """
 
@@ -62,7 +62,7 @@ class InvalidResponseError(NemotronRelationalError, ValueError):
     r"""The NIM answered, but its response does not match the contract.
 
     Subclasses :class:`ValueError` so existing callers keep working, while
-    letting the SDK report a malformed *server* response as such instead of
+    letting the client report a malformed *server* response as such instead of
     blaming the caller's request. It also stops a body that will never parse
     from being retried as though the NIM were merely busy.
     """

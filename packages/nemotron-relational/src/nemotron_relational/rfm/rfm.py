@@ -178,7 +178,7 @@ class ExplainConfig(CastMixin):
         **The natural-language summary is generated off-machine.** With
         ``skip_summary=False`` (the default), the ``openai`` package installed
         (``pip install 'nemotron-predict-client[explain]'``) and an API key discoverable, the
-        SDK sends the predictive query, the returned predictions, the cohort
+        client sends the predictive query, the returned predictions, the cohort
         analysis and the subgraph attribution -- which contains the **raw
         cell values** of the explained entity's subgraph -- to an
         OpenAI-compatible chat-completions endpoint. Unless
@@ -240,7 +240,7 @@ class Explanation:
 
     @property
     def feature_importance(self) -> GraphGradientScore:
-        r"""Gradient feature importance, as in the old SDK.
+        r"""Gradient feature importance, as in the old client.
 
         Sums the explained entity's per-cell subgraph attribution into
         per-table, per-column scores and returns a :class:`GraphGradientScore`:
@@ -415,7 +415,7 @@ def _problem_document(error: Exception) -> dict[str, Any]:
 def _invalid_params_summary(document: dict[str, Any]) -> str:
     r"""Render the NIM's per-field validation diagnosis.
 
-    ``nemotron_predict.errors.format_invalid_params`` is the counterpart on the SDK
+    ``nemotron_predict.errors.format_invalid_params`` is the counterpart on the client
     side and must render the same shape. The two cannot share one
     implementation: ``nemotron_relational`` does not depend on ``nemotron_predict``, and the
     package both depend on is a SQL-connector package with no HTTP surface.
@@ -492,7 +492,7 @@ def _nim_failure_error(
 
     A 4xx is by definition about the request the caller sent, so it is reported
     as such, quoting the NIM's per-field ``invalid_params`` diagnosis without
-    inviting a bug report against the SDK. Only genuinely unclassifiable
+    inviting a bug report against the client. Only genuinely unclassifiable
     failures keep that invitation.
 
     A timeout is called out separately: it is the one failure the caller can
@@ -559,7 +559,7 @@ def _check_anchor_time(value: Any, name: str) -> Any:
 
     A date *string* is what most pandas users reach for first, and it used to
     land on a bare ``assert`` with an empty message, and under ``python -O``
-    on no check at all. A timezone-*aware* ``Timestamp`` is what the SDK's own
+    on no check at all. A timezone-*aware* ``Timestamp`` is what the client's own
     ``predict`` output carries, so it is converted rather than refused.
     """
     if value is None or isinstance(value, pd.Timestamp):

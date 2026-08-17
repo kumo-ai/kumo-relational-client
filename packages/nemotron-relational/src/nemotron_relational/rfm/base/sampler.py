@@ -238,7 +238,7 @@ class Sampler(ABC):
                 column that does not exist. ``exclude_cols_dict`` is a public
                 ``predict_task`` argument, so a typo in it is a caller mistake
                 and has to read as one -- deleting straight out of the stype
-                map reported it as a bare ``KeyError``, which the SDK could
+                map reported it as a bare ``KeyError``, which the client could
                 only classify as an internal failure.
         """
         # Exclude all columns that leak target information:

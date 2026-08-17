@@ -2,7 +2,7 @@
 # independently released distribution lives under packages/ with its own
 # pyproject.toml:
 #
-#   packages/nemotron-predict-client     - the client SDK (pure-python)
+#   packages/nemotron-predict-client     - the client client (pure-python)
 #   packages/nemotron-predict-connectors - shared data-source connectors (pure-python)
 #   packages/nemotron-relational         - the NemotronRelational driver (native build)
 #

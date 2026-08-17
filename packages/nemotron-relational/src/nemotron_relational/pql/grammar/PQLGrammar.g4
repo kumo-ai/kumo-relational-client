@@ -175,7 +175,7 @@ TIME_UNIT:
 ID: [_a-zA-Z][_a-zA-Z0-9]*;
 
 // A name that a warehouse accepts but this grammar's bare identifier cannot spell, such as one
-// holding a space or a dot. Backticks follow the same convention the SDK's SQL backends use, and
+// holding a space or a dot. Backticks follow the same convention the client's SQL backends use, and
 // a backtick cannot appear inside the name, matching those backends.
 QUOTED_ID: '`' ~[`\r\n]+ '`';
 

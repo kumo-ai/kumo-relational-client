@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA Nemotron Predict SDK Environment Variables"
-description: "Reference for the environment variables that configure the NVIDIA Nemotron Predict SDK client, the Nemotron Relational driver, and the data-source connectors."
+title: "NVIDIA Nemotron Predict Client Environment Variables"
+description: "Reference for the environment variables that configure the NVIDIA Nemotron Predict Client client, the Nemotron Relational driver, and the data-source connectors."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Predict SDK Environment Variables
+# NVIDIA Nemotron Predict Client Environment Variables
 
-This page lists the environment variables the NVIDIA Nemotron Predict SDK reads. Most
+This page lists the environment variables the NVIDIA Nemotron Predict Client reads. Most
 configuration is passed directly to `PredictClient` in code; the variables below
 cover the Nemotron Relational driver's connection defaults, logging, and the data-source
 connectors.
@@ -26,7 +26,7 @@ without passing the values explicitly.
 ## Explanation Summary (Third-Party LLM)
 
 When you call `predict(..., explain=True)` and the NIM returns structured
-attribution without a natural-language summary, the SDK generates that summary
+attribution without a natural-language summary, the client generates that summary
 itself by calling an OpenAI-compatible chat-completions endpoint. The request
 carries the predictive query, the returned predictions, the cohort analysis and
 the subgraph attribution, which includes the raw cell values of the explained
@@ -65,5 +65,5 @@ it borrows the active session's connection.
 
 ## Related Topics
 
-- [Installation Guide for the NVIDIA Nemotron Predict SDK](../get-started/installation.md)
-- [Quickstart for the NVIDIA Nemotron Predict SDK](../get-started/quickstart.md)
+- [Installation Guide for the NVIDIA Nemotron Predict Client](../get-started/installation.md)
+- [Quickstart for the NVIDIA Nemotron Predict Client](../get-started/quickstart.md)

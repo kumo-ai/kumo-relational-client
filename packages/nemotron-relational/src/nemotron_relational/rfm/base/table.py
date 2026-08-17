@@ -471,7 +471,7 @@ class Table(ABC):
         differing = sorted(warehouse - locally)[:1]
         raise ValueError(
             f"'{self.name}' folds {list(names)} into an identity differently "
-            f'in the warehouse than this SDK does, so a prediction seeded '
+            f'in the warehouse than this client does, so a prediction seeded '
             f'here would match no row: the warehouse produced '
             f'{differing!r}. Add a column holding the identity you intend '
             f'and declare that instead.'

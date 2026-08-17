@@ -1,4 +1,4 @@
-# Public CI, mirroring the checks the SDK is released under.
+# Public CI, mirroring the checks the client is released under.
 #
 # The three packages depend on each other and are not on a public index, so
 # every job installs them from the working tree, in dependency order:

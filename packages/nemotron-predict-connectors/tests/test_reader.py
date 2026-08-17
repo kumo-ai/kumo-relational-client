@@ -263,7 +263,7 @@ def test_read_local_accepts_a_path_object(tmp_path):
 def test_read_local_rejects_a_non_path_argument():
     """Coercion must not turn the contract break into a different one: an
     argument that is neither ``str`` nor ``os.PathLike`` still raises the
-    SDK's own error with a stable code.
+    client's own error with a stable code.
     """
     with pytest.raises(ConnectorError) as excinfo:
         read('local', path=object())

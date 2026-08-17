@@ -628,7 +628,7 @@ def test_the_derived_name_is_stable_and_ordered() -> None:
 
 
 def test_a_query_names_the_identity_by_any_of_its_columns(superstore) -> None:
-    r"""A caller should not have to spell a column this SDK invented."""
+    r"""A caller should not have to spell a column this client invented."""
     from nemotron_relational.rfm.query_parser import parse_query_locally
 
     people, orders = superstore

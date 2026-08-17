@@ -1,4 +1,4 @@
-NVIDIA Nemotron Predict SDK
+NVIDIA Nemotron Predict Client
 Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not
@@ -23,7 +23,7 @@ This product includes the following third-party components:
   section at the end of the LICENSE file.
 
 Two trees in this repository are NVIDIA first-party code that began inside
-other NVIDIA packages and were brought here so the SDK is self-contained:
+other NVIDIA packages and were brought here so the client is self-contained:
 
 - packages/nemotron-relational/src/nemotron_relational/pql/ -- the predictive
   query grammar and parser.

@@ -297,7 +297,7 @@ def test_from_snowflake_tracks_internal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Regression test: a
-    # connection the SDK opened is a connection the SDK owns and closes.
+    # connection the client opened is a connection the client owns and closes.
     connection = _FakeConnection()
     monkeypatch.setattr(
         'nemotron_relational.rfm.backend.snow.connect',
@@ -328,7 +328,7 @@ def test_from_snowflake_tracks_internal_connection(
 def test_from_snowflake_closes_internal_connection_on_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A connection the SDK opened must not leak in case the graph is never
+    # A connection the client opened must not leak in case the graph is never
     # constructed and can therefore never take ownership of it:
     connection = _FakeConnection()
     monkeypatch.setattr(

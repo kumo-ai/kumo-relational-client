@@ -200,7 +200,7 @@ class ViewConversionWarning(UserWarning):
     A partial conversion is the normal outcome for these views -- measures,
     filters and cross-table expressions have no graph equivalent -- so this has
     its own category, letting a project silence it without silencing every
-    other warning the SDK raises. The same diagnostics are on the returned
+    other warning the client raises. The same diagnostics are on the returned
     graph as :attr:`Graph.conversion_messages`, which is the way to react to
     them in code.
     """
@@ -212,7 +212,7 @@ def _warn_view_conversion(message: str, owned_connection: Any) -> None:
     Under a warnings-as-errors policy ``warnings.warn`` raises, so the caller
     never receives the graph -- and therefore never receives the connection the
     graph would have owned. Closing it here keeps the same contract the rest of
-    these constructors follow: a connection the SDK opened is closed on every
+    these constructors follow: a connection the client opened is closed on every
     path that does not hand the graph back.
 
     Args:
@@ -236,7 +236,7 @@ def _reraise_as_graph_error(error: BaseException, source: str) -> None:
     the caller's bare ``raise`` re-raises those unchanged with their original
     traceback. Only a third-party driver's exception is translated, which is
     the one class of failure that otherwise escapes graph construction with no
-    base in common with the rest of this SDK.
+    base in common with the rest of this client.
 
     Deliberately called from the existing cleanup handler rather than applied
     as a decorator: a wrapper frame shifts the stack depth that

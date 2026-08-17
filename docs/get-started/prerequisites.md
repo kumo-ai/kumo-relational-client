@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA Nemotron Predict SDK Prerequisites"
-description: "Hardware, software, and network prerequisites for installing and using the NVIDIA Nemotron Predict SDK."
+title: "NVIDIA Nemotron Predict Client Prerequisites"
+description: "Hardware, software, and network prerequisites for installing and using the NVIDIA Nemotron Predict Client."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Predict SDK Prerequisites
+# NVIDIA Nemotron Predict Client Prerequisites
 
-Before you install the NVIDIA Nemotron Predict SDK, make sure your environment meets the
+Before you install the NVIDIA Nemotron Predict Client, make sure your environment meets the
 following requirements.
 
 ## Hardware
@@ -77,4 +77,4 @@ Before you continue to installation, confirm the following:
 
 ## Next Steps
 
-- Continue to the [Installation Guide for the NVIDIA Nemotron Predict SDK](installation.md).
+- Continue to the [Installation Guide for the NVIDIA Nemotron Predict Client](installation.md).

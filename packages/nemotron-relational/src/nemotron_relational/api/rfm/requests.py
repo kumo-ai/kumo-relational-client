@@ -2,8 +2,8 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# SDK-owned, not upstream's. Upstream also defined validate/parse/evaluate
-# request and response types; this SDK only ever POSTs a prediction, so only
+# client-owned, not upstream's. Upstream also defined validate/parse/evaluate
+# request and response types; this client only ever POSTs a prediction, so only
 # the prediction request and response are kept. See api/SOURCE.md.
 
 from typing import Any

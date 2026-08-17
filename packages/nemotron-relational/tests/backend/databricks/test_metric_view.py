@@ -1143,7 +1143,7 @@ def test_from_databricks_metric_view_tracks_internal_connection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # Regression test: a
-    # connection the SDK opened is a connection the SDK owns and closes.
+    # connection the client opened is a connection the client owns and closes.
     connection = _FakeConnection()
     monkeypatch.setattr(
         'nemotron_relational.rfm.backend.databricks.connect',
@@ -1170,7 +1170,7 @@ def test_from_databricks_metric_view_tracks_internal_connection(
 def test_from_databricks_closes_internal_connection_on_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A connection the SDK opened must not leak in case the graph is never
+    # A connection the client opened must not leak in case the graph is never
     # constructed and can therefore never take ownership of it:
     connection = _FakeConnection()
     monkeypatch.setattr(
@@ -1522,7 +1522,7 @@ class _ServerOperationError(Exception):
     r"""Stands in for ``databricks.sql.exc.ServerOperationError``.
 
     Defined here rather than imported so the test states what matters: the
-    exception belongs to the driver's hierarchy and to nothing this SDK owns.
+    exception belongs to the driver's hierarchy and to nothing this client owns.
     """
 
 
