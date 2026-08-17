@@ -7,8 +7,8 @@ template-library-version: "1.0.0"
 # NVIDIA Nemotron Predict Client Architecture
 
 The NVIDIA Nemotron Predict Client separates a small, universal client from the heavy runtimes
-that individual models need. The client is symmetric across models — every model
-is a peer adapter — while a model's optional driver holds its client-side compute.
+that individual models need. The client is symmetric across models, since every model
+is a peer adapter, while a model's optional driver holds its client-side compute.
 
 ## High-Level Architecture Diagram
 
@@ -44,7 +44,7 @@ Requests do not all leave through the same object. The client holds a
 through it. Nemotron Relational does not: the client hands its address and credential to
 the driver, which opens its own pooled session (`RelationalClient`) and sends from
 there. The two are separate implementations of the same HTTP contract, because
-`nemotron_relational` cannot depend on `nemotron-predict-client` — the dependency runs the other way.
+`nemotron_relational` cannot depend on `nemotron-predict-client`; the dependency runs the other way.
 
 The Nemotron Relational driver underneath does keep a process-wide configuration, which
 each prediction reconfigures. The adapter applies that configuration and
@@ -59,9 +59,9 @@ configured it last. Drive the driver through `PredictClient` only.
 Every model is a peer module implementing the `ModelAdapter` interface and
 registered in the client's `AdapterRegistry`. An adapter advertises its
 capabilities, shapes an internal typed request (`NemotronTabularRequest`, `NemotronRelationalRequest`
-— built by the model handles, and not importable from `nemotron_predict`) into the
+built by the model handles, and not importable from `nemotron_predict`) into the
 Universal TFM API envelope, and normalizes the NIM's response into a consistent
-pandas DataFrame. Adding a model means adding one adapter module — the client
+pandas DataFrame. Adding a model means adding one adapter module, and the client
 core does not change.
 
 ### Driver Layer
@@ -133,6 +133,84 @@ on the Nemotron Tabular path reads `/v1/models`.
 - **Databricks Model Serving.** `PredictClient.for_databricks_serving(name)`
   targets a named serving endpoint through the Databricks SDK. There is no base
   URL and no HTTP session on this path, and it serves Nemotron Relational only.
+
+## Repository Layout
+
+A monorepo workspace. Every independently released distribution lives under
+`packages/` with the same `src/` and `tests/` convention:
+
+```text
+nemotron-predict-client/
+├── pyproject.toml              # workspace root: shared tooling only, builds nothing
+├── e2e/                        # cross-distribution live harnesses
+├── docs/                       # user-facing documentation
+├── examples/                   # runnable notebooks and scripts
+├── scripts/                    # release and maintenance tooling
+└── packages/
+    ├── nemotron-predict-client/            # the client (pure python, universal wheel)
+    │   └── src/nemotron_predict/
+    │       ├── client.py       #   PredictClient: the entry point and its registry
+    │       ├── models.py       #   the per-model handles the client hands back
+    │       ├── requests.py     #   the internal typed requests handles build
+    │       ├── errors.py       #   the exception hierarchy
+    │       ├── core/           #   HTTP transport, response parsing, connectors, dtypes
+    │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
+    │       ├── adapters/       #   one peer module per model
+    │       │   ├── tabular.py    #   single-table (no driver)
+    │       │   └── relational.py #   relational (lazy-wraps the driver)
+    │       ├── wire/          #   the on-the-wire request and response shapes
+    │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
+    ├── nemotron-predict-connectors/        # shared data-source connectors (pure python)
+    │   └── src/nemotron_predict_connectors/
+    └── nemotron-relational/                # the relational driver (native build)
+        └── src/nemotron_relational/
+```
+
+## Adding a Model
+
+1. Add `packages/nemotron-predict-client/src/nemotron_predict/adapters/<model>.py`
+   implementing `ModelAdapter`, and register it in `_default_registry()` in
+   `client.py`. The core never changes.
+2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its
+   own distribution and add a `[<model>]` extra. The adapter lazy-imports the
+   driver so base installs stay light.
+3. A dependency-free model, like Nemotron Tabular, needs no driver and no extra.
+
+## Why the Relational Adapter Is Not Symmetric With Tabular
+
+The internal `NemotronTabularRequest` (`context`, `predict`, `task`, `target`)
+maps cleanly onto the wire envelope. `NemotronRelationalRequest` (`graph`,
+`query`, `indices`) does not. These are the shapes the handles build for the
+adapters, not a user-facing API.
+
+`NemotronRelational.predict()` takes a PQL query plus an entity graph and
+builds, samples and sends the request as one fused operation. There is no
+standalone "build a payload from two flat DataFrames" step to call into.
+Reimplementing that outside the driver would duplicate PQL parsing, subgraph
+sampling and point-in-time correctness logic that already lives, and is tested,
+there.
+
+So `adapters/relational.py` takes the shape the driver actually needs and
+normalizes the result into the same DataFrame shape `core.response` produces
+for Nemotron Tabular. Callers get one consistent return type either way.
+
+## Sessions
+
+A session pins `model`, `task`, `schema` and `context` on the NIM so later
+calls send only the rows to score. Both model paths use them and neither
+exposes them: they are a transport optimisation and never change a prediction.
+
+- **Nemotron Tabular.** `client.tabular(context, ...)` reuses one session for
+  the life of the handle. It opens on the second `predict()` against the same
+  context, so scoring a single table costs exactly one request as before, and
+  every call after that carries the rows alone.
+- **Nemotron Relational.** A multi-batch `predict()` opens one session for the
+  run and deletes it at the end. Set `NEMOTRON_PREDICT_DISABLE_SESSIONS=1` to
+  force the stateless path.
+
+Both fall back to `POST /v1/predictions` when the NIM answers 404, 405 or 501
+on session creation, and both re-pin the context transparently if a session
+expires.
 
 ## Related Topics
 
