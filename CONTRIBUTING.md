@@ -1,4 +1,4 @@
-# Contributing to nemotron-predict-client
+# Contributing to nemotron-structured-client
 
 Thanks for your interest in contributing. This project is licensed under the
 [Apache License 2.0](./LICENSE), and we welcome external contributions.

@@ -2,7 +2,10 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from nemotron_predict_connectors.backends.snowflake import Connection, connect
+from nemotron_structured_connectors.backends.snowflake import (
+    Connection,
+    connect,
+)
 
 from .binding import paramstyle
 from .table import SnowTable

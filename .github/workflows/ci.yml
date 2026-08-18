@@ -3,7 +3,7 @@
 # The three packages depend on each other and are not on a public index, so
 # every job installs them from the working tree, in dependency order:
 # connectors, then the relational driver, then the client. Installing the
-# client alone makes pip look for `nemotron-predict-connectors` on PyPI, where
+# client alone makes pip look for `nemotron-structured-connectors` on PyPI, where
 # it does not exist. Backend extras are installed so their tests import rather
 # than failing at collection; tests needing a live warehouse still skip.
 name: CI
@@ -25,9 +25,9 @@ env:
   LINT_PATHS: >-
     packages/nemotron-relational/src packages/nemotron-relational/tests
     packages/nemotron-relational/examples
-    packages/nemotron-predict-client/src packages/nemotron-predict-client/tests
-    packages/nemotron-predict-connectors/src
-    packages/nemotron-predict-connectors/tests
+    packages/nemotron-structured-client/src packages/nemotron-structured-client/tests
+    packages/nemotron-structured-connectors/src
+    packages/nemotron-structured-connectors/tests
     e2e scripts examples
 
 jobs:
@@ -71,8 +71,8 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-predict-connectors[sqlite,duckdb,s3,test]'
-      - run: python -m pytest packages/nemotron-predict-connectors/tests -q
+          './packages/nemotron-structured-connectors[sqlite,duckdb,s3,test]'
+      - run: python -m pytest packages/nemotron-structured-connectors/tests -q
 
   client-tests:
     runs-on: ubuntu-latest
@@ -83,13 +83,13 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-predict-connectors[sqlite,duckdb]'
+          './packages/nemotron-structured-connectors[sqlite,duckdb]'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-predict-client[sqlite,duckdb,test]'
-      - run: python -c "import nemotron_predict; from nemotron_predict import relational"
+          './packages/nemotron-structured-client[sqlite,duckdb,test]'
+      - run: python -c "import nemotron_structured; from nemotron_structured import relational"
       - run: >-
-          python -m pytest packages/nemotron-predict-client/tests
+          python -m pytest packages/nemotron-structured-client/tests
           -m 'not live_nim' -q
 
   relational-tests:
@@ -105,7 +105,7 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-predict-connectors[databricks,duckdb]'
+          './packages/nemotron-structured-connectors[databricks,duckdb]'
       - run: >-
           python -m pip install --editable
           './packages/nemotron-relational[test,explain,databricks,databricks-serving,duckdb]'
@@ -124,7 +124,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --editable './packages/nemotron-predict-connectors'
+      - run: python -m pip install --editable './packages/nemotron-structured-connectors'
       - run: >-
           WITH_RELATIONALLIB=0 python -m pip install --editable
           './packages/nemotron-relational[test]'
@@ -148,18 +148,18 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-predict-connectors[sqlite,duckdb]'
+          './packages/nemotron-structured-connectors[sqlite,duckdb]'
       - run: python -m pip install --editable './packages/nemotron-relational'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-predict-client[relational,sqlite,duckdb,test]'
+          './packages/nemotron-structured-client[relational,sqlite,duckdb,test]'
       - run: >-
-          python -c "import nemotron_predict; from nemotron_predict import relational;
+          python -c "import nemotron_structured; from nemotron_structured import relational;
           import nemotron_relational.relationallib as k;
           assert hasattr(k.NeighborSampler, 'seed'); relational.Graph;
           assert not hasattr(relational, 'NemotronRelational')"
       - run: >-
-          python -m pytest packages/nemotron-predict-client/tests
+          python -m pytest packages/nemotron-structured-client/tests
           -m 'not live_nim' -q
 
   wheels:
@@ -203,7 +203,7 @@ jobs:
         with:
           name: wheels
           path: dist
-      - run: python -m pip install ./packages/nemotron-predict-connectors
+      - run: python -m pip install ./packages/nemotron-structured-connectors
       - run: python -m pip install dist/nemotron_relational-*-cp$(echo "${{ matrix.python }}" | tr -d .)-*.whl
       - run: >-
           python -c "import nemotron_relational.relationallib as relationallib;

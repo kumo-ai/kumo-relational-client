@@ -29,7 +29,7 @@ logger = logging.getLogger('nemotron_relational')
 _AUTH_STATUS_CODES = frozenset({401, 403})
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 _MAX_BODY_SNIPPET = 512
-# Mirrors ``nemotron_predict.core.transport``: well above any real prediction
+# Mirrors ``nemotron_structured.core.transport``: well above any real prediction
 # response -- a full-precision float64 column for a million rows is ~25 MB of
 # JSON -- but far below what a compressed hostile body can inflate to.
 _MAX_RESPONSE_BYTES = 64 * 1024 * 1024
@@ -89,7 +89,7 @@ def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
 
 
 def _validate_url(url: str, api_key: str | None) -> None:
-    r"""Mirrors ``nemotron_predict.core.transport._validate_url``.
+    r"""Mirrors ``nemotron_structured.core.transport._validate_url``.
 
     This client carries every Nemotron Relational prediction, so the guard the client
     documents has to hold here too rather than only on the path that happens
@@ -147,7 +147,7 @@ def scrub_userinfo(text: str) -> str:
 
 
 class _Session(requests.Session):
-    r"""Mirrors ``nemotron_predict.core.transport._Session``.
+    r"""Mirrors ``nemotron_structured.core.transport._Session``.
 
     ``requests`` strips only the standard ``Authorization`` header when a
     redirect changes origin; a custom header set on the session is re-sent
@@ -156,9 +156,9 @@ class _Session(requests.Session):
     ``_validate_url``.
 
     The two clients keep their own copy rather than sharing one: the only
-    package both depend on is ``nemotron-predict-connectors``, which is a SQL-connector
+    package both depend on is ``nemotron-structured-connectors``, which is a SQL-connector
     package with no HTTP surface and no ``requests`` dependency, and
-    ``nemotron_relational`` cannot import ``nemotron_predict`` because the dependency runs the
+    ``nemotron_relational`` cannot import ``nemotron_structured`` because the dependency runs the
     other way. This is the same arrangement as ``_validate_url`` above.
     """
 
@@ -180,7 +180,7 @@ class _Session(requests.Session):
 def _read_capped(response: requests.Response, url: str) -> requests.Response:
     r"""Reads a streamed response body under a cap, then re-attaches it.
 
-    Mirrors ``nemotron_predict.core.transport._read_capped``. ``requests`` inflates
+    Mirrors ``nemotron_structured.core.transport._read_capped``. ``requests`` inflates
     ``Content-Encoding: gzip`` with no ratio limit, so an unbounded read lets a
     small compressed body expand into hundreds of megabytes of client memory
     before anything is parsed.
@@ -294,7 +294,7 @@ class RelationalClient:
 
         ``max_retries`` bounds the transport-level retries of a transient
         failure (408/429/5xx, or a connection that never established); ``0``
-        disables them. It is what ``PredictClient(max_retries=...)`` forwards, so
+        disables them. It is what ``StructuredClient(max_retries=...)`` forwards, so
         the knob reaches this path rather than being dropped for a fixed policy
         of its own. It is separate from ``predict(num_retries=...)``, which
         retries the prediction call itself at the application level and is what

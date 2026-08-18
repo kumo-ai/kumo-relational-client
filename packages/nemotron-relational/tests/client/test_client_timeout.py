@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""The socket timeout the client client configures must reach the wire.
+r"""The socket timeout the client configures must reach the wire.
 
 ``requests_mock`` mounts its own adapter and never opens a socket, so these
 tests talk to a local ``http.server`` that stalls before replying.
@@ -107,7 +107,7 @@ def test_max_retries_reaches_the_transport_policy():
     """/
     client-max-retries-never-reaches-the-nemotron_relational-path.md
 
-    `PredictClient(max_retries=...)` is documented without a model qualifier, next
+    `StructuredClient(max_retries=...)` is documented without a model qualifier, next
     to `timeout`, which was made to reach both paths. This client used to
     hardcode `total=10, connect=3, read=3, status=5` regardless, so `0` still
     retried and a raised value changed nothing -- and its prediction `POST` was

@@ -1,12 +1,12 @@
 ---
-title: "NVIDIA Nemotron Predict Client Architecture"
-description: "How the NVIDIA Nemotron Predict Client is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
+title: "NVIDIA Nemotron Structured Client Architecture"
+description: "How the NVIDIA Nemotron Structured Client is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Predict Client Architecture
+# NVIDIA Nemotron Structured Client Architecture
 
-The NVIDIA Nemotron Predict Client separates a small, universal client from the heavy runtimes
+The NVIDIA Nemotron Structured Client separates a small, universal client from the heavy runtimes
 that individual models need. The client is symmetric across models, since every model
 is a peer adapter, while a model's optional driver holds its client-side compute.
 
@@ -14,7 +14,7 @@ is a peer adapter, while a model's optional driver holds its client-side compute
 
 ```mermaid
 flowchart TD
-    app["Your application"] --> client["PredictClient (nemotron-predict-client)"]
+    app["Your application"] --> client["StructuredClient (nemotron-structured-client)"]
     client --> registry["AdapterRegistry"]
     registry --> tabicl["Nemotron Tabular adapter"]
     registry --> rfm["Nemotron Relational adapter"]
@@ -25,7 +25,7 @@ flowchart TD
     transport --> nim["Universal TFM NIM"]
     kumoclient --> nim
     serving --> endpoint["Databricks Model Serving endpoint"]
-    client --> connectors["nemotron-predict-connectors"]
+    client --> connectors["nemotron-structured-connectors"]
     driver --> connectors
 ```
 
@@ -33,7 +33,7 @@ flowchart TD
 
 ### Client Layer
 
-`PredictClient` owns the endpoint address and an `AdapterRegistry`. Because each
+`StructuredClient` owns the endpoint address and an `AdapterRegistry`. Because each
 client owns its own registry and configuration, several clients can target
 different endpoints or tenants in the same process, concurrently: every
 prediction is issued against the endpoint and credential of the client that
@@ -44,7 +44,7 @@ Requests do not all leave through the same object. The client holds a
 through it. Nemotron Relational does not: the client hands its address and credential to
 the driver, which opens its own pooled session (`RelationalClient`) and sends from
 there. The two are separate implementations of the same HTTP contract, because
-`nemotron_relational` cannot depend on `nemotron-predict-client`; the dependency runs the other way.
+`nemotron_relational` cannot depend on `nemotron-structured-client`; the dependency runs the other way.
 
 The Nemotron Relational driver underneath does keep a process-wide configuration, which
 each prediction reconfigures. The adapter applies that configuration and
@@ -52,14 +52,14 @@ resolves the resulting client as one atomic step, then binds it to that
 prediction, so a concurrent prediction from a differently configured client
 cannot re-point it. What remains shared is the driver global itself: direct
 `nemotron_relational.init()` callers, and anything else reading it, see whichever client
-configured it last. Drive the driver through `PredictClient` only.
+configured it last. Drive the driver through `StructuredClient` only.
 
 ### Adapter Layer
 
 Every model is a peer module implementing the `ModelAdapter` interface and
 registered in the client's `AdapterRegistry`. An adapter advertises its
 capabilities, shapes an internal typed request (`NemotronTabularRequest`, `NemotronRelationalRequest`
-built by the model handles, and not importable from `nemotron_predict`) into the
+built by the model handles, and not importable from `nemotron_structured`) into the
 Universal TFM API envelope, and normalizes the NIM's response into a consistent
 pandas DataFrame. Adding a model means adding one adapter module, and the client
 core does not change.
@@ -86,7 +86,7 @@ platform-independent. Nemotron Tabular requires no driver.
    directly.
 4. The request goes to the NIM over HTTP, with retry on transient failures:
    Nemotron Tabular sends through the client's `Transport`, Nemotron Relational through the driver's
-   own `RelationalClient`. A client built with `PredictClient.for_databricks_serving`
+   own `RelationalClient`. A client built with `StructuredClient.for_databricks_serving`
    sends through `DatabricksServingClient` instead, which invokes a named
    Model Serving endpoint through the Databricks SDK rather than speaking
    HTTP.
@@ -96,11 +96,11 @@ platform-independent. Nemotron Tabular requires no driver.
 
 The client is a client library; it connects to a NIM you deploy and operate.
 
-- **Local NIM.** Point `PredictClient(url=...)` at a NIM running on `localhost`.
+- **Local NIM.** Point `StructuredClient(url=...)` at a NIM running on `localhost`.
 - **Networked NIM.** Point the client at any reachable NIM endpoint. If the
   deployment fronts the NIM with an authenticating gateway, pass an `api_key`.
 - **Databricks Model Serving.** Build the client with
-  `PredictClient.for_databricks_serving(endpoint_name)` to reach a Nemotron Relational model
+  `StructuredClient.for_databricks_serving(endpoint_name)` to reach a Nemotron Relational model
   served inside a Databricks workspace.
 
 ## Service Interactions
@@ -114,7 +114,7 @@ requested. Standard NIM management endpoints are provided by the NIM runtime,
 not by the client.
 
 Two endpoints are read rather than predicted against, and not by the same
-caller. `PredictClient.health_ready()` issues `GET /v1/health/ready` and reports
+caller. `StructuredClient.health_ready()` issues `GET /v1/health/ready` and reports
 whether it answered 200. The Nemotron Relational driver checks more before its first
 prediction: it reads `/v1/health/ready` for a ready status and then
 `/v1/models`, and fails if the endpoint does not advertise
@@ -124,13 +124,13 @@ on the Nemotron Tabular path reads `/v1/models`.
 ## External Integration Points
 
 - **Data sources.** Both the client and the Nemotron Relational driver read tables through
-  the shared `nemotron-predict-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
+  the shared `nemotron-structured-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
 - **NIM endpoint.** Any NIM that implements the Universal TFM API. The Nemotron Relational
   path additionally requires the endpoint to advertise
   `nemotron-relational` in
   `/v1/models`.
-- **Databricks Model Serving.** `PredictClient.for_databricks_serving(name)`
+- **Databricks Model Serving.** `StructuredClient.for_databricks_serving(name)`
   targets a named serving endpoint through the Databricks SDK. There is no base
   URL and no HTTP session on this path, and it serves Nemotron Relational only.
 
@@ -140,16 +140,16 @@ A monorepo workspace. Every independently released distribution lives under
 `packages/` with the same `src/` and `tests/` convention:
 
 ```text
-nemotron-predict-client/
+nemotron-structured-client/
 ├── pyproject.toml              # workspace root: shared tooling only, builds nothing
 ├── e2e/                        # cross-distribution live harnesses
 ├── docs/                       # user-facing documentation
 ├── examples/                   # runnable notebooks and scripts
 ├── scripts/                    # release and maintenance tooling
 └── packages/
-    ├── nemotron-predict-client/            # the client (pure python, universal wheel)
-    │   └── src/nemotron_predict/
-    │       ├── client.py       #   PredictClient: the entry point and its registry
+    ├── nemotron-structured-client/            # the client (pure python, universal wheel)
+    │   └── src/nemotron_structured/
+    │       ├── client.py       #   StructuredClient: the entry point and its registry
     │       ├── models.py       #   the per-model handles the client hands back
     │       ├── requests.py     #   the internal typed requests handles build
     │       ├── errors.py       #   the exception hierarchy
@@ -160,15 +160,15 @@ nemotron-predict-client/
     │       │   └── relational.py #   relational (lazy-wraps the driver)
     │       ├── wire/          #   the on-the-wire request and response shapes
     │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
-    ├── nemotron-predict-connectors/        # shared data-source connectors (pure python)
-    │   └── src/nemotron_predict_connectors/
+    ├── nemotron-structured-connectors/        # shared data-source connectors (pure python)
+    │   └── src/nemotron_structured_connectors/
     └── nemotron-relational/                # the relational driver (native build)
         └── src/nemotron_relational/
 ```
 
 ## Adding a Model
 
-1. Add `packages/nemotron-predict-client/src/nemotron_predict/adapters/<model>.py`
+1. Add `packages/nemotron-structured-client/src/nemotron_structured/adapters/<model>.py`
    implementing `ModelAdapter`, and register it in `_default_registry()` in
    `client.py`. The core never changes.
 2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its
@@ -205,7 +205,7 @@ exposes them: they are a transport optimisation and never change a prediction.
   context, so scoring a single table costs exactly one request as before, and
   every call after that carries the rows alone.
 - **Nemotron Relational.** A multi-batch `predict()` opens one session for the
-  run and deletes it at the end. Set `NEMOTRON_PREDICT_DISABLE_SESSIONS=1` to
+  run and deletes it at the end. Set `NEMOTRON_STRUCTURED_DISABLE_SESSIONS=1` to
   force the stateless path.
 
 Both fall back to `POST /v1/predictions` when the NIM answers 404, 405 or 501
@@ -214,6 +214,6 @@ expires.
 
 ## Related Topics
 
-- [NVIDIA Nemotron Predict Client Documentation](overview.md)
-- [Quickstart for the NVIDIA Nemotron Predict Client](../get-started/quickstart.md)
-- [NVIDIA Nemotron Predict Client Environment Variables](../reference/environment-variables.md)
+- [NVIDIA Nemotron Structured Client Documentation](overview.md)
+- [Quickstart for the NVIDIA Nemotron Structured Client](../get-started/quickstart.md)
+- [NVIDIA Nemotron Structured Client Environment Variables](../reference/environment-variables.md)

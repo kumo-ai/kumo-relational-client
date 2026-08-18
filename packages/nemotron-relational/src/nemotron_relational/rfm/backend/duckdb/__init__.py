@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from nemotron_predict_connectors.backends.duckdb import Connection, connect
+from nemotron_structured_connectors.backends.duckdb import Connection, connect
 
 
 from .table import DuckDBTable

@@ -5,8 +5,8 @@
 The first release under the `nemotron-*` names, and the first public one. All
 three packages now share a single version: they are released together and only
 ever tested against each other, so independent numbering carried information
-nobody could act on. Earlier numbering (`nemotron-predict-client` 0.x,
-`nemotron_relational` 2.x, `nemotron-predict-connectors` 0.x) was published
+nobody could act on. Earlier numbering (`nemotron-structured-client` 0.x,
+`nemotron_relational` 2.x, `nemotron-structured-connectors` 0.x) was published
 under the previous distribution names and stops here.
 
 The models are addressed as `nemotron-tabular` and `nemotron-relational`. The
@@ -21,7 +21,7 @@ first-party module.
 
 - **Python 3.10 was broken.** `nemotron_relational` imported `typing.assert_never`, which
   is 3.11+, so `import nemotron_relational` failed on the floor all three packages declare.
-- **A credential in the endpoint URL reached `nemotron-predict-client`'s error messages,
+- **A credential in the endpoint URL reached `nemotron-structured-client`'s error messages,
   logs and reprs.** `https://user:token@host` is a supported way to address a
   deployment; the userinfo is now stripped everywhere the URL is rendered, as
   `nemotron_relational` already did.
@@ -39,14 +39,14 @@ first-party module.
 ### Added
 
 - **A root exception per package.** `nemotron_relational.NemotronRelationalError` and
-  `nemotron_predict_connectors.ConnectorError` are now the single base each package raises
+  `nemotron_structured_connectors.ConnectorError` are now the single base each package raises
   from; `MissingBackendError` joins the latter. Every class keeps the built-in
   it derived from, so existing `except ValueError` / `except RuntimeError`
   keeps working.
 - Connection-time failures are typed (`AuthenticationError`,
   `NimUnreachableError`, `NimTimeoutError`) and translated at the
-  `nemotron-predict-client` boundary, so a wrong API key or an unreachable NIM is caught by
-  `except PredictError` instead of escaping as a bare `ValueError`.
+  `nemotron-structured-client` boundary, so a wrong API key or an unreachable NIM is caught by
+  `except StructuredError` instead of escaping as a bare `ValueError`.
 - Reading a warehouse raises `GraphConstructionError` rather than the driver's
   own exception, which shared no base with anything else the client raises.
 - **Python 3.13 wheels.** `nemotron_relational` builds and tests cp310 through cp313.
@@ -65,10 +65,10 @@ first-party module.
 - Multiclass classification is reachable from `predict()`; the reference said
   otherwise.
 
-## nemotron-predict-client 0.2.1 · nemotron_relational 2.24.1 · nemotron-predict-connectors 0.3.0
+## nemotron-structured-client 0.2.1 · nemotron_relational 2.24.1 · nemotron-structured-connectors 0.3.0
 
 Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and
-contain none of them. `nemotron-predict-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
+contain none of them. `nemotron-structured-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
 cannot resolve the affected build.
 
 The outcome of a full audit of the client's public surface, every connector, every
@@ -77,31 +77,31 @@ the error handling around each. 78 findings were reported and fixed.
 
 ### Removed: read this before upgrading
 
-The typed-request surface `nemotron-predict-client` 0.1.0 exported was replaced by the model
+The typed-request surface `nemotron-structured-client` 0.1.0 exported was replaced by the model
 handles. Code written against 0.1.0 that used it will not import.
 
-- `nemotron_predict.ModelRequest`, `TabICLRequest`, `NemotronRelationalRequest`, `ModelAdapter`
+- `nemotron_structured.ModelRequest`, `TabICLRequest`, `NemotronRelationalRequest`, `ModelAdapter`
   and `AdapterRegistry` are no longer exported; the request types are an
   implementation detail of the handles. Use `client.tabicl(...)` /
   `client.relational(...)`.
-- `PredictClient.predict(request)` and `PredictClient.register(adapter)` are internal
+- `StructuredClient.predict(request)` and `StructuredClient.register(adapter)` are internal
   (`_predict` / `_register`). Run inference through the handles, and pass a
-  custom registry with `PredictClient(url, registry=...)`.
-- `nemotron_predict.relational` no longer exports `NemotronRelational`, `LocalGraph`,
+  custom registry with `StructuredClient(url, registry=...)`.
+- `nemotron_structured.relational` no longer exports `NemotronRelational`, `LocalGraph`,
   `MaterializedPredictionRequest` or `TaskTable`. Direct engine use is refused,
   and nothing on the supported surface returns or accepts the other two, the
   shim now carries what a caller can actually reach. Build graphs with
-  `nemotron_predict.relational.Graph` and predict through `client.relational(graph)`.
+  `nemotron_structured.relational.Graph` and predict through `client.relational(graph)`.
   `Dtype`, `Stype` and `ViewConversionWarning` were added in their place.
 - `Graph.visualize(backend=...)`: visualization is Mermaid-only; the parameter
   is replaced by `height=`.
-- `nemotron_relational.rfm.init()` raises `RuntimeError` unless called by `PredictClient`.
-  Construct an `PredictClient` instead.
+- `nemotron_relational.rfm.init()` raises `RuntimeError` unless called by `StructuredClient`.
+  Construct an `StructuredClient` instead.
 
 ### Compatibility
 
 Everything else on the supported surface is unchanged, verified by an AST diff of
-the public API against the 0.1.0 tag (`ed86392`): `PredictClient`'s constructor and
+the public API against the 0.1.0 tag (`ed86392`): `StructuredClient`'s constructor and
 its `tabicl` / `nemotron_relational` / `models` / `capabilities` / `health_ready` / `close`
 methods, `RFMModel.predict` and `predict_task`, `TabICLModel.predict`, every
 `Graph.from_*`, `NemotronRelational`'s methods, and `read` / `connect` / `quote_ident` /
@@ -118,7 +118,7 @@ produced a wrong or silently-degraded result.
 - **Multiclass `CLASS` column keeps its target's dtype** instead of always being
   `str`. `result['CLASS'] == '5'` becomes `result['CLASS'] == 5`. Previously
   `CLASS` could not be joined back to the table it names without a manual cast.
-- **Client-side validation failures on the NemotronRelational path raise `PredictError`**
+- **Client-side validation failures on the NemotronRelational path raise `StructuredError`**
   (code `INVALID_REQUEST`) rather than a bare `ValueError`, matching the contract
   TabICL already followed. Messages are unchanged. The `nemotron_relational` driver surface is
   unaffected: `NimFailureError` subclasses `RuntimeError` and `InvalidResponseError`
@@ -134,16 +134,16 @@ produced a wrong or silently-degraded result.
   backend with declared foreign keys it used to add them anyway, so a caller who
   pinned the graph's shape got extra edges, and therefore different predictions.
   `edges=None` is unchanged and still applies them.
-- **`PredictClient(max_retries=...)` now governs the NemotronRelational transport too**, which
+- **`StructuredClient(max_retries=...)` now governs the NemotronRelational transport too**, which
   previously used a fixed policy of its own. A caller who raised it will see
   transient failures retried where they were not before, and one who set `0` will
   see them surface immediately; failures on the NemotronRelational path therefore take longer
   or shorter to surface than in 0.1.0 according to what was asked for.
 - **A caller mistake the engine reports as a `KeyError`**: a typo in
   `exclude_cols_dict`, a feature column present in `context` but not `predict`,
-  is `PredictError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
+  is `StructuredError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
   invitation to file a bug. Code branching on `.code` for those inputs sees the new
-  value; `except PredictError` is unaffected.
+  value; `except StructuredError` is unaffected.
 - **A malformed create-session response is `INVALID_RESPONSE`**, not
   `INVALID_REQUEST`, matching the prediction path.
 
@@ -184,7 +184,7 @@ produced a wrong or silently-degraded result.
 - Raw `TypeError`, `KeyError` and `AssertionError` no longer escape the public API.
 - The NIM's RFC-9457 `invalid_params` detail, which names the exact table, row and
   column rejected, is surfaced instead of discarded.
-- `PredictClient(timeout=..., max_retries=...)` reaches the NemotronRelational path; it was
+- `StructuredClient(timeout=..., max_retries=...)` reaches the NemotronRelational path; it was
   silently ignored there.
 - `validate()` reports a graph inconsistency as `ValueError` naming the edge, rather
   than `KeyError` from a column lookup.
@@ -219,13 +219,13 @@ produced a wrong or silently-degraded result.
   keywords through to the engine instead of raising `TypeError`.
 - Unsigned integer columns are accepted at every width. Only `uint8` was, so
   `astype('uint32')`, or reading an unsigned Parquet column, refused the table.
-- `nemotron_predict.relational` exports `ViewConversionWarning`, so the diagnostics that
+- `nemotron_structured.relational` exports `ViewConversionWarning`, so the diagnostics that
   view-based graph construction raises can be filtered without importing the
   driver package directly.
 
 ### Changed
 
-- `nemotron-predict-connectors` and `nemotron_relational` minimum versions were raised in `nemotron-predict-client`'s
+- `nemotron-structured-connectors` and `nemotron_relational` minimum versions were raised in `nemotron-structured-client`'s
   requirements so the client cannot resolve against pre-audit releases.
 - Linting covers all three packages; it previously skipped the `nemotron_relational` package
   entirely.
@@ -234,4 +234,4 @@ produced a wrong or silently-degraded result.
   not validated against a NIM's advertised capabilities, there is no public
   `client.predict`, `client.models()` lists the local registry rather than
   discovering what a NIM serves, no macOS wheels are built, and
-  `nemotron-predict-client[all]` deliberately excludes `[explain]` and `[relbench]`.
+  `nemotron-structured-client[all]` deliberately excludes `[explain]` and `[relbench]`.

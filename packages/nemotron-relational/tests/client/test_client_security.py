@@ -110,7 +110,7 @@ def test_init_error_body_is_truncated() -> None:
 def test_importing_the_package_does_not_connect() -> None:
     with _serve() as (server, url):
         env = dict(os.environ)
-        env['NEMOTRON_PREDICT_API_ENDPOINT'] = url
+        env['NEMOTRON_STRUCTURED_API_ENDPOINT'] = url
         env['PYTHONPATH'] = os.pathsep.join(sys.path)
         result = subprocess.run(
             [sys.executable, '-c', 'import nemotron_relational'],
@@ -126,13 +126,13 @@ def test_importing_the_package_does_not_connect() -> None:
 def test_endpoint_env_var_still_initializes_on_first_use() -> None:
     r"""Dropping the import-time ``init()`` must not drop the env-var contract.
 
-    Callers who set ``NEMOTRON_PREDICT_API_ENDPOINT`` and never call ``init()`` explicitly
+    Callers who set ``NEMOTRON_STRUCTURED_API_ENDPOINT`` and never call ``init()`` explicitly
     kept working before; the connection just moves from import time to first
     use, where a network call is expected.
     """
     with _serve() as (server, url):
         env = dict(os.environ)
-        env['NEMOTRON_PREDICT_API_ENDPOINT'] = url
+        env['NEMOTRON_STRUCTURED_API_ENDPOINT'] = url
         env['PYTHONPATH'] = os.pathsep.join(sys.path)
         result = subprocess.run(
             [
@@ -152,15 +152,15 @@ def test_endpoint_env_var_still_initializes_on_first_use() -> None:
 
 
 def test_blank_endpoint_env_var_does_not_start_a_connection() -> None:
-    r"""An empty ``NEMOTRON_PREDICT_API_ENDPOINT`` means unconfigured, not a URL.
+    r"""An empty ``NEMOTRON_STRUCTURED_API_ENDPOINT`` means unconfigured, not a URL.
 
-    A key-presence check treats ``NEMOTRON_PREDICT_API_ENDPOINT=""`` as configured and
+    A key-presence check treats ``NEMOTRON_STRUCTURED_API_ENDPOINT=""`` as configured and
     routes the caller into a URL-parse error instead of saying no endpoint was
     given. A non-blank value that is not a URL still reaches URL validation,
     which names the offending value.
     """
     env = dict(os.environ)
-    env['NEMOTRON_PREDICT_API_ENDPOINT'] = ''
+    env['NEMOTRON_STRUCTURED_API_ENDPOINT'] = ''
     env['PYTHONPATH'] = os.pathsep.join(sys.path)
     result = subprocess.run(
         [
@@ -184,7 +184,7 @@ def test_explicit_init_with_a_blank_endpoint_names_the_env_var() -> None:
     to reach its own missing-endpoint message rather than URL validation.
     """
     env = dict(os.environ)
-    env['NEMOTRON_PREDICT_API_ENDPOINT'] = ''
+    env['NEMOTRON_STRUCTURED_API_ENDPOINT'] = ''
     env['PYTHONPATH'] = os.pathsep.join(sys.path)
     result = subprocess.run(
         [
@@ -393,13 +393,13 @@ def test_ambient_endpoint_does_not_connect_under_pytest(
     r"""A test run must never be connected to a real endpoint by accident.
 
     The removed import-time ``init()`` skipped itself under pytest; the lazy
-    path has to keep that guard, or an exported ``NEMOTRON_PREDICT_API_ENDPOINT`` would
+    path has to keep that guard, or an exported ``NEMOTRON_STRUCTURED_API_ENDPOINT`` would
     silently point somebody's test suite at a live NIM.
     """
     import nemotron_relational
 
     with _serve() as (server, url):
-        monkeypatch.setenv('NEMOTRON_PREDICT_API_ENDPOINT', url)
+        monkeypatch.setenv('NEMOTRON_STRUCTURED_API_ENDPOINT', url)
         monkeypatch.setattr(
             nemotron_relational.global_state, '_url', None, raising=False
         )

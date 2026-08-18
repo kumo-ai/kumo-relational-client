@@ -1,19 +1,19 @@
 ---
-title: "NVIDIA Nemotron Predict Client Prerequisites"
-description: "Hardware, software, and network prerequisites for installing and using the NVIDIA Nemotron Predict Client."
+title: "NVIDIA Nemotron Structured Client Prerequisites"
+description: "Hardware, software, and network prerequisites for installing and using the NVIDIA Nemotron Structured Client."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Predict Client Prerequisites
+# NVIDIA Nemotron Structured Client Prerequisites
 
-Before you install the NVIDIA Nemotron Predict Client, make sure your environment meets the
+Before you install the NVIDIA Nemotron Structured Client, make sure your environment meets the
 following requirements.
 
 ## Hardware
 
 ### Compute
 
-The base client (`nemotron-predict-client`) is pure Python and has no special hardware
+The base client (`nemotron-structured-client`) is pure Python and has no special hardware
 requirements. The Nemotron Relational driver performs graph sampling on the CPU of the
 machine that runs the client; the model itself runs on the NIM's GPU, not on
 your client machine.
@@ -30,8 +30,8 @@ The Nemotron Relational driver ships prebuilt binary wheels for the following pl
 | Everything else, including macOS | No, build from source |
 
 No source distribution is published either, so `pip install
-"nemotron-predict-client[relational]"` resolves on Linux x86_64 only. On any other platform,
-install the base `nemotron-predict-client` and run Nemotron Relational from a Linux
+"nemotron-structured-client[relational]"` resolves on Linux x86_64 only. On any other platform,
+install the base `nemotron-structured-client` and run Nemotron Relational from a Linux
 x86_64 host. The base client is pure Python, as are the connectors, so it installs
 on anything running Python 3.10 or later.
 
@@ -47,15 +47,15 @@ install only when you request the matching extra.
 
 ## Verified Configurations
 
-- Python 3.12 on Linux x86_64, installing `nemotron-predict-client[relational]`.
-- Python 3.12 on macOS arm64, installing the base `nemotron-predict-client`.
+- Python 3.12 on Linux x86_64, installing `nemotron-structured-client[relational]`.
+- Python 3.12 on macOS arm64, installing the base `nemotron-structured-client`.
 
 ## Network Access
 
 ### NIM Endpoint Access
 
 At runtime, the client needs network access to a Universal TFM API NIM. Set the
-endpoint when you create the client, or through the `NEMOTRON_PREDICT_API_ENDPOINT`
+endpoint when you create the client, or through the `NEMOTRON_STRUCTURED_API_ENDPOINT`
 environment variable for the Nemotron Relational path.
 
 ## Pre-Installation Checklist
@@ -70,11 +70,11 @@ Before you continue to installation, confirm the following:
 - **`No matching distribution found for nemotron_relational`.** Your platform or Python
   version is outside the wheel matrix (Linux x86_64, Python 3.10–3.13), and no
   source distribution is published to fall back to. Install the base
-  `nemotron-predict-client` without the `[relational]` extra, or use a supported host and
+  `nemotron-structured-client` without the `[relational]` extra, or use a supported host and
   interpreter.
 - **Cannot reach the package index.** Confirm you are connected to the NVIDIA
   network, then retry the install.
 
 ## Next Steps
 
-- Continue to the [Installation Guide for the NVIDIA Nemotron Predict Client](installation.md).
+- Continue to the [Installation Guide for the NVIDIA Nemotron Structured Client](installation.md).
