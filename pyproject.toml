@@ -1,10 +1,10 @@
-# Workspace root for the nemotron-predict-client monorepo. This builds no package; each
+# Workspace root for the nemotron-structured-client monorepo. This builds no package; each
 # independently released distribution lives under packages/ with its own
 # pyproject.toml:
 #
-#   packages/nemotron-predict-client     - the client client (pure-python)
-#   packages/nemotron-predict-connectors - shared data-source connectors (pure-python)
-#   packages/nemotron-relational         - the NemotronRelational driver (native build)
+#   packages/nemotron-structured-client     - the client (pure-python)
+#   packages/nemotron-structured-connectors - shared data-source connectors (pure-python)
+#   packages/nemotron-relational            - the NemotronRelational driver (native build)
 #
 # This file carries only shared tooling configuration. Each package's
 # [tool.ruff] extends this file, so the lint baseline below applies to every

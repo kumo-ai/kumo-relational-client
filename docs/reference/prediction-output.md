@@ -1,10 +1,10 @@
 ---
-title: "NVIDIA Nemotron Predict Client Prediction Output"
+title: "NVIDIA Nemotron Structured Client Prediction Output"
 description: "Reference for the shape and columns of the DataFrame returned by Nemotron Relational predictions, which vary by task type."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Predict Client Prediction Output
+# NVIDIA Nemotron Structured Client Prediction Output
 
 Both `predict()` and `predict_task()` return a `pandas.DataFrame`, but **the
 number of rows and the set of columns depend on the task type**. Only binary

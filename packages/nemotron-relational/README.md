@@ -1,6 +1,6 @@
 # nemotron_relational
 
-The Nemotron Relational driver for the [`nemotron-predict-client`](../nemotron-predict-client/README.md) client.
+The Nemotron Relational driver for the [`nemotron-structured-client`](../nemotron-structured-client/README.md) client.
 
 This distribution provides the heavy, client-side machinery a Nemotron Relational prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
@@ -12,12 +12,12 @@ It is imported as `nemotron_relational` and is normally installed transitively v
 `nemotron_relational` extra rather than on its own:
 
 ```bash
-pip install nemotron-predict-client[relational]      # pulls the nemotron_relational driver
+pip install nemotron-structured-client[relational]      # pulls the nemotron_relational driver
 ```
 
 It can also be installed on its own, for the graph, sampler and PQL machinery.
 Predicting is not available that way: the engine's entry points refuse a direct
-call, so a prediction has to go through `nemotron-predict-client`.
+call, so a prediction has to go through `nemotron-structured-client`.
 
 ```bash
 pip install nemotron-relational
@@ -36,10 +36,10 @@ Application code should import the client's neutral surface, not this package
 directly:
 
 ```python
-from nemotron_predict import PredictClient, relational
+from nemotron_structured import StructuredClient, relational
 
 graph = relational.Graph.from_data({'users': df1, 'items': df2, 'orders': df3})
-with PredictClient(url='http://localhost:8000') as client:
+with StructuredClient(url='http://localhost:8000') as client:
     result = client.relational(graph).predict(
         'PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1'
     )

@@ -1,10 +1,10 @@
-# NVIDIA Nemotron Predict Client
+# NVIDIA Nemotron Structured Client
 
 Make predictions on tables and relational data with NVIDIA Nemotron
 structured-data foundation models, without training a model for each dataset.
 
 ```bash
-pip install nemotron-predict-client
+pip install nemotron-structured-client
 ```
 
 ## Overview
@@ -32,12 +32,12 @@ table:
 
 ```python
 import pandas as pd
-from nemotron_predict import PredictClient
+from nemotron_structured import StructuredClient
 
 context = pd.DataFrame({"x": [1, 2, 3, 4], "label": ["a", "b", "a", "b"]})
 rows = pd.DataFrame({"x": [5, 6]})
 
-with PredictClient(url="http://localhost:8000") as client:
+with StructuredClient(url="http://localhost:8000") as client:
     model = client.tabular(context, target="label", task="classification")
     print(model.predict(rows))
 ```
@@ -60,17 +60,17 @@ live endpoint.
 
 | Command | You get |
 | --- | --- |
-| `pip install nemotron-predict-client` | The client and every lightweight model, which today means Nemotron Tabular. |
-| `pip install nemotron-predict-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
-| `pip install nemotron-predict-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
-| `pip install nemotron-predict-client[all]` | Nemotron Relational, every warehouse backend, and `[databricks-serving]`. |
+| `pip install nemotron-structured-client` | The client and every lightweight model, which today means Nemotron Tabular. |
+| `pip install nemotron-structured-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
+| `pip install nemotron-structured-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
+| `pip install nemotron-structured-client[all]` | Nemotron Relational, every warehouse backend, and `[databricks-serving]`. |
 
 What ships in the base wheel is decided by dependency weight, not by
 preference. A model that does no client-side work, like Nemotron Tabular which
 only shapes a request the NIM runs, is included. A model that does heavy
 client-side work, like Nemotron Relational with its graph building, native
 neighbor sampling and PQL, is an opt-in extra. Warehouse drivers are opt-in the
-same way, through the shared `nemotron-predict-connectors` package.
+same way, through the shared `nemotron-structured-connectors` package.
 
 Two extras stay outside `[all]` and must be asked for by name. `[explain]`
 fills in `Explanation.summary`, which posts row data to a third-party LLM
@@ -79,68 +79,68 @@ RelBench datasets for `Graph.from_relbench()`.
 
 ## Usage
 
-A `PredictClient` owns one connection to a NIM. You run inference through a
+A `StructuredClient` owns one connection to a NIM. You run inference through a
 model handle, then call `.predict(...)` on it.
 
 ### A single table
 
 ```python
-from nemotron_predict import PredictClient
+from nemotron_structured import StructuredClient
 
-with PredictClient(url="http://localhost:8000") as client:
+with StructuredClient(url="http://localhost:8000") as client:
     model = client.tabular(context_df, target="label", task="classification")
     df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
 
 ### Related tables
 
-Needs `nemotron-predict-client[relational]`. You describe the data as a graph
+Needs `nemotron-structured-client[relational]`. You describe the data as a graph
 and ask for a prediction in PQL, a small query language for predictive
 questions:
 
 ```python
-from nemotron_predict import PredictClient, relational
+from nemotron_structured import StructuredClient, relational
 
 graph = relational.Graph.from_data({"users": df1, "items": df2, "orders": df3})
 
-with PredictClient(url="http://localhost:8000") as client:
+with StructuredClient(url="http://localhost:8000") as client:
     df = client.relational(graph).predict(
         "PREDICT SUM(orders.price, 0, 30, days) FOR users.user_id IN (1, 2, 3)",
     )
 ```
 
-`from nemotron_predict import relational` is the supported surface for `Graph`,
+`from nemotron_structured import relational` is the supported surface for `Graph`,
 `Table` and friends. You never import the driver package directly.
 
 ### Several endpoints at once
 
-Each `PredictClient` holds its own transport and registry, so clients can
+Each `StructuredClient` holds its own transport and registry, so clients can
 target different endpoints or tenants concurrently, including from several
 threads. A prediction always goes to the endpoint and credential of the client
 that started it.
 
 The transport pools connections and retries transient failures (429, 500, 502,
 503, 504) with backoff. Tune it per client with
-`PredictClient(url, timeout=30, max_retries=3)`.
+`StructuredClient(url, timeout=30, max_retries=3)`.
 
 Two things are worth knowing. `client.models()` describes the client's own
 registry rather than the connected endpoint, so a NIM serving only one model
 still reports both, and the mismatch surfaces as an error on the first
 prediction. And the relational driver keeps a process-wide configuration that
-each prediction reconfigures, so drive it through `PredictClient` rather than
+each prediction reconfigures, so drive it through `StructuredClient` rather than
 mixing in direct `nemotron_relational.init()` calls.
 
 ### Errors
 
-Every failure raises `PredictError` or a subclass carrying a stable `code`, so
+Every failure raises `StructuredError` or a subclass carrying a stable `code`, so
 branch on the code rather than the message:
 
 ```python
-from nemotron_predict.errors import PredictError
+from nemotron_structured.errors import StructuredError
 
 try:
     df = model.predict(rows)
-except PredictError as exc:
+except StructuredError as exc:
     print(exc.code)
 ```
 
@@ -168,8 +168,8 @@ with 1.0.0:
 
 | Package | Import | What it is |
 | --- | --- | --- |
-| `nemotron-predict-client` | `nemotron_predict` | the client and its model handles |
-| `nemotron-predict-connectors` | `nemotron_predict_connectors` | reads source tables from sqlite, duckdb, Snowflake, Databricks and S3 |
+| `nemotron-structured-client` | `nemotron_structured` | the client and its model handles |
+| `nemotron-structured-connectors` | `nemotron_structured_connectors` | reads source tables from sqlite, duckdb, Snowflake, Databricks and S3 |
 | `nemotron-relational` | `nemotron_relational` | the relational driver: graph building, PQL, and a native neighbor sampler |
 
 Release history is in [`CHANGELOG.md`](CHANGELOG.md).
@@ -181,10 +181,10 @@ Contributions are welcome under the Developer Certificate of Origin. Start with
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 ```bash
-git clone https://github.com/NVIDIA/nemotron-predict-client.git
-cd nemotron-predict-client
-python -m pip install -e './packages/nemotron-predict-client[test]'
-python -m pytest packages/nemotron-predict-client/tests -m 'not live_nim' -q
+git clone https://github.com/NVIDIA/nemotron-structured-client.git
+cd nemotron-structured-client
+python -m pip install -e './packages/nemotron-structured-client[test]'
+python -m pytest packages/nemotron-structured-client/tests -m 'not live_nim' -q
 ```
 
 ## Governance and support

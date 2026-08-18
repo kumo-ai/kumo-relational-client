@@ -5,11 +5,11 @@
 import os
 import time
 
-from nemotron_predict import PredictClient
 from nemotron_relational import rfm
 from nemotron_relational.testing.databricks import connect
+from nemotron_structured import StructuredClient
 
-nim_url = os.environ['NEMOTRON_PREDICT_API_ENDPOINT']
+nim_url = os.environ['NEMOTRON_STRUCTURED_API_ENDPOINT']
 
 connection = connect(
     catalog='kumo_test_catalogue',
@@ -30,7 +30,7 @@ with connection.cursor() as cursor:
 query = 'PREDICT COUNT(order_lines.*, 0, 30)=0 FOR EACH customers.customer_id'
 # `order_lines` is large (~1.4M rows), so cap the per-hop neighbor fan-out to
 # keep the in-context tables under the request-size limit:
-with PredictClient(url=nim_url) as client:
+with StructuredClient(url=nim_url) as client:
     pred = client.relational(graph).predict(
         query,
         indices=indices,

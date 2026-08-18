@@ -103,10 +103,10 @@ def build_demo_graph() -> rfm.Graph:
 
 def run_high_level_prediction(base_url: str, api_key: str | None) -> None:
     print('\n=== client.relational(graph).predict(...) ===')
-    from nemotron_predict import PredictClient
+    from nemotron_structured import StructuredClient
 
     graph = build_demo_graph()
-    with PredictClient(url=base_url, api_key=api_key) as client:
+    with StructuredClient(url=base_url, api_key=api_key) as client:
         result = client.relational(graph).predict(
             'PREDICT USERS.STATUS = "A" FOR USERS.USER_ID = 4',
             run_mode='best',
@@ -177,9 +177,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         '--api-key',
-        default=os.getenv('NEMOTRON_PREDICT_API_KEY'),
+        default=os.getenv('NEMOTRON_STRUCTURED_API_KEY'),
         help='Optional API key, only needed if the NIM is behind an '
-        'authenticating gateway. Default: NEMOTRON_PREDICT_API_KEY or none.',
+        'authenticating gateway. Default: NEMOTRON_STRUCTURED_API_KEY or none.',
     )
     parser.add_argument(
         '--timeout',

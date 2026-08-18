@@ -12,7 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 from nemotron_relational._logging import (
-    _ENV_NEMOTRON_PREDICT_LOG,
+    _ENV_NEMOTRON_STRUCTURED_LOG,
     initialize_logging,
 )
 from nemotron_relational._singleton import Singleton
@@ -120,7 +120,7 @@ class GlobalState(metaclass=Singleton):
         rather than closed: another thread's :class:`~nemotron_relational.rfm.NemotronRelational` may
         still hold it for an in-flight prediction.
 
-        Auto-init from an ambient ``NEMOTRON_PREDICT_API_ENDPOINT`` is gated on
+        Auto-init from an ambient ``NEMOTRON_STRUCTURED_API_ENDPOINT`` is gated on
         ``initialized`` rather than on ``_url``, because a serving deployment
         has no URL and would otherwise have the factory it just installed
         replaced. It is skipped under pytest so a test run cannot silently
@@ -128,7 +128,7 @@ class GlobalState(metaclass=Singleton):
         """
         if (
             not self.initialized
-            and (os.getenv('NEMOTRON_PREDICT_API_ENDPOINT'))
+            and (os.getenv('NEMOTRON_STRUCTURED_API_ENDPOINT'))
             and 'pytest' not in sys.modules
         ):
             init()
@@ -183,15 +183,15 @@ def init(
     leaves requests unbounded. ``max_retries`` bounds the transport-level
     retries of a transient failure; ``0`` disables them.
     """
-    set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
+    set_log_level(os.getenv(_ENV_NEMOTRON_STRUCTURED_LOG) or log_level)
 
-    api_key = api_key or os.getenv('NEMOTRON_PREDICT_API_KEY')
-    url = url or os.getenv('NEMOTRON_PREDICT_API_ENDPOINT')
+    api_key = api_key or os.getenv('NEMOTRON_STRUCTURED_API_KEY')
+    url = url or os.getenv('NEMOTRON_STRUCTURED_API_ENDPOINT')
     if not url:
         raise ValueError(
             'Nemotron Relational initialization failed since no endpoint '
             'URL was provided. Please either set the '
-            "'NEMOTRON_PREDICT_API_ENDPOINT' environment variable or "
+            "'NEMOTRON_STRUCTURED_API_ENDPOINT' environment variable or "
             'explicitly call `nemotron_relational.init(url=...)`.'
         )
 
@@ -291,7 +291,7 @@ def init_databricks_serving(
             and overrides == global_state._serving_overrides
         )
         if unchanged:
-            set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
+            set_log_level(os.getenv(_ENV_NEMOTRON_STRUCTURED_LOG) or log_level)
             return
 
     from nemotron_relational.client.databricks_serving import (
@@ -300,7 +300,7 @@ def init_databricks_serving(
 
     probe = DatabricksServingClient(endpoint, workspace_client, **overrides)
 
-    set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
+    set_log_level(os.getenv(_ENV_NEMOTRON_STRUCTURED_LOG) or log_level)
 
     if global_state.initialized:
         global_state.clear()
@@ -382,7 +382,7 @@ def init_snowflake_serving(
             and overrides == global_state._serving_overrides
         )
         if unchanged:
-            set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
+            set_log_level(os.getenv(_ENV_NEMOTRON_STRUCTURED_LOG) or log_level)
             return
 
     from nemotron_relational.client.snowflake_serving import (
@@ -391,7 +391,7 @@ def init_snowflake_serving(
 
     probe = SnowflakeServingClient(service, session, **overrides)
 
-    set_log_level(os.getenv(_ENV_NEMOTRON_PREDICT_LOG) or log_level)
+    set_log_level(os.getenv(_ENV_NEMOTRON_STRUCTURED_LOG) or log_level)
 
     if global_state.initialized:
         global_state.clear()
@@ -406,7 +406,7 @@ def init_snowflake_serving(
     global_state.thread_local._client = probe
 
     logging.getLogger('nemotron_relational').info(
-        'Initialized Nemotron Predict Client v%s against Snowflake model service %r',
+        'Initialized Nemotron Structured Client v%s against Snowflake model service %r',
         __version__,
         service,
     )

@@ -144,25 +144,25 @@ _STRUCTURED_NOTE = (
     'The structured explanation is still available on .cohorts and .subgraphs.'
 )
 
-# Names the extra on the distribution users install (`nemotron-predict-client`), not on this
+# Names the extra on the distribution users install (`nemotron-structured-client`), not on this
 # engine package, which the client documents as an implementation detail.
 SUMMARY_NEEDS_EXTRA_MESSAGE = (
     "Natural-language explanation summary needs the 'explain' extra: "
-    "pip install 'nemotron-predict-client[explain]'. " + _STRUCTURED_NOTE
+    "pip install 'nemotron-structured-client[explain]'. " + _STRUCTURED_NOTE
 )
 
 SUMMARY_UNAVAILABLE_MESSAGE = (
     'Natural-language explanation summary needs an API key. Set '
-    'NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY, which sends the rows behind the '
+    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY, which sends the rows behind the '
     'prediction to the summary endpoint (the default is OpenAI gpt-4.1-mini, a '
     'non-NVIDIA service). For another OpenAI-compatible endpoint also set '
-    'NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL and NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL. '
+    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL and NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL. '
     + _STRUCTURED_NOTE
 )
 
 SUMMARY_NEEDS_MODEL_MESSAGE = (
     'Natural-language explanation summary: a custom endpoint is set '
-    '(NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL) but no model. Set NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL to a '
+    '(NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL) but no model. Set NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL to a '
     'model that endpoint serves. ' + _STRUCTURED_NOTE
 )
 
@@ -173,7 +173,7 @@ SUMMARY_ERROR_MESSAGE = (
 
 SUMMARY_TIMEOUT_MESSAGE = (
     'Natural-language explanation summary timed out after {timeout:g}s. Raise '
-    'NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT (or point NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL at a faster model) '
+    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT (or point NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL at a faster model) '
     'and retry. ' + _STRUCTURED_NOTE
 )
 
@@ -265,7 +265,7 @@ def generate_summary(
         This sends ``query``, ``prediction``, ``cohorts`` and ``subgraphs``
         -- the last of which carries the **raw cell values** of the explained
         entity's subgraph -- to the configured chat-completions endpoint.
-        Unless ``base_url`` / ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` says otherwise
+        Unless ``base_url`` / ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL`` says otherwise
         that endpoint is OpenAI's ``https://api.openai.com/v1/``, a
         non-NVIDIA service. Callers that must not egress row-level data
         should not reach this function; set ``skip_summary=True`` on
@@ -273,9 +273,9 @@ def generate_summary(
 
     Built for OpenAI (default model ``gpt-4.1-mini``), it works with any
     OpenAI-compatible chat-completions endpoint. Configure once via the
-    environment: the API key from ``NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY`` (else
-    ``NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL`` (for another
-    endpoint), ``NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL``, and ``NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT``
+    environment: the API key from ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY`` (else
+    ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL`` (for another
+    endpoint), ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL``, and ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT``
     (seconds); or pass ``base_url`` / ``api_key`` / ``model`` / ``timeout`` (or
     an already-built ``client``), which take precedence. A slow model just needs
     a larger timeout; the summary degrades to a short message that names what to
@@ -284,13 +284,13 @@ def generate_summary(
     """
     if timeout is None:
         timeout = _env_float(
-            'NEMOTRON_PREDICT_EXPLAIN_LLM_TIMEOUT', _DEFAULT_TIMEOUT
+            'NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT', _DEFAULT_TIMEOUT
         )
-    base_url = base_url or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_BASE_URL')
+    base_url = base_url or _env('NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL')
     # No ambient-key fallback: a key exported for an unrelated tool must not be
     # enough to start sending row values to a third party.
-    api_key = api_key or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_API_KEY')
-    model_set = model or _env('NEMOTRON_PREDICT_EXPLAIN_LLM_MODEL')
+    api_key = api_key or _env('NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY')
+    model_set = model or _env('NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL')
     model = model_set or _DEFAULT_MODEL
 
     if client is None:

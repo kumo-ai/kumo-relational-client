@@ -2,6 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from nemotron_predict_connectors import quote_ident
+from nemotron_structured_connectors import quote_ident
 
 __all__ = ['quote_ident']

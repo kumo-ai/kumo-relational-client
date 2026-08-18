@@ -61,7 +61,7 @@ def _pooch() -> Any:
             raise
         raise ModuleNotFoundError(
             "Loading a RelBench dataset requires 'pooch'. Install it via the "
-            "'relbench' extra, e.g. `pip install 'nemotron-predict-client[relbench]'` "
+            "'relbench' extra, e.g. `pip install 'nemotron-structured-client[relbench]'` "
             "(or `pip install 'nemotron_relational[relbench]'`).",
             name='pooch',
         ) from error
@@ -103,7 +103,7 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
     published datasets carry a ``rel-`` prefix, so the archive name rather than
     a stripped one is what identifies a dataset here.
 
-    Requires the ``relbench`` extra (``pip install 'nemotron-predict-client[relbench]'``).
+    Requires the ``relbench`` extra (``pip install 'nemotron-structured-client[relbench]'``).
     """
     dataset = dataset.lower()
     registry = get_registry()

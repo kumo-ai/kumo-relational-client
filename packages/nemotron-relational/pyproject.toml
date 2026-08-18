@@ -6,7 +6,7 @@ authors=[
 ]
 license = "Apache-2.0"
 license-files=["LICENSE", "NOTICE"]
-description="Relational driver (graph building, samplers, PQL, native neighbor-sampler) for the NVIDIA Nemotron Predict Client"
+description="Relational driver (graph building, samplers, PQL, native neighbor-sampler) for the NVIDIA Nemotron Structured Client"
 readme="README.md"
 # Upper bound matches the interpreters CI builds and imports wheels for
 # (cp310..cp313 on manylinux_2_28 x86-64): this package ships binary wheels
@@ -35,9 +35,9 @@ classifiers=[
 ]
 
 [project.urls]
-Homepage = "https://github.com/NVIDIA/nemotron-predict-client"
-Source = "https://github.com/NVIDIA/nemotron-predict-client"
-Issues = "https://github.com/NVIDIA/nemotron-predict-client/issues"
+Homepage = "https://github.com/NVIDIA/nemotron-structured-client"
+Source = "https://github.com/NVIDIA/nemotron-structured-client"
+Issues = "https://github.com/NVIDIA/nemotron-structured-client/issues"
 
 [project.optional-dependencies]
 # Invoking a served model. Separate from the `databricks` extra below, which
@@ -66,18 +66,18 @@ relbench=[
     "pooch",
 ]
 sqlite=[
-    "nemotron-predict-connectors[sqlite]",
+    "nemotron-structured-connectors[sqlite]",
 ]
 duckdb=[
-    "nemotron-predict-connectors[duckdb]",
+    "nemotron-structured-connectors[duckdb]",
 ]
 snowflake=[
     "numpy<2.0",
-    "nemotron-predict-connectors[snowflake]",
+    "nemotron-structured-connectors[snowflake]",
     "pyyaml",
 ]
 databricks=[
-    "nemotron-predict-connectors[databricks]",
+    "nemotron-structured-connectors[databricks]",
     "pyyaml",
 ]
 
@@ -178,7 +178,7 @@ ignore = [
     "D415",  # First line should end with a period
 
     # --- Style backlog -------------------------------------------------
-    # Everything below is on in nemotron-predict-client and nemotron-predict-connectors, which pass
+    # Everything below is on in nemotron-structured-client and nemotron-structured-connectors, which pass
     # clean. This tree is an order of magnitude larger and predates the rule
     # set, so each is listed with its count at the time of writing and is
     # meant to be retired one rule at a time, not left indefinitely. None of

@@ -2,7 +2,10 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from nemotron_predict_connectors.backends.databricks import Connection, connect
+from nemotron_structured_connectors.backends.databricks import (
+    Connection,
+    connect,
+)
 
 from .table import DatabricksTable
 from .sampler import DatabricksSampler

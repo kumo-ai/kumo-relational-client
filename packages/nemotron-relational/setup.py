@@ -26,7 +26,7 @@ setup(
         'urllib3',
         'typing_extensions>=4.5.0',
         'pydantic>=2.7',
-        'nemotron-predict-connectors>=1.0,<2',
+        'nemotron-structured-connectors>=1.0,<2',
         'antlr4-python3-runtime==4.9.3',
         'rich>=9.0.0',
         'jinja2',

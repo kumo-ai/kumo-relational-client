@@ -5,7 +5,7 @@
 """Guard: a release tag must match the tagged package's declared version.
 
 Release tags have the form ``<distribution>/v<version>`` (for example
-``nemotron-predict-client/v0.1.0``). The publish jobs upload whatever version the package
+``nemotron-structured-client/v0.1.0``). The publish jobs upload whatever version the package
 files declare, so a tag that disagrees with ``__version__`` would publish a
 release under the wrong name. This check fails the pipeline first.
 
@@ -22,8 +22,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 VERSION_FILES = {
-    'nemotron-predict-connectors': 'packages/nemotron-predict-connectors/src/nemotron_predict_connectors/__init__.py',
-    'nemotron-predict-client': 'packages/nemotron-predict-client/src/nemotron_predict/_version.py',
+    'nemotron-structured-connectors': 'packages/nemotron-structured-connectors/src/nemotron_structured_connectors/__init__.py',
+    'nemotron-structured-client': 'packages/nemotron-structured-client/src/nemotron_structured/_version.py',
     'nemotron-relational': 'packages/nemotron-relational/src/nemotron_relational/_version.py',
 }
 
