@@ -47,24 +47,46 @@ print(predictions.head())
 
 ### Nemotron Relational: Relational Data
 
-Build a graph from related tables, then express the target in PQL. This example
-requires the `[relational]` extra:
+Build a graph from related tables, then express the target in PQL.
+
+This example runs as written. It needs the `[relational]` and `[relbench]`
+extras, and it downloads a ready-made dataset the first time you run it:
+
+```bash
+pip install "nemotron-structured-client[relational,relbench]"
+```
 
 ```python
 from nemotron_structured import StructuredClient, relational
 
-# Build a graph from related DataFrames; links are inferred.
-graph = relational.Graph.from_data({'users': df1, 'items': df2, 'orders': df3})
+# Nine tables of Formula 1 history. Links between them are inferred.
+graph = relational.Graph.from_relbench('f1')
 
 with StructuredClient(url='http://localhost:8000') as client:
-    # Predict a per-item quantity over the next 30 days.
+    # Will each of these drivers race more than three times in the next 90 days?
     predictions = client.relational(graph).predict(
-        'PREDICT SUM(orders.price, 0, 30, days) FOR items.item_id=1',
-        run_mode='fast',
+        'PREDICT COUNT(results.*, 0, 90, days) > 3 FOR EACH drivers.driverId',
+        indices=[814, 0, 842, 831, 3, 829],
     )
 
-print(predictions.head())
+print(predictions)
 ```
+
+```text
+   ENTITY          ANCHOR_TIMESTAMP  PREDICTION  FALSE_PROB  TRUE_PROB
+0     814 2023-07-30 13:00:00+00:00        True    0.014900   0.985100
+1       0 2023-07-30 13:00:00+00:00        True    0.024704   0.975296
+2     842 2023-07-30 13:00:00+00:00        True    0.004905   0.995095
+```
+
+`indices` selects which entities to score. The ids above are drivers who were
+racing at the end of the dataset; RelBench renumbers ids from zero, so they are
+not the ids used by the original Formula 1 data.
+
+To use your own tables instead, pass DataFrames to
+`relational.Graph.from_data({'users': users_df, 'orders': orders_df})`. Choose an
+aggregation window your data can support: a query over `0, 90, days` needs at
+least 90 days of history before the anchor time, or the request is rejected.
 
 ### Check Which Models the Client Can Serve
 

@@ -94,20 +94,29 @@ with StructuredClient(url="http://localhost:8000") as client:
 
 ### Related tables
 
-Needs `nemotron-structured-client[relational]`. You describe the data as a graph
-and ask for a prediction in PQL, a small query language for predictive
-questions:
+You describe the data as a graph and ask for a prediction in PQL, a small query
+language for predictive questions. This runs as written, against a ready-made
+dataset it downloads on first use:
+
+```bash
+pip install "nemotron-structured-client[relational,relbench]"
+```
 
 ```python
 from nemotron_structured import StructuredClient, relational
 
-graph = relational.Graph.from_data({"users": df1, "items": df2, "orders": df3})
+graph = relational.Graph.from_relbench("f1")
 
 with StructuredClient(url="http://localhost:8000") as client:
     df = client.relational(graph).predict(
-        "PREDICT SUM(orders.price, 0, 30, days) FOR users.user_id IN (1, 2, 3)",
+        "PREDICT COUNT(results.*, 0, 90, days) > 3 FOR EACH drivers.driverId",
+        indices=[814, 0, 842, 831, 3, 829],
     )
 ```
+
+For your own tables, use `relational.Graph.from_data({"users": users_df,
+"orders": orders_df})`. Pick an aggregation window your data can support: a
+query over `0, 90, days` needs 90 days of history before the anchor time.
 
 `from nemotron_structured import relational` is the supported surface for `Graph`,
 `Table` and friends. You never import the driver package directly.

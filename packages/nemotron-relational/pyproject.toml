@@ -64,6 +64,7 @@ explain=[
 ]
 relbench=[
     "pooch",
+    "tqdm",
 ]
 sqlite=[
     "nemotron-structured-connectors[sqlite]",
