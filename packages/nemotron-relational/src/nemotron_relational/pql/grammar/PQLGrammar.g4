@@ -159,10 +159,12 @@ NULL: 'NULL' | 'null';
 NEG_INFTY: '-INF' | '-INFINITY' | '-inf' | '-infinity';
 TIME_UNIT:
 	'days'
+	| 'weeks'
 	| 'months'
 	| 'hours'
 	| 'minutes'
 	| 'DAYS'
+	| 'WEEKS'
 	| 'MONTHS'
 	| 'MINUTES'
 	| 'HOURS';

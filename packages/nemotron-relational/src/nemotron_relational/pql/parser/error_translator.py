@@ -11,18 +11,18 @@ from nemotron_relational.api.common import ValidationError, ValidationResponse
 from nemotron_relational.pql.grammar.PQLGrammarLexer import PQLGrammarLexer
 from nemotron_relational.pql.grammar.PQLGrammarParser import PQLGrammarParser
 
-_SUPPORTED_TIME_UNITS = ('minutes', 'hours', 'days', 'months')
+_SUPPORTED_TIME_UNITS = ('minutes', 'hours', 'days', 'weeks', 'months')
 
-# Words a caller reaches for that the grammar has no token for. `TimeUnit`
-# additionally declares `seconds` and `weeks`, which nothing implements, so
-# reading that enum is what sends people here in the first place.
+# Words a caller reaches for that the grammar has no token for. Every unit is
+# plural, so the singular of a supported one belongs here too. `TimeUnit`
+# additionally declares `seconds`, which nothing implements, so reading that
+# enum is what sends people here in the first place.
 _REJECTED_TIME_UNITS = frozenset(
     {
         'second',
         'seconds',
         'minute',
         'week',
-        'weeks',
         'hour',
         'day',
         'month',
@@ -288,7 +288,7 @@ class ErrorTranslator:
         return (
             f'Line {err.line}, col {err.column}; Invalid aggregation '
             f'time unit {err.offending_symbol.text!r}. Expected one '
-            "of: 'days', 'hours', 'minutes', or 'months'."
+            "of: 'days', 'weeks', 'hours', 'minutes', or 'months'."
         )
 
     def _handle_no_viable_alt_exception(

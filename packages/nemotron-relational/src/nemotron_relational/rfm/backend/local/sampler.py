@@ -364,6 +364,8 @@ def date_offset_to_seconds(offset: pd.DateOffset) -> int:
             total_sec += scaled_value * _MAX_DAYS_IN_YEAR * _SECONDS_IN_DAY
         elif attr == 'months':
             total_sec += scaled_value * _MAX_DAYS_IN_MONTH * _SECONDS_IN_DAY
+        elif attr == 'weeks':
+            total_sec += scaled_value * 7 * _SECONDS_IN_DAY
         elif attr == 'days':
             total_sec += scaled_value * _SECONDS_IN_DAY
         elif attr == 'hours':
