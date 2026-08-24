@@ -1,0 +1,57 @@
+{
+  "model": "nemotron-tabular",
+  "task": {
+    "kind": "classification",
+    "target": {
+      "column_name": "target_col",
+      "dtype": "string",
+      "classes": ["no", "yes"],
+      "positive_class": "yes"
+    }
+  },
+  "schema": {
+    "instance_table": {
+      "columns": {
+        "row_id": {"dtype": "string", "stype": "ID"},
+        "age": {"dtype": "int64", "stype": "numerical"},
+        "score": {"dtype": "float64", "stype": "numerical"},
+        "target_col": {"dtype": "string", "stype": "categorical"}
+      },
+      "primary_key": "row_id"
+    },
+    "related_tables": {},
+    "relationships": []
+  },
+  "context": {
+    "instance_table": {
+      "format": "arrays",
+      "columns": ["row_id", "age", "score", "target_col"],
+      "rows": [
+        ["ctx-0", 22, 0.20, "no"],
+        ["ctx-1", 31, 0.78, "yes"],
+        ["ctx-2", 47, 0.35, "no"],
+        ["ctx-3", 54, 0.91, "yes"],
+        ["ctx-4", 36, 0.66, "yes"],
+        ["ctx-5", 28, 0.29, "no"]
+      ]
+    },
+    "related_tables": {}
+  },
+  "predict": {
+    "instance_table": {
+      "format": "arrays",
+      "columns": ["row_id", "age", "score"],
+      "rows": [
+        ["q-0", 33, 0.72],
+        ["q-1", 49, 0.30]
+      ]
+    },
+    "related_tables": {}
+  },
+  "output": {
+    "fields": ["prediction", "probabilities"]
+  },
+  "metadata": {
+    "request_id": "nemotron-tabular-numeric-classification-001"
+  }
+}

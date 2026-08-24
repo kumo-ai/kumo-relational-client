@@ -1,0 +1,93 @@
+{
+  "model": "nemotron-tabular",
+  "task": {
+    "kind": "classification",
+    "target": {
+      "column_name": "target_col",
+      "dtype": "string",
+      "classes": [
+        "no",
+        "yes"
+      ],
+      "positive_class": "yes"
+    }
+  },
+  "schema": {
+    "instance_table": {
+      "columns": {
+        "row_id": {
+          "dtype": "string",
+          "stype": "ID"
+        },
+        "age": {
+          "dtype": "int64",
+          "stype": "numerical"
+        },
+        "country": {
+          "dtype": "string",
+          "stype": "categorical"
+        },
+        "target_col": {
+          "dtype": "string",
+          "stype": "categorical"
+        }
+      },
+      "primary_key": "row_id"
+    },
+    "related_tables": {},
+    "relationships": []
+  },
+  "context": {
+    "instance_table": {
+      "format": "arrays",
+      "columns": [
+        "row_id",
+        "age",
+        "country",
+        "target_col"
+      ],
+      "rows": [
+        [
+          "ctx-0",
+          34,
+          "US",
+          "yes"
+        ],
+        [
+          "ctx-1",
+          52,
+          "CA",
+          "no"
+        ]
+      ]
+    },
+    "related_tables": {}
+  },
+  "predict": {
+    "instance_table": {
+      "format": "arrays",
+      "columns": [
+        "row_id",
+        "age",
+        "country"
+      ],
+      "rows": [
+        [
+          "q-0",
+          29,
+          "US"
+        ]
+      ]
+    },
+    "related_tables": {}
+  },
+  "output": {
+    "fields": [
+      "prediction",
+      "probabilities"
+    ]
+  },
+  "metadata": {
+    "request_id": "nemotron-tabular-demo-001"
+  }
+}

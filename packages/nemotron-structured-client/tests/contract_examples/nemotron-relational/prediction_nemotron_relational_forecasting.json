@@ -1,0 +1,169 @@
+{
+  "model": "nemotron-relational",
+  "task": {
+    "kind": "forecasting",
+    "target": {
+      "column_name": "weekly_revenue",
+      "dtype": "float32"
+    },
+    "entity_table_names": [
+      "items"
+    ],
+    "anchor_time_column": "anchor_time",
+    "step_size": 604800000000000,
+    "num_forecasts": 3
+  },
+  "schema": {
+    "instance_table": {
+      "columns": {
+        "instance_id": {
+          "dtype": "int64",
+          "stype": "ID",
+          "nullable": false
+        },
+        "item_id": {
+          "dtype": "int64",
+          "stype": "ID"
+        },
+        "weekly_revenue": {
+          "dtype": "float32",
+          "stype": "numerical"
+        },
+        "anchor_time": {
+          "dtype": "timestamp[us]",
+          "stype": "timestamp",
+          "nullable": false
+        }
+      },
+      "primary_key": "instance_id"
+    },
+    "related_tables": {
+      "items": {
+        "primary_key": [
+          "instance_id",
+          "item_id"
+        ],
+        "columns": {
+          "instance_id": {
+            "dtype": "int64",
+            "stype": "ID",
+            "nullable": false
+          },
+          "item_id": {
+            "dtype": "int64",
+            "stype": "ID"
+          },
+          "category": {
+            "dtype": "string",
+            "stype": "categorical"
+          }
+        }
+      }
+    },
+    "relationships": [
+      {
+        "source_columns": [
+          "instance_id",
+          "item_id"
+        ],
+        "target_table": "items",
+        "target_columns": [
+          "instance_id",
+          "item_id"
+        ]
+      }
+    ]
+  },
+  "context": {
+    "instance_table": {
+      "format": "arrays",
+      "columns": [
+        "instance_id",
+        "item_id",
+        "weekly_revenue",
+        "anchor_time"
+      ],
+      "rows": [
+        [
+          1001,
+          42,
+          30.0,
+          "2025-01-01T00:00:00Z"
+        ],
+        [
+          1002,
+          42,
+          34.5,
+          "2025-01-08T00:00:00Z"
+        ]
+      ]
+    },
+    "related_tables": {
+      "items": {
+        "format": "arrays",
+        "columns": [
+          "instance_id",
+          "item_id",
+          "category"
+        ],
+        "rows": [
+          [
+            1001,
+            42,
+            "books"
+          ],
+          [
+            1002,
+            42,
+            "books"
+          ]
+        ]
+      }
+    }
+  },
+  "predict": {
+    "instance_table": {
+      "format": "arrays",
+      "columns": [
+        "instance_id",
+        "item_id",
+        "anchor_time"
+      ],
+      "rows": [
+        [
+          2001,
+          42,
+          "2025-01-15T00:00:00Z"
+        ]
+      ]
+    },
+    "related_tables": {
+      "items": {
+        "format": "arrays",
+        "columns": [
+          "instance_id",
+          "item_id",
+          "category"
+        ],
+        "rows": [
+          [
+            2001,
+            42,
+            "books"
+          ]
+        ]
+      }
+    }
+  },
+  "output": {
+    "fields": [
+      "prediction"
+    ]
+  },
+  "inference": {
+    "run_mode": "best"
+  },
+  "metadata": {
+    "request_id": "rfm-forecasting-demo-001"
+  }
+}
