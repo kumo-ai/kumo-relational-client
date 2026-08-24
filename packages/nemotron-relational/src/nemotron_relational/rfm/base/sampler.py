@@ -443,6 +443,53 @@ class Sampler(ABC):
 
         return time_offset_dict
 
+    def _empty_sample_reason(
+        self,
+        query: ValidatedPredictiveQuery,
+        anchor_time: pd.Timestamp | Literal['entity'],
+    ) -> str:
+        r"""Why a sample came back empty, in terms of where the anchor fell.
+
+        Context examples are drawn from before the anchor and each needs the
+        query's whole window of data after it, so an anchor at the end of the
+        data leaves nowhere to draw from. The default anchor is the latest
+        timestamp in the tables the query aggregates, which puts every default
+        prediction at exactly that edge.
+
+        Asking whether the query is too restrictive sends the caller to rewrite
+        something that was never wrong, so state the anchor and the range it
+        sits against and let them judge. The question is kept as the fallback,
+        for when the anchor cannot be the explanation.
+        """
+        generic = ' Is your predictive query too restrictive?'
+        if not isinstance(anchor_time, pd.Timestamp):
+            return generic
+        try:
+            table_names = sorted(
+                {
+                    aggr.get_target_column_name().split('.')[0]
+                    for aggr in query.get_all_target_aggregations()
+                }
+            )
+            if not table_names:
+                return generic
+            max_time = self.get_max_time(table_names)
+            min_time = self.get_min_time(table_names)
+        except Exception:
+            return generic
+        if max_time is None:
+            return generic
+        listed = ', '.join(repr(name) for name in table_names)
+        return (
+            f' The anchor time is most likely the reason: it is '
+            f'{anchor_time}, and {listed} hold data from '
+            f'{min_time} to {max_time}. Context examples come from before the '
+            f"anchor and each needs the query's full window of data after "
+            f'it, so an anchor at or near the end of the range leaves none to '
+            f'draw from. Pass an earlier anchor_time, or widen the window the '
+            f'query asks about.'
+        )
+
     def sample_target(
         self,
         query: ValidatedPredictiveQuery,
@@ -735,17 +782,20 @@ class Sampler(ABC):
         test_time = test_time.reset_index(drop=True)
         test_y = test_y.reset_index(drop=True)
 
+        # ValueError, not RuntimeError: the caller can fix this by moving the
+        # anchor or widening the window, and the client maps ValueError to
+        # INVALID_REQUEST while an unrecognised error becomes INTERNAL_ERROR,
+        # which reads as a fault in the service rather than in the request.
         if num_train_examples > 0 and len(train_y) == 0:
-            raise RuntimeError(
-                'Failed to collect any context examples. Is '
-                'your predictive query too restrictive?'
+            raise ValueError(
+                'Failed to collect any context examples.'
+                + self._empty_sample_reason(query, train_anchor_time)
             )
 
         if num_test_examples > 0 and len(test_y) == 0:
-            raise RuntimeError(
-                'Failed to collect any test examples for '
-                'evaluation. Is your predictive query too '
-                'restrictive?'
+            raise ValueError(
+                'Failed to collect any test examples for evaluation.'
+                + self._empty_sample_reason(query, test_anchor_time)
             )
 
         global _coverage_warned

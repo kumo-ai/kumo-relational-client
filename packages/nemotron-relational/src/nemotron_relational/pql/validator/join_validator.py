@@ -197,6 +197,17 @@ class JoinValidator:
                     )
                 )
         elif len(keys) > 1:
+            # Naming the call is the difference between a diagnosis and a
+            # repair: the caller has to drop every foreign key but one, and
+            # which one to keep is theirs to decide, not ours to guess.
+            # `keys` are qualified as '<table>.<column>' but `Graph.unlink`
+            # takes the bare column, so a suggestion built from them verbatim
+            # would not run.
+            drops = '; '.join(
+                f"graph.unlink('{fkey_table}', "
+                f"'{key.split('.')[-1]}', '{pkey_table}')"
+                for key in keys[1:]
+            )
             response.errors.append(
                 ValidationError(
                     title='Ambiguous link between tables',
@@ -204,7 +215,8 @@ class JoinValidator:
                     f"Encountered an error when processing '{node}'. "
                     f'The foreign key from table {fkey_table} '
                     f'to table {pkey_table} is not unique (got {keys}). '
-                    f'{additional_explanation}',
+                    f'{additional_explanation} Keep the one this query '
+                    f'means and drop the rest, for example: {drops}',
                 )
             )
         return keys, response

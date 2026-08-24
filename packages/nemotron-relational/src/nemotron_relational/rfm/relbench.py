@@ -4,6 +4,7 @@
 
 import difflib
 import json
+import warnings
 from functools import lru_cache
 from importlib import import_module
 from pathlib import Path
@@ -163,6 +164,8 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
     for edge in edges:
         graph.link(*edge)
 
+    _warn_ambiguous_links(edges)
+
     if dataset == 'salt':
         # Correct some categorical columns misclassified as numerical
         table = graph['salesdocument']
@@ -193,3 +196,45 @@ def from_relbench(dataset: str, verbose: bool = True) -> Graph:
         table['REGION'].stype = Stype.categorical
 
     return graph
+
+
+def _warn_ambiguous_links(edges: list[tuple[str, str, str]]) -> None:
+    r"""Warn when a table reaches another through more than one foreign key.
+
+    RelBench records every foreign key, and several datasets point at the same
+    table repeatedly: rel-salt links a sales document item to a customer four
+    times, as sold-to, ship-to, bill-to and payer. Each is a real relationship,
+    so the loader keeps them all; picking one would silently decide what the
+    graph means.
+
+    PQL, though, refuses to aggregate across a link it cannot resolve to one
+    key, and it only says so once a query fails, which reads as a problem with
+    the query rather than the graph it was written against. Saying it at load
+    time puts the warning where the cause is.
+    """
+    pairs: dict[tuple[str, str], list[str]] = {}
+    for src_table, fkey, dst_table in edges:
+        pairs.setdefault((src_table, dst_table), []).append(fkey)
+
+    ambiguous = {pair: keys for pair, keys in pairs.items() if len(keys) > 1}
+    if not ambiguous:
+        return
+
+    described = '; '.join(
+        f"'{src}' -> '{dst}' via {sorted(keys)}"
+        for (src, dst), keys in sorted(ambiguous.items())
+    )
+    # Every duplicate but one has to go, so spell out the whole set rather
+    # than a single call that leaves the graph just as ambiguous as before.
+    (src, dst), keys = sorted(ambiguous.items())[0]
+    kept, *dropped = sorted(keys)
+    drops = '; '.join(
+        f"graph.unlink('{src}', '{key}', '{dst}')" for key in dropped
+    )
+    warnings.warn(
+        f'This dataset links some tables through more than one foreign key '
+        f'({described}). A predictive query that aggregates across one of '
+        f'these will be rejected as ambiguous. Keep the key your question '
+        f"means and drop the rest; to keep '{kept}', run: {drops}",
+        stacklevel=3,
+    )

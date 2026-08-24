@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import contextlib
+import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, NamedTuple
 
@@ -483,12 +484,47 @@ def _coerce_result(
     return result
 
 
+def _build_engine_model(
+    engine: Any, graph: Any, api_client: Any, options: dict[str, Any]
+) -> Any:
+    r"""`verbose` reaches the constructor because it owns the
+    graph-materialization banner; a reused model prints none, which is correct
+    since no materialization happens."""
+    if 'verbose' in options:
+        return engine.NemotronRelational(
+            graph, verbose=options['verbose'], _client=api_client
+        )
+    return engine.NemotronRelational(graph, _client=api_client)
+
+
+def _graph_signature(graph: Any) -> Any | None:
+    r"""A comparable description of what materializing this graph would use,
+    or ``None``.
+
+    Asks the graph rather than reading its tables here: which counts are cheap
+    is a property of the backend, and only the engine knows that.
+
+    Any graph that cannot describe itself is simply not cached. Correctness
+    does not depend on the cache, only speed does.
+    """
+    describe = getattr(graph, '_materialization_signature', None)
+    if describe is None:
+        describe = getattr(graph, '_to_api_graph_definition', None)
+    if describe is None:
+        return None
+    try:
+        return describe()
+    except Exception:
+        return None
+
+
 class NemotronRelationalAdapter(ModelAdapter):
     name = 'nemotron-relational'
     request_type = (NemotronRelationalRequest, NemotronRelationalTaskRequest)
 
     def __init__(self) -> None:
         self._opened_engine_client = False
+        self._engine_cache = threading.local()
 
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
@@ -535,18 +571,7 @@ class NemotronRelationalAdapter(ModelAdapter):
             except _engine_init_error_types() as error:
                 raise _translate_init_error(error) from error
             self._opened_engine_client = True
-        # `verbose` has to reach the constructor as well as the call: it owns
-        # the graph-materialization output, and a handle builds a fresh engine
-        # model per prediction, so that banner is printed on every predict.
-        # Only overridden when the caller actually asked, so the engine keeps
-        # its own default otherwise.
-        model = (
-            engine.NemotronRelational(
-                request.graph, verbose=options['verbose'], _client=api_client
-            )
-            if 'verbose' in options
-            else engine.NemotronRelational(request.graph, _client=api_client)
-        )
+        model = self._engine_for(engine, request.graph, api_client, options)
         if request.batch_size is not None:
             batch_ctx = model.batch_mode(
                 request.batch_size, num_retries=request.num_retries
@@ -582,6 +607,70 @@ class NemotronRelationalAdapter(ModelAdapter):
             ) from error
         return _coerce_result(result, explain is not False)
 
+    def _engine_for(
+        self,
+        engine: Any,
+        graph: Any,
+        api_client: Any,
+        options: dict[str, Any],
+    ) -> Any:
+        r"""The engine model for this graph, materialized at most once.
+
+        Constructing the model materializes the graph: sanitizing every table,
+        collecting primary keys and building the adjacency. That cost is
+        independent of the query, so rebuilding it per prediction repeats
+        identical work; on a graph with tens of millions of nodes it dominates
+        the request and makes a retry loop unusable.
+
+        One entry, held per thread. Per thread because a model carries the
+        mutable batch size and retry count that ``batch_mode`` and ``retry``
+        set and restore around a call: two threads sharing one model would
+        interleave those and restore each other's values. One entry because
+        the case worth serving is repeated questions of a single graph;
+        holding every graph ever predicted against would retain each one's
+        materialization for the life of the client.
+
+        Reused only when the graph is the same object, its schema still
+        compares equal, and the endpoint resolved to the same client object.
+        The engine client is a process-wide singleton rebuilt whenever the URL
+        or credential changes, so identity is what keeps a reconfigured
+        endpoint from being served a model bound to the old one. A managed
+        serving target resolves no client at all, so nothing is cached there
+        rather than letting two endpoints share an entry keyed on ``None``.
+
+        A graph is materialized as it was when first predicted against.
+        Editing table data in place afterwards, while holding on to the same
+        graph, is not picked up; build the graph again to pick it up.
+        """
+        if api_client is None:
+            return _build_engine_model(engine, graph, api_client, options)
+
+        definition = _graph_signature(graph)
+        if definition is None:
+            return _build_engine_model(engine, graph, api_client, options)
+
+        cached = getattr(self._engine_cache, 'entry', None)
+        if cached is not None:
+            if (
+                cached[0] is graph
+                and cached[1] is api_client
+                and cached[2] == definition
+            ):
+                return cached[3]
+
+            # Let the old materialization go before building its replacement.
+            # Holding both at once doubles the peak, and one of them can be
+            # gigabytes: rel-amazon's edges alone are over a gigabyte before
+            # the tables, the ID maps and the Python objects around them.
+            # Indexed above rather than unpacked so that no named local keeps
+            # it alive past this point.
+            self._engine_cache.entry = None
+            del cached
+
+        model = _build_engine_model(engine, graph, api_client, options)
+        self._engine_cache.entry = (graph, api_client, definition, model)
+        return model
+
     def close(self) -> None:
         r"""Releases the engine's pooled connections for this thread.
 
@@ -590,6 +679,7 @@ class NemotronRelationalAdapter(ModelAdapter):
         when this adapter never configured the engine, so that closing a
         client that only ever used another model does not import the driver.
         """
+        self._engine_cache = threading.local()
         if not self._opened_engine_client:
             return
         self._opened_engine_client = False

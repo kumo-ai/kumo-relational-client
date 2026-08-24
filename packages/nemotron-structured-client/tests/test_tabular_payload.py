@@ -44,21 +44,21 @@ def _comparable(payload: dict) -> dict:
     ('example_file', 'target', 'task', 'outputs', 'extra'),
     [
         (
-            'prediction_tabicl_arrays.json',
+            'prediction_nemotron_tabular_arrays.json',
             'target_col',
             'classification',
             ['prediction', 'probabilities'],
             {},
         ),
         (
-            'prediction_tabicl_numeric_classification.json',
+            'prediction_nemotron_tabular_numeric_classification.json',
             'target_col',
             'classification',
             ['prediction', 'probabilities'],
             {},
         ),
         (
-            'prediction_tabicl_regression_quantiles.json',
+            'prediction_nemotron_tabular_regression_quantiles.json',
             'target_col',
             'regression',
             ['prediction', 'quantiles'],

@@ -2703,6 +2703,26 @@ class Graph:
 
     # Helpers #################################################################
 
+    def _materialization_signature(self) -> tuple[Any, ...]:
+        r"""What a materialization of this graph would be built from.
+
+        Materializing is expensive and depends on the graph rather than the
+        query, so a caller may reuse one across predictions. This is what tells
+        it the graph has moved on: the schema, plus each table's row count
+        where a backend can give one for nothing.
+
+        Row counts are best effort. They catch rows appended or dropped, and
+        they do not catch a value edited in place, so this narrows the window
+        in which a reused materialization is stale rather than closing it.
+        Backends that would have to run a query contribute nothing here, since
+        this is evaluated on every prediction.
+        """
+        counts = tuple(
+            (name, table._local_row_count())
+            for name, table in sorted(self.tables.items())
+        )
+        return (self._to_api_graph_definition(), counts)
+
     def _to_api_graph_definition(self) -> GraphDefinition:
         tables: dict[str, TableDefinition] = {}
         col_groups: list[ColumnKeyGroup] = []

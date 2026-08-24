@@ -1442,3 +1442,228 @@ def test_predict_task_still_accepts_the_supported_frame_shapes(
         ),
     )
     assert isinstance(out, pd.DataFrame)
+
+
+class _SignedGraph(_FakeGraph):
+    r"""A graph that can describe its schema, so the adapter may cache it."""
+
+    def __init__(self, *table_names: str, signature: str = 'v1') -> None:
+        super().__init__(*table_names)
+        self._signature = signature
+
+    def _to_api_graph_definition(self) -> str:
+        return self._signature
+
+
+def _counting_engine(monkeypatch, builds: list) -> None:
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: 'client-a')
+
+    class CountingModel(_FakeEngineModel):
+        def __init__(self, graph, **kwargs):
+            builds.append(graph)
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'entity': kwargs.get('indices') or [1]})
+
+    monkeypatch.setattr(rfm_engine, 'NemotronRelational', CountingModel)
+
+
+def _request(graph) -> NemotronRelationalRequest:
+    return NemotronRelationalRequest(
+        graph=graph, query='PREDICT target FOR entity=1', indices=[1]
+    )
+
+
+@requires_engine
+def test_the_graph_is_materialized_once_across_predictions(
+    monkeypatch, client
+) -> None:
+    r"""Materializing is the expensive half of a prediction and does not depend
+    on the query, so repeating a question against one graph must not repeat
+    it."""
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    graph = _SignedGraph('users', 'orders')
+    adapter = NemotronRelationalAdapter()
+
+    for _ in range(3):
+        adapter.predict(client, _request(graph))
+
+    assert len(builds) == 1
+
+
+@requires_engine
+def test_a_different_graph_is_materialized_again(monkeypatch, client) -> None:
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    adapter = NemotronRelationalAdapter()
+
+    adapter.predict(client, _request(_SignedGraph('users')))
+    adapter.predict(client, _request(_SignedGraph('users')))
+
+    assert len(builds) == 2
+
+
+@requires_engine
+def test_a_graph_altered_in_place_is_materialized_again(
+    monkeypatch, client
+) -> None:
+    r"""Identity alone would hand back a model built for the old schema."""
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    graph = _SignedGraph('users', signature='before')
+    adapter = NemotronRelationalAdapter()
+
+    adapter.predict(client, _request(graph))
+    graph._signature = 'after'
+    adapter.predict(client, _request(graph))
+
+    assert len(builds) == 2
+
+
+@requires_engine
+def test_a_reconfigured_endpoint_is_not_served_the_old_model(
+    monkeypatch, client
+) -> None:
+    r"""The engine client is a process-wide singleton rebuilt whenever the URL
+    or credential changes, so a new one means this prediction must not reuse a
+    model bound to the previous endpoint."""
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    graph = _SignedGraph('users')
+    adapter = NemotronRelationalAdapter()
+
+    adapter.predict(client, _request(graph))
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: 'client-b')
+    adapter.predict(client, _request(graph))
+
+    assert len(builds) == 2
+
+
+@requires_engine
+def test_a_graph_that_cannot_describe_itself_is_not_cached(
+    monkeypatch, client
+) -> None:
+    r"""Correctness must not depend on the cache, so an undescribable graph is
+    rebuilt rather than reused on a guess."""
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    graph = _FakeGraph('users')
+    adapter = NemotronRelationalAdapter()
+
+    adapter.predict(client, _request(graph))
+    adapter.predict(client, _request(graph))
+
+    assert len(builds) == 2
+
+
+@requires_engine
+def test_closing_releases_the_materialized_graph(monkeypatch, client) -> None:
+    r"""A materialized graph can be gigabytes; closing the client has to let it
+    go rather than hold it for the process's life."""
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    graph = _SignedGraph('users')
+    adapter = NemotronRelationalAdapter()
+
+    adapter.predict(client, _request(graph))
+    adapter.close()
+    adapter.predict(client, _request(graph))
+
+    assert len(builds) == 2
+
+
+@requires_engine
+def test_a_managed_serving_target_is_never_cached(monkeypatch, client) -> None:
+    r"""Serving resolves no client object, so an entry keyed on it would be
+    keyed on ``None`` and two endpoints would share one model."""
+    from nemotron_structured.core.serving import DatabricksServingTarget
+
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    monkeypatch.setattr(
+        'nemotron_structured.adapters.relational._init_serving',
+        lambda engine, target: None,
+    )
+    graph = _SignedGraph('users')
+    adapter = NemotronRelationalAdapter()
+    target = DatabricksServingTarget('nemotron-relational')
+
+    adapter.predict(target, _request(graph))
+    adapter.predict(target, _request(graph))
+
+    assert len(builds) == 2
+
+
+@requires_engine
+def test_each_thread_materializes_its_own_model(monkeypatch, client) -> None:
+    r"""A model carries the batch size and retry count that `batch_mode` and
+    `retry` set and restore, so two threads must not share one."""
+    import threading
+
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    graph = _SignedGraph('users')
+    adapter = NemotronRelationalAdapter()
+    seen: list = []
+
+    def run() -> None:
+        adapter.predict(client, _request(graph))
+        adapter.predict(client, _request(graph))
+        seen.append(True)
+
+    threads = [threading.Thread(target=run) for _ in range(3)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(seen) == 3
+    assert len(builds) == 3
+
+
+@requires_engine
+def test_alternating_between_graphs_materializes_each_time(
+    monkeypatch, client
+) -> None:
+    r"""One entry is kept, so this is the case the cache does not serve; pinned
+    so the behaviour the docstring promises cannot drift from the code."""
+    builds: list = []
+    _counting_engine(monkeypatch, builds)
+    first = _SignedGraph('users', signature='first')
+    second = _SignedGraph('orders', signature='second')
+    adapter = NemotronRelationalAdapter()
+
+    adapter.predict(client, _request(first))
+    adapter.predict(client, _request(second))
+    adapter.predict(client, _request(first))
+
+    assert len(builds) == 3
+
+
+@requires_engine
+def test_the_old_graph_is_released_before_the_new_one_is_built(
+    monkeypatch, client
+) -> None:
+    r"""Peak memory, not steady state, is what fails a worker: a materialized
+    graph can be gigabytes, so holding the outgoing one while the replacement
+    is built doubles the peak exactly when a service refreshes its graph."""
+    monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: 'client-a')
+    adapter = NemotronRelationalAdapter()
+    held_during_build: list = []
+
+    class WatchingModel(_FakeEngineModel):
+        def __init__(self, graph, **kwargs):
+            held_during_build.append(
+                getattr(adapter._engine_cache, 'entry', None)
+            )
+
+        def predict(self, query, **kwargs):
+            return pd.DataFrame({'entity': [1]})
+
+    monkeypatch.setattr(rfm_engine, 'NemotronRelational', WatchingModel)
+
+    adapter.predict(client, _request(_SignedGraph('users', signature='a')))
+    adapter.predict(client, _request(_SignedGraph('orders', signature='b')))
+
+    assert held_during_build == [None, None]

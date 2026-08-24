@@ -92,6 +92,9 @@ class LocalTable(Table):
     def backend(self) -> DataBackend:
         return cast(DataBackend, DataBackend.LOCAL)
 
+    def _local_row_count(self) -> int:
+        return len(self._data)
+
     def _get_source_columns(self) -> list[SourceColumn]:
         return [
             SourceColumn(

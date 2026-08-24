@@ -157,6 +157,17 @@ class RelationalModel:
 
     >>> model = client.relational(graph)  # doctest: +SKIP
     >>> model.predict("PREDICT ... FOR ...", [1, 2, 3], run_mode="fast")
+
+    Materializing a graph is the expensive half of a prediction and depends on
+    the graph rather than the query, so the most recently used one is kept and
+    reused: asking several questions of the same graph materializes it once.
+    One graph is kept per thread, so alternating between two graphs, or working
+    from several threads, materializes each time.
+
+    A reused graph is the graph as it was when first predicted against. Editing
+    a table's data in place afterwards is not picked up; build the graph again
+    to pick it up. Adding or removing tables, columns or links changes the
+    schema, which is picked up.
     """
 
     def __init__(self, client: Any, graph: Any) -> None:

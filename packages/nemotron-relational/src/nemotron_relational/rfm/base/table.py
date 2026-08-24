@@ -877,6 +877,17 @@ class Table(ABC):
     def _num_rows(self) -> int | None:
         return self._get_num_rows()
 
+    def _local_row_count(self) -> int | None:
+        r"""Row count, only when it costs nothing to ask.
+
+        Used to notice that a table's rows changed between predictions. A
+        backend that would have to query for this returns ``None`` instead:
+        the caller runs this on every prediction, and a ``COUNT(*)`` per
+        prediction would cost more than the work it saves. Deliberately not
+        :attr:`_num_rows`, which is cached and so cannot report a change.
+        """
+        return None
+
     def _get_sample_df(self) -> pd.DataFrame:
         dfs: list[pd.DataFrame] = []
 
