@@ -107,12 +107,12 @@ class PQLGrammarParser ( Parser ):
 
     literalNames = [ "<INVALID>", "'('", "')'", "','" ]
 
-    symbolicNames = [ "<INVALID>", "<INVALID>", "<INVALID>", "<INVALID>",
-                      "BOOL", "FQN_COLUMN", "WILDCARD_COLUMN", "PREDICT",
-                      "CLASSIFY", "RANK", "TOP", "FORECAST", "TIMEFRAMES",
-                      "FOR_EACH", "FOR", "WHERE", "ASSUMING", "AND", "OR",
-                      "NOT", "AGGR", "REL_OP", "NULL", "NEG_INFTY", "TIME_UNIT",
-                      "ID", "QUOTED_ID", "INT", "DECIMAL", "STR", "DATE",
+    symbolicNames = [ "<INVALID>", "<INVALID>", "<INVALID>", "<INVALID>", 
+                      "BOOL", "FQN_COLUMN", "WILDCARD_COLUMN", "PREDICT", 
+                      "CLASSIFY", "RANK", "TOP", "FORECAST", "TIMEFRAMES", 
+                      "FOR_EACH", "FOR", "WHERE", "ASSUMING", "AND", "OR", 
+                      "NOT", "AGGR", "REL_OP", "NULL", "NEG_INFTY", "TIME_UNIT", 
+                      "ID", "QUOTED_ID", "INT", "DECIMAL", "STR", "DATE", 
                       "TIME", "WS" ]
 
     RULE_prog = 0
@@ -133,9 +133,9 @@ class PQLGrammarParser ( Parser ):
     RULE_array = 15
     RULE_datetime = 16
 
-    ruleNames =  [ "prog", "problem_spec", "problem_type", "top_k", "forecast",
-                   "target", "entity", "whatif", "entity_list", "filtered_entity_list",
-                   "condition", "aggregation", "filtered_column", "column",
+    ruleNames =  [ "prog", "problem_spec", "problem_type", "top_k", "forecast", 
+                   "target", "entity", "whatif", "entity_list", "filtered_entity_list", 
+                   "condition", "aggregation", "filtered_column", "column", 
                    "constant", "array", "datetime" ]
 
     EOF = Token.EOF
@@ -925,7 +925,7 @@ class PQLGrammarParser ( Parser ):
                         self.condition(3)
                         pass
 
-
+             
                 self.state = 112
                 self._errHandler.sync(self)
                 _alt = self._interp.adaptivePredict(self._input,6,self._ctx)
@@ -1336,7 +1336,7 @@ class PQLGrammarParser ( Parser ):
                 self.enterOuterAlt(localctx, 1)
                 self.state = 164
                 self.match(PQLGrammarParser.T__0)
-                self.state = 168
+                self.state = 168 
                 self._errHandler.sync(self)
                 _alt = 1
                 while _alt!=2 and _alt!=ATN.INVALID_ALT_NUMBER:
@@ -1348,7 +1348,7 @@ class PQLGrammarParser ( Parser ):
 
                     else:
                         raise NoViableAltException(self)
-                    self.state = 170
+                    self.state = 170 
                     self._errHandler.sync(self)
                     _alt = self._interp.adaptivePredict(self._input,12,self._ctx)
 
@@ -1456,7 +1456,12 @@ class PQLGrammarParser ( Parser ):
     def condition_sempred(self, localctx:ConditionContext, predIndex:int):
             if predIndex == 0:
                 return self.precpred(self._ctx, 3)
-
+         
 
             if predIndex == 1:
                 return self.precpred(self._ctx, 2)
+         
+
+
+
+

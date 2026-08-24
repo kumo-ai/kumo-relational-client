@@ -81,6 +81,13 @@ class DateOffsetRange:
         if offset1.unit == offset2.unit:
             return (offset1, offset2)
 
+        def weeks_to_days(unit: TimeUnit, value: int) -> tuple[TimeUnit, int]:
+            # Exact, unlike months: a week is seven days everywhere, so this
+            # needs none of the warning the month conversion carries.
+            if unit != TimeUnit.WEEKS:
+                return unit, value
+            return TimeUnit.DAYS, 7 * value
+
         def months_to_days(unit: TimeUnit, value: int) -> tuple[TimeUnit, int]:
             if unit != TimeUnit.MONTHS:
                 return unit, value
@@ -103,6 +110,17 @@ class DateOffsetRange:
             if unit != TimeUnit.HOURS:
                 return unit, value
             return TimeUnit.MINUTES, 60 * value
+
+        # Weeks reduce to days first, which lets the existing
+        # days-to-hours-to-minutes ladder carry them the rest of the way.
+        for offset in [offset1, offset2]:
+            assert isinstance(offset.unit, TimeUnit)
+            if offset.start is not None:
+                _, offset.start = weeks_to_days(offset.unit, offset.start)
+            offset.unit, offset.end = weeks_to_days(offset.unit, offset.end)
+
+        if offset1.unit == offset2.unit:
+            return (offset1, offset2)
 
         for offset in [offset1, offset2]:
             assert isinstance(offset.unit, TimeUnit)
