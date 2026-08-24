@@ -111,6 +111,13 @@ class DateOffsetRange:
                 return unit, value
             return TimeUnit.MINUTES, 60 * value
 
+        def minutes_to_seconds(
+            unit: TimeUnit, value: int
+        ) -> tuple[TimeUnit, int]:
+            if unit != TimeUnit.MINUTES:
+                return unit, value
+            return TimeUnit.SECONDS, 60 * value
+
         # Weeks reduce to days first, which lets the existing
         # days-to-hours-to-minutes ladder carry them the rest of the way.
         for offset in [offset1, offset2]:
@@ -143,6 +150,19 @@ class DateOffsetRange:
             if offset.start is not None:
                 _, offset.start = hours_to_minutes(offset.unit, offset.start)
             offset.unit, offset.end = hours_to_minutes(offset.unit, offset.end)
+
+        if offset1.unit == offset2.unit:
+            return (offset1, offset2)
+
+        # Seconds are the floor of the ladder: anything still unequal here is
+        # one side in minutes and the other already in seconds.
+        for offset in [offset1, offset2]:
+            assert isinstance(offset.unit, TimeUnit)
+            if offset.start is not None:
+                _, offset.start = minutes_to_seconds(offset.unit, offset.start)
+            offset.unit, offset.end = minutes_to_seconds(
+                offset.unit, offset.end
+            )
 
         return offset1, offset2
 

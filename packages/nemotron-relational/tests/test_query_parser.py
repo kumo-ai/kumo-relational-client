@@ -85,7 +85,7 @@ def test_parse_query_names_allowed_aggregation_time_units() -> None:
         ValueError,
         match=(
             r"Line 1, col \d+; Invalid aggregation time unit 'fortnights'. "
-            r"Expected one of: 'days', 'weeks', 'hours', 'minutes', or 'months'\."
+            r"Expected one of: 'seconds', 'minutes', 'hours', 'days', 'weeks', or 'months'\."
         ),
     ):
         PQLParser(
@@ -747,7 +747,7 @@ def test_a_valid_query_still_parses(user_store_graph: Graph) -> None:
     assert stdout.getvalue() == ''
 
 
-@pytest.mark.parametrize('unit', ['seconds', 'day', 'year'])
+@pytest.mark.parametrize('unit', ['day', 'year'])
 def test_an_unsupported_time_unit_is_named(
     unit: str, user_store_graph: Graph
 ) -> None:
@@ -760,8 +760,8 @@ def test_an_unsupported_time_unit_is_named(
     message = str(excinfo.value)
     assert f"Invalid aggregation time unit '{unit}'." in message
     assert (
-        "Expected one of: 'days', 'weeks', 'hours', 'minutes', or 'months'."
-        in message
+        "Expected one of: 'seconds', 'minutes', 'hours', 'days', "
+        "'weeks', or 'months'." in message
     )
     assert re.search(r'Line 1, col \d+;', message)
     assert 'target (PREDICT) clause' not in message
