@@ -163,11 +163,13 @@ TIME_UNIT:
 	| 'months'
 	| 'hours'
 	| 'minutes'
+	| 'seconds'
 	| 'DAYS'
 	| 'WEEKS'
 	| 'MONTHS'
 	| 'MINUTES'
-	| 'HOURS';
+	| 'HOURS'
+	| 'SECONDS';
 
 // Section: all regular expressions that correspond to non-keyword symbols (identifiers, constants)
 
