@@ -17,7 +17,7 @@ from __future__ import annotations
 import pytest
 from conftest import canonical_examples_available, load_canonical_example
 
-from kumo_relational_client.adapters.relational import NemotronRelationalAdapter
+from kumo_relational_client.adapters.relational import KumoRelationalAdapter
 
 RELATIONAL = 'kumo-relational'
 
@@ -35,7 +35,7 @@ def test_a_prediction_example_is_addressed_to_this_client(
 ) -> None:
     payload = load_canonical_example(RELATIONAL, example_file)
 
-    assert payload['model'] == NemotronRelationalAdapter().capabilities().model
+    assert payload['model'] == KumoRelationalAdapter().capabilities().model
 
 
 @canonical_examples_available

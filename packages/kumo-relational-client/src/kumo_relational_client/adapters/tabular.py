@@ -425,7 +425,7 @@ def _predict_with_session(
         )
 
 
-class NemotronTabularAdapter(ModelAdapter):
+class KumoTabularAdapter(ModelAdapter):
     name = 'kumo-tabular'
     request_type = KumoTabularRequest
 

@@ -9,7 +9,7 @@ import contextlib
 import pandas as pd
 import pytest
 
-from kumo_relational_client.adapters.relational import NemotronRelationalAdapter
+from kumo_relational_client.adapters.relational import KumoRelationalAdapter
 from kumo_relational_client.core.transport import Transport
 from kumo_relational_client.errors import (
     MissingExtraError,
@@ -76,7 +76,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    result = NemotronRelationalAdapter().predict(
+    result = KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='fake-graph',
@@ -118,7 +118,7 @@ def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
     )
 
     transport = Transport('https://nim.example.com:8000', timeout=3.5)
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         transport, KumoRelationalRequest(graph='g', query='PREDICT x')
     )
 
@@ -142,7 +142,7 @@ def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='g',
@@ -166,7 +166,7 @@ def test_predict_rejects_reserved_option_keys(monkeypatch, client):
         lambda **kwargs: called.setdefault('init', True),
     )
     with pytest.raises(RelationalError) as excinfo:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='g', query='PREDICT x', options={'run_mode': 'best'}
@@ -191,7 +191,7 @@ def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
     )
 
     with pytest.raises(TypeError):
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client, KumoRelationalRequest(graph='g', query='PREDICT x')
         )
 
@@ -213,7 +213,7 @@ def test_adapter_authorizes_engine_init(monkeypatch, client):
     monkeypatch.setattr(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client, KumoRelationalRequest(graph='g', query='PREDICT x')
     )
 
@@ -310,7 +310,7 @@ def test_predict_raises_missing_extra_error_when_engine_not_installed(
         ),
     )
     with pytest.raises(MissingExtraError):
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client, KumoRelationalRequest(graph='g', query='PREDICT x')
         )
 
@@ -321,7 +321,7 @@ def test_predict_propagates_broken_driver_error(monkeypatch, client):
         RuntimeError('relationallib native extension failed to load'),
     )
     with pytest.raises(RuntimeError, match='native extension'):
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client, KumoRelationalRequest(graph='g', query='PREDICT x')
         )
 
@@ -332,7 +332,7 @@ def test_predict_propagates_transitive_import_error(monkeypatch, client):
         ModuleNotFoundError("No module named 'some_dep'", name='some_dep'),
     )
     with pytest.raises(ModuleNotFoundError, match='some_dep'):
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client, KumoRelationalRequest(graph='g', query='PREDICT x')
         )
 
@@ -362,7 +362,7 @@ def test_predict_explain_field_returns_explanation(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    result = NemotronRelationalAdapter().predict(
+    result = KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='fake-graph', query='PREDICT t FOR e=1', explain=True
@@ -397,7 +397,7 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    result = NemotronRelationalAdapter().predict(
+    result = KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='fake-graph',
@@ -426,7 +426,7 @@ def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
     )
 
     with pytest.raises(TypeError, match='expected a DataFrame result'):
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='fake-graph', query='PREDICT t FOR e=1'
@@ -450,7 +450,7 @@ def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
     )
 
     with pytest.raises(TypeError, match='expected an Explanation result'):
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='fake-graph', query='PREDICT t FOR e=1', explain=True
@@ -459,7 +459,7 @@ def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
 
 
 def test_capabilities_advertise_explanation():
-    assert 'explanation' in NemotronRelationalAdapter().capabilities().outputs
+    assert 'explanation' in KumoRelationalAdapter().capabilities().outputs
 
 
 @requires_engine
@@ -471,7 +471,7 @@ def test_predict_rejects_explain_specified_twice(
     monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='fake-graph',
@@ -490,7 +490,7 @@ def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
     monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='fake-graph',
@@ -566,7 +566,7 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
     )
 
     cfg = ExplainConfig(skip_summary=True)
-    result = NemotronRelationalAdapter().predict(
+    result = KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='fake-graph', query='PREDICT t FOR e=1', explain=cfg
@@ -597,7 +597,7 @@ def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
     monkeypatch.setattr(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='g',
@@ -631,7 +631,7 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
     monkeypatch.setattr(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(graph='g', query='PREDICT x FOR t.id=1'),
     )
@@ -645,7 +645,7 @@ def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='g', query='PREDICT x FOR t.id=1', batch_size='auto'
@@ -669,7 +669,7 @@ def _failing_engine(monkeypatch, error: BaseException) -> None:
 
 
 def _predict(client):
-    return NemotronRelationalAdapter().predict(
+    return KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(graph='g', query='PREDICT x FOR t.id=1'),
     )
@@ -815,7 +815,7 @@ def test_num_retries_applies_without_batch_size(monkeypatch, client):
     monkeypatch.setattr(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='g', query='PREDICT x FOR t.id=1', num_retries=5
@@ -844,7 +844,7 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
     monkeypatch.setattr(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='g', query='PREDICT x FOR t.id=1', num_retries=0
@@ -861,7 +861,7 @@ def test_adapter_rejects_negative_num_retries(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as excinfo:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalRequest(
                 graph='g', query='PREDICT x FOR t.id=1', num_retries=-1
@@ -903,7 +903,7 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
     )
     predict = pd.DataFrame({'ENTITY': [3]})
 
-    out = NemotronRelationalAdapter().predict(
+    out = KumoRelationalAdapter().predict(
         client,
         KumoRelationalTaskRequest(
             graph=_FakeGraph('users'),
@@ -953,7 +953,7 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalTaskRequest(
             graph=_FakeGraph('users'),
@@ -995,7 +995,7 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalTaskRequest(
             graph=_FakeGraph('users'),
@@ -1040,7 +1040,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    out = NemotronRelationalAdapter().predict(
+    out = KumoRelationalAdapter().predict(
         client,
         KumoRelationalTaskRequest(
             graph=_FakeGraph('users'),
@@ -1068,7 +1068,7 @@ def test_predict_task_rejects_reserved_option_keys(monkeypatch, client):
     )
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalTaskRequest(
                 graph=_FakeGraph('users'),
@@ -1085,7 +1085,7 @@ def test_predict_task_rejects_reserved_option_keys(monkeypatch, client):
 
 def test_capabilities_list_both_request_types():
     assert (
-        NemotronRelationalAdapter().capabilities().request_type
+        KumoRelationalAdapter().capabilities().request_type
         == 'KumoRelationalRequest | KumoRelationalTaskRequest'
     )
 
@@ -1100,7 +1100,7 @@ def test_predict_task_rejects_unknown_task_type(monkeypatch, client):
     )
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalTaskRequest(
                 graph=_FakeGraph('users'),
@@ -1122,7 +1122,7 @@ def test_predict_task_rejects_entity_table_absent_from_graph(
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalTaskRequest(
                 graph=_FakeGraph('users', 'orders'),
@@ -1141,7 +1141,7 @@ def test_predict_task_rejects_missing_target_column(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalTaskRequest(
                 graph=_FakeGraph('users'),
@@ -1163,7 +1163,7 @@ def test_predict_task_rejects_missing_entity_column_in_predict(
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
     with pytest.raises(RelationalError) as err:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalTaskRequest(
                 graph=_FakeGraph('users'),
@@ -1180,7 +1180,7 @@ def test_predict_task_rejects_missing_entity_column_in_predict(
 def test_capabilities_advertise_supported_task_types():
     from kumo_relational_client.adapters.relational import RFM_TASK_TYPES
 
-    tasks = NemotronRelationalAdapter().capabilities().tasks
+    tasks = KumoRelationalAdapter().capabilities().tasks
     assert tasks == RFM_TASK_TYPES
     assert 'multiclass_classification' in tasks
 
@@ -1243,7 +1243,7 @@ def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
             graph='g', query='PREDICT x', options={'verbose': False}
@@ -1271,7 +1271,7 @@ def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         client, KumoRelationalRequest(graph='g', query='PREDICT x')
     )
 
@@ -1370,7 +1370,7 @@ def test_predict_task_names_a_feature_column_missing_from_predict(client):
     constraint, which the classifier could only report as an internal failure.
     """
     with pytest.raises(RelationalError) as excinfo:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             client,
             KumoRelationalTaskRequest(
                 graph=_FakeGraph('users'),
@@ -1435,7 +1435,7 @@ def test_predict_task_still_accepts_the_supported_frame_shapes(
         rfm_engine, 'NemotronRelational', FakeNemotronRelational
     )
 
-    out = NemotronRelationalAdapter().predict(
+    out = KumoRelationalAdapter().predict(
         client,
         KumoRelationalTaskRequest(
             graph=_FakeGraph('users'),
@@ -1488,7 +1488,7 @@ def test_the_graph_is_materialized_once_across_predictions(
     builds: list = []
     _counting_engine(monkeypatch, builds)
     graph = _SignedGraph('users', 'orders')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     for _ in range(3):
         adapter.predict(client, _request(graph))
@@ -1500,7 +1500,7 @@ def test_the_graph_is_materialized_once_across_predictions(
 def test_a_different_graph_is_materialized_again(monkeypatch, client) -> None:
     builds: list = []
     _counting_engine(monkeypatch, builds)
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     adapter.predict(client, _request(_SignedGraph('users')))
     adapter.predict(client, _request(_SignedGraph('users')))
@@ -1516,7 +1516,7 @@ def test_a_graph_altered_in_place_is_materialized_again(
     builds: list = []
     _counting_engine(monkeypatch, builds)
     graph = _SignedGraph('users', signature='before')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     adapter.predict(client, _request(graph))
     graph._signature = 'after'
@@ -1535,7 +1535,7 @@ def test_a_reconfigured_endpoint_is_not_served_the_old_model(
     builds: list = []
     _counting_engine(monkeypatch, builds)
     graph = _SignedGraph('users')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     adapter.predict(client, _request(graph))
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: 'client-b')
@@ -1553,7 +1553,7 @@ def test_a_graph_that_cannot_describe_itself_is_not_cached(
     builds: list = []
     _counting_engine(monkeypatch, builds)
     graph = _FakeGraph('users')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     adapter.predict(client, _request(graph))
     adapter.predict(client, _request(graph))
@@ -1568,7 +1568,7 @@ def test_closing_releases_the_materialized_graph(monkeypatch, client) -> None:
     builds: list = []
     _counting_engine(monkeypatch, builds)
     graph = _SignedGraph('users')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     adapter.predict(client, _request(graph))
     adapter.close()
@@ -1590,7 +1590,7 @@ def test_a_managed_serving_target_is_never_cached(monkeypatch, client) -> None:
         lambda engine, target: None,
     )
     graph = _SignedGraph('users')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
     target = DatabricksServingTarget('kumo-relational')
 
     adapter.predict(target, _request(graph))
@@ -1608,7 +1608,7 @@ def test_each_thread_materializes_its_own_model(monkeypatch, client) -> None:
     builds: list = []
     _counting_engine(monkeypatch, builds)
     graph = _SignedGraph('users')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
     seen: list = []
 
     def run() -> None:
@@ -1636,7 +1636,7 @@ def test_alternating_between_graphs_materializes_each_time(
     _counting_engine(monkeypatch, builds)
     first = _SignedGraph('users', signature='first')
     second = _SignedGraph('orders', signature='second')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
 
     adapter.predict(client, _request(first))
     adapter.predict(client, _request(second))
@@ -1653,7 +1653,7 @@ def test_the_old_graph_is_released_before_the_new_one_is_built(
     graph can be gigabytes, so holding the outgoing one while the replacement
     is built doubles the peak exactly when a service refreshes its graph."""
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: 'client-a')
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
     held_during_build: list = []
 
     class WatchingModel(_FakeEngineModel):

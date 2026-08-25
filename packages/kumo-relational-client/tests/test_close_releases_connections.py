@@ -115,10 +115,10 @@ def test_nemotron_relational_adapter_close_is_inert_before_any_prediction() -> (
     which is an optional dependency and may not be installed.
     """
     from kumo_relational_client.adapters.relational import (
-        NemotronRelationalAdapter,
+        KumoRelationalAdapter,
     )
 
-    adapter = NemotronRelationalAdapter()
+    adapter = KumoRelationalAdapter()
     assert not adapter._opened_engine_client
     adapter.close()
 
@@ -140,7 +140,7 @@ def test_nemotron_relational_adapter_releases_the_engine_it_opened(
 
     monkeypatch.setattr(adapter_module, '_load_engine', lambda: _Engine)
 
-    adapter = adapter_module.NemotronRelationalAdapter()
+    adapter = adapter_module.KumoRelationalAdapter()
     adapter._opened_engine_client = True
     adapter.close()
 
@@ -166,7 +166,7 @@ def test_nemotron_relational_adapter_does_not_release_twice(
 
     monkeypatch.setattr(adapter_module, '_load_engine', lambda: _Engine)
 
-    adapter = adapter_module.NemotronRelationalAdapter()
+    adapter = adapter_module.KumoRelationalAdapter()
     adapter._opened_engine_client = True
     adapter.close()
     adapter.close()

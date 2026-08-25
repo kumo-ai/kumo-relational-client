@@ -86,7 +86,7 @@ class ModelAdapter(ABC):
         ``url``, ``health_ready`` and ``predict`` alike, so reaching for the
         wrong one fails with an error a caller can read. An adapter that
         supports both must branch on the type, as
-        :class:`~kumo_relational_client.adapters.relational.NemotronRelationalAdapter` does.
+        :class:`~kumo_relational_client.adapters.relational.KumoRelationalAdapter` does.
 
         Args:
             transport: The owning client's HTTP layer, or its serving target.

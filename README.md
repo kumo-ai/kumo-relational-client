@@ -1,6 +1,6 @@
 # NVIDIA Kumo Relational Client
 
-Make predictions on tables and relational data with NVIDIA Nemotron
+Make predictions on tables and relational data with NVIDIA Kumo
 structured-data foundation models, without training a model for each dataset.
 
 ```bash

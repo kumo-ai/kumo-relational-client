@@ -33,13 +33,13 @@ from kumo_relational_client.requests import ModelRequest
 
 def _default_registry() -> AdapterRegistry:
     from kumo_relational_client.adapters import (
-        NemotronRelationalAdapter,
-        NemotronTabularAdapter,
+        KumoRelationalAdapter,
+        KumoTabularAdapter,
     )
 
     registry = AdapterRegistry()
-    registry.register(NemotronTabularAdapter())
-    registry.register(NemotronRelationalAdapter())
+    registry.register(KumoTabularAdapter())
+    registry.register(KumoRelationalAdapter())
     return registry
 
 

@@ -3,7 +3,7 @@
 ## Support level
 
 **Maintained.** The client is developed and released by NVIDIA alongside the
-Nemotron structured-data foundation model NIMs. Issues and pull requests are
+Kumo structured-data foundation model NIMs. Issues and pull requests are
 reviewed, and fixes ship in the next release of all three packages.
 
 It is not a supported NVIDIA product under a commercial agreement. There is no

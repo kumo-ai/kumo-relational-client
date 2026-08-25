@@ -9,7 +9,7 @@ which on a machine without the compiled ``relationallib`` is everything. That is
 repo's existing convention and it left the branch added for Databricks Model
 Serving with no coverage at all.
 
-``NemotronRelationalAdapter.predict`` imports the engine lazily, inside the method, so a
+``KumoRelationalAdapter.predict`` imports the engine lazily, inside the method, so a
 stub module registered in ``sys.modules`` is enough to exercise the branch --
 no compiled extension, no Databricks SDK, no network.
 """
@@ -24,7 +24,7 @@ from typing import Any
 import pandas as pd
 import pytest
 
-from kumo_relational_client.adapters.relational import NemotronRelationalAdapter
+from kumo_relational_client.adapters.relational import KumoRelationalAdapter
 from kumo_relational_client.core.serving import DatabricksServingTarget
 from kumo_relational_client.core.transport import Transport
 from kumo_relational_client.errors import RelationalError
@@ -124,7 +124,7 @@ def test_serving_target_initializes_by_endpoint_name(
     """The branch under test: a ServingTarget must not be sent through the
     URL-based init, which would read attributes that raise by design."""
     target = DatabricksServingTarget('kumo-relational', platform_client='WS')
-    NemotronRelationalAdapter().predict(target, _request())
+    KumoRelationalAdapter().predict(target, _request())
 
     assert 'init_databricks_serving' in engine.calls
     assert (
@@ -141,7 +141,7 @@ def test_serving_target_never_reads_url_or_api_key(
 ) -> None:
     """ServingTarget.url raises. If the adapter duck-typed instead of checking
     the type, this is where it would blow up."""
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         DatabricksServingTarget('kumo-relational'), _request()
     )
     sent = engine.calls['init_databricks_serving']
@@ -155,7 +155,7 @@ def test_transport_still_takes_the_url_path(
 ) -> None:
     """The raw-NIM path must be unchanged by the branch."""
     transport = Transport('https://nim.example.com:8000', api_key='secret')
-    NemotronRelationalAdapter().predict(transport, _request())
+    KumoRelationalAdapter().predict(transport, _request())
 
     assert 'init' in engine.calls
     assert engine.calls['init']['url'] == 'https://nim.example.com:8000'
@@ -167,13 +167,13 @@ def test_both_paths_reach_the_same_predict(
     engine: types.SimpleNamespace,
 ) -> None:
     """Only initialization differs; inference must be identical."""
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         DatabricksServingTarget('kumo-relational'), _request()
     )
     serving = engine.calls['predict']
 
     engine.calls.clear()
-    NemotronRelationalAdapter().predict(
+    KumoRelationalAdapter().predict(
         Transport('https://nim.example.com:8000'), _request()
     )
     assert engine.calls['predict'] == serving
@@ -374,7 +374,7 @@ def test_engine_init_failures_are_translated_at_the_boundary(
     engine.init_databricks_serving = _raise
 
     with pytest.raises(RelationalError) as caught:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             DatabricksServingTarget('kumo-relational'), _request()
         )
     assert caught.value.code == code
@@ -411,7 +411,7 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
     monkeypatch.setattr(engine, 'NemotronRelational', _Failing)
 
     with pytest.raises(RelationalError) as excinfo:
-        NemotronRelationalAdapter().predict(
+        KumoRelationalAdapter().predict(
             DatabricksServingTarget('kumo-relational'), _request()
         )
 

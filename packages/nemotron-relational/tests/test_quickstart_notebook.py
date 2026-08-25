@@ -11,9 +11,7 @@ from nemotron_relational import Dtype, Stype
 from nemotron_relational.rfm.infer import infer_stype
 
 NOTEBOOK = (
-    Path(__file__).parents[3]
-    / 'examples'
-    / 'kumo_relational_quickstart.ipynb'
+    Path(__file__).parents[3] / 'examples' / 'kumo_relational_quickstart.ipynb'
 )
 
 

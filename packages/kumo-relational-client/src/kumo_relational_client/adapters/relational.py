@@ -516,7 +516,7 @@ def _graph_signature(graph: Any) -> Any | None:
         return None
 
 
-class NemotronRelationalAdapter(ModelAdapter):
+class KumoRelationalAdapter(ModelAdapter):
     name = 'kumo-relational'
     request_type = (KumoRelationalRequest, KumoRelationalTaskRequest)
 

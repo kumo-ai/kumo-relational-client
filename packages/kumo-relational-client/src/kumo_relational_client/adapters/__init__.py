@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from kumo_relational_client.adapters.relational import NemotronRelationalAdapter
-from kumo_relational_client.adapters.tabular import NemotronTabularAdapter
+from kumo_relational_client.adapters.relational import KumoRelationalAdapter
+from kumo_relational_client.adapters.tabular import KumoTabularAdapter
 
-__all__ = ['NemotronRelationalAdapter', 'NemotronTabularAdapter']
+__all__ = ['KumoRelationalAdapter', 'KumoTabularAdapter']
