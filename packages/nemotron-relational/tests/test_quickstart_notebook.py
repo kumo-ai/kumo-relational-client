@@ -13,7 +13,7 @@ from nemotron_relational.rfm.infer import infer_stype
 NOTEBOOK = (
     Path(__file__).parents[3]
     / 'examples'
-    / 'nemotron_relational_quickstart.ipynb'
+    / 'kumo_relational_quickstart.ipynb'
 )
 
 
