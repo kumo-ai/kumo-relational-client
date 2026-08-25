@@ -25,7 +25,7 @@ from nemotron_relational.client import RelationalClient
 
 _READY_BODY = json.dumps({'status': 'healthy', 'check': 'ready'})
 _MODELS_BODY = json.dumps(
-    {'object': 'list', 'data': [{'id': 'nemotron-relational'}]}
+    {'object': 'list', 'data': [{'id': 'kumo-relational'}]}
 )
 
 

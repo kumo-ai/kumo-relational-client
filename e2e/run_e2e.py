@@ -59,7 +59,7 @@ def section(title: str) -> None:
 def contract_compliance_regressions() -> None:
     section('contract compliance (regression checks for the 4 fixed gaps)')
     body = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'classification',
             'target': {'column_name': 'label', 'dtype': 'string'},
@@ -100,7 +100,7 @@ def contract_compliance_regressions() -> None:
     )
 
     timestamp_body = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'classification',
             'target': {'column_name': 'label', 'dtype': 'string'},
@@ -164,7 +164,7 @@ def contract_compliance_regressions() -> None:
     )
 
     session_body = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'classification',
             'target': {'column_name': 'label', 'dtype': 'string'},
@@ -411,7 +411,7 @@ def real_dataset_mixed_dtypes() -> None:
 def sessions_lifecycle() -> None:
     section('sessions: create -> reuse -> delete -> predict-after-delete')
     body = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'classification',
             'target': {'column_name': 'label', 'dtype': 'string'},
@@ -495,7 +495,7 @@ def sessions_lifecycle() -> None:
 def error_model() -> None:
     section('error model')
     unsupported_task = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'forecasting',
             'target': {'column_name': 'label', 'dtype': 'string'},
@@ -584,7 +584,7 @@ def admission_control() -> None:
     columns = {f'f{i}': {'dtype': 'float64'} for i in range(n_features)}
     columns['label'] = {'dtype': 'string'}
     body = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'classification',
             'target': {'column_name': 'label', 'dtype': 'string'},
@@ -636,7 +636,7 @@ def admission_control() -> None:
 def concurrency() -> None:
     section('concurrency: N parallel requests')
     body = {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': {
             'kind': 'classification',
             'target': {'column_name': 'label', 'dtype': 'string'},

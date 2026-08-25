@@ -64,7 +64,7 @@ class NemotronTabularRequest(ModelRequest):
     ``predict`` holds the unlabelled rows to score.
     """
 
-    model: ClassVar[str] = 'nemotron-tabular'
+    model: ClassVar[str] = 'kumo-tabular'
 
     context: pd.DataFrame
     predict: pd.DataFrame
@@ -109,7 +109,7 @@ class NemotronRelationalRequest(ModelRequest):
     machine; see ``nemotron_relational.rfm.ExplainConfig`` for the full disclosure.
     """
 
-    model: ClassVar[str] = 'nemotron-relational'
+    model: ClassVar[str] = 'kumo-relational'
 
     graph: Any
     query: str
@@ -146,7 +146,7 @@ class NemotronRelationalTaskRequest(ModelRequest):
     ``batch_size`` and ``options`` behave as in :class:`NemotronRelationalRequest`.
     """
 
-    model: ClassVar[str] = 'nemotron-relational'
+    model: ClassVar[str] = 'kumo-relational'
 
     graph: Any
     context: pd.DataFrame

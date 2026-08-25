@@ -1587,7 +1587,7 @@ def test_a_managed_serving_target_is_never_cached(monkeypatch, client) -> None:
     )
     graph = _SignedGraph('users')
     adapter = NemotronRelationalAdapter()
-    target = DatabricksServingTarget('nemotron-relational')
+    target = DatabricksServingTarget('kumo-relational')
 
     adapter.predict(target, _request(graph))
     adapter.predict(target, _request(graph))

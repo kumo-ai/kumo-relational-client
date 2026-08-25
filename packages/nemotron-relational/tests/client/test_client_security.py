@@ -28,7 +28,7 @@ from nemotron_relational.client.client import (
 from nemotron_relational.exceptions import InvalidResponseError
 
 _READY = b'{"status": "ready"}'
-_MODELS = b'{"object": "list", "data": [{"id": "nemotron-relational"}]}'
+_MODELS = b'{"object": "list", "data": [{"id": "kumo-relational"}]}'
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -359,9 +359,7 @@ def test_a_compressed_body_cannot_inflate_past_the_cap() -> None:
     with _serve_body(compressed, gzip_encoded=True) as url:
         client = RelationalClient(url)
         with pytest.raises(InvalidResponseError, match='byte limit'):
-            client._post(
-                '/v1/predictions', json={'model': 'nemotron-relational'}
-            )
+            client._post('/v1/predictions', json={'model': 'kumo-relational'})
 
 
 def test_a_large_legal_body_is_still_delivered_in_full() -> None:
@@ -377,7 +375,7 @@ def test_a_large_legal_body_is_still_delivered_in_full() -> None:
     with _serve_body(body) as url:
         client = RelationalClient(url)
         response = client._post(
-            '/v1/predictions', json={'model': 'nemotron-relational'}
+            '/v1/predictions', json={'model': 'kumo-relational'}
         )
 
     assert response.status_code == 200

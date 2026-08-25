@@ -58,7 +58,7 @@ def test_rfm_returns_bound_handle():
 def test_rfm_handle_end_to_end_through_client():
     result = pd.DataFrame({'ENTITY': [1], 'PREDICTION': [0.5]})
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, result
+        'kumo-relational', NemotronRelationalRequest, result
     )
     client = _client_with(adapter)
 
@@ -72,7 +72,7 @@ def test_rfm_handle_end_to_end_through_client():
     assert out is result
     req = adapter.captured
     assert isinstance(req, NemotronRelationalRequest)
-    assert req.model == 'nemotron-relational'
+    assert req.model == 'kumo-relational'
     assert req.graph == 'my-graph'
     assert req.query == 'PREDICT x FOR EACH t.id'
     assert req.indices == [1, 2, 3]
@@ -82,7 +82,7 @@ def test_rfm_handle_end_to_end_through_client():
 
 def test_rfm_handle_defaults_are_minimal():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -100,7 +100,7 @@ def test_rfm_handle_defaults_are_minimal():
 )
 def test_rfm_handle_names_allowed_run_modes(run_mode):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -116,7 +116,7 @@ def test_rfm_handle_names_allowed_run_modes(run_mode):
 
 def test_rfm_handle_preserves_debug_run_mode():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -127,7 +127,7 @@ def test_rfm_handle_preserves_debug_run_mode():
 
 def test_rfm_task_handle_names_allowed_run_modes():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -148,7 +148,7 @@ def test_rfm_task_handle_names_allowed_run_modes():
 @pytest.mark.parametrize('indices', ['payment-1', b'payment-1', 42, 4.2])
 def test_rfm_handle_rejects_scalar_indices(indices):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -179,7 +179,7 @@ def test_rfm_handle_rejects_scalar_indices(indices):
 )
 def test_rfm_handle_accepts_list_like_indices(indices):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -190,7 +190,7 @@ def test_rfm_handle_accepts_list_like_indices(indices):
 
 def test_rfm_handle_only_forwards_set_options():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -209,7 +209,7 @@ def test_rfm_handle_only_forwards_set_options():
 @pytest.mark.parametrize('random_seed', ['forty-two', 4.2, True, -1])
 def test_rfm_handle_rejects_malformed_random_seed(random_seed):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -226,7 +226,7 @@ def test_rfm_handle_rejects_malformed_random_seed(random_seed):
 @pytest.mark.parametrize('random_seed', ['forty-two', -1])
 def test_rfm_task_handle_rejects_malformed_random_seed(random_seed):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -251,7 +251,7 @@ def test_rfm_task_handle_rejects_malformed_random_seed(random_seed):
 )
 def test_rfm_handle_normalizes_integral_random_seed(random_seed):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -263,7 +263,7 @@ def test_rfm_handle_normalizes_integral_random_seed(random_seed):
 
 def test_rfm_task_handle_normalizes_integral_random_seed():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -290,7 +290,7 @@ def test_rfm_task_handle_normalizes_integral_random_seed():
 )
 def test_rfm_handle_rejects_non_boolean_options(option, value):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -306,7 +306,7 @@ def test_rfm_handle_rejects_non_boolean_options(option, value):
 @pytest.mark.parametrize('option', ['return_embeddings', 'use_prediction_time'])
 def test_rfm_task_handle_rejects_non_boolean_options(option):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -326,7 +326,7 @@ def test_rfm_task_handle_rejects_non_boolean_options(option):
 @pytest.mark.parametrize('value', [np.bool_(True), pd.Series([False]).iloc[0]])
 def test_rfm_handle_normalizes_numpy_boolean_options(option, value):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -337,7 +337,7 @@ def test_rfm_handle_normalizes_numpy_boolean_options(option, value):
 
 def test_rfm_task_handle_normalizes_numpy_boolean_options():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -356,7 +356,7 @@ def test_rfm_task_handle_normalizes_numpy_boolean_options():
 
 def test_rfm_handle_can_silence_progress_output():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -371,7 +371,7 @@ def test_rfm_handle_forwards_engine_arguments_it_does_not_name():
     ``TypeError`` with no way through.
     """
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -382,7 +382,7 @@ def test_rfm_handle_forwards_engine_arguments_it_does_not_name():
 
 def test_rfm_task_handle_exposes_link_prediction_and_column_exclusion():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -405,7 +405,7 @@ def test_rfm_task_handle_exposes_link_prediction_and_column_exclusion():
 
 def test_rfm_handle_matches_typed_request():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -435,9 +435,7 @@ def test_tabicl_returns_bound_handle():
 
 def test_tabicl_handle_end_to_end_through_client():
     result = pd.DataFrame({'prediction': [1]})
-    adapter = _CapturingAdapter(
-        'nemotron-tabular', NemotronTabularRequest, result
-    )
+    adapter = _CapturingAdapter('kumo-tabular', NemotronTabularRequest, result)
     client = _client_with(adapter)
 
     ctx = pd.DataFrame({'x': [1, 2], 'y': [0, 1]})
@@ -449,7 +447,7 @@ def test_tabicl_handle_end_to_end_through_client():
     assert out is result
     req = adapter.captured
     assert isinstance(req, NemotronTabularRequest)
-    assert req.model == 'nemotron-tabular'
+    assert req.model == 'kumo-tabular'
     assert req.context.equals(ctx)
     assert req.predict.equals(rows)
     assert req.task == 'classification'
@@ -459,7 +457,7 @@ def test_tabicl_handle_end_to_end_through_client():
 
 def test_tabicl_handle_defaults_are_minimal():
     adapter = _CapturingAdapter(
-        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+        'kumo-tabular', NemotronTabularRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -476,7 +474,7 @@ def test_tabicl_handle_defaults_are_minimal():
 
 def test_handle_still_dispatches_by_request_type():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronTabularRequest, pd.DataFrame()
+        'kumo-relational', NemotronTabularRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -495,7 +493,7 @@ def test_public_predict_is_not_exposed():
 
 def test_rfm_handle_forwards_explain():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -508,7 +506,7 @@ def test_rfm_handle_forwards_explain():
 
 def test_rfm_handle_forwards_num_neighbors_and_num_hops():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -541,7 +539,7 @@ def test_rfm_handle_rejects_malformed_integer_options(
     expected,
 ):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -556,7 +554,7 @@ def test_rfm_handle_rejects_malformed_integer_options(
 
 def test_rfm_task_handle_rejects_malformed_num_hops():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -584,7 +582,7 @@ def test_rfm_task_handle_rejects_malformed_num_hops():
 )
 def test_rfm_handle_normalizes_integral_options(option, value):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -596,7 +594,7 @@ def test_rfm_handle_normalizes_integral_options(option, value):
 
 def test_rfm_task_handle_normalizes_integral_num_hops():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -618,7 +616,7 @@ def test_rfm_task_handle_normalizes_integral_num_hops():
 )
 def test_rfm_handle_rejects_malformed_num_neighbors(num_neighbors):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -637,7 +635,7 @@ def test_rfm_handle_rejects_malformed_num_neighbors(num_neighbors):
 
 def test_rfm_task_handle_rejects_malformed_num_neighbors():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -667,7 +665,7 @@ def test_rfm_task_handle_rejects_malformed_num_neighbors():
 )
 def test_rfm_handle_preserves_supported_num_neighbors(num_neighbors):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -683,7 +681,7 @@ def test_rfm_handle_preserves_supported_num_neighbors(num_neighbors):
 
 def test_rfm_handle_forwards_explain_config():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -694,7 +692,7 @@ def test_rfm_handle_forwards_explain_config():
 
 def test_tabicl_handle_forwards_request_id():
     adapter = _CapturingAdapter(
-        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+        'kumo-tabular', NemotronTabularRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -708,7 +706,7 @@ def test_tabicl_handle_forwards_request_id():
 
 def test_rfm_handle_forwards_batch_size():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -730,7 +728,7 @@ def test_rfm_handle_batch_defaults_off():
     flipping this default silently changes how every existing call executes --
     this makes such a flip a visible, deliberate edit."""
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -743,7 +741,7 @@ def test_rfm_handle_batch_defaults_off():
 def test_rfm_handle_predict_task_end_to_end_through_client():
     result = pd.DataFrame({'ENTITY': [3], 'PREDICTION': ['pro']})
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, result
+        'kumo-relational', NemotronRelationalTaskRequest, result
     )
     client = _client_with(adapter)
 
@@ -761,7 +759,7 @@ def test_rfm_handle_predict_task_end_to_end_through_client():
     assert out is result
     req = adapter.captured
     assert isinstance(req, NemotronRelationalTaskRequest)
-    assert req.model == 'nemotron-relational'
+    assert req.model == 'kumo-relational'
     assert req.graph == 'my-graph'
     assert req.context is context
     assert req.predict is predict
@@ -773,7 +771,7 @@ def test_rfm_handle_predict_task_end_to_end_through_client():
 
 def test_rfm_handle_predict_task_defaults_are_minimal():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -796,7 +794,7 @@ def test_rfm_handle_predict_task_defaults_are_minimal():
 
 def test_rfm_handle_predict_task_only_forwards_set_options():
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -840,7 +838,7 @@ def test_tabicl_handle_rejects_a_non_frame_context(value):
 @pytest.mark.parametrize('value', _NOT_A_FRAME)
 def test_tabicl_handle_rejects_a_non_frame_predict(value):
     adapter = _CapturingAdapter(
-        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+        'kumo-tabular', NemotronTabularRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
     handle = client.tabular(
@@ -856,7 +854,7 @@ def test_tabicl_handle_rejects_a_non_frame_predict(value):
 @pytest.mark.parametrize('argument', ['context', 'predict'])
 def test_rfm_handle_predict_task_rejects_a_non_frame(argument):
     adapter = _CapturingAdapter(
-        'nemotron-relational', NemotronRelationalTaskRequest, pd.DataFrame()
+        'kumo-relational', NemotronRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
     frames = {
@@ -890,7 +888,7 @@ def test_frames_and_subclasses_are_still_accepted():
         pass
 
     adapter = _CapturingAdapter(
-        'nemotron-tabular', NemotronTabularRequest, pd.DataFrame()
+        'kumo-tabular', NemotronTabularRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
     context = _MyFrame({'a': [1.0, 2.0], 'y': [0, 1]})

@@ -390,7 +390,7 @@ class RelationalModel:
             task_type: One of ``'binary_classification'``,
                 ``'multiclass_classification'``, ``'regression'``,
                 ``'forecasting'`` or ``'temporal_link_prediction'`` (also on
-                ``capabilities('nemotron-relational').tasks``).
+                ``capabilities('kumo-relational').tasks``).
             entity_table: The graph table the ``entity_column`` values refer
                 to, or a ``(source, target)`` pair for temporal link
                 prediction.

@@ -49,7 +49,7 @@ def test_rfm_api_predict_posts_current_v1_payload_and_parses_response(
         additional_matcher=capture,
         json={
             'id': 'pred-contract-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '601',
@@ -89,7 +89,7 @@ def test_rfm_api_predict_reattaches_anchor_times(mock_api: Any) -> None:
         f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-anchor-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '601',
@@ -134,7 +134,7 @@ def test_rfm_api_predict_rejects_misaligned_anchor_times(
         f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-anchor-mismatch-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '601',
@@ -216,7 +216,7 @@ def test_sdk_rest_authenticate_accepts_current_nim_surface(
         json={
             'data': [
                 {
-                    'id': 'nemotron-relational',
+                    'id': 'kumo-relational',
                 }
             ]
         },
@@ -233,7 +233,7 @@ def test_rfm_api_predict_does_not_mutate_request_payload(
         f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-contract-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '601',
@@ -262,7 +262,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
         f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-varied-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '601',
@@ -380,7 +380,7 @@ def test_rfm_api_predict_renders_multiclass_long_format(
         f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-multiclass-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '601',
@@ -433,7 +433,7 @@ def test_prediction_response_rejects_bad_probability_shape(
         f'{MOCK_URL}{NIM_V1_PREDICTION_PATH}',
         json={
             'id': 'pred-bad-probabilities',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '1',
@@ -493,7 +493,7 @@ def test_container_smoke_payload_tracks_current_v1_wire_shape() -> None:
     }
     assert 'version' not in payload
     assert 'metadata' not in payload
-    assert payload['model'] == 'nemotron-relational'
+    assert payload['model'] == 'kumo-relational'
     assert payload['task']['kind'] == 'classification'
     assert payload['output']['fields'] == ['prediction', 'probabilities']
     assert payload['inference'] == {'run_mode': 'best'}
@@ -551,7 +551,7 @@ def test_prediction_item_missing_id_is_an_invalid_response_error() -> None:
     response = _StubResponse(
         {
             'id': 'pred-1',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [{'row_index': 0, 'prediction': True}],
         }
     )
@@ -573,7 +573,7 @@ def test_identity_mapping_mismatch_stays_a_caller_error() -> None:
 
     body = {
         'id': 'pred-1',
-        'model': 'nemotron-relational',
+        'model': 'kumo-relational',
         'predictions': [{'id': '1', 'row_index': 0, 'prediction': True}],
     }
 
@@ -605,7 +605,7 @@ def test_response_count_mismatch_is_still_an_invalid_response() -> None:
     response = _StubResponse(
         {
             'id': 'pred-1',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [],
         }
     )

@@ -144,7 +144,7 @@ class StructuredClient:
         there is no url, api_key, verify_ssl, timeout or retry policy to give --
         the platform owns those.
 
-        >>> client = StructuredClient.for_databricks_serving("nemotron-relational")
+        >>> client = StructuredClient.for_databricks_serving("kumo-relational")
         >>> df = client.relational(graph).predict("PREDICT ... FOR ...", [1, 2])
 
         Args:

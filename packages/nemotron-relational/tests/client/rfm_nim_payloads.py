@@ -16,7 +16,7 @@ SDK_V1_RFM_PARSE_QUERY_PATH = '/v1/rfm/parse_query'
 SDK_V1_RFM_VALIDATE_QUERY_PATH = '/v1/rfm/validate_query'
 
 _NIM_V1_SMOKE_PAYLOAD: dict[str, Any] = {
-    'model': 'nemotron-relational',
+    'model': 'kumo-relational',
     'task': {
         'kind': 'classification',
         'target': {

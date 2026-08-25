@@ -32,7 +32,7 @@ PREDICTION = TFMOperations.run_prediction.endpoint
 SESSIONS = TFMOperations.create_session.endpoint
 CANONICAL_RESPONSE = {
     'id': 'r1',
-    'model': 'nemotron-relational',
+    'model': 'kumo-relational',
     'predictions': [{'row_index': 0, 'prediction': 1}],
     'metadata': {'task_kind': 'binary_classification'},
 }
@@ -70,7 +70,7 @@ class _Workspace:
 
 def _client(**kwargs: Any) -> tuple[DatabricksServingClient, _Workspace]:
     workspace = _Workspace(**kwargs)
-    return DatabricksServingClient('nemotron-relational', workspace), workspace
+    return DatabricksServingClient('kumo-relational', workspace), workspace
 
 
 def _wire_size(request: Any) -> int:
@@ -90,7 +90,7 @@ def _wire_size(request: Any) -> int:
 # Quote-dense, like a real `format: arrays` cohort: every quote is re-escaped
 # once the payload is nested in request_json.
 QUOTE_DENSE = {
-    'model': 'nemotron-relational',
+    'model': 'kumo-relational',
     'rows': ['{"a":"b","c":"d"}'] * 400,
 }
 
@@ -111,12 +111,10 @@ def test_exposes_what_the_rfm_path_calls() -> None:
 
 def test_returns_a_serving_response() -> None:
     client, _ = _client()
-    response = client._request(
-        PREDICTION, json={'model': 'nemotron-relational'}
-    )
+    response = client._request(PREDICTION, json={'model': 'kumo-relational'})
     assert isinstance(response, ServingResponse)
     assert response.ok and response.status_code == 200
-    assert response.json()['model'] == 'nemotron-relational'
+    assert response.json()['model'] == 'kumo-relational'
 
 
 def test_has_no_authenticate_method() -> None:
@@ -132,16 +130,16 @@ def test_has_no_authenticate_method() -> None:
 
 def test_queries_by_endpoint_name_only() -> None:
     client, workspace = _client()
-    client._request(PREDICTION, json={'model': 'nemotron-relational'})
+    client._request(PREDICTION, json={'model': 'kumo-relational'})
     call = workspace.serving_endpoints.calls[0]
-    assert call['name'] == 'nemotron-relational'
+    assert call['name'] == 'kumo-relational'
     assert workspace.touched == [], 'transport touched an unexpected attribute'
 
 
 def test_never_probes_health_or_models() -> None:
     """The negative assertion the contract calls for, as a real test."""
     client, workspace = _client()
-    client._request(PREDICTION, json={'model': 'nemotron-relational'})
+    client._request(PREDICTION, json={'model': 'kumo-relational'})
     sent = json.dumps(workspace.serving_endpoints.calls)
     for probe in ('/v1/health/ready', '/v1/models', 'health', 'ready'):
         assert probe not in sent
@@ -149,7 +147,7 @@ def test_never_probes_health_or_models() -> None:
 
 def test_no_path_is_appended_to_anything() -> None:
     client, workspace = _client()
-    client._request(PREDICTION, json={'model': 'nemotron-relational'})
+    client._request(PREDICTION, json={'model': 'kumo-relational'})
     call = workspace.serving_endpoints.calls[0]
     assert '/v1/predictions' not in call['name']
     assert 'url' not in call and 'path' not in call
@@ -199,7 +197,7 @@ def test_a_rejected_url_never_echoes_credentials(bad: str) -> None:
 def test_sends_one_request_json_row() -> None:
     client, workspace = _client()
     request = {
-        'model': 'nemotron-relational',
+        'model': 'kumo-relational',
         'task': {'kind': 'binary_classification'},
     }
     client._request(PREDICTION, json=request)
@@ -211,9 +209,7 @@ def test_sends_one_request_json_row() -> None:
 
 def test_reads_one_response_json_row() -> None:
     client, _ = _client()
-    body = client._request(
-        PREDICTION, json={'model': 'nemotron-relational'}
-    ).json()
+    body = client._request(PREDICTION, json={'model': 'kumo-relational'}).json()
     assert body == CANONICAL_RESPONSE
 
 
@@ -240,19 +236,19 @@ def test_rejects_a_non_prediction_endpoint() -> None:
 def test_rejects_a_malformed_reply(reply: Any) -> None:
     client, _ = _client(reply=reply)
     with pytest.raises(HTTPException) as caught:
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     assert caught.value.status_code == 502
 
 
 def test_rejects_an_oversized_request_before_egress() -> None:
     workspace = _Workspace()
     client = DatabricksServingClient(
-        'nemotron-relational', workspace, max_request_bytes=256
+        'kumo-relational', workspace, max_request_bytes=256
     )
     with pytest.raises(HTTPException) as caught:
         client._request(
             PREDICTION,
-            json={'model': 'nemotron-relational', 'pad': 'x' * 512},
+            json={'model': 'kumo-relational', 'pad': 'x' * 512},
         )
     assert caught.value.status_code == 413
     assert workspace.serving_endpoints.calls == [], (
@@ -273,7 +269,7 @@ def test_the_cap_measures_the_escaped_wire_body_not_the_inner_payload() -> None:
     # A cap the inner payload clears but the wire body does not.
     workspace = _Workspace()
     client = DatabricksServingClient(
-        'nemotron-relational', workspace, max_request_bytes=len(payload) + 64
+        'kumo-relational', workspace, max_request_bytes=len(payload) + 64
     )
     with pytest.raises(HTTPException) as caught:
         client._request(PREDICTION, json=QUOTE_DENSE)
@@ -289,7 +285,7 @@ def test_what_is_measured_is_what_is_sent() -> None:
     wire = _wire_size(QUOTE_DENSE)
     workspace = _Workspace()
     client = DatabricksServingClient(
-        'nemotron-relational', workspace, max_request_bytes=wire
+        'kumo-relational', workspace, max_request_bytes=wire
     )
     client._request(PREDICTION, json=QUOTE_DENSE)
     records = workspace.serving_endpoints.calls[0]['dataframe_records']
@@ -305,7 +301,7 @@ def test_the_cap_boundary_is_exact(cap_delta: int, is_sent: bool) -> None:
     wire = _wire_size(QUOTE_DENSE)
     workspace = _Workspace()
     client = DatabricksServingClient(
-        'nemotron-relational', workspace, max_request_bytes=wire + cap_delta
+        'kumo-relational', workspace, max_request_bytes=wire + cap_delta
     )
     if is_sent:
         client._request(PREDICTION, json=QUOTE_DENSE)
@@ -324,7 +320,7 @@ def test_rejects_an_invalid_max_request_bytes(bad: Any) -> None:
     """Documented as a user override, so it is user input."""
     with pytest.raises(ValueError):
         DatabricksServingClient(
-            'nemotron-relational', _Workspace(), max_request_bytes=bad
+            'kumo-relational', _Workspace(), max_request_bytes=bad
         )
 
 
@@ -351,12 +347,12 @@ def test_a_request_over_the_platform_limit_never_leaves_the_process() -> None:
     locally rather than be paid for and refused.
     """
     workspace = _Workspace()
-    client = DatabricksServingClient('nemotron-relational', workspace)
+    client = DatabricksServingClient('kumo-relational', workspace)
     with pytest.raises(HTTPException) as caught:
         client._request(
             PREDICTION,
             json={
-                'model': 'nemotron-relational',
+                'model': 'kumo-relational',
                 'pad': 'x' * (16 * 1000 * 1000),
             },
         )
@@ -372,7 +368,7 @@ def test_rejects_non_finite_numbers() -> None:
     with pytest.raises(ValueError):
         client._request(
             PREDICTION,
-            json={'model': 'nemotron-relational', 'x': float('inf')},
+            json={'model': 'kumo-relational', 'x': float('inf')},
         )
 
 
@@ -399,7 +395,7 @@ def test_translates_provider_errors(exc_name: str, expected: int) -> None:
     error = type(exc_name, (Exception,), {})(f'boom on {SECRET}')
     client, _ = _client(raiser=error)
     with pytest.raises(HTTPException) as caught:
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     assert caught.value.status_code == expected
 
 
@@ -412,7 +408,7 @@ def test_provider_messages_are_never_echoed() -> None:
     )
     client, _ = _client(raiser=error)
     with pytest.raises(HTTPException) as caught:
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     rendered = f'{caught.value.status_code} {caught.value.detail}'
     for leak in (SECRET, 'abcd1234', 'acme.cloud.databricks.com'):
         assert leak not in rendered
@@ -427,7 +423,7 @@ def test_debug_logging_carries_no_request_or_provider_content(
     client, _ = _client(raiser=error)
     with pytest.raises(HTTPException):
         client._request(
-            PREDICTION, json={'model': 'nemotron-relational', 'note': SECRET}
+            PREDICTION, json={'model': 'kumo-relational', 'note': SECRET}
         )
     captured = '\n'.join(record.getMessage() for record in caplog.records)
     assert SECRET not in captured
@@ -444,7 +440,7 @@ def test_debug_logging_keeps_the_provider_error_for_diagnosis(
     error = type('BadRequest', (Exception,), {})(f'bad: {SECRET}')
     client, _ = _client(raiser=error)
     with pytest.raises(HTTPException):
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     record = next(r for r in caplog.records if r.name == 'nemotron_relational')
     assert record.exc_info is not None
     assert SECRET not in record.getMessage()
@@ -458,7 +454,7 @@ def test_the_provider_error_code_is_surfaced_but_the_message_is_not() -> None:
     error.error_code = 'INVALID_PARAMETER_VALUE'
     client, _ = _client(raiser=error)
     with pytest.raises(HTTPException) as caught:
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     assert 'INVALID_PARAMETER_VALUE' in caught.value.detail
     assert SECRET not in caught.value.detail
 
@@ -471,7 +467,7 @@ def test_a_non_enum_error_code_is_withheld() -> None:
     error.error_code = f'denied for token on acme.databricks.com: {SECRET}'
     client, _ = _client(raiser=error)
     with pytest.raises(HTTPException) as caught:
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     assert SECRET not in caught.value.detail
 
 
@@ -528,7 +524,7 @@ def test_the_timeout_reaches_a_self_constructed_workspace_client(
 
     monkeypatch.setattr(core, 'Config', _FakeConfig)
     monkeypatch.setattr(sdk, 'WorkspaceClient', _fake_workspace_client)
-    DatabricksServingClient('nemotron-relational', timeout=123.0)
+    DatabricksServingClient('kumo-relational', timeout=123.0)
     assert seen['http_timeout_seconds'] == 123.0
     assert isinstance(seen['config'], _FakeConfig)
 
@@ -548,7 +544,7 @@ def test_an_injected_workspace_client_is_never_reconfigured() -> None:
     """The timeout is ours to set only on a client we built."""
     workspace = _Workspace()
     before = set(workspace.__dict__)
-    DatabricksServingClient('nemotron-relational', workspace, timeout=1.0)
+    DatabricksServingClient('kumo-relational', workspace, timeout=1.0)
     assert set(workspace.__dict__) == before
     assert workspace.touched == []
 
@@ -559,9 +555,7 @@ def test_rejects_an_invalid_timeout(bad: Any) -> None:
     pass and become a one-second timeout -- the cold start this guards.
     """
     with pytest.raises(ValueError):
-        DatabricksServingClient(
-            'nemotron-relational', _Workspace(), timeout=bad
-        )
+        DatabricksServingClient('kumo-relational', _Workspace(), timeout=bad)
 
 
 def test_missing_extra_reports_the_extra_to_install() -> None:
@@ -578,7 +572,7 @@ def test_missing_extra_reports_the_extra_to_install() -> None:
     builtins.__import__ = _blocked
     try:
         with pytest.raises(ImportError) as caught:
-            DatabricksServingClient('nemotron-relational')
+            DatabricksServingClient('kumo-relational')
         assert 'databricks-serving' in str(caught.value)
     finally:
         builtins.__import__ = real_import
@@ -640,9 +634,7 @@ def test_reads_a_real_query_endpoint_response() -> None:
         predictions=[{RESPONSE_COLUMN: json.dumps(CANONICAL_RESPONSE)}]
     )
     client, _ = _client(reply=reply)
-    body = client._request(
-        PREDICTION, json={'model': 'nemotron-relational'}
-    ).json()
+    body = client._request(PREDICTION, json={'model': 'kumo-relational'}).json()
     assert body == CANONICAL_RESPONSE
 
 
@@ -669,5 +661,5 @@ def test_a_real_response_without_predictions_is_rejected() -> None:
     )
     client, _ = _client(reply=serving.QueryEndpointResponse())
     with pytest.raises(HTTPException) as caught:
-        client._request(PREDICTION, json={'model': 'nemotron-relational'})
+        client._request(PREDICTION, json={'model': 'kumo-relational'})
     assert caught.value.status_code == 502

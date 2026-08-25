@@ -98,8 +98,8 @@ serving only one of these models still reports both.
 from nemotron_structured import StructuredClient
 
 with StructuredClient(url='http://localhost:8000') as client:
-    print(client.models())  # ['nemotron-relational', 'nemotron-tabular']
-    print(client.capabilities('nemotron-tabular'))  # tasks and outputs the model supports
+    print(client.models())  # ['kumo-relational', 'kumo-tabular']
+    print(client.capabilities('kumo-tabular'))  # tasks and outputs the model supports
 ```
 
 To check the endpoint itself, call `client.health_ready()`. It returns whether

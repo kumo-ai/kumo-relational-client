@@ -1,5 +1,5 @@
 {
-  "model": "nemotron-tabular",
+  "model": "kumo-tabular",
   "task": {
     "kind": "regression",
     "target": {
@@ -52,6 +52,6 @@
     "quantile_levels": [0.1, 0.5, 0.9]
   },
   "metadata": {
-    "request_id": "nemotron-tabular-regression-quantiles-001"
+    "request_id": "kumo-tabular-regression-quantiles-001"
   }
 }

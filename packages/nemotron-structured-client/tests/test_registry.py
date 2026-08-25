@@ -60,6 +60,6 @@ def test_default_client_has_builtin_models():
     from nemotron_structured import StructuredClient
 
     assert set(StructuredClient(url='http://nim.test').models()) == {
-        'nemotron-relational',
-        'nemotron-tabular',
+        'kumo-relational',
+        'kumo-tabular',
     }

@@ -108,7 +108,7 @@ def _correlated_response(item_fields: dict[str, Any]) -> Any:
         ]
         return {
             'id': 'pred-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': predictions,
             'metadata': {
                 'task_kind': 'regression',
@@ -160,7 +160,7 @@ def test_predict_posts_universal_json_payload(
     payload = receptor.payload
     assert payload is not None
     assert 'version' not in payload
-    assert payload['model'] == 'nemotron-relational'
+    assert payload['model'] == 'kumo-relational'
     assert payload['task']['kind'] == 'regression'
     assert payload['schema']['relationships']
     assert payload['context']['instance_table']['format'] == 'arrays'

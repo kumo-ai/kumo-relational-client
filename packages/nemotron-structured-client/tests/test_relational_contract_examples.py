@@ -19,12 +19,12 @@ from conftest import canonical_examples_available, load_canonical_example
 
 from nemotron_structured.adapters.relational import NemotronRelationalAdapter
 
-RELATIONAL = 'nemotron-relational'
+RELATIONAL = 'kumo-relational'
 
 PREDICTION_EXAMPLES = [
-    'prediction_nemotron_relational_binary_classification.json',
-    'prediction_nemotron_relational_forecasting.json',
-    'prediction_nemotron_relational_temporal_link_prediction.json',
+    'prediction_kumo_relational_binary_classification.json',
+    'prediction_kumo_relational_forecasting.json',
+    'prediction_kumo_relational_temporal_link_prediction.json',
 ]
 
 
@@ -60,7 +60,7 @@ def test_creating_a_session_carries_context_but_asks_for_nothing() -> None:
     predict or output block."""
     payload = load_canonical_example(
         RELATIONAL,
-        'session_create_nemotron_relational_binary_classification.json',
+        'session_create_kumo_relational_binary_classification.json',
     )
 
     assert {'model', 'task', 'schema', 'context'} <= set(payload)
@@ -74,7 +74,7 @@ def test_predicting_in_a_session_carries_no_context() -> None:
     prediction against it re-sends only what to score."""
     payload = load_canonical_example(
         RELATIONAL,
-        'session_prediction_nemotron_relational_binary_classification.json',
+        'session_prediction_kumo_relational_binary_classification.json',
     )
 
     assert {'predict', 'output'} <= set(payload)
@@ -87,7 +87,7 @@ def test_a_forecast_step_is_an_integer_number_of_nanoseconds() -> None:
     r"""The unit is not stated on the wire, so a client that reads it as
     seconds is wrong by a factor of a billion and nothing says so."""
     payload = load_canonical_example(
-        RELATIONAL, 'prediction_nemotron_relational_forecasting.json'
+        RELATIONAL, 'prediction_kumo_relational_forecasting.json'
     )
     step = payload['task']['step_size']
 
@@ -99,7 +99,7 @@ def test_a_forecast_step_is_an_integer_number_of_nanoseconds() -> None:
 def test_a_temporal_link_prediction_ranks_between_two_entity_tables() -> None:
     payload = load_canonical_example(
         RELATIONAL,
-        'prediction_nemotron_relational_temporal_link_prediction.json',
+        'prediction_kumo_relational_temporal_link_prediction.json',
     )
 
     assert len(payload['task']['entity_table_names']) == 2

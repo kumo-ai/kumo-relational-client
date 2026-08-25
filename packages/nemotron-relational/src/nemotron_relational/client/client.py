@@ -365,13 +365,13 @@ class RelationalClient:
         models = self._probe('/v1/models')
         data = _json_or_none(models)
         advertised = isinstance(data, dict) and any(
-            isinstance(model, dict) and model.get('id') == 'nemotron-relational'
+            isinstance(model, dict) and model.get('id') == 'kumo-relational'
             for model in data.get('data', [])
         )
         if not advertised:
             raise ValueError(
                 f'Endpoint {redact_url(self._url)!r} did not advertise '
-                "the 'nemotron-relational' "
+                "the 'kumo-relational' "
                 "model at '/v1/models'. Point the client at a Universal TFM NIM "
                 'serving NemotronRelational.'
             )

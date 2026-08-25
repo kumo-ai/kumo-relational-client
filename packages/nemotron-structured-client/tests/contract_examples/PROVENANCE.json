@@ -1,15 +1,15 @@
 {
   "files": {
-    "nemotron-relational/prediction_nemotron_relational_binary_classification.json": "96a1cf816ee3868c0ffd0734f62839d4097a4ac6c08c6c393089fb9aa0df266b",
-    "nemotron-relational/prediction_nemotron_relational_forecasting.json": "2973381710a49f73d5fa7246f613ee4ce271052aba23aeee48fbda9142c29467",
-    "nemotron-relational/prediction_nemotron_relational_temporal_link_prediction.json": "787936751ef1cfe14a88ff986ca05504f92435d19415757f09c6880f13155a36",
-    "nemotron-relational/session_create_nemotron_relational_binary_classification.json": "7a734197d30e0f05addc67171017f2b8f8167960187da3b0a19d97c699ca45e3",
-    "nemotron-relational/session_prediction_nemotron_relational_binary_classification.json": "521306e3c729d13cbe1578e61a50f3ee31de082593a74f63fd50d1a3947d8105",
-    "nemotron-tabular/prediction_nemotron_tabular_arrays.json": "44d106d9e47b41e57d1ad5dc5159b79311b0473d2981afe69ab1576fdf601af1",
-    "nemotron-tabular/prediction_nemotron_tabular_numeric_classification.json": "198ef6f08dd88ed92b50914f6311ceb43491ef1499035543112ab78645cef577",
-    "nemotron-tabular/prediction_nemotron_tabular_regression_quantiles.json": "3ab039bdcce259af1d90cf91051f4c5419d2a37b55d9a5a4945ffcd8b1643bef"
+    "kumo-relational/prediction_kumo_relational_binary_classification.json": "1f617dfd1dc9d0ad3b43437b4cc57b71c394cd04a79e3e2b59a5c4876c4199f8",
+    "kumo-relational/prediction_kumo_relational_forecasting.json": "3886b95218ae78ab07c3a26fd5988d9bc06560a3088b1e6e733fadf02f8f6dcf",
+    "kumo-relational/prediction_kumo_relational_temporal_link_prediction.json": "96a705d275f240894e882d75efcfa0faeffaf05722972fdd5598f25c7a3f9b34",
+    "kumo-relational/session_create_kumo_relational_binary_classification.json": "69dfabc769a9de3920532227339fba77ae9fc9fd1e291a574add6a3b0f557e36",
+    "kumo-relational/session_prediction_kumo_relational_binary_classification.json": "1608633888302dfce01c9f6a8d0764b41f7ae52c49bc7aea4e2bab1351aedcee",
+    "kumo-tabular/prediction_kumo_tabular_arrays.json": "1ee99460b87c0f694d7c8a1536d5012eb5c863ecab20ee3d42303a8c2420ce12",
+    "kumo-tabular/prediction_kumo_tabular_numeric_classification.json": "34a351e2ee8efe7cd640fac59ecfdaef7d33cc8f38bf1deb898ec58f632757ff",
+    "kumo-tabular/prediction_kumo_tabular_regression_quantiles.json": "a2920c96b4bcf3cdec860d916239d87509a5ec750604ee39cd9be193c3370c01"
   },
   "source_path": "examples",
   "source_repository": "https://gitlab-master.nvidia.com/kumo-tfm-nims/structured-data-api.git",
-  "source_revision": "d09c5a2fcd7d9003267ed9ef019e840eb8f0db82"
+  "source_revision": "9ca10eeef619d2afd3aec3f6bbab3ce72196a61a"
 }

@@ -110,7 +110,7 @@ with StructuredClient(url='http://localhost:8000') as client:
 ```
 
 `client.models()` lists the models this client has adapters for and
-`client.capabilities("nemotron-relational")` describes one of them. Both read the
+`client.capabilities("kumo-relational")` describes one of them. Both read the
 client-side registry, not the endpoint: a NIM serving only one of these models
 still reports both, and a mismatch surfaces as an error from the NIM on the
 first prediction. The transport pools connections and retries

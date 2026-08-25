@@ -45,7 +45,7 @@ def _clean_state() -> Any:
 
 def test_initializes_without_a_url() -> None:
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=_Workspace()
+        'kumo-relational', workspace_client=_Workspace()
     )
     assert nemotron_relational.global_state.initialized
     assert nemotron_relational.global_state._url is None
@@ -73,12 +73,12 @@ def test_repeated_init_does_not_rebuild_the_client() -> None:
     """
     workspace = _Workspace()
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=workspace
+        'kumo-relational', workspace_client=workspace
     )
     first_client = nemotron_relational.global_state.client
 
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=workspace
+        'kumo-relational', workspace_client=workspace
     )
 
     assert nemotron_relational.global_state.client is first_client
@@ -89,7 +89,7 @@ def test_changed_arguments_still_rebuild_the_client() -> None:
     initialized, or a caller could never switch endpoint or workspace.
     """
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=_Workspace()
+        'kumo-relational', workspace_client=_Workspace()
     )
     first_client = nemotron_relational.global_state.client
 
@@ -108,7 +108,7 @@ def test_transport_overrides_reach_the_client() -> None:
     without plumbing them through init no caller can reach them.
     """
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational',
+        'kumo-relational',
         workspace_client=_Workspace(),
         max_request_bytes=1234,
         timeout=12.5,
@@ -120,7 +120,7 @@ def test_transport_overrides_reach_the_client() -> None:
 
 def test_clear_resets_the_factory() -> None:
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=_Workspace()
+        'kumo-relational', workspace_client=_Workspace()
     )
     nemotron_relational.global_state.clear()
     assert not nemotron_relational.global_state.initialized
@@ -132,7 +132,7 @@ def test_each_thread_gets_its_own_client() -> None:
     built with.
     """
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=_Workspace()
+        'kumo-relational', workspace_client=_Workspace()
     )
     main = nemotron_relational.global_state.client
     seen: list[Any] = []
@@ -155,7 +155,7 @@ def test_serving_reinit_replaces_cached_clients_in_other_threads() -> None:
     threads rely on the cache key changing when the process is reconfigured.
     """
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=_Workspace()
+        'kumo-relational', workspace_client=_Workspace()
     )
     first_ready = threading.Event()
     reconfigured = threading.Event()
@@ -226,7 +226,7 @@ def test_switching_modes_replaces_the_client(
     assert isinstance(nemotron_relational.global_state.client, RelationalClient)
 
     nemotron_relational.init_databricks_serving(
-        'nemotron-relational', workspace_client=_Workspace()
+        'kumo-relational', workspace_client=_Workspace()
     )
     assert isinstance(
         nemotron_relational.global_state.client, DatabricksServingClient

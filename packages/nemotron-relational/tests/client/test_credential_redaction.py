@@ -126,7 +126,7 @@ def test_init_log_line_does_not_leak_url_userinfo(
     requests_mock.get(
         f'{url}/v1/models',
         status_code=200,
-        json={'data': [{'id': 'nemotron-relational'}]},
+        json={'data': [{'id': 'kumo-relational'}]},
     )
 
     with caplog.at_level(logging.INFO, logger='nemotron_relational'):

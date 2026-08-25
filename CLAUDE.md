@@ -29,7 +29,7 @@ with StructuredClient(url='http://localhost:8000') as client:
     df = model.predict(rows)
 ```
 
-`client.tabular(...)` returns a `TabularModel` and sends `nemotron-tabular`.
+`client.tabular(...)` returns a `TabularModel` and sends `kumo-tabular`.
 `client.relational(graph)` returns a `RelationalModel` and sends
 `nemotron-relational`; it needs the `[relational]` extra. The method names the
 capability, so a future model of the same shape is a `model=` argument rather

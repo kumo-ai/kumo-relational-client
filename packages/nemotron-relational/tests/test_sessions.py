@@ -20,7 +20,7 @@ from nemotron_relational.rfm.payload import (
 from nemotron_relational.utils.progress_logger import PlainProgressLogger
 
 _FULL_PAYLOAD = {
-    'model': 'nemotron-relational',
+    'model': 'kumo-relational',
     'task': {'kind': 'regression'},
     'schema': {'instance_table': {}},
     'context': {'instance_table': {}, 'related_tables': {}},
@@ -291,7 +291,7 @@ def test_rfmapi_create_session_returns_id(mock_api: Any) -> None:
         json={'session_id': 'sess_x', 'ttl_seconds': 3600},
     )
     api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
-    assert api.create_session({'model': 'nemotron-relational'}) == 'sess_x'
+    assert api.create_session({'model': 'kumo-relational'}) == 'sess_x'
 
 
 def test_rfmapi_create_session_requires_id(mock_api: Any) -> None:
@@ -304,14 +304,14 @@ def test_rfmapi_create_session_requires_id(mock_api: Any) -> None:
     mock_api.post(f'{MOCK_URL}/v1/sessions', json={'ttl_seconds': 3600})
     api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(InvalidResponseError, match='session_id'):
-        api.create_session({'model': 'nemotron-relational'})
+        api.create_session({'model': 'kumo-relational'})
 
 
 def test_rfmapi_create_session_rejects_a_non_json_body(mock_api: Any) -> None:
     mock_api.post(f'{MOCK_URL}/v1/sessions', text='<html>gateway</html>')
     api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(InvalidResponseError):
-        api.create_session({'model': 'nemotron-relational'})
+        api.create_session({'model': 'kumo-relational'})
 
 
 def test_rfmapi_delete_session_issues_delete(mock_api: Any) -> None:
@@ -327,7 +327,7 @@ def test_rfmapi_session_predict_targets_session_path(mock_api: Any) -> None:
         index = table['columns'].index(INSTANCE_ID)
         return {
             'id': 'pred',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {'id': str(row[index]), 'row_index': i, 'prediction': 0.5}
                 for i, row in enumerate(table['rows'])

@@ -1,5 +1,5 @@
 {
-  "model": "nemotron-tabular",
+  "model": "kumo-tabular",
   "task": {
     "kind": "classification",
     "target": {
@@ -88,6 +88,6 @@
     ]
   },
   "metadata": {
-    "request_id": "nemotron-tabular-demo-001"
+    "request_id": "kumo-tabular-demo-001"
   }
 }

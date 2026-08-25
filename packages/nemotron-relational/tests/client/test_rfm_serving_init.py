@@ -35,7 +35,7 @@ class _Workspace:
 
 
 def _init(
-    rfm_engine: Any, endpoint: str = 'nemotron-relational', **kwargs: Any
+    rfm_engine: Any, endpoint: str = 'kumo-relational', **kwargs: Any
 ) -> None:
     """Initialize the way ``StructuredClient`` does, token included.
 
@@ -113,9 +113,7 @@ def test_records_the_endpoint_rather_than_a_stale_url(rfm_engine: Any) -> None:
     place would make the state read as if a NIM were still configured.
     """
     _init(rfm_engine)
-    assert (
-        rfm_engine.global_state._url == 'databricks-serving:nemotron-relational'
-    )
+    assert rfm_engine.global_state._url == 'databricks-serving:kumo-relational'
 
 
 def test_the_client_is_the_serving_transport(rfm_engine: Any) -> None:
@@ -136,7 +134,7 @@ def test_a_direct_call_is_refused(rfm_engine: Any) -> None:
     """
     with pytest.raises(RuntimeError):
         rfm_engine.init_databricks_serving(
-            'nemotron-relational', workspace_client=_Workspace()
+            'kumo-relational', workspace_client=_Workspace()
         )
     assert not rfm_engine.global_state._initialized
 
@@ -145,7 +143,7 @@ def test_a_url_shaped_endpoint_is_rejected(rfm_engine: Any) -> None:
     with pytest.raises(ValueError):
         _init(
             rfm_engine,
-            'https://workspace/serving-endpoints/nemotron-relational',
+            'https://workspace/serving-endpoints/kumo-relational',
         )
     assert not rfm_engine.global_state._initialized
 

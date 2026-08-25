@@ -11,16 +11,16 @@ from nemotron_structured import ModelCapabilities, StructuredClient
 
 def test_client_lists_builtin_models():
     assert set(StructuredClient(url='http://nim.test').models()) == {
-        'nemotron-relational',
-        'nemotron-tabular',
+        'kumo-relational',
+        'kumo-tabular',
     }
 
 
 def test_client_reports_capabilities():
     client = StructuredClient(url='http://nim.test')
-    caps = client.capabilities('nemotron-tabular')
+    caps = client.capabilities('kumo-tabular')
     assert isinstance(caps, ModelCapabilities)
-    assert caps.model == 'nemotron-tabular'
+    assert caps.model == 'kumo-tabular'
     assert 'classification' in caps.tasks
     assert 'prediction' in caps.outputs
     assert caps.request_type == 'NemotronTabularRequest'

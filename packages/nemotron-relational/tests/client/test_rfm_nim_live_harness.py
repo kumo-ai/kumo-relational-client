@@ -207,7 +207,7 @@ def test_assert_prediction_response_correlates_rows_semantically() -> None:
         'application/json',
         {
             'id': 'pred-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '602',
@@ -238,7 +238,7 @@ def test_assert_prediction_response_rejects_wrong_row_identity() -> None:
         'application/json',
         {
             'id': 'pred-test',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': '602',
@@ -279,7 +279,7 @@ def test_preflight_accepts_supported_readiness_shapes(
     )
     mock_api.get(
         'http://nim.test/v1/models',
-        json={'data': [{'id': 'nemotron-relational'}]},
+        json={'data': [{'id': 'kumo-relational'}]},
         headers={'Content-Type': 'application/json'},
     )
 

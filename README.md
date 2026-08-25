@@ -22,8 +22,8 @@ Two models are available through one client:
 
 | Model | For | Reached by |
 | --- | --- | --- |
-| `nemotron-tabular` | a single table | `client.tabular(...)` |
-| `nemotron-relational` | several related tables, joined as a graph | `client.relational(...)` |
+| `kumo-tabular` | a single table | `client.tabular(...)` |
+| `kumo-relational` | several related tables, joined as a graph | `client.relational(...)` |
 
 ## Getting Started
 
@@ -43,13 +43,13 @@ with StructuredClient(url="http://localhost:8000") as client:
 ```
 
 `client.models()` lists what the client can dispatch and
-`client.capabilities("nemotron-tabular")` describes one model. Neither needs a
+`client.capabilities("kumo-tabular")` describes one model. Neither needs a
 live endpoint.
 
 ## Requirements
 
 - **Python** 3.10 to 3.13.
-- **A reachable NIM** serving `nemotron-tabular` or `nemotron-relational`.
+- **A reachable NIM** serving `kumo-tabular` or `kumo-relational`.
 - **No GPU** on the client. The NIM owns that.
 - **OS and architecture.** The client and connectors are pure Python and
   install anywhere. The `[relational]` extra is a native build, published as

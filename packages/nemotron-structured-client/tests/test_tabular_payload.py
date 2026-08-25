@@ -44,21 +44,21 @@ def _comparable(payload: dict) -> dict:
     ('example_file', 'target', 'task', 'outputs', 'extra'),
     [
         (
-            'prediction_nemotron_tabular_arrays.json',
+            'prediction_kumo_tabular_arrays.json',
             'target_col',
             'classification',
             ['prediction', 'probabilities'],
             {},
         ),
         (
-            'prediction_nemotron_tabular_numeric_classification.json',
+            'prediction_kumo_tabular_numeric_classification.json',
             'target_col',
             'classification',
             ['prediction', 'probabilities'],
             {},
         ),
         (
-            'prediction_nemotron_tabular_regression_quantiles.json',
+            'prediction_kumo_tabular_regression_quantiles.json',
             'target_col',
             'regression',
             ['prediction', 'quantiles'],
@@ -76,7 +76,7 @@ def test_build_request_matches_canonical_example(
     outputs,
     extra,
 ):
-    canonical = load_canonical_example('nemotron-tabular', example_file)
+    canonical = load_canonical_example('kumo-tabular', example_file)
     context = _dataframe_from_table(canonical['context']['instance_table'])
     predict = _dataframe_from_table(canonical['predict']['instance_table'])
 

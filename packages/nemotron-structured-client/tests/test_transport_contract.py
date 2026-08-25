@@ -27,7 +27,7 @@ _URL = 'http://nim.example.com:8000'
 def _canned_response(request_id: str = 'pred_123') -> dict:
     return {
         'id': request_id,
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'predictions': [
             {
                 'row_index': 0,
@@ -62,7 +62,7 @@ def test_predict_end_to_end_round_trip(requests_mock, context_df, predict_df):
     assert list(frame['prediction']) == ['yes', 'no']
 
     sent_payload = requests_mock.last_request.json()
-    assert sent_payload['model'] == 'nemotron-tabular'
+    assert sent_payload['model'] == 'kumo-tabular'
     assert sent_payload['task']['target']['column_name'] == 'target_col'
 
 
@@ -78,7 +78,7 @@ def test_predict_unknown_model_raises():
 def test_predict_wrong_request_type_raises():
     @dataclass
     class _MislabelledRequest(ModelRequest):
-        model: ClassVar[str] = 'nemotron-tabular'
+        model: ClassVar[str] = 'kumo-tabular'
 
     with pytest.raises(StructuredError) as excinfo:
         StructuredClient(url=_URL)._predict(_MislabelledRequest())
@@ -128,7 +128,7 @@ def test_client_sends_api_key_header(requests_mock):
     https_url = 'https://nim.example.com:8000'
     requests_mock.post(https_url + '/v1/predictions', json=_canned_response())
     client = Transport(https_url, api_key='secret')
-    client.predict({'model': 'nemotron-tabular'})
+    client.predict({'model': 'kumo-tabular'})
     assert requests_mock.last_request.headers['X-API-Key'] == 'secret'
 
 
@@ -167,7 +167,7 @@ def test_invalid_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', text='not json')
     client = Transport(_URL)
     with pytest.raises(StructuredError) as excinfo:
-        client.predict({'model': 'nemotron-tabular'})
+        client.predict({'model': 'kumo-tabular'})
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
@@ -175,7 +175,7 @@ def test_non_object_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', json=['a', 'b'])
     client = Transport(_URL)
     with pytest.raises(StructuredError) as excinfo:
-        client.predict({'model': 'nemotron-tabular'})
+        client.predict({'model': 'kumo-tabular'})
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
@@ -183,7 +183,7 @@ def test_non_object_json_error_body_is_handled(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', status_code=500, json=['boom'])
     client = Transport(_URL)
     with pytest.raises(NimRequestError) as excinfo:
-        client.predict({'model': 'nemotron-tabular'})
+        client.predict({'model': 'kumo-tabular'})
     assert excinfo.value.status_code == 500
 
 
@@ -328,7 +328,7 @@ def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(servers):
     origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
 
     Transport(origin['url'], api_key='secret').predict(
-        {'model': 'nemotron-relational'}
+        {'model': 'kumo-relational'}
     )
 
     assert origin['headers'][0]['X-API-Key'] == 'secret'
@@ -340,7 +340,7 @@ def test_api_key_is_kept_on_a_same_origin_redirect(servers):
     origin['redirect_to'] = origin['url'] + '/v1/predictions/'
 
     Transport(origin['url'], api_key='secret').predict(
-        {'model': 'nemotron-relational'}
+        {'model': 'kumo-relational'}
     )
 
     assert len(origin['headers']) == 2
@@ -351,7 +351,7 @@ def test_redirects_are_still_followed(servers):
     origin, target = servers
     origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
 
-    body = Transport(origin['url']).predict({'model': 'nemotron-relational'})
+    body = Transport(origin['url']).predict({'model': 'kumo-relational'})
 
     assert body == {'predictions': []}
     assert len(target['headers']) == 1
@@ -365,7 +365,7 @@ def test_nim_error_string_carries_the_http_status(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'nemotron-tabular'})
+        Transport(_URL).predict({'model': 'kumo-tabular'})
     assert str(excinfo.value) == (
         '[422 INVALID_SCHEMA] schema validation failed'
     )
@@ -377,7 +377,7 @@ def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'nemotron-tabular'})
+        Transport(_URL).predict({'model': 'kumo-tabular'})
     assert str(excinfo.value) == '[403] Forbidden'
 
 
@@ -389,7 +389,7 @@ def test_nim_error_truncates_a_huge_response_body(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'nemotron-tabular'})
+        Transport(_URL).predict({'model': 'kumo-tabular'})
     assert len(str(excinfo.value)) < 1024
     assert 'truncated' in str(excinfo.value)
     assert excinfo.value.status_code == 502

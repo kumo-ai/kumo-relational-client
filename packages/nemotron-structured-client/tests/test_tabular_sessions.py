@@ -25,7 +25,7 @@ _SESSION_ID = 'sess_2c12f086caaa'
 def _predictions() -> dict:
     return {
         'id': 'pred_1',
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'predictions': [
             {'row_index': 0, 'prediction': 'yes'},
             {'row_index': 1, 'prediction': 'no'},

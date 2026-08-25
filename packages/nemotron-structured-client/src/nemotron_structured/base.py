@@ -40,7 +40,7 @@ class ModelCapabilities:
     read from the endpoint, and none of it is enforced before a request is
     sent. Attributes:
 
-    - ``model``: The model id, e.g. ``'nemotron-relational'``.
+    - ``model``: The model id, e.g. ``'kumo-relational'``.
     - ``request_type``: The name of the adapter's request class, for
       diagnostics. These classes are an implementation detail of the model
       handles and are not importable from ``nemotron_structured``.

@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- **The models are now addressed as `kumo-relational` and `kumo-tabular`.** The
+  previous ids `nemotron-relational` and `nemotron-tabular` are not accepted. A
+  request naming an old id is rejected by the NIM, so this is a breaking change
+  for any caller that passes a model id explicitly; `client.relational(...)` and
+  `client.tabular(...)` pick the right id on their own and need no edit.
+- The vendored contract examples and the generated TFM bindings were re-synced
+  from the canonical contract, which carries the same rename.
+- The bindings generator now emits output that already satisfies the repo's lint
+  and formatting rules, so the generated file no longer has to be hand-formatted
+  after generation and the byte-for-byte drift test against the contract is
+  enforceable again.
+
 ## 1.0.0: all three packages
 
 The first release under the `nemotron-*` names, and the first public one. All

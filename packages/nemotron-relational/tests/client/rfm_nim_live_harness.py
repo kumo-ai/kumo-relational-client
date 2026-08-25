@@ -155,6 +155,6 @@ def assert_ready_and_model_available(client: LiveNimClient) -> None:
     models = assert_json_object(models_response).get('data')
     assert isinstance(models, list)
     assert any(
-        isinstance(model, dict) and model.get('id') == 'nemotron-relational'
+        isinstance(model, dict) and model.get('id') == 'kumo-relational'
         for model in models
     )

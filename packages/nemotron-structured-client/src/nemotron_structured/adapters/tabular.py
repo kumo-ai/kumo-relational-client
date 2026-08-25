@@ -267,7 +267,7 @@ def build_request(
     }
 
     return {
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'task': task_spec,
         'schema': schema,
         'context': {
@@ -426,12 +426,12 @@ def _predict_with_session(
 
 
 class NemotronTabularAdapter(ModelAdapter):
-    name = 'nemotron-tabular'
+    name = 'kumo-tabular'
     request_type = NemotronTabularRequest
 
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
-            model='nemotron-tabular',
+            model='kumo-tabular',
             request_type=self.request_type.__name__,
             tasks=tuple(sorted(_TASK_KINDS)),
             outputs=('prediction', 'probabilities', 'quantiles'),

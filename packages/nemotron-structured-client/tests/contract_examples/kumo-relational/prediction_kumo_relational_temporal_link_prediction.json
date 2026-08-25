@@ -1,5 +1,5 @@
 {
-  "model": "nemotron-relational",
+  "model": "kumo-relational",
   "task": {
     "kind": "temporal_link_prediction",
     "target": {

@@ -16,7 +16,7 @@ from nemotron_relational.client import RelationalClient
 from nemotron_relational.client.endpoints import HTTPMethod
 from nemotron_relational.client.generated.tfm_api import (
     TFM_ENDPOINTS_BY_OPERATION_ID,
-    TFM_MODEL_NEMOTRON_RELATIONAL,
+    TFM_MODEL_KUMO_RELATIONAL,
     TFM_OUTPUT_FIELD_EMBEDDINGS,
     TFM_OUTPUT_FIELD_EXPLANATION,
     TFM_OUTPUT_FIELD_VALUES,
@@ -44,7 +44,7 @@ CANONICAL_SPEC = (
 def test_generated_tfm_api_runtime_metadata() -> None:
     operation = TFMOperations.run_prediction
 
-    assert TFM_MODEL_NEMOTRON_RELATIONAL == 'nemotron-relational'
+    assert TFM_MODEL_KUMO_RELATIONAL == 'kumo-relational'
     assert TFM_OUTPUT_FIELD_EMBEDDINGS == 'embeddings'
     assert TFM_OUTPUT_FIELD_EXPLANATION == 'explanation'
     assert operation.operation_id == 'runPrediction'
@@ -74,7 +74,7 @@ def test_generated_prediction_response_parser() -> None:
     response = PredictionResponse.from_dict(
         {
             'id': 'pred-1',
-            'model': 'nemotron-relational',
+            'model': 'kumo-relational',
             'predictions': [
                 {
                     'id': 7,
@@ -113,7 +113,7 @@ def test_generated_prediction_response_parser() -> None:
     )
 
     assert response.id == 'pred-1'
-    assert response.model == 'nemotron-relational'
+    assert response.model == 'kumo-relational'
     assert response.metadata['task_kind'] == 'classification'
     assert len(response.predictions) == 1
     item = response.predictions[0]
@@ -205,7 +205,7 @@ def test_prediction_response_correlates_opaque_ids_to_repeated_entities() -> (
 ):
     response = PredictionResponse(
         id='pred-1',
-        model='nemotron-relational',
+        model='kumo-relational',
         predictions=(
             PredictionItem(id='21', row_index=1, prediction='second'),
             PredictionItem(id='20', row_index=0, prediction='first'),
@@ -231,7 +231,7 @@ def test_prediction_response_correlates_opaque_ids_to_repeated_entities() -> (
 def test_ranking_response_expands_rankings_to_compatibility_rows() -> None:
     response = PredictionResponse(
         id='pred-rank-1',
-        model='nemotron-relational',
+        model='kumo-relational',
         predictions=(
             PredictionItem(
                 id='20',
@@ -308,7 +308,7 @@ def test_ranking_response_rejects_malformed_rankings(
 ) -> None:
     response = PredictionResponse(
         id='pred-rank-1',
-        model='nemotron-relational',
+        model='kumo-relational',
         predictions=(item,),
         metadata={
             'task_kind': 'temporal_link_prediction',
@@ -327,7 +327,7 @@ def test_ranking_response_rejects_malformed_rankings(
 def test_forecast_response_allows_multiple_records_per_request_row() -> None:
     response = PredictionResponse(
         id='pred-forecast-1',
-        model='nemotron-relational',
+        model='kumo-relational',
         predictions=(
             PredictionItem(
                 id='20',
@@ -391,7 +391,7 @@ def test_forecast_response_rejects_malformed_steps(
 ) -> None:
     response = PredictionResponse(
         id='pred-forecast-1',
-        model='nemotron-relational',
+        model='kumo-relational',
         predictions=predictions,
         metadata={
             'task_kind': 'forecasting',
@@ -474,7 +474,7 @@ def test_prediction_response_rejects_invalid_correlation(
 ) -> None:
     response = PredictionResponse(
         id='pred-1',
-        model='nemotron-relational',
+        model='kumo-relational',
         predictions=predictions,
         metadata={'task_kind': 'regression'},
     )
@@ -511,8 +511,7 @@ def test_generator_creates_minimal_bindings(tmp_path: Path) -> None:
     assert 'run_prediction: Final[TFMOperation]' in generated
     assert "path='/v1/predictions'" in generated
     assert (
-        "TFM_MODEL_NEMOTRON_RELATIONAL: Final[str] = 'nemotron-relational'"
-        in generated
+        "TFM_MODEL_KUMO_RELATIONAL: Final[str] = 'kumo-relational'" in generated
     )
     assert "TFM_OUTPUT_FIELD_EMBEDDINGS: Final[str] = 'embeddings'" in generated
     assert (
@@ -748,7 +747,7 @@ def test_documented_prediction_request_examples_match_envelope_shape() -> None:
     property_names = set(request_schema['properties'])
     required = set(request_schema['required'])
 
-    assert {'tabicl_arrays', 'kumo_rfm_arrays'} <= set(examples)
+    assert {'kumo_tabular_arrays', 'kumo_relational_arrays'} <= set(examples)
     for example in examples.values():
         value = example['value']
         assert set(value) <= property_names
@@ -780,7 +779,7 @@ def _load_local_canonical_spec_at_generated_revision() -> dict:
 
 
 def _assert_request_envelope_shape(value: dict) -> None:
-    assert value['model'] in {'nemotron-tabular', 'nemotron-relational'}
+    assert value['model'] in {'kumo-tabular', 'kumo-relational'}
     assert 'kind' in value['task']
     assert 'instance_table' in value['schema']
     assert 'instance_table' in value['context']
@@ -840,7 +839,7 @@ def _minimal_openapi_spec() -> dict:
                             'enum': ['v1'],
                         },
                         'model': {
-                            'enum': ['nemotron-tabular', 'nemotron-relational'],
+                            'enum': ['kumo-tabular', 'kumo-relational'],
                         },
                         'task': {},
                         'schema': {},

@@ -142,12 +142,12 @@ def test_the_payload_is_bound_never_interpolated() -> None:
     is logged and shown in history.
     """
     session = _Session()
-    _client(session)._request(PREDICTION, json={'model': 'nemotron-relational'})
+    _client(session)._request(PREDICTION, json={'model': 'kumo-relational'})
     statement, params = session.statements[-1]
     assert '?' in statement
-    assert 'nemotron-relational' not in statement
+    assert 'kumo-relational' not in statement
     assert params == [
-        json.dumps({'model': 'nemotron-relational'}, separators=(',', ':'))
+        json.dumps({'model': 'kumo-relational'}, separators=(',', ':'))
     ]
 
 
@@ -322,7 +322,7 @@ def test_the_service_function_envelope_is_unwrapped() -> None:
     The SQL column and the model's column share a name, so the nesting is
     invisible until a parser reports a missing 'id' and blames the model.
     """
-    canonical = '{"id":"pred_1","model":"nemotron-relational","predictions":[]}'
+    canonical = '{"id":"pred_1","model":"kumo-relational","predictions":[]}'
     session = _Session(rows=[_Row(json.dumps({RESPONSE_COLUMN: canonical}))])
     response = _client(session)._request(PREDICTION, json={})
     assert response.json()['id'] == 'pred_1'

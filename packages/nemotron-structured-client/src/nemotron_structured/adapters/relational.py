@@ -319,7 +319,7 @@ def _translate_engine_error(error: Exception, url: str) -> StructuredError:
     if isinstance(error, (ValueError, TypeError, LookupError)):
         return StructuredError(str(error), code='INVALID_REQUEST')
     return StructuredError(
-        f'The nemotron-relational prediction at {url} failed unexpectedly with '
+        f'The kumo-relational prediction at {url} failed unexpectedly with '
         f'{type(error).__name__}: {error}',
         code='INTERNAL_ERROR',
     )
@@ -519,7 +519,7 @@ def _graph_signature(graph: Any) -> Any | None:
 
 
 class NemotronRelationalAdapter(ModelAdapter):
-    name = 'nemotron-relational'
+    name = 'kumo-relational'
     request_type = (NemotronRelationalRequest, NemotronRelationalTaskRequest)
 
     def __init__(self) -> None:
@@ -528,7 +528,7 @@ class NemotronRelationalAdapter(ModelAdapter):
 
     def capabilities(self) -> ModelCapabilities:
         return ModelCapabilities(
-            model='nemotron-relational',
+            model='kumo-relational',
             request_type=request_type_names(self.request_type),
             tasks=RFM_TASK_TYPES,
             outputs=('prediction', 'probabilities', 'explanation'),

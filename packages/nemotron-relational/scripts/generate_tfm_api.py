@@ -32,6 +32,8 @@ except ImportError:  # pragma: no cover - exercised only in bare dev envs.
 DEFAULT_OUTPUT = Path('nemotron_relational/client/generated/tfm_api.py')
 DEFAULT_STRIP_PREFIX = ''
 
+_LINE_LENGTH = 80
+
 HTTP_METHODS = {
     'delete',
     'get',
@@ -141,8 +143,9 @@ def generate_code(
         f'# Source: {source_label}',
         f'# Source SHA256: {spec_hash}',
         '',
+        'from collections.abc import Mapping',
         'from dataclasses import dataclass',
-        'from typing import Any, Final, Mapping',
+        'from typing import Any, Final',
         '',
         'from nemotron_relational.client.endpoints import Endpoint, HTTPMethod',
         '',
@@ -184,14 +187,17 @@ def generate_code(
             '',
             '',
             '__all__ = [',
-            "    'TFMOperation',",
-            "    'TFMOperations',",
-            "    'TFM_ENDPOINTS_BY_OPERATION_ID',",
-            "    'TFM_SCHEMA_NAMES',",
         ]
     )
-    lines.extend(f'    {name!r},' for name in response_model_names)
-    lines.extend(f'    {name!r},' for name in sorted(constants))
+    exported = [
+        'TFMOperation',
+        'TFMOperations',
+        'TFM_ENDPOINTS_BY_OPERATION_ID',
+        'TFM_SCHEMA_NAMES',
+        *response_model_names,
+        *constants,
+    ]
+    lines.extend(f'    {name!r},' for name in _sorted_dunder_all(exported))
     lines.extend(
         [
             ']',
@@ -384,9 +390,34 @@ def _constant_lines(
         if isinstance(value, tuple):
             lines.extend(_tuple_constant_lines(name, value))
         else:
-            lines.append(f'{name}: Final[str] = {value!r}')
+            declaration = f'{name}: Final[str] = {value!r}'
+            if len(declaration) > _LINE_LENGTH:
+                # Match what the formatter would do, so generated output needs
+                # no formatting pass and stays byte-comparable to the checkout.
+                lines.extend(
+                    [
+                        f'{name}: Final[str] = (',
+                        f'    {value!r}',
+                        ')',
+                    ]
+                )
+            else:
+                lines.append(declaration)
     lines.extend(['', ''])
     return lines
+
+
+def _sorted_dunder_all(names: list[str]) -> list[str]:
+    r"""Order ``__all__`` the way ruff's RUF022 expects, so generated output is
+    lint-clean and the byte-for-byte drift test stays enforceable.
+
+    Constant-cased names sort ahead of class-cased ones, each alphabetically.
+    """
+
+    def key(name: str) -> tuple[int, str]:
+        return (0 if name.replace('_', '').isupper() else 1, name)
+
+    return sorted(names, key=key)
 
 
 def _generated_response_model_names(schemas: dict[str, Any]) -> tuple[str, ...]:
@@ -417,7 +448,7 @@ def _response_model_lines(schemas: dict[str, Any]) -> list[str]:
         '    metadata: dict[str, Any] | None = None',
         '',
         '    @classmethod',
-        '    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionItem":',
+        "    def from_dict(cls, data: Mapping[str, Any]) -> 'PredictionItem':",
         '        return cls(',
         "            id=str(data['id']) if 'id' in data else None,",
         "            row_index=_int_or_none(data.get('row_index')),",
@@ -441,7 +472,7 @@ def _response_model_lines(schemas: dict[str, Any]) -> list[str]:
         '    metadata: dict[str, Any]',
         '',
         '    @classmethod',
-        '    def from_dict(cls, data: Mapping[str, Any]) -> "PredictionResponse":',
+        "    def from_dict(cls, data: Mapping[str, Any]) -> 'PredictionResponse':",
         '        return cls(',
         "            id=str(data['id']),",
         "            model=str(data['model']),",

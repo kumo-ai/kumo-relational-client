@@ -70,7 +70,7 @@ python -c "from nemotron_structured import StructuredClient; print(StructuredCli
 Expected output:
 
 ```text
-['nemotron-relational', 'nemotron-tabular']
+['kumo-relational', 'kumo-tabular']
 ```
 
 If you installed the `[relational]` extra, confirm the driver's native extension

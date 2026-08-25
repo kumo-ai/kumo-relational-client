@@ -13,7 +13,7 @@ from nemotron_structured.errors import StructuredError
 def test_parse_prediction_response_basic_fields():
     response = {
         'id': 'pred_abc',
-        'model': 'nemotron-tabular',
+        'model': 'kumo-tabular',
         'predictions': [
             {
                 'row_index': 0,
