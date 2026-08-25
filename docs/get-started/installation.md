@@ -22,7 +22,7 @@ Before you start, you must complete the following prerequisites:
 pip install "kumo-relational-client"
 ```
 
-This installs the client and every lightweight model, including Nemotron Tabular.
+This installs the client and every lightweight model, including Kumo Tabular.
 
 ## Package Extras
 
@@ -30,11 +30,11 @@ Add extras in brackets to install additional capabilities.
 
 | Command | You get |
 | --- | --- |
-| `pip install "kumo-relational-client"` | The client plus every lightweight model (Nemotron Tabular). |
+| `pip install "kumo-relational-client"` | The client plus every lightweight model (Kumo Tabular). |
 | `pip install "kumo-relational-client[relational]"` | Adds the Nemotron Relational driver (native graph sampler and PQL). |
 | `pip install "kumo-relational-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
-| `pip install "kumo-relational-client[databricks-serving]"` | Reaches a Nemotron Relational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
-| `pip install "kumo-relational-client[all]"` | Nemotron Relational, every data-source connector, and `[databricks-serving]`. |
+| `pip install "kumo-relational-client[databricks-serving]"` | Reaches a Kumo Relational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
+| `pip install "kumo-relational-client[all]"` | Kumo Relational, every data-source connector, and `[databricks-serving]`. |
 
 Two extras are deliberately outside `[all]` and must be named:
 

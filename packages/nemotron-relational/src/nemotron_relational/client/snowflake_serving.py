@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""Invoke Nemotron Relational through a Snowpark Container Services model service.
+"""Invoke Kumo Relational through a Snowpark Container Services model service.
 
 The peer of :mod:`nemotron_relational.client.databricks_serving`, and the same contract:
 one ``request_json`` row in, one ``response_json`` row out. What differs is how
@@ -97,7 +97,7 @@ def _status_of(error: BaseException) -> int:
 
 
 class SnowflakeServingClient:
-    """Address a Nemotron Relational model served on Snowpark Container Services.
+    """Address a Kumo Relational model served on Snowpark Container Services.
 
     Args:
         service: The service name, optionally qualified as

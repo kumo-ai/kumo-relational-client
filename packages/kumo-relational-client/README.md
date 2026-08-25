@@ -7,12 +7,12 @@ per-model adapters; heavy model drivers are optional extras.
 ## Install
 
 ```bash
-pip install kumo-relational-client              # client + every lightweight model (Nemotron Tabular)
+pip install kumo-relational-client              # client + every lightweight model (Kumo Tabular)
 pip install kumo-relational-client[relational]     # adds Nemotron Relational (native driver)
 pip install kumo-relational-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
-pip install kumo-relational-client[all]         # Nemotron Relational, every data-source backend,
+pip install kumo-relational-client[all]         # Kumo Relational, every data-source backend,
                                      # and [databricks-serving]
-pip install kumo-relational-client[explain]     # Nemotron Relational plus the explanation-summary LLM
+pip install kumo-relational-client[explain]     # Kumo Relational plus the explanation-summary LLM
                                      # client. Deliberately NOT part of [all],
                                      # because it enables the third-party data
                                      # egress described below.
@@ -23,12 +23,12 @@ pip install kumo-relational-client[explain]     # Nemotron Relational plus the e
 A `RelationalClient` owns one connection to a NIM. Requests are typed per model: each
 model handle builds its own request type, and the client rejects a request the
 target model's adapter does not accept. Each adapter also checks what it knows
-it cannot serve, an unsupported task kind or output field for Nemotron Tabular, an
-unknown `task_type` or a missing entity table for Nemotron Relational, and raises
+it cannot serve, an unsupported task kind or output field for Kumo Tabular, an
+unknown `task_type` or a missing entity table for Kumo Relational, and raises
 `RelationalError(code="INVALID_REQUEST")` before anything is sent. Everything else is
 validated by the NIM.
 
-Nemotron Tabular (single table):
+Kumo Tabular (single table):
 
 ```python
 from kumo_relational_client import RelationalClient
@@ -38,7 +38,7 @@ with RelationalClient(url='http://localhost:8000') as client:
     df = model.predict(predict_df, outputs=['prediction', 'probabilities'])
 ```
 
-Nemotron Relational (relational), needs `kumo-relational-client[relational]`:
+Kumo Relational (relational), needs `kumo-relational-client[relational]`:
 
 ```python
 from kumo_relational_client import RelationalClient, relational
@@ -126,7 +126,7 @@ through `RelationalClient` rather than mixing in direct `nemotron_relational.ini
 `close()` (or leaving the `with` block) releases the pooled connections and
 retires the client; use a new `RelationalClient` afterwards.
 
-`from kumo_relational_client import relational` is the supported surface onto the Nemotron Relational
+`from kumo_relational_client import relational` is the supported surface onto the Kumo Relational
 driver (`Graph`, `LocalTable`, `Stype`, `Dtype`, `ExplainConfig`, ...); you
 never import the driver package directly. The model itself is not on that
 surface, you reach it through `client.relational(graph)`.

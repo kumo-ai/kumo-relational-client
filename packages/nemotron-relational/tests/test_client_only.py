@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-"""The Nemotron Relational engine may only be initialized by kumo_relational_client.RelationalClient.
+"""The Kumo Relational engine may only be initialized by kumo_relational_client.RelationalClient.
 
 Direct `rfm.init(...)` + `NemotronRelational(graph).predict(...)` against a NIM used to
 bypass the supported client surface (issue #22). These tests lock in that the

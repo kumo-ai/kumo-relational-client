@@ -2,7 +2,7 @@
 
 The Nemotron Relational driver for the [`kumo-relational-client`](../kumo-relational-client/README.md) client.
 
-This distribution provides the heavy, client-side machinery a Nemotron Relational prediction
+This distribution provides the heavy, client-side machinery a Kumo Relational prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
 the neighbor samplers (local native `relationallib`, plus DuckDB / SQLite / Snowflake /
 Databricks backends), the PQL parser, and the HTTP client that talks to a Universal

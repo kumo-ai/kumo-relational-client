@@ -72,7 +72,7 @@ class CompleteFileUploadRequest:
     # Upload ID as returned in StartFileUploadResponse.
     upload_id: str
     parts_metadata: list[PartUploadMetadata] = field(default_factory=list)
-    # Validate the data types and column names for compatibility with Nemotron Relational. Can
+    # Validate the data types and column names for compatibility with Kumo Relational. Can
     # be skipped if the user has already performed validation before uploading.
     validate_data: bool = True
 
@@ -86,7 +86,7 @@ class DeleteUploadedFileRequest:
 
 
 class DataSourceType(StrEnum):
-    r"""The different data sources that Nemotron Relational can connect to."""
+    r"""The different data sources that Kumo Relational can connect to."""
 
     SNOWFLAKE = 'SNOWFLAKE'
     S3 = 'S3'
@@ -99,7 +99,7 @@ class DataSourceType(StrEnum):
 
 
 class ConnectorType(StrEnum):
-    r"""The different types of connectors that Nemotron Relational supports."""
+    r"""The different types of connectors that Kumo Relational supports."""
 
     SNOWFLAKE = 'snowflake'
     DATABRICKS = 'databricks'

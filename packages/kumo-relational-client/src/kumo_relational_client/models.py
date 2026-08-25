@@ -147,7 +147,7 @@ def _validate_random_seed(value: Any) -> int | None:
 
 
 class RelationalModel:
-    r"""A Nemotron Relational handle bound to a graph, offering the familiar
+    r"""A Kumo Relational handle bound to a graph, offering the familiar
     ``model.predict(query, ...)`` call from the old client.
 
     Returned by :meth:`RelationalClient.nemotron_relational`. It is a thin, stateless wrapper: the
@@ -516,7 +516,7 @@ class RelationalModel:
 
 
 class TabularModel:
-    r"""A Nemotron Tabular handle bound to a labelled context table.
+    r"""A Kumo Tabular handle bound to a labelled context table.
 
     Returned by :meth:`RelationalClient.tabicl`. The context, task and target are
     supplied once; each :meth:`predict` scores a new table of unlabelled rows,
@@ -563,23 +563,23 @@ class TabularModel:
             predict: The unlabelled rows to score. Must share the context's
                 feature columns and hold at least one row.
             outputs: The fields to return, defaulting to ``['prediction']``.
-                Nemotron Tabular produces ``'probabilities'`` for a classification task
+                Kumo Tabular produces ``'probabilities'`` for a classification task
                 and ``'quantiles'`` for a regression one; asking for a field
                 the task cannot produce raises.
             positive_class: The class to treat as positive in a binary
                 classification. Must be one of the classes in the context's
-                target column. Currently ignored by the Nemotron Tabular NIM.
+                target column. Currently ignored by the Kumo Tabular NIM.
             prediction_statistic: The statistic to reduce a regression
                 prediction with, e.g. ``'mean'``.
             quantile_levels: The quantiles to return alongside a regression
                 prediction, each strictly between 0 and 1.
             score_format: Requested encoding of ``'probabilities'``.
-                Currently ignored by the Nemotron Tabular NIM, which always returns an
+                Currently ignored by the Kumo Tabular NIM, which always returns an
                 object keyed by class.
             embedding_dtype: Requested encoding of returned embeddings.
-                Currently ignored by the Nemotron Tabular NIM.
+                Currently ignored by the Kumo Tabular NIM.
             max_results: Requested cap on the number of returned rows.
-                Currently ignored by the Nemotron Tabular NIM, which scores every row.
+                Currently ignored by the Kumo Tabular NIM, which scores every row.
             request_id: An id to correlate this request with server logs. One
                 is generated when omitted.
 

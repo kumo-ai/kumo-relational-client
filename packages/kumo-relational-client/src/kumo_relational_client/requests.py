@@ -58,7 +58,7 @@ class KumoTabularSession:
 
 @dataclass
 class KumoTabularRequest(ModelRequest):
-    r"""A single-table Nemotron Tabular prediction request.
+    r"""A single-table Kumo Tabular prediction request.
 
     ``context`` holds labelled rows (including the ``target`` column) and
     ``predict`` holds the unlabelled rows to score.
@@ -85,7 +85,7 @@ class KumoTabularRequest(ModelRequest):
 
 @dataclass
 class KumoRelationalRequest(ModelRequest):
-    r"""A relational Nemotron Relational prediction request.
+    r"""A relational Kumo Relational prediction request.
 
     ``graph`` is a ``kumo_relational_client.relational`` graph, ``query`` is a PQL string, and
     ``options`` forwards any additional keyword arguments to the driver's
@@ -123,7 +123,7 @@ class KumoRelationalRequest(ModelRequest):
 
 @dataclass
 class KumoRelationalTaskRequest(ModelRequest):
-    r"""A Nemotron Relational prediction request with a caller-supplied context table.
+    r"""A Kumo Relational prediction request with a caller-supplied context table.
 
     Where :class:`KumoRelationalRequest` derives its in-context (train) examples from a
     PQL ``query``, this request carries them directly: ``context`` holds the

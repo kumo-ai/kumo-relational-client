@@ -27,7 +27,7 @@ class ColumnKeyGroup:
 
 @dataclass(frozen=True, eq=True)
 class Edge:
-    r"""A representation of an edge between tables in Nemotron Relational."""
+    r"""A representation of an edge between tables in Kumo Relational."""
 
     src_table: str
     fkey: str

@@ -1,6 +1,6 @@
 ---
 title: "NVIDIA Kumo Relational Client Prediction Output"
-description: "Reference for the shape and columns of the DataFrame returned by Nemotron Relational predictions, which vary by task type."
+description: "Reference for the shape and columns of the DataFrame returned by Kumo Relational predictions, which vary by task type."
 template-library-version: "1.0.0"
 ---
 

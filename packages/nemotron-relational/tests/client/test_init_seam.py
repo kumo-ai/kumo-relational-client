@@ -128,7 +128,7 @@ def test_clear_resets_the_factory() -> None:
 
 
 def test_each_thread_gets_its_own_client() -> None:
-    """The cache is per thread, so an existing Nemotron Relational keeps the client it was
+    """The cache is per thread, so an existing Kumo Relational keeps the client it was
     built with.
     """
     nemotron_relational.init_databricks_serving(

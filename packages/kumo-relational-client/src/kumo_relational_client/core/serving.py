@@ -104,7 +104,7 @@ class ServingTarget:
         raise RelationalError(
             f'the model served at {self.endpoint!r} does not support '
             'serving-mode invocation through the generic transport; only '
-            'Nemotron Relational does',
+            'Kumo Relational does',
             code='UNSUPPORTED_FEATURE',
         )
 

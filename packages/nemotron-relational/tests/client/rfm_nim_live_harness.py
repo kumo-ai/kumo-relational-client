@@ -95,7 +95,7 @@ def assert_prediction_response(
     response: requests.Response,
     request_payload: dict[str, Any],
 ) -> dict[str, Any]:
-    """Validate Nemotron Relational response semantics without pinning model output."""
+    """Validate Kumo Relational response semantics without pinning model output."""
     assert response.status_code == 200
     body = assert_json_object(response)
     assert isinstance(body.get('id'), str) and body['id']

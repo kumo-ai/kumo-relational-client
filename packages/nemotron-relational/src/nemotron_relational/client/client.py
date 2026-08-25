@@ -50,7 +50,7 @@ _USERINFO_RE = re.compile(r'(?<=//)[^/@\s]+@')
 
 
 def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
-    r"""The retry policy for one Nemotron Relational client.
+    r"""The retry policy for one Kumo Relational client.
 
     ``retry_post=False`` drops ``POST`` from the retryable methods, switching
     off the status retries for a route whose side effect the client cannot
@@ -91,7 +91,7 @@ def _build_retry(max_retries: int, retry_post: bool = True) -> Retry:
 def _validate_url(url: str, api_key: str | None) -> None:
     r"""Mirrors ``kumo_relational_client.core.transport._validate_url``.
 
-    This client carries every Nemotron Relational prediction, so the guard the client
+    This client carries every Kumo Relational prediction, so the guard the client
     documents has to hold here too rather than only on the path that happens
     to construct a ``Transport`` first.
     """
@@ -267,7 +267,7 @@ def _raise_init_error(url: str, exc: BaseException) -> NoReturn:
             f'{cause}'
         ) from exc
     raise ClientInitializationError(
-        f'Failed to initialize Nemotron Relational client against {shown!r}. '
+        f'Failed to initialize Kumo Relational client against {shown!r}. '
         f'Exception: {cause}'
     ) from exc
 
@@ -281,7 +281,7 @@ class RelationalClient:
         timeout: float | None = None,
         max_retries: int = 3,
     ) -> None:
-        r"""Creates a client for Nemotron Relational requests against a Universal TFM NIM.
+        r"""Creates a client for Kumo Relational requests against a Universal TFM NIM.
 
         NIMs are unauthenticated by contract. ``api_key`` is optional and only
         needed when a deployment adds its own authenticating gateway; when

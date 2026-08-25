@@ -60,13 +60,13 @@ live endpoint.
 
 | Command | You get |
 | --- | --- |
-| `pip install kumo-relational-client` | The client and every lightweight model, which today means Nemotron Tabular. |
+| `pip install kumo-relational-client` | The client and every lightweight model, which today means Kumo Tabular. |
 | `pip install kumo-relational-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
 | `pip install kumo-relational-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
-| `pip install kumo-relational-client[all]` | Nemotron Relational, every warehouse backend, and `[databricks-serving]`. |
+| `pip install kumo-relational-client[all]` | Kumo Relational, every warehouse backend, and `[databricks-serving]`. |
 
 What ships in the base wheel is decided by dependency weight, not by
-preference. A model that does no client-side work, like Nemotron Tabular which
+preference. A model that does no client-side work, like Kumo Tabular which
 only shapes a request the NIM runs, is included. A model that does heavy
 client-side work, like Nemotron Relational with its graph building, native
 neighbor sampling and PQL, is an opt-in extra. Warehouse drivers are opt-in the

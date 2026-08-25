@@ -32,7 +32,7 @@ logger = logging.getLogger('nemotron_relational_rfm')
 _CLIENT_TOKEN = object()
 
 _DIRECT_USE_MESSAGE = (
-    'Direct use of the Nemotron Relational engine is not supported. Run inference through '
+    'Direct use of the Kumo Relational engine is not supported. Run inference through '
     'the NVIDIA Kumo Relational Client:\n'
     '    from kumo_relational_client import RelationalClient, relational\n'
     '    graph = relational.Graph.from_data(...)\n'

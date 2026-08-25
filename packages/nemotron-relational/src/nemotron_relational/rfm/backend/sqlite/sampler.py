@@ -132,7 +132,7 @@ class SQLiteSampler(SQLSampler):
                 f'database querying. For improving runtime, we '
                 f'strongly suggest to create indices for primary '
                 f'and foreign keys, e.g., automatically by '
-                f'instantiating Nemotron Relational via '
+                f'instantiating Kumo Relational via '
                 f'`NemotronRelational(graph, optimize=True)`.'
             )
 

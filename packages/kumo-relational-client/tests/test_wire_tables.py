@@ -4,7 +4,7 @@
 
 r"""The shared ``arrays`` table encoder.
 
-``encode_table`` came out of the Nemotron Tabular adapter to be shared with the
+``encode_table`` came out of the Kumo Tabular adapter to be shared with the
 relational path, so what matters is that it still writes exactly what the
 adapter wrote. The cases here are the ones where a rewrite could plausibly
 differ and the server would still accept the result: the empty-column frame,
@@ -85,7 +85,7 @@ def test_missing_values_become_null() -> None:
 
 
 def test_the_adapter_and_the_shared_encoder_agree() -> None:
-    r"""The move this module came from: the Nemotron Tabular payload builder must be
+    r"""The move this module came from: the Kumo Tabular payload builder must be
     emitting exactly what ``encode_table`` produces.
     """
     from kumo_relational_client.adapters.tabular import build_request

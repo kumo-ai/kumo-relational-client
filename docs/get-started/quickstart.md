@@ -1,6 +1,6 @@
 ---
 title: "Quickstart for the NVIDIA Kumo Relational Client"
-description: "Run your first Nemotron Tabular and Nemotron Relational predictions against a Universal TFM API NIM using the NVIDIA Kumo Relational Client."
+description: "Run your first Kumo Tabular and Kumo Relational predictions against a Universal TFM API NIM using the NVIDIA Kumo Relational Client."
 template-library-version: "1.0.0"
 ---
 
@@ -14,7 +14,7 @@ typed handle.
 
 Before you start, you must complete the following prerequisites:
 
-1. Install the client. For the relational example, install the Nemotron Relational extra:
+1. Install the client. For the relational example, install the Kumo Relational extra:
    `pip install "kumo-relational-client[relational]"`.
 2. Identify the URL of a running Universal TFM API NIM.
 
@@ -26,7 +26,7 @@ Before you start, you must complete the following prerequisites:
 
 ## Minimal Code Example
 
-### Nemotron Tabular: Single Table
+### Kumo Tabular: Single Table
 
 Provide labeled context rows and rows to predict:
 
@@ -35,7 +35,7 @@ from kumo_relational_client import RelationalClient
 
 # Connect to the NIM; the client is a context manager.
 with RelationalClient(url='http://localhost:8000') as client:
-    # Build a Nemotron Tabular handle bound to the labeled context table.
+    # Build a Kumo Tabular handle bound to the labeled context table.
     model = client.tabular(context_df, target='label', task='classification')
     # Score the unlabeled rows.
     predictions = model.predict(
@@ -45,7 +45,7 @@ with RelationalClient(url='http://localhost:8000') as client:
 print(predictions.head())
 ```
 
-### Nemotron Relational: Relational Data
+### Kumo Relational: Relational Data
 
 Build a graph from related tables, then express the target in PQL.
 

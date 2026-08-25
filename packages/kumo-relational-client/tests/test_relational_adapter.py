@@ -232,7 +232,7 @@ def test_nemotron_relational_shim_does_not_expose_driver():
 def test_nemotron_relational_shim_namespace_is_pinned():
     from kumo_relational_client import relational as nemotron_relational_shim
 
-    # This namespace is the documented Nemotron Relational surface (README, quickstart
+    # This namespace is the documented Kumo Relational surface (README, quickstart
     # notebook). Pinned so a change here has to be a change to the docs too.
     assert nemotron_relational_shim.__all__ == [
         'Dtype',

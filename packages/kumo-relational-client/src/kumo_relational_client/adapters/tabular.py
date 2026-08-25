@@ -45,11 +45,11 @@ _WIRE_TASK_KINDS = {
     'multiclass_classification': 'classification',
 }
 
-# Nemotron Tabular builds its KV cache for a fixed number of classes; beyond that the
+# Kumo Tabular builds its KV cache for a fixed number of classes; beyond that the
 # model raises and the NIM answers with an opaque 500.
 _MAX_CLASSES = 10
 
-# Fields Nemotron Tabular can produce per task kind. Anything else is accepted by the
+# Fields Kumo Tabular can produce per task kind. Anything else is accepted by the
 # contract but dropped server-side without comment.
 _OUTPUT_FIELDS = {
     'classification': ('prediction', 'probabilities'),
@@ -119,7 +119,7 @@ def _validate_outputs(outputs: Any, wire_task: str) -> None:
     ]
     if unsupported:
         raise RelationalError(
-            f'Nemotron Tabular does not produce {unsupported} for a {wire_task} task; '
+            f'Kumo Tabular does not produce {unsupported} for a {wire_task} task; '
             f'supported output fields: {list(_OUTPUT_FIELDS[wire_task])}',
             code='INVALID_REQUEST',
         )
@@ -184,12 +184,12 @@ def build_request(
         )
     if len(context) == 0:
         raise RelationalError(
-            'context is empty; Nemotron Tabular needs at least one labelled row',
+            'context is empty; Kumo Tabular needs at least one labelled row',
             code='INVALID_REQUEST',
         )
     if len(predict) == 0:
         raise RelationalError(
-            'predict is empty; Nemotron Tabular needs at least one row to score',
+            'predict is empty; Kumo Tabular needs at least one row to score',
             code='INVALID_REQUEST',
         )
 
@@ -229,7 +229,7 @@ def build_request(
         )
         if len(classes) > _MAX_CLASSES:
             raise RelationalError(
-                f'Nemotron Tabular supports at most {_MAX_CLASSES} classes; context '
+                f'Kumo Tabular supports at most {_MAX_CLASSES} classes; context '
                 f'target {target!r} has {len(classes)}',
                 code='INVALID_REQUEST',
             )

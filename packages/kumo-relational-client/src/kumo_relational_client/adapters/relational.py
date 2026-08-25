@@ -195,7 +195,7 @@ def _reject_reserved_options(options: dict[str, Any]) -> None:
     reserved = _RESERVED_OPTIONS & set(options)
     if reserved:
         raise RelationalError(
-            f'Nemotron Relational request options contain reserved keys {sorted(reserved)}; '
+            f'Kumo Relational request options contain reserved keys {sorted(reserved)}; '
             'set them as request fields instead',
             code='INVALID_REQUEST',
         )
@@ -275,7 +275,7 @@ def _translate_engine_error(error: Exception, url: str) -> RelationalError:
     ``NimFailureError`` (a ``RuntimeError``) carrying the status and the
     problem document's ``invalid_params``. Translating here means ``except
     RelationalError`` catches every failure of the prediction call itself, as it
-    already does for Nemotron Tabular. It does not cover graph construction: the engine
+    already does for Kumo Tabular. It does not cover graph construction: the engine
     validates the graph in its own constructor, outside this call, so a graph
     that fails validation still surfaces the engine's ``ValueError``.
 

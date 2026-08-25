@@ -95,13 +95,13 @@ class RelationalClient:
                 up to ``(max_retries + 1) * timeout`` plus backoff.
             max_retries: Transport-level retries of a transient failure (429,
                 500, 502, 503, 504, or a dropped connection) with
-                exponential backoff, on both the Nemotron Tabular and the Nemotron Relational path.
+                exponential backoff, on both the Kumo Tabular and the Kumo Relational path.
                 ``0`` disables them. ``POST /v1/sessions`` is excluded: a
                 re-sent create would orphan a pinned context on the NIM.
                 Distinct from ``predict(num_retries=...)``, which retries a
-                Nemotron Relational prediction at the application level and defaults to 1.
+                Kumo Relational prediction at the application level and defaults to 1.
             registry: The adapter registry to dispatch with. Defaults to the
-                built-in Nemotron Tabular and Nemotron Relational adapters.
+                built-in Kumo Tabular and Kumo Relational adapters.
         """
         self._configure(
             Transport(
@@ -268,10 +268,10 @@ class RelationalClient:
         target: str,
         task: str,
     ) -> TabularModel:
-        r"""A Nemotron Tabular handle:
+        r"""A Kumo Tabular handle:
         ``client.tabular(context, target=..., task=...).predict(rows)``.
 
-        This is the supported way to run Nemotron Tabular inference.
+        This is the supported way to run Kumo Tabular inference.
         """
         return TabularModel(
             self, require_frame(context, 'context'), task=task, target=target
@@ -283,7 +283,7 @@ class RelationalClient:
         Not a public API: run inference through ``client.relational(...)`` or
         ``client.tabular(...)``. Returns the adapter's typed result: a
         prediction ``pd.DataFrame``, or a ``nemotron_relational.rfm.rfm.Explanation`` when a
-        Nemotron Relational request asks to explain.
+        Kumo Relational request asks to explain.
         """
         self._transport._require_open()
         adapter = self._registry.get(request.model)

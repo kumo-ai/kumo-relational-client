@@ -7,7 +7,7 @@ r"""The exceptions this client raises.
 Every call on :class:`~kumo_relational_client.RelationalClient` and its model handles raises
 :class:`RelationalError` or one of its subclasses, so ``except RelationalError`` is enough
 to catch anything the client reports. Building a graph is the exception: the
-Nemotron Relational engine validates a graph in its own constructor, before any client call,
+Kumo Relational engine validates a graph in its own constructor, before any client call,
 and reports problems as :class:`ValueError`.
 
 Every error carries a ``code``, a short stable string meant to be branched on.

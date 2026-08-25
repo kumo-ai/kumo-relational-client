@@ -2,7 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""The Nemotron Relational examples that ship beside the contract.
+r"""The Kumo Relational examples that ship beside the contract.
 
 These had no test at all: only the tabular examples were replayed, so the
 relational half of the wire format was described by the contract and checked by

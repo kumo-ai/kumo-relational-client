@@ -31,7 +31,7 @@ The Nemotron Relational driver ships prebuilt binary wheels for the following pl
 
 No source distribution is published either, so `pip install
 "kumo-relational-client[relational]"` resolves on Linux x86_64 only. On any other platform,
-install the base `kumo-relational-client` and run Nemotron Relational from a Linux
+install the base `kumo-relational-client` and run Kumo Relational from a Linux
 x86_64 host. The base client is pure Python, as are the connectors, so it installs
 on anything running Python 3.10 or later.
 
@@ -56,7 +56,7 @@ install only when you request the matching extra.
 
 At runtime, the client needs network access to a Universal TFM API NIM. Set the
 endpoint when you create the client, or through the `KUMO_RELATIONAL_API_ENDPOINT`
-environment variable for the Nemotron Relational path.
+environment variable for the Kumo Relational path.
 
 ## Pre-Installation Checklist
 

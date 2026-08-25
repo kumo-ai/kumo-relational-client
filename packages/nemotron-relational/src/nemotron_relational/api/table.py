@@ -16,7 +16,7 @@ from nemotron_relational.api.typing import (
 
 
 class TimestampUnit(Enum):
-    r"""A timestamp unit for a column in a Nemotron Relational table."""
+    r"""A timestamp unit for a column in a Kumo Relational table."""
 
     #: Specified in seconds
     SECOND = 's'
@@ -33,7 +33,7 @@ class TimestampUnit(Enum):
 
 @dataclass(frozen=True)
 class Column:
-    r"""A column in a Nemotron Relational table."""
+    r"""A column in a Kumo Relational table."""
 
     name: str
     stype: Stype
@@ -46,7 +46,7 @@ class Column:
 
 @dataclass
 class TableDefinition:
-    r"""A definition of a Nemotron Relational table."""
+    r"""A definition of a Kumo Relational table."""
 
     # List of ALL columns selected from source table
     cols: list[Column]
@@ -95,7 +95,7 @@ class TableResource:
 
 @dataclass(frozen=True)
 class ColumnMetadataRequest:
-    r"""A request to infer metadata for a column in a Nemotron Relational table. This request
+    r"""A request to infer metadata for a column in a Kumo Relational table. This request
     can be incomplete in its stype, dtype, or timestamp format.
     """
 
@@ -110,7 +110,7 @@ class ColumnMetadataRequest:
 
 @dataclass
 class TableMetadataRequest:
-    r"""A request to infer Nemotron Relational table metadata."""
+    r"""A request to infer Kumo Relational table metadata."""
 
     cols: list[ColumnMetadataRequest]
     source_table: SourceTableType = Field(discriminator='data_source_type')
@@ -121,7 +121,7 @@ class TableMetadataRequest:
 
 @dataclass
 class TableMetadataResponse:
-    r"""A response containing metadata for a Nemotron Relational table."""
+    r"""A response containing metadata for a Kumo Relational table."""
 
     cols: list[Column]
     source_table: SourceTableType = Field(discriminator='data_source_type')

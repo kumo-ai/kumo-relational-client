@@ -53,7 +53,7 @@ def redact_url(url: str | None) -> str | None:
     into a log aggregator or a bug report.
 
     Mirrors ``nemotron_relational.client.client.redact_url``, which guards the same
-    credential on the Nemotron Relational path. The two cannot share one implementation:
+    credential on the Kumo Relational path. The two cannot share one implementation:
     this package must not import the optional driver, and the package both
     depend on is a SQL-connector package with no URL handling. Keep them in
     step.
@@ -138,7 +138,7 @@ class _Session(requests.Session):
     to any host it names, defeating ``_validate_url``.
 
     Redirects are still followed, and this covers the credential only. A
-    ``307``/``308`` therefore re-sends the request *body* -- for Nemotron Tabular, the
+    ``307``/``308`` therefore re-sends the request *body* -- for Kumo Tabular, the
     caller's whole labelled context table -- to the redirect target, including
     across an ``https`` to ``http`` downgrade, which ``_validate_url`` never
     sees because it runs at construction against the configured URL. That is

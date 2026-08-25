@@ -534,7 +534,7 @@ def _context_frame():
 def test_an_object_predict_column_does_not_retype_the_context(predict_column):
     # Regression: the union was taken over both frames, so an ``object`` or
     # all-null predict column re-typed the context's real ``int64`` feature as
-    # strings and Nemotron Tabular answered as though it were categorical. Nothing was
+    # strings and Kumo Tabular answered as though it were categorical. Nothing was
     # logged.
     context = _context_frame()
     predict = pd.DataFrame(
@@ -608,7 +608,7 @@ def test_widening_refuses_to_round_ids_past_the_float64_mantissa():
 def test_outputs_given_as_a_bare_string_is_named(context_df, predict_df):
     """``outputs`` is documented as a list. A bare string is iterable, so it used
     to be checked character by character and reported as
-    "Nemotron Tabular does not produce ['p', 'r', 'e', ...]".
+    "Kumo Tabular does not produce ['p', 'r', 'e', ...]".
     """
     with pytest.raises(RelationalError) as excinfo:
         build_request(
