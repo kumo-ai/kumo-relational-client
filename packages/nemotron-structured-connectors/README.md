@@ -1,6 +1,6 @@
 # nemotron-structured-connectors
 
-Shared data-source connectors for the [`nemotron-structured-client`](../nemotron-structured-client/README.md) client and its
+Shared data-source connectors for the [`kumo-relational-client`](../kumo-relational-client/README.md) client and its
 model engines. One place that knows how to reach each warehouse, so the client
 (flat table reads for Nemotron Tabular) and the Nemotron Relational driver (warehouse connections for
 its graph samplers) don't each carry their own copy.
@@ -53,7 +53,7 @@ Failures raised by `connect` / `read` / `read_table` surface as
 cases stay unwrapped by design: a missing optional driver raises
 `MissingBackendError`, and a broken or incompatible driver installation raises
 `ImportError` (consumers map it to their own broken-install category, e.g.
-nemotron-structured-client's `DRIVER_LOAD_FAILED`).
+kumo-relational-client's `DRIVER_LOAD_FAILED`).
 
 Pure-python. Database drivers are optional extras:
 
@@ -62,7 +62,7 @@ pip install "nemotron-structured-connectors[sqlite]"      # or [duckdb] / [snowf
 ```
 
 Consumers depend on it and surface these extras under their own name, e.g.
-`nemotron-structured-client[snowflake]` and `nemotron_relational[databricks]` both resolve the corresponding
+`kumo-relational-client[snowflake]` and `nemotron_relational[databricks]` both resolve the corresponding
 `nemotron-structured-connectors` extra.
 
 ## Local development

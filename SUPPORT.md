@@ -14,23 +14,23 @@ Apache-2.0 licence the code is released under.
 
 | What you have | Where to take it |
 | --- | --- |
-| A bug, or behaviour that contradicts the documentation | [GitHub issue](https://github.com/NVIDIA/nemotron-structured-client/issues) |
-| A question about usage | [GitHub issue](https://github.com/NVIDIA/nemotron-structured-client/issues) with the `question` label |
-| A feature request | [GitHub issue](https://github.com/NVIDIA/nemotron-structured-client/issues) describing the problem, not only the proposed fix |
+| A bug, or behaviour that contradicts the documentation | [GitHub issue](https://github.com/NVIDIA/kumo-relational-client/issues) |
+| A question about usage | [GitHub issue](https://github.com/NVIDIA/kumo-relational-client/issues) with the `question` label |
+| A feature request | [GitHub issue](https://github.com/NVIDIA/kumo-relational-client/issues) describing the problem, not only the proposed fix |
 | A suspected security vulnerability | **Not GitHub.** Follow [SECURITY.md](SECURITY.md) |
 | A problem with the NIM itself rather than the client | Your NVIDIA support channel for that NIM |
 
 A bug report is most useful with the package versions (`pip show
-nemotron-structured-client nemotron-structured-connectors nemotron-relational`), the
+kumo-relational-client nemotron-structured-connectors nemotron-relational`), the
 Python version and platform, the smallest script that reproduces the problem,
-and the full traceback. `StructuredError` and its subclasses carry a stable `code`
+and the full traceback. `RelationalError` and its subclasses carry a stable `code`
 field, include it.
 
 ## Which package
 
 Three packages are released together and share a version:
 
-- `nemotron-structured-client`: the client and its model handles
+- `kumo-relational-client`: the client and its model handles
 - `nemotron-structured-connectors`: reading source tables from warehouses
 - `nemotron-relational`: the relational driver, graph building and PQL
 

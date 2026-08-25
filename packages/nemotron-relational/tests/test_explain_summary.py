@@ -21,10 +21,10 @@ from nemotron_relational.rfm.explain_summary import (
 
 _ENV_VARS = (
     'OPENAI_API_KEY',
-    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY',
-    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL',
-    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL',
-    'NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT',
+    'KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY',
+    'KUMO_RELATIONAL_EXPLAIN_LLM_BASE_URL',
+    'KUMO_RELATIONAL_EXPLAIN_LLM_MODEL',
+    'KUMO_RELATIONAL_EXPLAIN_LLM_TIMEOUT',
 )
 
 try:
@@ -110,7 +110,7 @@ def test_generate_summary_passes_context_and_returns_text() -> None:
 
 def test_missing_extra_message_when_openai_absent(monkeypatch: Any) -> None:
     monkeypatch.setitem(sys.modules, 'openai', None)
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY', 'k')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY', 'k')
     assert (
         generate_summary('q', 'p', ['c'], ['s']) == SUMMARY_NEEDS_EXTRA_MESSAGE
     )
@@ -145,7 +145,7 @@ def test_generate_summary_timeout_tells_user_to_raise_timeout() -> None:
     client = _FakeClient(error=APITimeoutError('timed out'))
     out = generate_summary('q', 'p', ['c'], ['s'], client=client, timeout=7)
     assert 'timed out after 7s' in out
-    assert 'NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT' in out
+    assert 'KUMO_RELATIONAL_EXPLAIN_LLM_TIMEOUT' in out
     assert '.cohorts' in out
 
 
@@ -156,7 +156,7 @@ def test_generate_summary_empty_content_is_error() -> None:
 
 
 def test_generate_summary_uses_env_model(monkeypatch: Any) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL', 'env-model')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_MODEL', 'env-model')
     record: dict[str, Any] = {}
     client = _FakeClient(record=record)
     generate_summary('q', 'p', ['c'], ['s'], client=client)
@@ -166,7 +166,7 @@ def test_generate_summary_uses_env_model(monkeypatch: Any) -> None:
 def test_generate_summary_explicit_model_overrides_env(
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL', 'env-model')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_MODEL', 'env-model')
     record: dict[str, Any] = {}
     client = _FakeClient(record=record)
     generate_summary('q', 'p', ['c'], ['s'], client=client, model='explicit')
@@ -208,10 +208,10 @@ def _capture_make_client(monkeypatch: Any) -> dict[str, Any]:
 @requires_openai
 def test_uses_openai_env(monkeypatch: Any) -> None:
     monkeypatch.setenv(
-        'NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL', 'https://openai.example/v1'
+        'KUMO_RELATIONAL_EXPLAIN_LLM_BASE_URL', 'https://openai.example/v1'
     )
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY', 'explain-key')
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL', 'm')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY', 'explain-key')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_MODEL', 'm')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['base_url'] == 'https://openai.example/v1'
@@ -223,8 +223,8 @@ def test_uses_openai_env(monkeypatch: Any) -> None:
 def test_an_ambient_openai_key_is_never_used(monkeypatch: Any) -> None:
     """A key exported for another tool must not send rows to a third party."""
     monkeypatch.setenv('OPENAI_API_KEY', 'openai-key')
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY', 'explain-key')
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL', 'm')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY', 'explain-key')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_MODEL', 'm')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['api_key'] == 'explain-key'
@@ -251,7 +251,7 @@ def test_explain_config_docstring_discloses_the_egress() -> None:
     doc = ExplainConfig.__doc__ or ''
     assert 'api.openai.com' in doc
     assert 'cell values' in doc
-    assert 'NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY' in doc
+    assert 'KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY' in doc
     assert 'skip_summary=True' in doc
 
 
@@ -265,9 +265,9 @@ def test_generate_summary_docstring_discloses_the_egress() -> None:
 @requires_openai
 def test_explicit_args_override_env(monkeypatch: Any) -> None:
     monkeypatch.setenv(
-        'NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL', 'https://env.example/v1'
+        'KUMO_RELATIONAL_EXPLAIN_LLM_BASE_URL', 'https://env.example/v1'
     )
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY', 'env-key')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY', 'env-key')
     call = _capture_make_client(monkeypatch)
     generate_summary(
         'q',
@@ -287,25 +287,21 @@ def test_explicit_args_override_env(monkeypatch: Any) -> None:
 
 @requires_openai
 def test_timeout_defaults_to_20_and_reads_env(monkeypatch: Any) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY', 'k')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY', 'k')
     call = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call['timeout'] == 20.0
 
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT', '5')
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_TIMEOUT', '5')
     call2 = _capture_make_client(monkeypatch)
     generate_summary('q', 'p', ['c'], ['s'])
     assert call2['timeout'] == 5.0
 
 
 def test_env_float_invalid_falls_back(monkeypatch: Any) -> None:
-    monkeypatch.setenv(
-        'NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT', 'not-a-number'
-    )
+    monkeypatch.setenv('KUMO_RELATIONAL_EXPLAIN_LLM_TIMEOUT', 'not-a-number')
     assert (
-        explain_summary._env_float(
-            'NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT', 20.0
-        )
+        explain_summary._env_float('KUMO_RELATIONAL_EXPLAIN_LLM_TIMEOUT', 20.0)
         == 20.0
     )
 
@@ -515,7 +511,7 @@ def test_nim_failure_error_timeout_points_at_the_timeout_setting() -> None:
         )
     )
     assert 'timeout' in msg
-    assert 'StructuredClient(url, timeout=...)' in msg
+    assert 'RelationalClient(url, timeout=...)' in msg
     assert 'GPU memory pressure' not in msg
 
 

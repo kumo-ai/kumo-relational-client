@@ -67,7 +67,7 @@ def test_a_bad_endpoint_leaves_state_untouched() -> None:
 
 
 def test_repeated_init_does_not_rebuild_the_client() -> None:
-    """Building the transport resolves Databricks credentials, and the Nemotron Structured
+    """Building the transport resolves Databricks credentials, and the Kumo Relational
     adapter re-initializes on every predict. An unchanged re-init must be a
     no-op rather than a fresh authentication per scored partition.
     """
@@ -212,7 +212,7 @@ def test_url_mode_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
     assert called == [True]
 
     nemotron_relational.global_state.clear()
-    monkeypatch.delenv('NEMOTRON_STRUCTURED_API_ENDPOINT', raising=False)
+    monkeypatch.delenv('KUMO_RELATIONAL_API_ENDPOINT', raising=False)
     with pytest.raises(ValueError, match='no endpoint'):
         nemotron_relational.init()
 

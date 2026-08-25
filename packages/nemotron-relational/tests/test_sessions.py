@@ -202,15 +202,13 @@ def test_env_kill_switch_says_the_context_is_re_uploaded(
     ltv: ValidatedPredictiveQuery,
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_DISABLE_SESSIONS', '1')
+    monkeypatch.setenv('KUMO_RELATIONAL_DISABLE_SESSIONS', '1')
     api = RecordingAPI()
     model = _model(user_store_graph, api)
     logger = PlainProgressLogger('Predicting', verbose=False)
     with model.batch_mode(batch_size=2):
         model.predict(ltv, indices=[0, 1, 2, 3], verbose=logger)
-    assert any(
-        'NEMOTRON_STRUCTURED_DISABLE_SESSIONS' in msg for msg in logger.logs
-    )
+    assert any('KUMO_RELATIONAL_DISABLE_SESSIONS' in msg for msg in logger.logs)
 
 
 def test_a_session_backed_run_says_nothing_about_sessions(
@@ -230,7 +228,7 @@ def test_env_kill_switch_disables_sessions(
     ltv: ValidatedPredictiveQuery,
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_DISABLE_SESSIONS', '1')
+    monkeypatch.setenv('KUMO_RELATIONAL_DISABLE_SESSIONS', '1')
     api = RecordingAPI()
     model = _model(user_store_graph, api)
     with model.batch_mode(batch_size=2):

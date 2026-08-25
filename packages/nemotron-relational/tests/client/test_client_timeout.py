@@ -107,7 +107,7 @@ def test_max_retries_reaches_the_transport_policy():
     """/
     client-max-retries-never-reaches-the-nemotron_relational-path.md
 
-    `StructuredClient(max_retries=...)` is documented without a model qualifier, next
+    `RelationalClient(max_retries=...)` is documented without a model qualifier, next
     to `timeout`, which was made to reach both paths. This client used to
     hardcode `total=10, connect=3, read=3, status=5` regardless, so `0` still
     retried and a raised value changed nothing -- and its prediction `POST` was

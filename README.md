@@ -1,10 +1,10 @@
-# NVIDIA Nemotron Structured Client
+# NVIDIA Kumo Relational Client
 
 Make predictions on tables and relational data with NVIDIA Nemotron
 structured-data foundation models, without training a model for each dataset.
 
 ```bash
-pip install nemotron-structured-client
+pip install kumo-relational-client
 ```
 
 ## Overview
@@ -32,12 +32,12 @@ table:
 
 ```python
 import pandas as pd
-from nemotron_structured import StructuredClient
+from kumo_relational_client import RelationalClient
 
 context = pd.DataFrame({"x": [1, 2, 3, 4], "label": ["a", "b", "a", "b"]})
 rows = pd.DataFrame({"x": [5, 6]})
 
-with StructuredClient(url="http://localhost:8000") as client:
+with RelationalClient(url="http://localhost:8000") as client:
     model = client.tabular(context, target="label", task="classification")
     print(model.predict(rows))
 ```
@@ -60,10 +60,10 @@ live endpoint.
 
 | Command | You get |
 | --- | --- |
-| `pip install nemotron-structured-client` | The client and every lightweight model, which today means Nemotron Tabular. |
-| `pip install nemotron-structured-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
-| `pip install nemotron-structured-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
-| `pip install nemotron-structured-client[all]` | Nemotron Relational, every warehouse backend, and `[databricks-serving]`. |
+| `pip install kumo-relational-client` | The client and every lightweight model, which today means Nemotron Tabular. |
+| `pip install kumo-relational-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
+| `pip install kumo-relational-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
+| `pip install kumo-relational-client[all]` | Nemotron Relational, every warehouse backend, and `[databricks-serving]`. |
 
 What ships in the base wheel is decided by dependency weight, not by
 preference. A model that does no client-side work, like Nemotron Tabular which
@@ -79,15 +79,15 @@ RelBench datasets for `Graph.from_relbench()`.
 
 ## Usage
 
-A `StructuredClient` owns one connection to a NIM. You run inference through a
+A `RelationalClient` owns one connection to a NIM. You run inference through a
 model handle, then call `.predict(...)` on it.
 
 ### A single table
 
 ```python
-from nemotron_structured import StructuredClient
+from kumo_relational_client import RelationalClient
 
-with StructuredClient(url="http://localhost:8000") as client:
+with RelationalClient(url="http://localhost:8000") as client:
     model = client.tabular(context_df, target="label", task="classification")
     df = model.predict(predict_df, outputs=["prediction", "probabilities"])
 ```
@@ -99,15 +99,15 @@ language for predictive questions. This runs as written, against a ready-made
 dataset it downloads on first use:
 
 ```bash
-pip install "nemotron-structured-client[relational,relbench]"
+pip install "kumo-relational-client[relational,relbench]"
 ```
 
 ```python
-from nemotron_structured import StructuredClient, relational
+from kumo_relational_client import RelationalClient, relational
 
 graph = relational.Graph.from_relbench("f1")
 
-with StructuredClient(url="http://localhost:8000") as client:
+with RelationalClient(url="http://localhost:8000") as client:
     df = client.relational(graph).predict(
         "PREDICT COUNT(results.*, 0, 90, days) > 3 FOR EACH drivers.driverId",
         indices=[814, 0, 842, 831, 3, 829],
@@ -118,38 +118,38 @@ For your own tables, use `relational.Graph.from_data({"users": users_df,
 "orders": orders_df})`. Pick an aggregation window your data can support: a
 query over `0, 90, days` needs 90 days of history before the anchor time.
 
-`from nemotron_structured import relational` is the supported surface for `Graph`,
+`from kumo_relational_client import relational` is the supported surface for `Graph`,
 `Table` and friends. You never import the driver package directly.
 
 ### Several endpoints at once
 
-Each `StructuredClient` holds its own transport and registry, so clients can
+Each `RelationalClient` holds its own transport and registry, so clients can
 target different endpoints or tenants concurrently, including from several
 threads. A prediction always goes to the endpoint and credential of the client
 that started it.
 
 The transport pools connections and retries transient failures (429, 500, 502,
 503, 504) with backoff. Tune it per client with
-`StructuredClient(url, timeout=30, max_retries=3)`.
+`RelationalClient(url, timeout=30, max_retries=3)`.
 
 Two things are worth knowing. `client.models()` describes the client's own
 registry rather than the connected endpoint, so a NIM serving only one model
 still reports both, and the mismatch surfaces as an error on the first
 prediction. And the relational driver keeps a process-wide configuration that
-each prediction reconfigures, so drive it through `StructuredClient` rather than
+each prediction reconfigures, so drive it through `RelationalClient` rather than
 mixing in direct `nemotron_relational.init()` calls.
 
 ### Errors
 
-Every failure raises `StructuredError` or a subclass carrying a stable `code`, so
+Every failure raises `RelationalError` or a subclass carrying a stable `code`, so
 branch on the code rather than the message:
 
 ```python
-from nemotron_structured.errors import StructuredError
+from kumo_relational_client.errors import RelationalError
 
 try:
     df = model.predict(rows)
-except StructuredError as exc:
+except RelationalError as exc:
     print(exc.code)
 ```
 
@@ -177,7 +177,7 @@ with 1.0.0:
 
 | Package | Import | What it is |
 | --- | --- | --- |
-| `nemotron-structured-client` | `nemotron_structured` | the client and its model handles |
+| `kumo-relational-client` | `kumo_relational_client` | the client and its model handles |
 | `nemotron-structured-connectors` | `nemotron_structured_connectors` | reads source tables from sqlite, duckdb, Snowflake, Databricks and S3 |
 | `nemotron-relational` | `nemotron_relational` | the relational driver: graph building, PQL, and a native neighbor sampler |
 
@@ -190,10 +190,10 @@ Contributions are welcome under the Developer Certificate of Origin. Start with
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 ```bash
-git clone https://github.com/NVIDIA/nemotron-structured-client.git
-cd nemotron-structured-client
-python -m pip install -e './packages/nemotron-structured-client[test]'
-python -m pytest packages/nemotron-structured-client/tests -m 'not live_nim' -q
+git clone https://github.com/NVIDIA/kumo-relational-client.git
+cd kumo-relational-client
+python -m pip install -e './packages/kumo-relational-client[test]'
+python -m pytest packages/kumo-relational-client/tests -m 'not live_nim' -q
 ```
 
 ## Governance and support

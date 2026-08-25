@@ -25,7 +25,7 @@ env:
   LINT_PATHS: >-
     packages/nemotron-relational/src packages/nemotron-relational/tests
     packages/nemotron-relational/examples
-    packages/nemotron-structured-client/src packages/nemotron-structured-client/tests
+    packages/kumo-relational-client/src packages/kumo-relational-client/tests
     packages/nemotron-structured-connectors/src
     packages/nemotron-structured-connectors/tests
     e2e scripts examples
@@ -86,10 +86,10 @@ jobs:
           './packages/nemotron-structured-connectors[sqlite,duckdb]'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-client[sqlite,duckdb,test]'
-      - run: python -c "import nemotron_structured; from nemotron_structured import relational"
+          './packages/kumo-relational-client[sqlite,duckdb,test]'
+      - run: python -c "import kumo_relational_client; from kumo_relational_client import relational"
       - run: >-
-          python -m pytest packages/nemotron-structured-client/tests
+          python -m pytest packages/kumo-relational-client/tests
           -m 'not live_nim' -q
 
   relational-tests:
@@ -152,14 +152,14 @@ jobs:
       - run: python -m pip install --editable './packages/nemotron-relational'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-client[relational,sqlite,duckdb,test]'
+          './packages/kumo-relational-client[relational,sqlite,duckdb,test]'
       - run: >-
-          python -c "import nemotron_structured; from nemotron_structured import relational;
+          python -c "import kumo_relational_client; from kumo_relational_client import relational;
           import nemotron_relational.relationallib as k;
           assert hasattr(k.NeighborSampler, 'seed'); relational.Graph;
           assert not hasattr(relational, 'NemotronRelational')"
       - run: >-
-          python -m pytest packages/nemotron-structured-client/tests
+          python -m pytest packages/kumo-relational-client/tests
           -m 'not live_nim' -q
 
   wheels:

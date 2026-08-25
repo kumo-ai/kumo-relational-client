@@ -15,14 +15,14 @@ sys.path.insert(
         os.path.dirname(__file__),
         '..',
         'packages',
-        'nemotron-structured-client',
+        'kumo-relational-client',
         'src',
     ),
 )
-import nemotron_structured
-from nemotron_structured import StructuredClient
+import kumo_relational_client
+from kumo_relational_client import RelationalClient
 
-_client: StructuredClient | None = None
+_client: RelationalClient | None = None
 
 
 def predict_tabicl(*, context, predict, task, target, **kwargs):
@@ -31,9 +31,9 @@ def predict_tabicl(*, context, predict, task, target, **kwargs):
     return handle.predict(predict, **kwargs)
 
 
-BASE_URL = os.environ.get('NEMOTRON_STRUCTURED_NIM_BASE_URL', '').rstrip('/')
+BASE_URL = os.environ.get('KUMO_RELATIONAL_NIM_BASE_URL', '').rstrip('/')
 DATA_DIR = os.environ.get(
-    'NEMOTRON_STRUCTURED_DATA_DIR',
+    'KUMO_RELATIONAL_DATA_DIR',
     os.path.join(os.path.dirname(__file__), 'data'),
 )
 
@@ -106,7 +106,7 @@ def classify_job_outcomes(frame: pd.DataFrame, source: str) -> None:
 
 def local_csv_connector() -> None:
     section('local connector: job_outcomes.csv -> tabicl classification')
-    frame = nemotron_structured.read(
+    frame = kumo_relational_client.read(
         'local', path=os.path.join(DATA_DIR, 'job_outcomes.csv')
     )
     check(
@@ -119,7 +119,7 @@ def local_csv_connector() -> None:
 
 def sqlite_connector() -> None:
     section('sqlite connector: gpu_metrics_daily -> tabicl regression')
-    frame = nemotron_structured.read(
+    frame = kumo_relational_client.read(
         'sqlite',
         database=os.path.join(DATA_DIR, 'gpu_fleet.sqlite'),
         query='SELECT avg_util_pct, avg_sm_active_pct, avg_tensor_active_pct, '
@@ -165,7 +165,7 @@ def sqlite_connector() -> None:
 
 def duckdb_connector() -> None:
     section('duckdb connector: gpu_allocations -> tabicl regression')
-    frame = nemotron_structured.read(
+    frame = kumo_relational_client.read(
         'duckdb',
         database=os.path.join(DATA_DIR, 'gpu_fleet_smoke.duckdb'),
         query='SELECT gpu_hours, allocation_type, mig_profile, '
@@ -218,7 +218,7 @@ def snowflake_connector() -> None:
     section(
         'snowflake connector: full-scale JOB_OUTCOMES -> tabicl classification'
     )
-    frame = nemotron_structured.read(
+    frame = kumo_relational_client.read(
         'snowflake',
         account=os.environ['SNOWFLAKE_ACCOUNT'],
         user=os.environ['SNOWFLAKE_USER'],
@@ -240,13 +240,11 @@ def snowflake_connector() -> None:
 
 def main() -> None:
     if not BASE_URL:
-        print(
-            'Set NEMOTRON_STRUCTURED_NIM_BASE_URL to run the connector checks.'
-        )
+        print('Set KUMO_RELATIONAL_NIM_BASE_URL to run the connector checks.')
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
     global _client
-    _client = StructuredClient(url=BASE_URL)
+    _client = RelationalClient(url=BASE_URL)
 
     for step in (
         local_csv_connector,

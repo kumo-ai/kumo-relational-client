@@ -72,7 +72,7 @@ class NimFailureError(NemotronRelationalError, RuntimeError):
     r"""A failed NemotronRelational NIM prediction, classified and ready to re-wrap.
 
     Subclasses :class:`RuntimeError` so existing callers keep working, and
-    carries the structured facts a caller (or the ``nemotron-structured-client`` adapter) needs
+    carries the structured facts a caller (or the ``kumo-relational-client`` adapter) needs
     to map it onto its own error hierarchy without re-parsing the message:
     the HTTP status, the problem document's ``detail``, its RFC-9457
     ``invalid_params`` entries, and whether the failure looks transient.

@@ -92,7 +92,7 @@ _SIZE_LIMIT_MSG = (
     'number of columns (e.g., large text columns), '
     'neighborhood configuration, or the run mode. If none of '
     'this is possible, please create a feature request at '
-    "'https://github.com/NVIDIA/nemotron-structured-client' if you must go "
+    "'https://github.com/NVIDIA/kumo-relational-client' if you must go "
     'beyond this for your use-case.'
 )
 
@@ -104,10 +104,10 @@ def _sessions_unsupported(error: HTTPException) -> bool:
 
 
 def _sessions_disabled_by_env() -> bool:
-    r"""Opt-out kill switch: set ``NEMOTRON_STRUCTURED_DISABLE_SESSIONS`` to force the
+    r"""Opt-out kill switch: set ``KUMO_RELATIONAL_DISABLE_SESSIONS`` to force the
     stateless per-batch path even for multi-batch jobs.
     """
-    value = os.environ.get('NEMOTRON_STRUCTURED_DISABLE_SESSIONS') or ''
+    value = os.environ.get('KUMO_RELATIONAL_DISABLE_SESSIONS') or ''
     return value.strip().lower() in (
         '1',
         'true',
@@ -124,7 +124,7 @@ def _no_session_reason(random_seed: int | None) -> str:
     prediction rows alone.
     """
     cause = (
-        'NEMOTRON_STRUCTURED_DISABLE_SESSIONS is set'
+        'KUMO_RELATIONAL_DISABLE_SESSIONS is set'
         if random_seed is not None
         else 'random_seed=None re-samples neighborhoods per batch'
     )
@@ -177,14 +177,14 @@ class ExplainConfig(CastMixin):
 
         **The natural-language summary is generated off-machine.** With
         ``skip_summary=False`` (the default), the ``openai`` package installed
-        (``pip install 'nemotron-structured-client[explain]'``) and an API key discoverable, the
+        (``pip install 'kumo-relational-client[explain]'``) and an API key discoverable, the
         client sends the predictive query, the returned predictions, the cohort
         analysis and the subgraph attribution -- which contains the **raw
         cell values** of the explained entity's subgraph -- to an
         OpenAI-compatible chat-completions endpoint. Unless
-        ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL`` points somewhere else, that endpoint
+        ``KUMO_RELATIONAL_EXPLAIN_LLM_BASE_URL`` points somewhere else, that endpoint
         is OpenAI's ``https://api.openai.com/v1/``, a non-NVIDIA service. The
-        key is read from ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY`` only. Setting
+        key is read from ``KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY`` only. Setting
         that variable is what turns the call on; no other key enables it.
 
         Pass ``skip_summary=True`` (e.g.
@@ -196,11 +196,11 @@ class ExplainConfig(CastMixin):
     Args:
         skip_summary: Whether to skip generating a human-readable summary of
             the explanation. The summary's LLM endpoint is configured once via
-            the environment: the API key from ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_API_KEY``
-            ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_BASE_URL`` (for
+            the environment: the API key from ``KUMO_RELATIONAL_EXPLAIN_LLM_API_KEY``
+            ``KUMO_RELATIONAL_EXPLAIN_LLM_BASE_URL`` (for
             any OpenAI-compatible endpoint, including a self-hosted one),
-            ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini-2025-04-14``) and
-            ``NEMOTRON_STRUCTURED_EXPLAIN_LLM_TIMEOUT`` (default 20s).
+            ``KUMO_RELATIONAL_EXPLAIN_LLM_MODEL`` (default ``gpt-4.1-mini-2025-04-14``) and
+            ``KUMO_RELATIONAL_EXPLAIN_LLM_TIMEOUT`` (default 20s).
     """
 
     skip_summary: bool = False
@@ -415,9 +415,9 @@ def _problem_document(error: Exception) -> dict[str, Any]:
 def _invalid_params_summary(document: dict[str, Any]) -> str:
     r"""Render the NIM's per-field validation diagnosis.
 
-    ``nemotron_structured.errors.format_invalid_params`` is the counterpart on the client
+    ``kumo_relational_client.errors.format_invalid_params`` is the counterpart on the client
     side and must render the same shape. The two cannot share one
-    implementation: ``nemotron_relational`` does not depend on ``nemotron_structured``, and the
+    implementation: ``nemotron_relational`` does not depend on ``kumo_relational_client``, and the
     package both depend on is a SQL-connector package with no HTTP surface.
 
     The NIM names the exact table, row and column it rejected in
@@ -502,7 +502,7 @@ def _nim_failure_error(
     if isinstance(error, Timeout):
         return NimFailureError(
             f'The NemotronRelational NIM did not answer {subject} within the configured '
-            'timeout. Raise it with StructuredClient(url, timeout=...), or retry '
+            'timeout. Raise it with RelationalClient(url, timeout=...), or retry '
             f'when the NIM is less busy. Original error: {error}',
             transient=True,
         )
@@ -545,7 +545,7 @@ def _nim_failure_error(
 
     return NimFailureError(
         f'An unexpected exception occurred. Please create an issue at '
-        f"'https://github.com/NVIDIA/nemotron-structured-client'. "
+        f"'https://github.com/NVIDIA/kumo-relational-client'. "
         f'{detail if detail else error}{fields}',
         status_code=status,
         detail=detail,
@@ -865,7 +865,7 @@ class NemotronRelational:
         Note:
             A multi-batch prediction uploads its context once, into a session
             the batches share, unless ``random_seed=None`` or
-            ``NEMOTRON_STRUCTURED_DISABLE_SESSIONS`` rules that out -- in which case every
+            ``KUMO_RELATIONAL_DISABLE_SESSIONS`` rules that out -- in which case every
             batch re-uploads the context and says so in the progress output.
         """
         if batch_size != 'max' and (
@@ -2517,7 +2517,7 @@ class NemotronRelational:
                 f'hops (got {len(num_neighbors)}). Reduce the '
                 f'number of hops and try again. Please create a '
                 f'feature request at '
-                f"'https://github.com/NVIDIA/nemotron-structured-client' if you "
+                f"'https://github.com/NVIDIA/kumo-relational-client' if you "
                 f'must go beyond this for your use-case.'
             )
 
@@ -2572,7 +2572,7 @@ class NemotronRelational:
                 f'{_MAX_SUBGRAPH_TABLES} '
                 f'tables (got {len(subgraph.table_dict)}). '
                 f'Please create a feature request at '
-                f"'https://github.com/NVIDIA/nemotron-structured-client' if you "
+                f"'https://github.com/NVIDIA/kumo-relational-client' if you "
                 f'must go beyond this for your use-case.'
             )
 

@@ -5,7 +5,7 @@
 import logging
 import os
 
-_ENV_NEMOTRON_STRUCTURED_LOG = 'NEMOTRON_STRUCTURED_LOG'
+_ENV_KUMO_RELATIONAL_LOG = 'KUMO_RELATIONAL_LOG'
 
 _HANDLER_ATTR = '_nemotron_relational_handler'
 
@@ -57,7 +57,7 @@ def initialize_logging() -> None:
 
     _install_handler(logger)
 
-    default_level = os.getenv(_ENV_NEMOTRON_STRUCTURED_LOG) or 'INFO'
+    default_level = os.getenv(_ENV_KUMO_RELATIONAL_LOG) or 'INFO'
     try:
         logger.setLevel(default_level)
     except (TypeError, ValueError):

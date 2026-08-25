@@ -175,15 +175,15 @@ def test_read_s3_missing_driver_raises(monkeypatch):
 
 
 @pytest.mark.skipif(
-    'NEMOTRON_STRUCTURED_S3_LIVE_URI' not in os.environ,
-    reason='NEMOTRON_STRUCTURED_S3_LIVE_URI not set',
+    'KUMO_RELATIONAL_S3_LIVE_URI' not in os.environ,
+    reason='KUMO_RELATIONAL_S3_LIVE_URI not set',
 )
 def test_read_s3_live():
-    anon = os.environ.get('NEMOTRON_STRUCTURED_S3_LIVE_ANON', '').lower()
+    anon = os.environ.get('KUMO_RELATIONAL_S3_LIVE_ANON', '').lower()
     options = {'anon': True} if anon in ('1', 'true', 'yes') else None
     frame = read(
         's3',
-        path=os.environ['NEMOTRON_STRUCTURED_S3_LIVE_URI'],
+        path=os.environ['KUMO_RELATIONAL_S3_LIVE_URI'],
         storage_options=options,
     )
     assert len(frame) > 0

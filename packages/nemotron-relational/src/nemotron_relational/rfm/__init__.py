@@ -33,10 +33,10 @@ _CLIENT_TOKEN = object()
 
 _DIRECT_USE_MESSAGE = (
     'Direct use of the Nemotron Relational engine is not supported. Run inference through '
-    'the NVIDIA Nemotron Structured Client:\n'
-    '    from nemotron_structured import StructuredClient, relational\n'
+    'the NVIDIA Kumo Relational Client:\n'
+    '    from kumo_relational_client import RelationalClient, relational\n'
     '    graph = relational.Graph.from_data(...)\n'
-    '    with StructuredClient(url=...) as client:\n'
+    '    with RelationalClient(url=...) as client:\n'
     '        client.relational(graph).predict(query, indices=[...])'
 )
 
@@ -77,7 +77,7 @@ def _configure(
     timeout: float | None,
     max_retries: int = 3,
 ) -> None:
-    resolved_url = url or os.getenv('NEMOTRON_STRUCTURED_API_ENDPOINT')
+    resolved_url = url or os.getenv('KUMO_RELATIONAL_API_ENDPOINT')
 
     nemotron_relational.init(
         url=resolved_url,
@@ -184,7 +184,7 @@ def init_databricks_serving(
     argument or the environment; there is no URL to resolve here.
 
     Gated like :func:`init`: the engine is reachable only through
-    ``StructuredClient``, so both entry points must refuse a direct call rather than
+    ``RelationalClient``, so both entry points must refuse a direct call rather than
     leaving one of them as a way around the boundary.
     """
     if _token is not _CLIENT_TOKEN:
@@ -220,7 +220,7 @@ def init_snowflake_serving(
     invoked as a SQL method over a session, so there is no URL to resolve.
 
     Gated like :func:`init`: the engine is reachable only through
-    ``StructuredClient``, so both entry points must refuse a direct call rather than
+    ``RelationalClient``, so both entry points must refuse a direct call rather than
     leaving one of them as a way around the boundary.
     """
     if _token is not _CLIENT_TOKEN:

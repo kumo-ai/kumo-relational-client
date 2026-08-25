@@ -1,6 +1,6 @@
 # Working in this repository
 
-The NVIDIA Nemotron Structured Client is the Python client for NVIDIA's structured-data
+The NVIDIA Kumo Relational Client is the Python client for NVIDIA's structured-data
 foundation models, served behind the Universal TFM API by a NIM. It does not
 serve models itself: every prediction is an HTTP call to a NIM you point it at.
 
@@ -8,7 +8,7 @@ serve models itself: every prediction is an HTTP call to a NIM you point it at.
 
 | Package | Import | What it is |
 | --- | --- | --- |
-| `nemotron-structured-client` | `nemotron_structured` | The client. Pure Python, no heavy dependencies. |
+| `kumo-relational-client` | `kumo_relational_client` | The client. Pure Python, no heavy dependencies. |
 | `nemotron-structured-connectors` | `nemotron_structured_connectors` | Reads source tables from sqlite, duckdb, Snowflake, Databricks, S3. |
 | `nemotron-relational` | `nemotron_relational` | The relational driver: graph building, PQL, and a compiled neighbor sampler. |
 
@@ -19,12 +19,12 @@ anywhere.
 
 ## Two models, one client
 
-`StructuredClient` dispatches to whichever model you ask for:
+`RelationalClient` dispatches to whichever model you ask for:
 
 ```python
-from nemotron_structured import StructuredClient
+from kumo_relational_client import RelationalClient
 
-with StructuredClient(url='http://localhost:8000') as client:
+with RelationalClient(url='http://localhost:8000') as client:
     model = client.tabular(context_df, target='label', task='classification')
     df = model.predict(rows)
 ```
@@ -47,14 +47,14 @@ rows per entity under `RANK TOP k`, and forecasting one row per entity per
 forecast step. Row order is not a contract. See
 `docs/reference/prediction-output.md`.
 
-**Drive the relational model only through `StructuredClient`.** The driver keeps a
+**Drive the relational model only through `RelationalClient`.** The driver keeps a
 process-wide configuration that each prediction reconfigures. Predictions are
 pinned to their own client and are unaffected, but calling
 `nemotron_relational.init()` directly in the same process changes what that
 global points at. Do not mix the two.
 
 **Branch on the error code, not the message.** Every failure raises
-`StructuredError` or a subclass carrying a stable `code`: `MISSING_EXTRA`,
+`RelationalError` or a subclass carrying a stable `code`: `MISSING_EXTRA`,
 `TRANSPORT_ERROR`, `INVALID_REQUEST`, `UNKNOWN_MODEL`, and the connector codes
 `CONNECT_FAILED`, `QUERY_FAILED`, `READ_FAILED`, `DRIVER_LOAD_FAILED`.
 `NimRequestError` also carries `status_code`, so a retriable 5xx or 429 is
@@ -73,8 +73,8 @@ names the exact `pip install` that fixes it.
 Each package is installed editable and tested from its own directory:
 
 ```bash
-python -m pip install -e './packages/nemotron-structured-client[test]'
-python -m pytest packages/nemotron-structured-client/tests -m 'not live_nim' -q
+python -m pip install -e './packages/kumo-relational-client[test]'
+python -m pytest packages/kumo-relational-client/tests -m 'not live_nim' -q
 ```
 
 Tests marked `live_nim` need a running NIM and are excluded by default. The

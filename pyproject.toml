@@ -1,8 +1,8 @@
-# Workspace root for the nemotron-structured-client monorepo. This builds no package; each
+# Workspace root for the kumo-relational-client monorepo. This builds no package; each
 # independently released distribution lives under packages/ with its own
 # pyproject.toml:
 #
-#   packages/nemotron-structured-client     - the client (pure-python)
+#   packages/kumo-relational-client     - the client (pure-python)
 #   packages/nemotron-structured-connectors - shared data-source connectors (pure-python)
 #   packages/nemotron-relational            - the NemotronRelational driver (native build)
 #

@@ -4,7 +4,7 @@ dynamic = ["version"]
 authors = [
     {name = "NVIDIA"},
 ]
-description = "Shared data-source connectors (connect, read, SQL quoting) for the nemotron-structured-client and its engines"
+description = "Shared data-source connectors (connect, read, SQL quoting) for the kumo-relational-client and its engines"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -34,9 +34,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/NVIDIA/nemotron-structured-client"
-Source = "https://github.com/NVIDIA/nemotron-structured-client"
-Issues = "https://github.com/NVIDIA/nemotron-structured-client/issues"
+Homepage = "https://github.com/NVIDIA/kumo-relational-client"
+Source = "https://github.com/NVIDIA/kumo-relational-client"
+Issues = "https://github.com/NVIDIA/kumo-relational-client/issues"
 
 [project.optional-dependencies]
 sqlite = [

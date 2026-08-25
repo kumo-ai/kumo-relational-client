@@ -21,7 +21,7 @@
 The first release under the `nemotron-*` names, and the first public one. All
 three packages now share a single version: they are released together and only
 ever tested against each other, so independent numbering carried information
-nobody could act on. Earlier numbering (`nemotron-structured-client` 0.x,
+nobody could act on. Earlier numbering (`kumo-relational-client` 0.x,
 `nemotron_relational` 2.x, `nemotron-structured-connectors` 0.x) was published
 under the previous distribution names and stops here.
 
@@ -37,7 +37,7 @@ first-party module.
 
 - **Python 3.10 was broken.** `nemotron_relational` imported `typing.assert_never`, which
   is 3.11+, so `import nemotron_relational` failed on the floor all three packages declare.
-- **A credential in the endpoint URL reached `nemotron-structured-client`'s error messages,
+- **A credential in the endpoint URL reached `kumo-relational-client`'s error messages,
   logs and reprs.** `https://user:token@host` is a supported way to address a
   deployment; the userinfo is now stripped everywhere the URL is rendered, as
   `nemotron_relational` already did.
@@ -61,8 +61,8 @@ first-party module.
   keeps working.
 - Connection-time failures are typed (`AuthenticationError`,
   `NimUnreachableError`, `NimTimeoutError`) and translated at the
-  `nemotron-structured-client` boundary, so a wrong API key or an unreachable NIM is caught by
-  `except StructuredError` instead of escaping as a bare `ValueError`.
+  `kumo-relational-client` boundary, so a wrong API key or an unreachable NIM is caught by
+  `except RelationalError` instead of escaping as a bare `ValueError`.
 - Reading a warehouse raises `GraphConstructionError` rather than the driver's
   own exception, which shared no base with anything else the client raises.
 - **Python 3.13 wheels.** `nemotron_relational` builds and tests cp310 through cp313.
@@ -81,10 +81,10 @@ first-party module.
 - Multiclass classification is reachable from `predict()`; the reference said
   otherwise.
 
-## nemotron-structured-client 0.2.1 · nemotron_relational 2.24.1 · nemotron-structured-connectors 0.3.0
+## kumo-relational-client 0.2.1 · nemotron_relational 2.24.1 · nemotron-structured-connectors 0.3.0
 
 Supersedes 0.2.0 and 2.24.0, which were tagged before these fixes merged and
-contain none of them. `nemotron-structured-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
+contain none of them. `kumo-relational-client 0.2.1` requires `nemotron_relational>=2.24.1` so it
 cannot resolve the affected build.
 
 The outcome of a full audit of the client's public surface, every connector, every
@@ -93,31 +93,31 @@ the error handling around each. 78 findings were reported and fixed.
 
 ### Removed: read this before upgrading
 
-The typed-request surface `nemotron-structured-client` 0.1.0 exported was replaced by the model
+The typed-request surface `kumo-relational-client` 0.1.0 exported was replaced by the model
 handles. Code written against 0.1.0 that used it will not import.
 
-- `nemotron_structured.ModelRequest`, `TabICLRequest`, `NemotronRelationalRequest`, `ModelAdapter`
+- `kumo_relational_client.ModelRequest`, `TabICLRequest`, `KumoRelationalRequest`, `ModelAdapter`
   and `AdapterRegistry` are no longer exported; the request types are an
   implementation detail of the handles. Use `client.tabicl(...)` /
   `client.relational(...)`.
-- `StructuredClient.predict(request)` and `StructuredClient.register(adapter)` are internal
+- `RelationalClient.predict(request)` and `RelationalClient.register(adapter)` are internal
   (`_predict` / `_register`). Run inference through the handles, and pass a
-  custom registry with `StructuredClient(url, registry=...)`.
-- `nemotron_structured.relational` no longer exports `NemotronRelational`, `LocalGraph`,
+  custom registry with `RelationalClient(url, registry=...)`.
+- `kumo_relational_client.relational` no longer exports `NemotronRelational`, `LocalGraph`,
   `MaterializedPredictionRequest` or `TaskTable`. Direct engine use is refused,
   and nothing on the supported surface returns or accepts the other two, the
   shim now carries what a caller can actually reach. Build graphs with
-  `nemotron_structured.relational.Graph` and predict through `client.relational(graph)`.
+  `kumo_relational_client.relational.Graph` and predict through `client.relational(graph)`.
   `Dtype`, `Stype` and `ViewConversionWarning` were added in their place.
 - `Graph.visualize(backend=...)`: visualization is Mermaid-only; the parameter
   is replaced by `height=`.
-- `nemotron_relational.rfm.init()` raises `RuntimeError` unless called by `StructuredClient`.
-  Construct an `StructuredClient` instead.
+- `nemotron_relational.rfm.init()` raises `RuntimeError` unless called by `RelationalClient`.
+  Construct an `RelationalClient` instead.
 
 ### Compatibility
 
 Everything else on the supported surface is unchanged, verified by an AST diff of
-the public API against the 0.1.0 tag (`ed86392`): `StructuredClient`'s constructor and
+the public API against the 0.1.0 tag (`ed86392`): `RelationalClient`'s constructor and
 its `tabicl` / `nemotron_relational` / `models` / `capabilities` / `health_ready` / `close`
 methods, `RFMModel.predict` and `predict_task`, `TabICLModel.predict`, every
 `Graph.from_*`, `NemotronRelational`'s methods, and `read` / `connect` / `quote_ident` /
@@ -134,7 +134,7 @@ produced a wrong or silently-degraded result.
 - **Multiclass `CLASS` column keeps its target's dtype** instead of always being
   `str`. `result['CLASS'] == '5'` becomes `result['CLASS'] == 5`. Previously
   `CLASS` could not be joined back to the table it names without a manual cast.
-- **Client-side validation failures on the NemotronRelational path raise `StructuredError`**
+- **Client-side validation failures on the NemotronRelational path raise `RelationalError`**
   (code `INVALID_REQUEST`) rather than a bare `ValueError`, matching the contract
   TabICL already followed. Messages are unchanged. The `nemotron_relational` driver surface is
   unaffected: `NimFailureError` subclasses `RuntimeError` and `InvalidResponseError`
@@ -150,16 +150,16 @@ produced a wrong or silently-degraded result.
   backend with declared foreign keys it used to add them anyway, so a caller who
   pinned the graph's shape got extra edges, and therefore different predictions.
   `edges=None` is unchanged and still applies them.
-- **`StructuredClient(max_retries=...)` now governs the NemotronRelational transport too**, which
+- **`RelationalClient(max_retries=...)` now governs the NemotronRelational transport too**, which
   previously used a fixed policy of its own. A caller who raised it will see
   transient failures retried where they were not before, and one who set `0` will
   see them surface immediately; failures on the NemotronRelational path therefore take longer
   or shorter to surface than in 0.1.0 according to what was asked for.
 - **A caller mistake the engine reports as a `KeyError`**: a typo in
   `exclude_cols_dict`, a feature column present in `context` but not `predict`,
-  is `StructuredError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
+  is `RelationalError(INVALID_REQUEST)` naming the mistake, not `INTERNAL_ERROR` with an
   invitation to file a bug. Code branching on `.code` for those inputs sees the new
-  value; `except StructuredError` is unaffected.
+  value; `except RelationalError` is unaffected.
 - **A malformed create-session response is `INVALID_RESPONSE`**, not
   `INVALID_REQUEST`, matching the prediction path.
 
@@ -200,7 +200,7 @@ produced a wrong or silently-degraded result.
 - Raw `TypeError`, `KeyError` and `AssertionError` no longer escape the public API.
 - The NIM's RFC-9457 `invalid_params` detail, which names the exact table, row and
   column rejected, is surfaced instead of discarded.
-- `StructuredClient(timeout=..., max_retries=...)` reaches the NemotronRelational path; it was
+- `RelationalClient(timeout=..., max_retries=...)` reaches the NemotronRelational path; it was
   silently ignored there.
 - `validate()` reports a graph inconsistency as `ValueError` naming the edge, rather
   than `KeyError` from a column lookup.
@@ -235,13 +235,13 @@ produced a wrong or silently-degraded result.
   keywords through to the engine instead of raising `TypeError`.
 - Unsigned integer columns are accepted at every width. Only `uint8` was, so
   `astype('uint32')`, or reading an unsigned Parquet column, refused the table.
-- `nemotron_structured.relational` exports `ViewConversionWarning`, so the diagnostics that
+- `kumo_relational_client.relational` exports `ViewConversionWarning`, so the diagnostics that
   view-based graph construction raises can be filtered without importing the
   driver package directly.
 
 ### Changed
 
-- `nemotron-structured-connectors` and `nemotron_relational` minimum versions were raised in `nemotron-structured-client`'s
+- `nemotron-structured-connectors` and `nemotron_relational` minimum versions were raised in `kumo-relational-client`'s
   requirements so the client cannot resolve against pre-audit releases.
 - Linting covers all three packages; it previously skipped the `nemotron_relational` package
   entirely.
@@ -250,4 +250,4 @@ produced a wrong or silently-degraded result.
   not validated against a NIM's advertised capabilities, there is no public
   `client.predict`, `client.models()` lists the local registry rather than
   discovering what a NIM serves, no macOS wheels are built, and
-  `nemotron-structured-client[all]` deliberately excludes `[explain]` and `[relbench]`.
+  `kumo-relational-client[all]` deliberately excludes `[explain]` and `[relbench]`.

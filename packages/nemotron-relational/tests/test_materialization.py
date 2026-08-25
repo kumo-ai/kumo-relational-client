@@ -112,7 +112,7 @@ def test_materialize_task_matches_live_requests(
     user_store_graph: Graph,
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_DISABLE_SESSIONS', '1')
+    monkeypatch.setenv('KUMO_RELATIONAL_DISABLE_SESSIONS', '1')
     model = NemotronRelational(user_store_graph, verbose=False)
     task = _task()
     context_before = task._context_df.copy()
@@ -356,7 +356,7 @@ def test_materialization_covers_task_types_and_request_options(
 def test_materialize_task_seed_controls_random_neighborhoods(
     monkeypatch: Any,
 ) -> None:
-    monkeypatch.setenv('NEMOTRON_STRUCTURED_DISABLE_SESSIONS', '1')
+    monkeypatch.setenv('KUMO_RELATIONAL_DISABLE_SESSIONS', '1')
     graph = Graph.from_data(
         {
             'USERS': pd.DataFrame(

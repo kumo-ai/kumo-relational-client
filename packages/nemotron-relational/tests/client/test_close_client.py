@@ -6,7 +6,7 @@ r"""Releasing the engine's connection pool.
 
 ``init_client`` configures the engine and caches a client per thread. Nothing
 released that client until the process exited, so a caller that closed its
-``StructuredClient`` left the engine's pool open. ``close_client`` is the release,
+``RelationalClient`` left the engine's pool open. ``close_client`` is the release,
 and these fix the two properties that make it safe to call while another
 caller is still pointed at the same endpoint: the configuration survives, and
 the next use rebuilds rather than fails.
@@ -55,7 +55,7 @@ def _configured(token: object) -> Any:
 
 
 def test_close_client_is_gated_like_the_other_entry_points() -> None:
-    r"""The engine is reachable only through ``StructuredClient``; a release that
+    r"""The engine is reachable only through ``RelationalClient``; a release that
     anyone could call would be a way around that boundary.
     """
     with pytest.raises(RuntimeError, match='not supported'):

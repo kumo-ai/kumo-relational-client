@@ -31,7 +31,9 @@ from typing import Any
 import nemotron_relational.rfm as rfm
 import pandas as pd
 from nemotron_relational.api.typing import Stype
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import (
+    RelationalClient as EngineRelationalClient,
+)
 from nemotron_relational.client.endpoints import Endpoint, HTTPMethod
 
 DEFAULT_BASE_URL = os.getenv('TFM_BASE_URL', 'http://127.0.0.1:8001')
@@ -103,10 +105,10 @@ def build_demo_graph() -> rfm.Graph:
 
 def run_high_level_prediction(base_url: str, api_key: str | None) -> None:
     print('\n=== client.relational(graph).predict(...) ===')
-    from nemotron_structured import StructuredClient
+    from kumo_relational_client import RelationalClient
 
     graph = build_demo_graph()
-    with StructuredClient(url=base_url, api_key=api_key) as client:
+    with RelationalClient(url=base_url, api_key=api_key) as client:
         result = client.relational(graph).predict(
             'PREDICT USERS.STATUS = "A" FOR USERS.USER_ID = 4',
             run_mode='best',
@@ -126,7 +128,7 @@ def run_sdk_route_descriptors(
 ) -> None:
     """Show low-level client route descriptors for non-predict NIM routes."""
     print('\n=== client route descriptors for NIM metadata ===')
-    client = RelationalClient(base_url, api_key=api_key)
+    client = EngineRelationalClient(base_url, api_key=api_key)
 
     endpoint_examples = (
         ('health live', Endpoint('/v1/health/live', HTTPMethod.GET)),
@@ -177,9 +179,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         '--api-key',
-        default=os.getenv('NEMOTRON_STRUCTURED_API_KEY'),
+        default=os.getenv('KUMO_RELATIONAL_API_KEY'),
         help='Optional API key, only needed if the NIM is behind an '
-        'authenticating gateway. Default: NEMOTRON_STRUCTURED_API_KEY or none.',
+        'authenticating gateway. Default: KUMO_RELATIONAL_API_KEY or none.',
     )
     parser.add_argument(
         '--timeout',

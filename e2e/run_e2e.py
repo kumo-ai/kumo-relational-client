@@ -21,13 +21,13 @@ sys.path.insert(
         os.path.dirname(__file__),
         '..',
         'packages',
-        'nemotron-structured-client',
+        'kumo-relational-client',
         'src',
     ),
 )
-from nemotron_structured import StructuredClient
+from kumo_relational_client import RelationalClient
 
-_client: StructuredClient | None = None
+_client: RelationalClient | None = None
 
 
 def predict_tabicl(*, context, predict, task, target, **kwargs):
@@ -36,7 +36,7 @@ def predict_tabicl(*, context, predict, task, target, **kwargs):
     return handle.predict(predict, **kwargs)
 
 
-BASE_URL = os.environ.get('NEMOTRON_STRUCTURED_NIM_BASE_URL', '').rstrip('/')
+BASE_URL = os.environ.get('KUMO_RELATIONAL_NIM_BASE_URL', '').rstrip('/')
 
 RESULTS: list[tuple[str, bool, str]] = []
 
@@ -363,7 +363,7 @@ def real_dataset_mixed_dtypes() -> None:
     predict_full = sample.iloc[2500:]
     predict = predict_full.drop(columns=['income']).reset_index(drop=True)
 
-    from nemotron_structured.adapters.tabular import build_request
+    from kumo_relational_client.adapters.tabular import build_request
 
     payload = build_request(
         context=context,
@@ -694,11 +694,11 @@ def concurrency() -> None:
 
 def main() -> None:
     if not BASE_URL:
-        print('Set NEMOTRON_STRUCTURED_NIM_BASE_URL to run the e2e checks.')
+        print('Set KUMO_RELATIONAL_NIM_BASE_URL to run the e2e checks.')
         sys.exit(2)
     print(f'Target NIM: {BASE_URL}')
     global _client
-    _client = StructuredClient(url=BASE_URL)
+    _client = RelationalClient(url=BASE_URL)
 
     for step in (
         management_endpoints,
