@@ -9,7 +9,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 VENV_DIR="${RFM_NIM_LIVE_VENV:-$REPO_ROOT/.tmp/rfm-nim-live-venv}"
-BASE_URL="${RFM_NIM_BASE_URL:-}"
+BASE_URL="${KUMO_RELATIONAL_NIM_BASE_URL:-${RFM_NIM_BASE_URL:-}}"
 MODE=smoke
 REBUILD_ENV=0
 
@@ -21,13 +21,15 @@ Usage:
   scripts/run_rfm_nim_live_tests.sh --url <base-url> [--full] [pytest args...]
 
 Options:
-  --url URL       KumoRelational NIM service root. RFM_NIM_BASE_URL is also accepted.
+  --url URL       KumoRelational NIM service root. KUMO_RELATIONAL_NIM_BASE_URL
+                  (or the older RFM_NIM_BASE_URL) is also accepted.
   --full          Run smoke and extended live validation. Default: smoke only.
   --rebuild-env   Recreate the script-owned virtualenv before running.
   -h, --help      Show this help.
 
 Optional environment:
-  RFM_NIM_API_KEY          X-API-Key value; never printed by this script.
+  KUMO_RELATIONAL_NIM_API_KEY  X-API-Key value; never printed by this script.
+                           RFM_NIM_API_KEY is still honoured.
   RFM_NIM_VERIFY_SSL       Set 0/false/no to disable TLS verification.
   RFM_NIM_TIMEOUT_SECONDS  Per-request timeout. Default: 30.
   RFM_NIM_PYTHON           Existing Python interpreter to use instead of the
@@ -63,7 +65,7 @@ while (($#)); do
 done
 
 if [[ -z "$BASE_URL" ]]; then
-  echo 'error: pass --url or set RFM_NIM_BASE_URL' >&2
+  echo 'error: pass --url or set KUMO_RELATIONAL_NIM_BASE_URL' >&2
   exit 2
 fi
 
@@ -137,4 +139,6 @@ pytest_command=(
 if ((${#pytest_args[@]})); then
   pytest_command+=("${pytest_args[@]}")
 fi
-RFM_NIM_BASE_URL="$BASE_URL" exec "${pytest_command[@]}"
+RFM_NIM_BASE_URL="$BASE_URL" \
+  KUMO_RELATIONAL_NIM_API_KEY="${KUMO_RELATIONAL_NIM_API_KEY:-${RFM_NIM_API_KEY:-}}" \
+  exec "${pytest_command[@]}"
