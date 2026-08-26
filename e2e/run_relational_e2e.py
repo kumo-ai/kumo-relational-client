@@ -211,7 +211,7 @@ def _bad_query():
     except RelationalError as e:
         return f'code={getattr(e, "code", "?")}'
     except Exception as e:
-        return f'{type(e).__name__} (not StructuredError)'
+        return f'{type(e).__name__} (not RelationalError)'
     raise AssertionError('a malformed query was accepted')
 
 
