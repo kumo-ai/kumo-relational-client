@@ -151,11 +151,10 @@ kumo-relational-client/
     │       ├── models.py       #   the per-model handles the client hands back
     │       ├── requests.py     #   the internal typed requests handles build
     │       ├── errors.py       #   the exception hierarchy
-    │       ├── core/           #   HTTP transport, response parsing, connectors, dtypes
+    │       ├── core/           #   HTTP transport, connectors, serving targets
     │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
     │       ├── adapters/       #   one peer module per model
     │       │   └── relational.py #   relational (lazy-wraps the driver)
-    │       ├── wire/          #   the on-the-wire request and response shapes
     │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
     ├── kumo-connectors/        # shared data-source connectors (pure python)
     │   └── src/kumo_connectors/
@@ -187,7 +186,7 @@ sampling and point-in-time correctness logic that already lives, and is tested,
 there.
 
 So `adapters/relational.py` takes the shape the driver actually needs and
-normalizes the result into the DataFrame shape `core.response` produces.
+normalizes the driver's result into the DataFrame shape callers get back.
 
 ## Sessions
 
