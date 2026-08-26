@@ -72,7 +72,7 @@ def test_transport_errors_do_not_render_a_credential_carried_in_the_url():
             exc=requests.ConnectTimeout(f'timed out for {_URL}/v1/predictions'),
         )
         with pytest.raises(RelationalError) as caught:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
     assert _SECRET not in str(caught.value)
     assert 'nim.example' in str(caught.value)
 
@@ -82,7 +82,7 @@ def test_a_non_json_body_is_reported_without_the_credential():
     with requests_mock.Mocker() as mock:
         mock.post(f'{_URL}/v1/predictions', text='not json')
         with pytest.raises(RelationalError) as caught:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
     assert _SECRET not in str(caught.value)
 
 

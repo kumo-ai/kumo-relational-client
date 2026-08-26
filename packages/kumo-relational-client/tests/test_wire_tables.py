@@ -4,7 +4,7 @@
 
 r"""The shared ``arrays`` table encoder.
 
-``encode_table`` came out of the Kumo Tabular adapter to be shared with the
+``encode_table`` was extracted to be shared with the
 relational path, so what matters is that it still writes exactly what the
 adapter wrote. The cases here are the ones where a rewrite could plausibly
 differ and the server would still accept the result: the empty-column frame,
@@ -82,24 +82,3 @@ def test_safe_integers_stay_numbers() -> None:
 def test_missing_values_become_null() -> None:
     frame = pd.DataFrame({'a': [1.0, np.nan, 3.0]})
     assert encode(frame)['rows'] == [[1.0], [None], [3.0]]
-
-
-def test_the_adapter_and_the_shared_encoder_agree() -> None:
-    r"""The move this module came from: the Kumo Tabular payload builder must be
-    emitting exactly what ``encode_table`` produces.
-    """
-    from kumo_relational_client.adapters.tabular import build_request
-
-    context = pd.DataFrame({'x': [1.0, 2.0, 3.0], 'y': [0, 1, 0]})
-    predict = pd.DataFrame({'x': [4.0]})
-    body = build_request(
-        context=context,
-        predict=predict,
-        task='binary_classification',
-        target='y',
-        outputs=['prediction'],
-        request_id='fixed',
-    )
-
-    assert body['context']['instance_table'] == encode(context)
-    assert body['predict']['instance_table'] == encode(predict)

@@ -25,13 +25,12 @@ anywhere.
 from kumo_relational_client import RelationalClient
 
 with RelationalClient(url='http://localhost:8000') as client:
-    model = client.tabular(context_df, target='label', task='classification')
-    df = model.predict(rows)
+    model = client.relational(graph)
+    df = model.predict(query, indices=[1, 2])
 ```
 
-`client.tabular(...)` returns a `TabularModel` and sends `kumo-tabular`.
 `client.relational(graph)` returns a `RelationalModel` and sends
-`nemotron-relational`; it needs the `[relational]` extra. The method names the
+`kumo-relational`; it needs the `[relational]` extra. The method names the
 capability, so a future model of the same shape is a `model=` argument rather
 than a new method.
 

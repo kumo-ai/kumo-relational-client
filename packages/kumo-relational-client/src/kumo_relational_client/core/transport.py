@@ -138,8 +138,8 @@ class _Session(requests.Session):
     to any host it names, defeating ``_validate_url``.
 
     Redirects are still followed, and this covers the credential only. A
-    ``307``/``308`` therefore re-sends the request *body* -- for Kumo Tabular, the
-    caller's whole labelled context table -- to the redirect target, including
+    ``307``/``308`` therefore re-sends the request *body* -- the caller's whole
+    context -- to the redirect target, including
     across an ``https`` to ``http`` downgrade, which ``_validate_url`` never
     sees because it runs at construction against the configured URL. That is
     an accepted trade: refusing redirects outright breaks legitimate ``308``

@@ -13,7 +13,7 @@ from kumo_relational_client.errors import RelationalError
 def test_parse_prediction_response_basic_fields():
     response = {
         'id': 'pred_abc',
-        'model': 'kumo-tabular',
+        'model': 'kumo-relational',
         'predictions': [
             {
                 'row_index': 0,

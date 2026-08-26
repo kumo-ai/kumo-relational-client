@@ -106,7 +106,7 @@ def test_retry_policy_retries_transient_status_on_a_real_socket():
         url,
     ):
         transport = Transport(url, max_retries=3, backoff_factor=0.0)
-        assert transport.predict({'model': 'kumo-tabular'}) == {
+        assert transport.predict({'model': 'kumo-relational'}) == {
             'predictions': []
         }
     assert server.received == ['/v1/predictions'] * 3
@@ -127,7 +127,7 @@ def test_retry_after_header_is_capped(monkeypatch):
         _Reply(),
     ) as (_, url):
         Transport(url, max_retries=1, backoff_factor=0.0).predict(
-            {'model': 'kumo-tabular'}
+            {'model': 'kumo-relational'}
         )
 
     assert slept == [
@@ -142,7 +142,7 @@ def test_timeout_bounds_a_slow_response():
         transport = Transport(url, timeout=0.5, max_retries=0)
         started = time.monotonic()
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
         elapsed = time.monotonic() - started
     assert excinfo.value.code == 'TRANSPORT_ERROR'
     assert elapsed < 4.0
@@ -172,7 +172,7 @@ def test_gzip_bomb_is_refused_instead_of_inflated():
     ):
         transport = Transport(url, max_retries=0)
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
 
     assert excinfo.value.code == 'TRANSPORT_ERROR'
     assert 'exceeds' in str(excinfo.value)
@@ -187,7 +187,7 @@ def test_large_legitimate_response_is_returned_intact(encode):
 
     with _serve(_Reply(raw=raw, headers=headers)) as (_, url):
         transport = Transport(url, max_retries=0)
-        result = transport.predict({'model': 'kumo-tabular'})
+        result = transport.predict({'model': 'kumo-relational'})
 
     assert len(body) > 8 * 1024 * 1024
     assert len(result['predictions']) == body.count(b',') + 1
@@ -201,7 +201,7 @@ def test_oversized_error_body_is_refused_before_it_becomes_a_message():
     ) as (_, url):
         transport = Transport(url, max_retries=0)
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
 
     assert not isinstance(excinfo.value, NimRequestError)
     assert excinfo.value.code == 'TRANSPORT_ERROR'
@@ -217,7 +217,7 @@ def test_deeply_nested_json_stays_inside_the_error_contract():
     with _serve(_Reply(raw=nested)) as (_, url):
         transport = Transport(url, max_retries=0)
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
 
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
@@ -225,10 +225,10 @@ def test_deeply_nested_json_stays_inside_the_error_contract():
 def test_closed_transport_stops_issuing_requests():
     with _serve(_Reply()) as (server, url):
         transport = Transport(url, max_retries=0)
-        transport.predict({'model': 'kumo-tabular'})
+        transport.predict({'model': 'kumo-relational'})
         transport.close()
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-tabular'})
+            transport.predict({'model': 'kumo-relational'})
         with pytest.raises(RelationalError):
             transport.health_ready()
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
@@ -252,7 +252,7 @@ def test_a_slow_session_create_is_not_retried():
             url, timeout=0.5, max_retries=2, backoff_factor=0.0
         )
         with pytest.raises(RelationalError) as excinfo:
-            transport.create_session({'model': 'kumo-tabular'})
+            transport.create_session({'model': 'kumo-relational'})
 
     assert excinfo.value.code == 'TRANSPORT_ERROR'
     assert server.received == ['/v1/sessions']
@@ -271,7 +271,7 @@ def test_the_replayable_session_routes_keep_the_retry_policy():
 
     with _serve(_Reply(status=503), _Reply()) as (server, url):
         transport = Transport(url, max_retries=2, backoff_factor=0.0)
-        transport.predict({'model': 'kumo-tabular'})
+        transport.predict({'model': 'kumo-relational'})
     assert server.received == ['/v1/predictions'] * 2
 
 

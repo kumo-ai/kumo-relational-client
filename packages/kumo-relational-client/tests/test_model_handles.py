@@ -11,14 +11,12 @@ import pytest
 from kumo_relational_client import (
     RelationalClient,
     RelationalModel,
-    TabularModel,
 )
 from kumo_relational_client.base import ModelAdapter, ModelCapabilities
 from kumo_relational_client.errors import RelationalError
 from kumo_relational_client.requests import (
     KumoRelationalRequest,
     KumoRelationalTaskRequest,
-    KumoTabularRequest,
 )
 
 
@@ -425,56 +423,9 @@ def test_rfm_handle_matches_typed_request():
     assert via_handle == typed
 
 
-def test_tabicl_returns_bound_handle():
-    client = RelationalClient(url='http://nim.test')
-    handle = client.tabular(
-        pd.DataFrame({'y': [0, 1]}), target='y', task='classification'
-    )
-    assert isinstance(handle, TabularModel)
-
-
-def test_tabicl_handle_end_to_end_through_client():
-    result = pd.DataFrame({'prediction': [1]})
-    adapter = _CapturingAdapter('kumo-tabular', KumoTabularRequest, result)
-    client = _client_with(adapter)
-
-    ctx = pd.DataFrame({'x': [1, 2], 'y': [0, 1]})
-    rows = pd.DataFrame({'x': [3]})
-    out = client.tabular(ctx, target='y', task='classification').predict(
-        rows, positive_class='1'
-    )
-
-    assert out is result
-    req = adapter.captured
-    assert isinstance(req, KumoTabularRequest)
-    assert req.model == 'kumo-tabular'
-    assert req.context.equals(ctx)
-    assert req.predict.equals(rows)
-    assert req.task == 'classification'
-    assert req.target == 'y'
-    assert req.positive_class == '1'
-
-
-def test_tabicl_handle_defaults_are_minimal():
-    adapter = _CapturingAdapter(
-        'kumo-tabular', KumoTabularRequest, pd.DataFrame()
-    )
-    client = _client_with(adapter)
-
-    ctx = pd.DataFrame({'x': [1], 'y': [0]})
-    client.tabular(ctx, target='y', task='regression').predict(
-        pd.DataFrame({'x': [2]})
-    )
-
-    req = adapter.captured
-    assert req.outputs == ['prediction']
-    assert req.positive_class is None
-    assert req.max_results is None
-
-
 def test_handle_still_dispatches_by_request_type():
     adapter = _CapturingAdapter(
-        'kumo-relational', KumoTabularRequest, pd.DataFrame()
+        'kumo-relational', KumoRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
 
@@ -488,7 +439,6 @@ def test_public_predict_is_not_exposed():
     client = RelationalClient(url='http://nim.test')
     assert not hasattr(client, 'predict')
     assert hasattr(client, 'relational')
-    assert hasattr(client, 'tabular')
 
 
 def test_rfm_handle_forwards_explain():
@@ -690,20 +640,6 @@ def test_rfm_handle_forwards_explain_config():
     assert adapter.captured.explain == cfg
 
 
-def test_tabicl_handle_forwards_request_id():
-    adapter = _CapturingAdapter(
-        'kumo-tabular', KumoTabularRequest, pd.DataFrame()
-    )
-    client = _client_with(adapter)
-
-    ctx = pd.DataFrame({'x': [1], 'y': [0]})
-    client.tabular(ctx, target='y', task='classification').predict(
-        pd.DataFrame({'x': [2]}), request_id='trace-123'
-    )
-
-    assert adapter.captured.request_id == 'trace-123'
-
-
 def test_rfm_handle_forwards_batch_size():
     adapter = _CapturingAdapter(
         'kumo-relational', KumoRelationalRequest, pd.DataFrame()
@@ -821,34 +757,25 @@ _NOT_A_FRAME = [
 
 
 @pytest.mark.parametrize('value', _NOT_A_FRAME)
-def test_tabicl_handle_rejects_a_non_frame_context(value):
-    """These are the shapes a pandas user reaches for before building a frame.
-    Each used to reach ``frame.columns`` inside the adapter and raise
-    ``AttributeError``, which ``except RelationalError`` does not catch and which
-    names neither the argument nor the type it should have been.
+def test_predict_task_rejects_every_shape_that_is_not_a_frame(value):
+    r"""The shapes a pandas user reaches for before building a frame must be
+    named at the boundary rather than surfacing as an AttributeError from
+    inside an adapter.
     """
-    client = RelationalClient(url='http://nim.test')
-    with pytest.raises(RelationalError) as excinfo:
-        client.tabular(value, target='y', task='classification')
-    assert excinfo.value.code == 'INVALID_REQUEST'
-    assert 'context must be a pandas DataFrame' in str(excinfo.value)
-    assert type(value).__name__ in str(excinfo.value)
-
-
-@pytest.mark.parametrize('value', _NOT_A_FRAME)
-def test_tabicl_handle_rejects_a_non_frame_predict(value):
     adapter = _CapturingAdapter(
-        'kumo-tabular', KumoTabularRequest, pd.DataFrame()
+        'kumo-relational', KumoRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
-    handle = client.tabular(
-        pd.DataFrame({'a': [1.0], 'y': [0]}), target='y', task='classification'
-    )
 
     with pytest.raises(RelationalError) as excinfo:
-        handle.predict(value)
+        client.relational('g').predict_task(
+            context=value,
+            predict=pd.DataFrame({'ENTITY': [2]}),
+            task_type='regression',
+            entity_table='users',
+        )
     assert excinfo.value.code == 'INVALID_REQUEST'
-    assert 'predict must be a pandas DataFrame' in str(excinfo.value)
+    assert 'context must be a pandas DataFrame' in str(excinfo.value)
 
 
 @pytest.mark.parametrize('argument', ['context', 'predict'])
@@ -875,7 +802,12 @@ def test_a_dict_or_series_is_told_how_to_become_a_row():
     client = RelationalClient(url='http://nim.test')
     for value in ({'a': 1, 'y': 0}, pd.Series({'a': 1, 'y': 0})):
         with pytest.raises(RelationalError) as excinfo:
-            client.tabular(value, target='y', task='classification')
+            client.relational('g').predict_task(
+                context=value,
+                predict=pd.DataFrame({'a': [1]}),
+                task_type='regression',
+                entity_table='users',
+            )
         assert 'pd.DataFrame([row])' in str(excinfo.value)
 
 
@@ -888,12 +820,15 @@ def test_frames_and_subclasses_are_still_accepted():
         pass
 
     adapter = _CapturingAdapter(
-        'kumo-tabular', KumoTabularRequest, pd.DataFrame()
+        'kumo-relational', KumoRelationalTaskRequest, pd.DataFrame()
     )
     client = _client_with(adapter)
     context = _MyFrame({'a': [1.0, 2.0], 'y': [0, 1]})
 
-    client.tabular(context, target='y', task='classification').predict(
-        _MyFrame({'a': [3.0]})
+    client.relational('g').predict_task(
+        context=context,
+        predict=_MyFrame({'a': [3.0]}),
+        task_type='regression',
+        entity_table='users',
     )
     assert adapter.captured is not None

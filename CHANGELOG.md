@@ -2,7 +2,26 @@
 
 ## Unreleased
 
+### Removed
+
+- **The tabular surface is gone.** `client.tabular()`, `TabularModel`, the
+  `kumo-tabular` adapter and its request types are removed, and
+  `client.models()` now reports `['kumo-relational']` alone. No endpoint serves
+  `kumo-tabular`, and the model is not being released, so the client no longer
+  offers a method that cannot reach a model. The contract still defines
+  `kumo-tabular`, so re-adding an adapter later is additive rather than
+  breaking.
+- The end-to-end scripts that drove the tabular path are removed, replaced by
+  `e2e/run_relational_e2e.py`. The connectors end-to-end script went with them:
+  it scored warehouse tables through the tabular path, and the relational path
+  needs a time column those tables do not have. The connectors package keeps its
+  own unit tests.
+
 ### Changed
+
+- The relational engine's HTTP connection to a NIM is now `NimClient`. It and
+  the client's own `RelationalClient` were both named `RelationalClient`, so a
+  module importing both silently bound whichever came last.
 
 - **The models are now addressed as `kumo-relational` and `kumo-tabular`.** The
   previous ids `nemotron-relational` and `nemotron-tabular` are not accepted. A

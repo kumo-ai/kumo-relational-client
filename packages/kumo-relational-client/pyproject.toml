@@ -4,7 +4,7 @@ dynamic = ["version"]
 authors = [
     {name = "NVIDIA"},
 ]
-description = "Client for NVIDIA structured-data foundation model NIMs (Kumo Relational, Kumo Tabular, and future adapters)"
+description = "Client for the NVIDIA Kumo Relational structured-data foundation model NIM"
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
@@ -12,7 +12,6 @@ license-files = ["LICENSE", "NOTICE"]
 keywords = [
     "structured-data",
     "foundation-model",
-    "tabular",
     "relational",
 ]
 # Only the interpreter versions CI builds and tests; see `requires-python`.

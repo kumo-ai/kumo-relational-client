@@ -4,7 +4,7 @@
 
 r"""The Kumo Relational examples that ship beside the contract.
 
-These had no test at all: only the tabular examples were replayed, so the
+These had no test at all: the relational examples were never replayed, so the
 relational half of the wire format was described by the contract and checked by
 nobody. A full replay is not possible from this package, because a relational
 request is assembled by the engine from a graph rather than by the client, so

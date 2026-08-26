@@ -7,8 +7,6 @@ from __future__ import annotations
 from types import TracebackType
 from typing import Any
 
-import pandas as pd
-
 from kumo_relational_client.base import (
     AdapterRegistry,
     ModelAdapter,
@@ -25,20 +23,14 @@ from kumo_relational_client.core.transport import Transport, redact_url
 from kumo_relational_client.errors import RelationalError
 from kumo_relational_client.models import (
     RelationalModel,
-    TabularModel,
-    require_frame,
 )
 from kumo_relational_client.requests import ModelRequest
 
 
 def _default_registry() -> AdapterRegistry:
-    from kumo_relational_client.adapters import (
-        KumoRelationalAdapter,
-        KumoTabularAdapter,
-    )
+    from kumo_relational_client.adapters import KumoRelationalAdapter
 
     registry = AdapterRegistry()
-    registry.register(KumoTabularAdapter())
     registry.register(KumoRelationalAdapter())
     return registry
 
@@ -95,13 +87,13 @@ class RelationalClient:
                 up to ``(max_retries + 1) * timeout`` plus backoff.
             max_retries: Transport-level retries of a transient failure (429,
                 500, 502, 503, 504, or a dropped connection) with
-                exponential backoff, on both the Kumo Tabular and the Kumo Relational path.
+                exponential backoff, on the Kumo Relational path.
                 ``0`` disables them. ``POST /v1/sessions`` is excluded: a
                 re-sent create would orphan a pinned context on the NIM.
                 Distinct from ``predict(num_retries=...)``, which retries a
                 Kumo Relational prediction at the application level and defaults to 1.
             registry: The adapter registry to dispatch with. Defaults to the
-                built-in Kumo Tabular and Kumo Relational adapters.
+                built-in Kumo Relational adapter.
         """
         self._configure(
             Transport(
@@ -261,27 +253,11 @@ class RelationalClient:
         """
         return RelationalModel(self, graph)
 
-    def tabular(
-        self,
-        context: pd.DataFrame,
-        *,
-        target: str,
-        task: str,
-    ) -> TabularModel:
-        r"""A Kumo Tabular handle:
-        ``client.tabular(context, target=..., task=...).predict(rows)``.
-
-        This is the supported way to run Kumo Tabular inference.
-        """
-        return TabularModel(
-            self, require_frame(context, 'context'), task=task, target=target
-        )
-
     def _predict(self, request: ModelRequest) -> PredictResult:
         r"""Internal dispatch used by the model handles.
 
-        Not a public API: run inference through ``client.relational(...)`` or
-        ``client.tabular(...)``. Returns the adapter's typed result: a
+        Not a public API: run inference through ``client.relational(...)``.
+        Returns the adapter's typed result: a
         prediction ``pd.DataFrame``, or a ``nemotron_relational.rfm.rfm.Explanation`` when a
         Kumo Relational request asks to explain.
         """

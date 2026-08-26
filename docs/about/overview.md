@@ -10,15 +10,14 @@ The NVIDIA Kumo Relational Client is one Python client for
 NVIDIA's structured-data foundation model NIMs, served behind the Universal TFM
 API. A thin, model-agnostic client dispatches through per-model handles to
 per-model adapters; heavy model drivers are optional and installed only when you
-ask for them. Two models are available today: **Kumo Tabular** (single-table, in-context
-learning) and **Kumo Relational** (relational, graph-aware in-context learning).
+ask for them. One model is available today: **Kumo Relational** (relational,
+graph-aware in-context learning).
 
 ## Benefits
 
 - **One client for every model.** A single `RelationalClient` connects to a NIM and
   serves any registered model through a handle of its own,
-  `client.tabular(...).predict(...)` and `client.relational(...).predict(...)`,
-  each returning the same shape of pandas DataFrame.
+  `client.relational(...).predict(...)`, returning a pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
   every platform. Heavy drivers, such as Nemotron Relational's native graph sampler, are
   opt-in extras.
@@ -40,11 +39,10 @@ learning) and **Kumo Relational** (relational, graph-aware in-context learning).
 
 ## Use Cases
 
-### Score a Single Table with Kumo Tabular
+### Score Related Tables with Kumo Relational
 
-Provide a table of labeled context rows and a table of rows to predict, and
-Kumo Tabular returns predictions in one forward pass, with no per-dataset
-training.
+Provide a graph of related tables and a predictive query, and Kumo Relational
+returns predictions in one forward pass, with no per-dataset training.
 
 ### Predict Over Relational Data with Kumo Relational
 
@@ -59,8 +57,8 @@ the relevant subgraph and returns predictions for the entities you name.
 - **Model adapter.** A per-model module that shapes a typed request into the
   wire envelope and normalizes the response into a pandas DataFrame.
 - **Driver.** A model's heavy client-side runtime. Nemotron Relational ships one (graph
-  building, native neighbor sampling, PQL); Kumo Tabular needs none.
-- **In-context learning (ICL).** Both models predict from labeled context rows
+  building, native neighbor sampling, PQL).
+- **In-context learning (ICL).** The model predicts from labeled context rows
   in a single forward pass rather than training per dataset.
 
 ## Core Components

@@ -64,7 +64,7 @@ def test_error_types_are_exported(name: str) -> None:
     [
         NimRequestError(503, code='X', message='m'),
         MissingExtraError('nemotron_relational', 'nemotron_relational'),
-        UnknownModelError('nope', ['kumo-tabular']),
+        UnknownModelError('nope', ['kumo-relational']),
     ],
 )
 def test_every_error_is_catchable_as_predict_error(

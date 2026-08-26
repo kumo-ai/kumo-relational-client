@@ -4,10 +4,7 @@
     "kumo-relational/prediction_kumo_relational_forecasting.json": "3886b95218ae78ab07c3a26fd5988d9bc06560a3088b1e6e733fadf02f8f6dcf",
     "kumo-relational/prediction_kumo_relational_temporal_link_prediction.json": "96a705d275f240894e882d75efcfa0faeffaf05722972fdd5598f25c7a3f9b34",
     "kumo-relational/session_create_kumo_relational_binary_classification.json": "69dfabc769a9de3920532227339fba77ae9fc9fd1e291a574add6a3b0f557e36",
-    "kumo-relational/session_prediction_kumo_relational_binary_classification.json": "1608633888302dfce01c9f6a8d0764b41f7ae52c49bc7aea4e2bab1351aedcee",
-    "kumo-tabular/prediction_kumo_tabular_arrays.json": "1ee99460b87c0f694d7c8a1536d5012eb5c863ecab20ee3d42303a8c2420ce12",
-    "kumo-tabular/prediction_kumo_tabular_numeric_classification.json": "34a351e2ee8efe7cd640fac59ecfdaef7d33cc8f38bf1deb898ec58f632757ff",
-    "kumo-tabular/prediction_kumo_tabular_regression_quantiles.json": "a2920c96b4bcf3cdec860d916239d87509a5ec750604ee39cd9be193c3370c01"
+    "kumo-relational/session_prediction_kumo_relational_binary_classification.json": "1608633888302dfce01c9f6a8d0764b41f7ae52c49bc7aea4e2bab1351aedcee"
   },
   "source_path": "examples",
   "source_repository": "https://gitlab-master.nvidia.com/kumo-tfm-nims/structured-data-api.git",

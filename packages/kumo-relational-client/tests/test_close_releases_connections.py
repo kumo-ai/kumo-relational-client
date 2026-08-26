@@ -111,7 +111,7 @@ def test_two_clients_close_independently() -> None:
 def test_nemotron_relational_adapter_close_is_inert_before_any_prediction() -> (
     None
 ):
-    r"""Closing a client that only used Kumo Tabular must not import the driver,
+    r"""Closing a client that never ran a prediction must not import the driver,
     which is an optional dependency and may not be installed.
     """
     from kumo_relational_client.adapters.relational import (

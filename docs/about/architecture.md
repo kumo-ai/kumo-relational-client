@@ -16,14 +16,13 @@ is a peer adapter, while a model's optional driver holds its client-side compute
 flowchart TD
     app["Your application"] --> client["RelationalClient (kumo-relational-client)"]
     client --> registry["AdapterRegistry"]
-    registry --> tabicl["Kumo Tabular adapter"]
     registry --> rfm["Kumo Relational adapter"]
     rfm --> driver["nemotron_relational driver: graph, sampler, PQL"]
-    tabicl --> transport["Transport (HTTP)"]
-    driver --> kumoclient["RelationalClient (HTTP)"]
+    client --> transport["Transport (HTTP)"]
+    driver --> nimclient["NimClient (HTTP)"]
     driver -.-> serving["DatabricksServingClient"]
     transport --> nim["Universal TFM NIM"]
-    kumoclient --> nim
+    nimclient --> nim
     serving --> endpoint["Databricks Model Serving endpoint"]
     client --> connectors["nemotron-structured-connectors"]
     driver --> connectors
@@ -40,10 +39,10 @@ prediction is issued against the endpoint and credential of the client that
 started it.
 
 Requests do not all leave through the same object. The client holds a
-`Transport`, a pooled HTTP session with retry and backoff, and Kumo Tabular predicts
-through it. Kumo Relational does not: the client hands its address and credential to
-the driver, which opens its own pooled session (`RelationalClient`) and sends from
-there. The two are separate implementations of the same HTTP contract, because
+`Transport`, a pooled HTTP session with retry and backoff, which serves the
+client's own calls such as `/v1/models`. Kumo Relational does not predict through
+it: the client hands its address and credential to the driver, which opens its
+own pooled session (`NimClient`) and sends from there. The two are separate implementations of the same HTTP contract, because
 `nemotron_relational` cannot depend on `kumo-relational-client`; the dependency runs the other way.
 
 The Nemotron Relational driver underneath does keep a process-wide configuration, which
@@ -58,7 +57,8 @@ configured it last. Drive the driver through `RelationalClient` only.
 
 Every model is a peer module implementing the `ModelAdapter` interface and
 registered in the client's `AdapterRegistry`. An adapter advertises its
-capabilities, shapes an internal typed request (`KumoTabularRequest`, `KumoRelationalRequest`
+capabilities, shapes an internal typed request (`KumoRelationalRequest`,
+`KumoRelationalTaskRequest`,
 built by the model handles, and not importable from `kumo_relational_client`) into the
 Universal TFM API envelope, and normalizes the NIM's response into a consistent
 pandas DataFrame. Adding a model means adding one adapter module, and the client
@@ -70,23 +70,21 @@ A driver is a model's heavy client-side runtime, packaged as its own
 distribution. The Nemotron Relational driver (`nemotron_relational`) performs graph building, native
 neighbor sampling through a compiled extension, and PQL parsing. The Nemotron Relational
 adapter lazy-imports this driver, so base installs stay lightweight and
-platform-independent. Kumo Tabular requires no driver.
+platform-independent.
 
 ## Data Flow
 
-1. Your application builds a model handle with `client.tabular(...)` or
-   `client.relational(...)` and calls `predict` on it.
+1. Your application builds a model handle with `client.relational(...)` and
+   calls `predict` on it.
 2. The handle builds that model's internal typed request; the client checks it is
    the type the model's adapter accepts and dispatches to it. Nothing is checked
    against `capabilities()`, which describes the client-side adapter for callers
    who ask and is not consulted on this path.
-3. The adapter builds the Universal TFM API request. For Kumo Relational, the driver
-   parses the PQL query, samples the relevant subgraph, and materializes the
-   request; for Kumo Tabular, the adapter serializes the context and predict tables
-   directly.
-4. The request goes to the NIM over HTTP, with retry on transient failures:
-   Kumo Tabular sends through the client's `Transport`, Kumo Relational through the driver's
-   own `RelationalClient`. A client built with `RelationalClient.for_databricks_serving`
+3. The adapter builds the Universal TFM API request: the driver parses the PQL
+   query, samples the relevant subgraph, and materializes the request.
+4. The request goes to the NIM over HTTP, with retry on transient failures,
+   through the driver's own `NimClient`. A client built with
+   `RelationalClient.for_databricks_serving`
    sends through `DatabricksServingClient` instead, which invokes a named
    Model Serving endpoint through the Databricks SDK rather than speaking
    HTTP.
@@ -119,7 +117,7 @@ whether it answered 200. The Nemotron Relational driver checks more before its f
 prediction: it reads `/v1/health/ready` for a ready status and then
 `/v1/models`, and fails if the endpoint does not advertise
 `nemotron-relational`. Nothing
-on the Kumo Tabular path reads `/v1/models`.
+on the client path reads `/v1/models`.
 
 ## External Integration Points
 
@@ -156,7 +154,6 @@ kumo-relational-client/
     │       ├── core/           #   HTTP transport, response parsing, connectors, dtypes
     │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
     │       ├── adapters/       #   one peer module per model
-    │       │   ├── tabular.py    #   single-table (no driver)
     │       │   └── relational.py #   relational (lazy-wraps the driver)
     │       ├── wire/          #   the on-the-wire request and response shapes
     │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
@@ -174,14 +171,13 @@ kumo-relational-client/
 2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its
    own distribution and add a `[<model>]` extra. The adapter lazy-imports the
    driver so base installs stay light.
-3. A dependency-free model, like Kumo Tabular, needs no driver and no extra.
+3. A dependency-free model needs no driver and no extra.
 
-## Why the Relational Adapter Is Not Symmetric With Tabular
+## Why the Relational Adapter Wraps the Driver
 
-The internal `KumoTabularRequest` (`context`, `predict`, `task`, `target`)
-maps cleanly onto the wire envelope. `KumoRelationalRequest` (`graph`,
-`query`, `indices`) does not. These are the shapes the handles build for the
-adapters, not a user-facing API.
+`KumoRelationalRequest` (`graph`, `query`, `indices`) does not map cleanly onto
+the wire envelope. It is the shape the handle builds for the adapter, not a
+user-facing API.
 
 `NemotronRelational.predict()` takes a PQL query plus an entity graph and
 builds, samples and sends the request as one fused operation. There is no
@@ -191,26 +187,19 @@ sampling and point-in-time correctness logic that already lives, and is tested,
 there.
 
 So `adapters/relational.py` takes the shape the driver actually needs and
-normalizes the result into the same DataFrame shape `core.response` produces
-for Kumo Tabular. Callers get one consistent return type either way.
+normalizes the result into the DataFrame shape `core.response` produces.
 
 ## Sessions
 
 A session pins `model`, `task`, `schema` and `context` on the NIM so later
-calls send only the rows to score. Both model paths use them and neither
-exposes them: they are a transport optimisation and never change a prediction.
+calls send only the rows to score. The client uses them without exposing them:
+they are a transport optimisation and never change a prediction.
 
-- **Kumo Tabular.** `client.tabular(context, ...)` reuses one session for
-  the life of the handle. It opens on the second `predict()` against the same
-  context, so scoring a single table costs exactly one request as before, and
-  every call after that carries the rows alone.
-- **Kumo Relational.** A multi-batch `predict()` opens one session for the
-  run and deletes it at the end. Set `KUMO_RELATIONAL_DISABLE_SESSIONS=1` to
-  force the stateless path.
+A multi-batch `predict()` opens one session for the run and deletes it at the
+end. Set `KUMO_RELATIONAL_DISABLE_SESSIONS=1` to force the stateless path.
 
-Both fall back to `POST /v1/predictions` when the NIM answers 404, 405 or 501
-on session creation, and both re-pin the context transparently if a session
-expires.
+It falls back to `POST /v1/predictions` when the NIM answers 404, 405 or 501 on
+session creation, and re-pins the context transparently if a session expires.
 
 ## Related Topics
 

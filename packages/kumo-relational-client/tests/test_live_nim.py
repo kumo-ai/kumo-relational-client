@@ -10,9 +10,9 @@ import pandas as pd
 import pytest
 
 from kumo_relational_client import RelationalClient
-from kumo_relational_client.requests import KumoTabularRequest
 
 _ENV_VAR = 'KUMO_RELATIONAL_NIM_BASE_URL'
+_KEY_VAR = 'KUMO_RELATIONAL_NIM_API_KEY'
 
 pytestmark = [
     pytest.mark.live_nim,
@@ -30,7 +30,11 @@ def nim_url() -> str:
 
 @pytest.fixture
 def client(nim_url: str):
-    with RelationalClient(url=nim_url) as client:
+    # A deployment may front the NIM with an authenticating gateway; the
+    # contract itself leaves NIMs unauthenticated, so the key is optional.
+    with RelationalClient(
+        url=nim_url, api_key=os.environ.get(_KEY_VAR)
+    ) as client:
         yield client
 
 
@@ -38,67 +42,36 @@ def test_nim_reports_ready(client: RelationalClient):
     assert client.health_ready() is True
 
 
-def test_tabicl_predict_returns_expected_shape(client: RelationalClient):
-    context = pd.DataFrame(
+def test_nim_serves_the_relational_model(client: RelationalClient):
+    caps = client.capabilities('kumo-relational')
+    assert caps.model == 'kumo-relational'
+    assert 'regression' in caps.tasks
+
+
+def test_relational_predict_returns_a_row_per_entity(client: RelationalClient):
+    relational = pytest.importorskip('kumo_relational_client.relational')
+
+    users = pd.DataFrame({'user_id': range(1, 41)})
+    orders = pd.DataFrame(
         {
-            'row_id': [f'ctx-{i}' for i in range(20)],
-            'age': [20 + i for i in range(20)],
-            'score': [0.05 * i for i in range(20)],
-            'target_col': ['yes' if i % 2 == 0 else 'no' for i in range(20)],
+            'order_id': range(1, 401),
+            'user_id': [1 + (i % 40) for i in range(400)],
+            'price': [5.0 + i % 50 for i in range(400)],
+            'ts': pd.Timestamp('2024-01-01')
+            + pd.to_timedelta([i % 180 for i in range(400)], unit='D'),
         }
     )
-    predict = pd.DataFrame(
-        {
-            'row_id': ['q-0', 'q-1'],
-            'age': [33, 49],
-            'score': [0.72, 0.30],
-        }
+    graph = relational.Graph.from_data(
+        {'users': users, 'orders': orders}, verbose=False
     )
 
-    frame = client._predict(
-        KumoTabularRequest(
-            context=context,
-            predict=predict,
-            task='classification',
-            target='target_col',
-            outputs=['prediction', 'probabilities'],
-        )
+    entities = [1, 2, 3]
+    frame = client.relational(graph).predict(
+        'PREDICT SUM(orders.price, 0, 30, days) FOR EACH users.user_id',
+        indices=entities,
+        verbose=False,
     )
 
-    assert len(frame) == 2
-    assert list(frame['row_index']) == [0, 1]
-    assert set(frame['prediction']).issubset({'yes', 'no'})
-    for probabilities in frame['probabilities']:
-        assert set(probabilities) == {'yes', 'no'}
-        assert abs(sum(probabilities.values()) - 1.0) < 1e-3
-
-
-def test_tabicl_predict_regression_returns_quantiles(client: RelationalClient):
-    context = pd.DataFrame(
-        {
-            'row_id': [f'ctx-{i}' for i in range(10)],
-            'feature_a': [float(i) for i in range(10)],
-            'target_col': [float(i) * 2.0 + 1.0 for i in range(10)],
-        }
-    )
-    predict = pd.DataFrame(
-        {
-            'row_id': ['q-0'],
-            'feature_a': [4.5],
-        }
-    )
-
-    frame = client._predict(
-        KumoTabularRequest(
-            context=context,
-            predict=predict,
-            task='regression',
-            target='target_col',
-            outputs=['prediction', 'quantiles'],
-            prediction_statistic='mean',
-            quantile_levels=[0.1, 0.5, 0.9],
-        )
-    )
-
-    assert len(frame) == 1
-    assert 'quantiles' in frame.columns
+    assert len(frame) == len(entities)
+    assert 'ENTITY' in frame.columns
+    assert frame['PREDICTION'].notna().all()

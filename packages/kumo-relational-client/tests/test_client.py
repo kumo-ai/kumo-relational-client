@@ -12,18 +12,19 @@ from kumo_relational_client import ModelCapabilities, RelationalClient
 def test_client_lists_builtin_models():
     assert set(RelationalClient(url='http://nim.test').models()) == {
         'kumo-relational',
-        'kumo-tabular',
     }
 
 
 def test_client_reports_capabilities():
     client = RelationalClient(url='http://nim.test')
-    caps = client.capabilities('kumo-tabular')
+    caps = client.capabilities('kumo-relational')
     assert isinstance(caps, ModelCapabilities)
-    assert caps.model == 'kumo-tabular'
-    assert 'classification' in caps.tasks
+    assert caps.model == 'kumo-relational'
+    assert 'regression' in caps.tasks
     assert 'prediction' in caps.outputs
-    assert caps.request_type == 'KumoTabularRequest'
+    assert caps.request_type == (
+        'KumoRelationalRequest | KumoRelationalTaskRequest'
+    )
 
 
 def test_two_clients_have_independent_transports():

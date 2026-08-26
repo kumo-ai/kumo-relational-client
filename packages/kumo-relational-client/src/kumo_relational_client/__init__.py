@@ -21,7 +21,6 @@ from kumo_relational_client.errors import (
 )
 from kumo_relational_client.models import (
     RelationalModel,
-    TabularModel,
 )
 
 __all__ = [
@@ -31,7 +30,6 @@ __all__ = [
     'RelationalClient',
     'RelationalError',
     'RelationalModel',
-    'TabularModel',
     'UnknownModelError',
     '__version__',
     'read',

@@ -1,6 +1,6 @@
 ---
 title: "Quickstart for the NVIDIA Kumo Relational Client"
-description: "Run your first Kumo Tabular and Kumo Relational predictions against a Universal TFM API NIM using the NVIDIA Kumo Relational Client."
+description: "Run your first Kumo Relational prediction against a Universal TFM API NIM using the NVIDIA Kumo Relational Client."
 template-library-version: "1.0.0"
 ---
 
@@ -21,29 +21,10 @@ Before you start, you must complete the following prerequisites:
 ## Quickstart Steps
 
 1. Create a `RelationalClient` pointed at your NIM.
-2. Build a model handle with `client.tabular(...)` or `client.relational(...)`.
+2. Build a model handle with `client.relational(...)`.
 3. Call `predict` and read the returned pandas DataFrame.
 
 ## Minimal Code Example
-
-### Kumo Tabular: Single Table
-
-Provide labeled context rows and rows to predict:
-
-```python
-from kumo_relational_client import RelationalClient
-
-# Connect to the NIM; the client is a context manager.
-with RelationalClient(url='http://localhost:8000') as client:
-    # Build a Kumo Tabular handle bound to the labeled context table.
-    model = client.tabular(context_df, target='label', task='classification')
-    # Score the unlabeled rows.
-    predictions = model.predict(
-        predict_df, outputs=['prediction', 'probabilities']
-    )
-
-print(predictions.head())
-```
 
 ### Kumo Relational: Relational Data
 
@@ -98,8 +79,8 @@ serving only one of these models still reports both.
 from kumo_relational_client import RelationalClient
 
 with RelationalClient(url='http://localhost:8000') as client:
-    print(client.models())  # ['kumo-relational', 'kumo-tabular']
-    print(client.capabilities('kumo-tabular'))  # tasks and outputs the model supports
+    print(client.models())  # ['kumo-relational']
+    print(client.capabilities('kumo-relational'))  # tasks and outputs the model supports
 ```
 
 To check the endpoint itself, call `client.health_ready()`. It returns whether

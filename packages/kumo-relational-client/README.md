@@ -7,7 +7,7 @@ per-model adapters; heavy model drivers are optional extras.
 ## Install
 
 ```bash
-pip install kumo-relational-client              # client + every lightweight model (Kumo Tabular)
+pip install kumo-relational-client              # the client on its own
 pip install kumo-relational-client[relational]     # adds Nemotron Relational (native driver)
 pip install kumo-relational-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
 pip install kumo-relational-client[all]         # Kumo Relational, every data-source backend,
@@ -23,22 +23,12 @@ pip install kumo-relational-client[explain]     # Kumo Relational plus the expla
 A `RelationalClient` owns one connection to a NIM. Requests are typed per model: each
 model handle builds its own request type, and the client rejects a request the
 target model's adapter does not accept. Each adapter also checks what it knows
-it cannot serve, an unsupported task kind or output field for Kumo Tabular, an
-unknown `task_type` or a missing entity table for Kumo Relational, and raises
+it cannot serve, an unknown `task_type` or a missing entity table for Kumo
+Relational, and raises
 `RelationalError(code="INVALID_REQUEST")` before anything is sent. Everything else is
 validated by the NIM.
 
-Kumo Tabular (single table):
-
-```python
-from kumo_relational_client import RelationalClient
-
-with RelationalClient(url='http://localhost:8000') as client:
-    model = client.tabular(context_df, target='label', task='classification')
-    df = model.predict(predict_df, outputs=['prediction', 'probabilities'])
-```
-
-Kumo Relational (relational), needs `kumo-relational-client[relational]`:
+Kumo Relational, needs `kumo-relational-client[relational]`:
 
 ```python
 from kumo_relational_client import RelationalClient, relational

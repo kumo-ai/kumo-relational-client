@@ -61,5 +61,4 @@ def test_default_client_has_builtin_models():
 
     assert set(RelationalClient(url='http://nim.test').models()) == {
         'kumo-relational',
-        'kumo-tabular',
     }

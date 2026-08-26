@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
@@ -20,67 +19,11 @@ class ModelRequest:
     r"""Base class for typed per-model prediction requests.
 
     Every request declares the ``model`` id it targets, so the model handles
-    (``client.relational(...)`` / ``client.tabular(...)``) can dispatch to the right
+    (``client.relational(...)``) can dispatch to the right
     adapter without a loose ``**kwargs`` bag.
     """
 
     model: ClassVar[str] = ''
-
-
-@dataclass
-class KumoTabularSession:
-    r"""The server-side context a ``TabularModel`` handle reuses across calls.
-
-    One of these lives on each handle so repeated ``predict`` calls against the
-    same bound context upload it once instead of once per call. ``pinned`` is a
-    digest of the context half of the payload the session was opened for -- a
-    digest rather than the sections themselves so a handle does not hold a
-    second copy of the context; a request whose context half differs cannot use
-    the session. ``supported`` latches to ``False`` against a NIM without
-    session routes, so the handle stops asking.
-
-    ``lock`` serializes the decision of whether to open a session, so a handle
-    shared across a thread pool -- which the handle's own docstring recommends
-    -- opens one session rather than one per thread. Without it every thread
-    reads ``id is None`` at once, they all create, the last writer wins and the
-    rest are pinned on the NIM with no ``session_id`` left to release them by.
-    Scoring against an established session runs outside the lock and so stays
-    concurrent.
-    """
-
-    id: str | None = None
-    pinned: str | None = None
-    supported: bool = True
-    lock: threading.Lock = field(
-        default_factory=threading.Lock, repr=False, compare=False
-    )
-
-
-@dataclass
-class KumoTabularRequest(ModelRequest):
-    r"""A single-table Kumo Tabular prediction request.
-
-    ``context`` holds labelled rows (including the ``target`` column) and
-    ``predict`` holds the unlabelled rows to score.
-    """
-
-    model: ClassVar[str] = 'kumo-tabular'
-
-    context: pd.DataFrame
-    predict: pd.DataFrame
-    task: str
-    target: str
-    outputs: list[str] = field(default_factory=lambda: ['prediction'])
-    positive_class: str | None = None
-    prediction_statistic: str | None = None
-    quantile_levels: list[float] | None = None
-    score_format: str | None = None
-    embedding_dtype: str | None = None
-    max_results: int | None = None
-    request_id: str | None = None
-    session: KumoTabularSession | None = field(
-        default=None, repr=False, compare=False
-    )
 
 
 @dataclass

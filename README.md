@@ -18,38 +18,47 @@ This client talks to those models. It builds the request, sends it to a NIM
 inference endpoint, and gives you back a pandas DataFrame. Inference runs in
 the NIM, so this package downloads no weights and needs no GPU.
 
-Two models are available through one client:
+One model is available through the client today:
 
 | Model | For | Reached by |
 | --- | --- | --- |
-| `kumo-tabular` | a single table | `client.tabular(...)` |
 | `kumo-relational` | several related tables, joined as a graph | `client.relational(...)` |
 
 ## Getting Started
 
 You need a running NIM to predict against. Point the client at it and score a
-table:
+set of related tables:
 
 ```python
 import pandas as pd
-from kumo_relational_client import RelationalClient
+from kumo_relational_client import RelationalClient, relational
 
-context = pd.DataFrame({"x": [1, 2, 3, 4], "label": ["a", "b", "a", "b"]})
-rows = pd.DataFrame({"x": [5, 6]})
+users = pd.DataFrame({"user_id": [1, 2, 3]})
+orders = pd.DataFrame({
+    "order_id": [1, 2, 3],
+    "user_id": [1, 2, 1],
+    "price": [10.0, 20.0, 30.0],
+    "ts": pd.to_datetime(["2024-01-01", "2024-02-01", "2024-03-01"]),
+})
+
+graph = relational.Graph.from_data({"users": users, "orders": orders})
 
 with RelationalClient(url="http://localhost:8000") as client:
-    model = client.tabular(context, target="label", task="classification")
-    print(model.predict(rows))
+    model = client.relational(graph)
+    print(model.predict(
+        "PREDICT SUM(orders.price, 0, 30, days) FOR EACH users.user_id",
+        indices=[1, 2],
+    ))
 ```
 
 `client.models()` lists what the client can dispatch and
-`client.capabilities("kumo-tabular")` describes one model. Neither needs a
+`client.capabilities("kumo-relational")` describes it. Neither needs a
 live endpoint.
 
 ## Requirements
 
 - **Python** 3.10 to 3.13.
-- **A reachable NIM** serving `kumo-tabular` or `kumo-relational`.
+- **A reachable NIM** serving `kumo-relational`.
 - **No GPU** on the client. The NIM owns that.
 - **OS and architecture.** The client and connectors are pure Python and
   install anywhere. The `[relational]` extra is a native build, published as
@@ -60,16 +69,14 @@ live endpoint.
 
 | Command | You get |
 | --- | --- |
-| `pip install kumo-relational-client` | The client and every lightweight model, which today means Kumo Tabular. |
+| `pip install kumo-relational-client` | The client on its own. |
 | `pip install kumo-relational-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
 | `pip install kumo-relational-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
 | `pip install kumo-relational-client[all]` | Kumo Relational, every warehouse backend, and `[databricks-serving]`. |
 
 What ships in the base wheel is decided by dependency weight, not by
-preference. A model that does no client-side work, like Kumo Tabular which
-only shapes a request the NIM runs, is included. A model that does heavy
-client-side work, like Nemotron Relational with its graph building, native
-neighbor sampling and PQL, is an opt-in extra. Warehouse drivers are opt-in the
+preference. A model that does heavy client-side work, like Nemotron Relational
+with its graph building, native neighbor sampling and PQL, is an opt-in extra. Warehouse drivers are opt-in the
 same way, through the shared `nemotron-structured-connectors` package.
 
 Two extras stay outside `[all]` and must be asked for by name. `[explain]`
@@ -81,16 +88,6 @@ RelBench datasets for `Graph.from_relbench()`.
 
 A `RelationalClient` owns one connection to a NIM. You run inference through a
 model handle, then call `.predict(...)` on it.
-
-### A single table
-
-```python
-from kumo_relational_client import RelationalClient
-
-with RelationalClient(url="http://localhost:8000") as client:
-    model = client.tabular(context_df, target="label", task="classification")
-    df = model.predict(predict_df, outputs=["prediction", "probabilities"])
-```
 
 ### Related tables
 

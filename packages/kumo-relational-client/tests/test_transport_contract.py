@@ -19,7 +19,7 @@ from kumo_relational_client import RelationalClient
 from kumo_relational_client.core import transport as transport_module
 from kumo_relational_client.core.transport import _PREDICTIONS_PATH, Transport
 from kumo_relational_client.errors import NimRequestError, RelationalError
-from kumo_relational_client.requests import KumoTabularRequest, ModelRequest
+from kumo_relational_client.requests import ModelRequest
 
 _URL = 'http://nim.example.com:8000'
 
@@ -27,7 +27,7 @@ _URL = 'http://nim.example.com:8000'
 def _canned_response(request_id: str = 'pred_123') -> dict:
     return {
         'id': request_id,
-        'model': 'kumo-tabular',
+        'model': 'kumo-relational',
         'predictions': [
             {
                 'row_index': 0,
@@ -44,28 +44,6 @@ def _canned_response(request_id: str = 'pred_123') -> dict:
     }
 
 
-def test_predict_end_to_end_round_trip(requests_mock, context_df, predict_df):
-    requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
-
-    with RelationalClient(url=_URL) as client:
-        frame = client._predict(
-            KumoTabularRequest(
-                context=context_df,
-                predict=predict_df,
-                task='classification',
-                target='target_col',
-                outputs=['prediction', 'probabilities'],
-            )
-        )
-
-    assert list(frame['row_index']) == [0, 1]
-    assert list(frame['prediction']) == ['yes', 'no']
-
-    sent_payload = requests_mock.last_request.json()
-    assert sent_payload['model'] == 'kumo-tabular'
-    assert sent_payload['task']['target']['column_name'] == 'target_col'
-
-
 def test_predict_unknown_model_raises():
     @dataclass
     class _UnknownRequest(ModelRequest):
@@ -78,38 +56,11 @@ def test_predict_unknown_model_raises():
 def test_predict_wrong_request_type_raises():
     @dataclass
     class _MislabelledRequest(ModelRequest):
-        model: ClassVar[str] = 'kumo-tabular'
+        model: ClassVar[str] = 'kumo-relational'
 
     with pytest.raises(RelationalError) as excinfo:
         RelationalClient(url=_URL)._predict(_MislabelledRequest())
     assert excinfo.value.code == 'INVALID_REQUEST'
-
-
-def test_predict_propagates_nim_error(requests_mock, context_df, predict_df):
-    requests_mock.post(
-        _URL + '/v1/predictions',
-        status_code=422,
-        json={
-            'type': 'about:blank',
-            'status': 422,
-            'title': 'Unprocessable Entity',
-            'detail': 'schema validation failed',
-            'code': 'INVALID_SCHEMA',
-        },
-    )
-
-    with pytest.raises(NimRequestError) as excinfo:
-        RelationalClient(url=_URL)._predict(
-            KumoTabularRequest(
-                context=context_df,
-                predict=predict_df,
-                task='classification',
-                target='target_col',
-                outputs=['prediction'],
-            )
-        )
-    assert excinfo.value.status_code == 422
-    assert excinfo.value.code == 'INVALID_SCHEMA'
 
 
 def test_health_ready_true_on_200(requests_mock):
@@ -128,7 +79,7 @@ def test_client_sends_api_key_header(requests_mock):
     https_url = 'https://nim.example.com:8000'
     requests_mock.post(https_url + '/v1/predictions', json=_canned_response())
     client = Transport(https_url, api_key='secret')
-    client.predict({'model': 'kumo-tabular'})
+    client.predict({'model': 'kumo-relational'})
     assert requests_mock.last_request.headers['X-API-Key'] == 'secret'
 
 
@@ -167,7 +118,7 @@ def test_invalid_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', text='not json')
     client = Transport(_URL)
     with pytest.raises(RelationalError) as excinfo:
-        client.predict({'model': 'kumo-tabular'})
+        client.predict({'model': 'kumo-relational'})
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
@@ -175,7 +126,7 @@ def test_non_object_json_success_response_raises_transport_error(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', json=['a', 'b'])
     client = Transport(_URL)
     with pytest.raises(RelationalError) as excinfo:
-        client.predict({'model': 'kumo-tabular'})
+        client.predict({'model': 'kumo-relational'})
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
@@ -183,7 +134,7 @@ def test_non_object_json_error_body_is_handled(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', status_code=500, json=['boom'])
     client = Transport(_URL)
     with pytest.raises(NimRequestError) as excinfo:
-        client.predict({'model': 'kumo-tabular'})
+        client.predict({'model': 'kumo-relational'})
     assert excinfo.value.status_code == 500
 
 
@@ -365,7 +316,7 @@ def test_nim_error_string_carries_the_http_status(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'kumo-tabular'})
+        Transport(_URL).predict({'model': 'kumo-relational'})
     assert str(excinfo.value) == (
         '[422 INVALID_SCHEMA] schema validation failed'
     )
@@ -377,7 +328,7 @@ def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'kumo-tabular'})
+        Transport(_URL).predict({'model': 'kumo-relational'})
     assert str(excinfo.value) == '[403] Forbidden'
 
 
@@ -389,7 +340,7 @@ def test_nim_error_truncates_a_huge_response_body(requests_mock):
     )
 
     with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'kumo-tabular'})
+        Transport(_URL).predict({'model': 'kumo-relational'})
     assert len(str(excinfo.value)) < 1024
     assert 'truncated' in str(excinfo.value)
     assert excinfo.value.status_code == 502
@@ -431,21 +382,19 @@ def test_url_without_a_host_is_rejected_at_construction(api_key):
     assert 'missing a host' in str(excinfo.value)
 
 
-def test_predict_after_close_is_rejected(requests_mock, context_df, predict_df):
+def test_predict_after_close_is_rejected(requests_mock):
     requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
     client = RelationalClient(url=_URL)
     client.close()
 
+    @dataclass
+    class _AnyRequest(ModelRequest):
+        model: ClassVar[str] = 'kumo-relational'
+
+    # The closed-transport check runs before adapter dispatch, so the request
+    # only has to name a registered model.
     with pytest.raises(RelationalError) as excinfo:
-        client._predict(
-            KumoTabularRequest(
-                context=context_df,
-                predict=predict_df,
-                task='classification',
-                target='target_col',
-                outputs=['prediction'],
-            )
-        )
+        client._predict(_AnyRequest())
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
     assert requests_mock.call_count == 0
 
