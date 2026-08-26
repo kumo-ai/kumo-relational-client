@@ -70,14 +70,14 @@ live endpoint.
 | Command | You get |
 | --- | --- |
 | `pip install kumo-relational-client` | The client on its own. |
-| `pip install kumo-relational-client[relational]` | Adds Nemotron Relational, pulling in the native driver. |
+| `pip install kumo-relational-client[relational]` | Adds Kumo Relational, pulling in the native driver. |
 | `pip install kumo-relational-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
 | `pip install kumo-relational-client[all]` | Kumo Relational, every warehouse backend, and `[databricks-serving]`. |
 
 What ships in the base wheel is decided by dependency weight, not by
-preference. A model that does heavy client-side work, like Nemotron Relational
+preference. A model that does heavy client-side work, like Kumo Relational
 with its graph building, native neighbor sampling and PQL, is an opt-in extra. Warehouse drivers are opt-in the
-same way, through the shared `nemotron-structured-connectors` package.
+same way, through the shared `kumo-connectors` package.
 
 Two extras stay outside `[all]` and must be asked for by name. `[explain]`
 fills in `Explanation.summary`, which posts row data to a third-party LLM
@@ -134,7 +134,7 @@ registry rather than the connected endpoint, so a NIM serving only one model
 still reports both, and the mismatch surfaces as an error on the first
 prediction. And the relational driver keeps a process-wide configuration that
 each prediction reconfigures, so drive it through `RelationalClient` rather than
-mixing in direct `nemotron_relational.init()` calls.
+mixing in direct `kumo_relational_engine.init()` calls.
 
 ### Errors
 
@@ -175,8 +175,8 @@ with 1.0.0:
 | Package | Import | What it is |
 | --- | --- | --- |
 | `kumo-relational-client` | `kumo_relational_client` | the client and its model handles |
-| `nemotron-structured-connectors` | `nemotron_structured_connectors` | reads source tables from sqlite, duckdb, Snowflake, Databricks and S3 |
-| `nemotron-relational` | `nemotron_relational` | the relational driver: graph building, PQL, and a native neighbor sampler |
+| `kumo-connectors` | `kumo_connectors` | reads source tables from sqlite, duckdb, Snowflake, Databricks and S3 |
+| `kumo-relational-engine` | `kumo_relational_engine` | the relational driver: graph building, PQL, and a native neighbor sampler |
 
 Release history is in [`CHANGELOG.md`](CHANGELOG.md).
 

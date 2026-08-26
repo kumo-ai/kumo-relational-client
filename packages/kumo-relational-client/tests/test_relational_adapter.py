@@ -22,7 +22,7 @@ from kumo_relational_client.requests import (
 )
 
 try:
-    import nemotron_relational.rfm as rfm_engine
+    import kumo_relational_engine.rfm as rfm_engine
 except (ImportError, RuntimeError) as error:
     rfm_engine = None
     _ENGINE_UNUSABLE = str(error)
@@ -31,7 +31,7 @@ else:
 
 requires_engine = pytest.mark.skipif(
     rfm_engine is None,
-    reason=f'nemotron_relational.rfm is not usable in this environment: {_ENGINE_UNUSABLE}',
+    reason=f'kumo_relational_engine.rfm is not usable in this environment: {_ENGINE_UNUSABLE}',
 )
 
 
@@ -64,7 +64,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
         lambda **kwargs: captured.update(init=kwargs),
     )
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             captured['graph'] = graph
 
@@ -72,9 +72,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
             captured['predict'] = {'query': query, **kwargs}
             return pd.DataFrame({'entity': kwargs.get('indices')})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     result = KumoRelationalAdapter().predict(
         client,
@@ -103,7 +101,7 @@ def test_predict_forwards_url_and_api_key_to_engine_init(monkeypatch, client):
 def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
     captured = {}
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -113,9 +111,7 @@ def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
     monkeypatch.setattr(
         rfm_engine, 'init_client', lambda **kwargs: captured.update(kwargs)
     )
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     transport = Transport('https://nim.example.com:8000', timeout=3.5)
     KumoRelationalAdapter().predict(
@@ -129,7 +125,7 @@ def test_predict_forwards_the_client_timeout_to_engine_init(monkeypatch):
 def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
     captured = {}
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -138,9 +134,7 @@ def test_predict_forwards_custom_run_mode_and_options(monkeypatch, client):
             return pd.DataFrame({'entity': [1]})
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     KumoRelationalAdapter().predict(
         client,
@@ -178,7 +172,7 @@ def test_predict_rejects_reserved_option_keys(monkeypatch, client):
 
 @requires_engine
 def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -186,9 +180,7 @@ def test_predict_raises_type_error_on_non_dataframe_result(monkeypatch, client):
             return object()
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     with pytest.raises(TypeError):
         KumoRelationalAdapter().predict(
@@ -203,16 +195,14 @@ def test_adapter_authorizes_engine_init(monkeypatch, client):
         rfm_engine, 'init_client', lambda **kwargs: captured.update(kwargs)
     )
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
     KumoRelationalAdapter().predict(
         client, KumoRelationalRequest(graph='g', query='PREDICT x')
     )
@@ -220,21 +210,21 @@ def test_adapter_authorizes_engine_init(monkeypatch, client):
     assert captured['_token'] is rfm_engine._CLIENT_TOKEN
 
 
-def test_nemotron_relational_shim_does_not_expose_driver():
-    from kumo_relational_client import relational as nemotron_relational_shim
+def test_kumo_relational_engine_shim_does_not_expose_driver():
+    from kumo_relational_client import relational as kumo_relational_engine_shim
 
-    assert 'NemotronRelational' not in nemotron_relational_shim.__all__
-    assert 'Graph' in nemotron_relational_shim.__all__
+    assert 'KumoRelational' not in kumo_relational_engine_shim.__all__
+    assert 'Graph' in kumo_relational_engine_shim.__all__
     with pytest.raises(AttributeError):
-        nemotron_relational_shim.NemotronRelational
+        kumo_relational_engine_shim.KumoRelational
 
 
-def test_nemotron_relational_shim_namespace_is_pinned():
-    from kumo_relational_client import relational as nemotron_relational_shim
+def test_kumo_relational_engine_shim_namespace_is_pinned():
+    from kumo_relational_client import relational as kumo_relational_engine_shim
 
     # This namespace is the documented Kumo Relational surface (README, quickstart
     # notebook). Pinned so a change here has to be a change to the docs too.
-    assert nemotron_relational_shim.__all__ == [
+    assert kumo_relational_engine_shim.__all__ == [
         'Dtype',
         'ExplainConfig',
         'Explanation',
@@ -244,46 +234,46 @@ def test_nemotron_relational_shim_namespace_is_pinned():
         'Table',
         'ViewConversionWarning',
     ]
-    assert nemotron_relational_shim.__dir__() == sorted(
-        nemotron_relational_shim.__all__
+    assert kumo_relational_engine_shim.__dir__() == sorted(
+        kumo_relational_engine_shim.__all__
     )
 
 
-def test_nemotron_relational_shim_withholds_names_the_supported_api_cannot_reach():
+def test_kumo_relational_engine_shim_withholds_names_the_supported_api_cannot_reach():
     r"""`MaterializedPredictionRequest` and `TaskTable` are off the shim.
 
     Neither is reachable through `RelationalClient`: the first is returned only by
-    `NemotronRelational.materialize_*` and the second is built by the adapter itself, and
-    `NemotronRelational` is deliberately absent, so exporting them promised a surface that
-    does not exist. `NemotronRelational` and `init` stay withheld for the same reason.
+    `KumoRelational.materialize_*` and the second is built by the adapter itself, and
+    `KumoRelational` is deliberately absent, so exporting them promised a surface that
+    does not exist. `KumoRelational` and `init` stay withheld for the same reason.
     """
-    from kumo_relational_client import relational as nemotron_relational_shim
+    from kumo_relational_client import relational as kumo_relational_engine_shim
 
     for name in (
         'MaterializedPredictionRequest',
         'TaskTable',
-        'NemotronRelational',
+        'KumoRelational',
         'init',
         'LocalGraph',
     ):
-        assert not hasattr(nemotron_relational_shim, name), name
+        assert not hasattr(kumo_relational_engine_shim, name), name
 
 
 @requires_engine
-def test_nemotron_relational_shim_every_exported_name_resolves():
-    from kumo_relational_client import relational as nemotron_relational_shim
+def test_kumo_relational_engine_shim_every_exported_name_resolves():
+    from kumo_relational_client import relational as kumo_relational_engine_shim
 
-    for name in nemotron_relational_shim.__all__:
-        assert getattr(nemotron_relational_shim, name) is not None, name
+    for name in kumo_relational_engine_shim.__all__:
+        assert getattr(kumo_relational_engine_shim, name) is not None, name
 
 
 @requires_engine
-def test_nemotron_relational_shim_exposes_stype_documented_by_the_quickstart():
-    # The quickstart documents `graph[t][c].stype = nemotron_relational.Stype.<type>`.
-    from kumo_relational_client import relational as nemotron_relational_shim
+def test_kumo_relational_engine_shim_exposes_stype_documented_by_the_quickstart():
+    # The quickstart documents `graph[t][c].stype = kumo_relational_engine.Stype.<type>`.
+    from kumo_relational_client import relational as kumo_relational_engine_shim
 
-    assert nemotron_relational_shim.Stype.categorical is not None
-    assert nemotron_relational_shim.Dtype.bool is not None
+    assert kumo_relational_engine_shim.Stype.categorical is not None
+    assert kumo_relational_engine_shim.Dtype.bool is not None
 
 
 def _patch_engine_import(monkeypatch, error: BaseException) -> None:
@@ -292,7 +282,7 @@ def _patch_engine_import(monkeypatch, error: BaseException) -> None:
     real_import = builtins.__import__
 
     def fake_import(name, *args, **kwargs):
-        if name == 'nemotron_relational.rfm':
+        if name == 'kumo_relational_engine.rfm':
             raise error
         return real_import(name, *args, **kwargs)
 
@@ -306,7 +296,8 @@ def test_predict_raises_missing_extra_error_when_engine_not_installed(
     _patch_engine_import(
         monkeypatch,
         ModuleNotFoundError(
-            "No module named 'nemotron_relational'", name='nemotron_relational'
+            "No module named 'kumo_relational_engine'",
+            name='kumo_relational_engine',
         ),
     )
     with pytest.raises(MissingExtraError):
@@ -339,12 +330,12 @@ def test_predict_propagates_transitive_import_error(monkeypatch, client):
 
 @requires_engine
 def test_predict_explain_field_returns_explanation(monkeypatch, client):
-    from nemotron_relational.rfm.rfm import Explanation
+    from kumo_relational_engine.rfm.rfm import Explanation
 
     captured = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -358,9 +349,7 @@ def test_predict_explain_field_returns_explanation(monkeypatch, client):
                 )
             return pd.DataFrame({'ENTITY': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     result = KumoRelationalAdapter().predict(
         client,
@@ -376,12 +365,12 @@ def test_predict_explain_field_returns_explanation(monkeypatch, client):
 
 @requires_engine
 def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
-    from nemotron_relational.rfm.rfm import Explanation
+    from kumo_relational_engine.rfm.rfm import Explanation
 
     captured = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -393,9 +382,7 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
                 details={'skip_summary': True},
             )
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     result = KumoRelationalAdapter().predict(
         client,
@@ -414,16 +401,14 @@ def test_predict_explain_via_options_returns_explanation(monkeypatch, client):
 def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             return object()
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     with pytest.raises(TypeError, match='expected a DataFrame result'):
         KumoRelationalAdapter().predict(
@@ -438,16 +423,14 @@ def test_predict_without_explain_still_requires_dataframe(monkeypatch, client):
 def test_predict_explain_rejects_non_explanation_result(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
         def predict(self, query, **kwargs):
             return pd.DataFrame({'ENTITY': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     with pytest.raises(TypeError, match='expected an Explanation result'):
         KumoRelationalAdapter().predict(
@@ -468,7 +451,7 @@ def test_predict_rejects_explain_specified_twice(
     monkeypatch, client, field_value
 ):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as err:
         KumoRelationalAdapter().predict(
@@ -487,7 +470,7 @@ def test_predict_rejects_explain_specified_twice(
 @pytest.mark.parametrize('bad', [0, '', 'yes', 1.0])
 def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as err:
         KumoRelationalAdapter().predict(
@@ -504,13 +487,13 @@ def test_predict_rejects_malformed_explain_values(monkeypatch, client, bad):
 @requires_engine
 def test_client_predict_explain_returns_explanation(monkeypatch):
     """Exercise issue #19: client.relational(graph).predict(explain=True)."""
-    from nemotron_relational.rfm.rfm import Explanation
+    from kumo_relational_engine.rfm.rfm import Explanation
 
     from kumo_relational_client import RelationalClient
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -522,9 +505,7 @@ def test_client_predict_explain_returns_explanation(monkeypatch):
                 details={'format': 'kumo_rfm_v2_1', 'details': {'cohorts': []}},
             )
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     monkeypatch.setattr(
         'kumo_relational_client.core.transport.Transport.health_ready',
@@ -543,12 +524,12 @@ def test_client_predict_explain_returns_explanation(monkeypatch):
 def test_predict_accepts_explain_config_object(monkeypatch, client):
     """ExplainConfig instances are a valid driver explain input, not rejected
     as INVALID_REQUEST (the driver's predict accepts bool|ExplainConfig|dict)."""
-    from nemotron_relational.rfm.rfm import ExplainConfig, Explanation
+    from kumo_relational_engine.rfm.rfm import ExplainConfig, Explanation
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     captured = {}
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -561,9 +542,7 @@ def test_predict_accepts_explain_config_object(monkeypatch, client):
                 warning=None,
             )
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     cfg = ExplainConfig(skip_summary=True)
     result = KumoRelationalAdapter().predict(
@@ -582,7 +561,7 @@ def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -594,9 +573,7 @@ def test_adapter_enters_batch_mode_when_batch_size_set(monkeypatch, client):
             calls['predicted'] = True
             return pd.DataFrame({'ENTITY': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
     KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
@@ -617,7 +594,7 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -628,9 +605,7 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
         def predict(self, query, **kwargs):
             return pd.DataFrame({'ENTITY': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
     KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(graph='g', query='PREDICT x FOR t.id=1'),
@@ -642,7 +617,7 @@ def test_adapter_skips_batch_mode_when_unset(monkeypatch, client):
 @requires_engine
 def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as err:
         KumoRelationalAdapter().predict(
@@ -655,7 +630,7 @@ def test_adapter_rejects_invalid_batch_size(monkeypatch, client):
 
 
 def _failing_engine(monkeypatch, error: BaseException) -> None:
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -663,9 +638,7 @@ def _failing_engine(monkeypatch, error: BaseException) -> None:
             raise error
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
 
 def _predict(client):
@@ -677,7 +650,7 @@ def _predict(client):
 
 @requires_engine
 def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
-    from nemotron_relational.exceptions import NimFailureError
+    from kumo_relational_engine.exceptions import NimFailureError
 
     params = [
         {
@@ -688,7 +661,7 @@ def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
     _failing_engine(
         monkeypatch,
         NimFailureError(
-            'The NemotronRelational NIM rejected this prediction (HTTP 422): bad data.',
+            'The KumoRelational NIM rejected this prediction (HTTP 422): bad data.',
             status_code=422,
             detail='bad data',
             invalid_params=params,
@@ -707,7 +680,7 @@ def test_nim_failure_becomes_a_nim_request_error(monkeypatch, client):
 def test_nim_failure_without_a_status_becomes_a_transport_error(
     monkeypatch, client
 ):
-    from nemotron_relational.exceptions import NimFailureError
+    from kumo_relational_engine.exceptions import NimFailureError
 
     _failing_engine(
         monkeypatch,
@@ -754,12 +727,12 @@ def test_malformed_response_becomes_invalid_response(monkeypatch, client):
     """A malformed server response is the server's fault, so it must not be
     reported as a bad request.
     """
-    from nemotron_relational.exceptions import InvalidResponseError
+    from kumo_relational_engine.exceptions import InvalidResponseError
 
     _failing_engine(
         monkeypatch,
         InvalidResponseError(
-            'The NemotronRelational NIM returned a prediction response that does not match '
+            'The KumoRelational NIM returned a prediction response that does not match '
             'the contract (KeyError: id)'
         ),
     )
@@ -801,7 +774,7 @@ def test_num_retries_applies_without_batch_size(monkeypatch, client):
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -812,9 +785,7 @@ def test_num_retries_applies_without_batch_size(monkeypatch, client):
         def predict(self, query, **kwargs):
             return pd.DataFrame({'ENTITY': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
     KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
@@ -830,7 +801,7 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
     calls = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -841,9 +812,7 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
         def predict(self, query, **kwargs):
             return pd.DataFrame({'ENTITY': [1]})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
     KumoRelationalAdapter().predict(
         client,
         KumoRelationalRequest(
@@ -858,7 +827,7 @@ def test_zero_num_retries_enters_no_context(monkeypatch, client):
 def test_adapter_rejects_negative_num_retries(monkeypatch, client):
     """Rejected on both paths, not just batch."""
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(rfm_engine, 'NemotronRelational', lambda graph: None)
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', lambda graph: None)
 
     with pytest.raises(RelationalError) as excinfo:
         KumoRelationalAdapter().predict(
@@ -881,7 +850,7 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
         def __init__(self, **kwargs):
             captured['task_table'] = kwargs
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             captured['graph'] = graph
 
@@ -890,9 +859,7 @@ def test_predict_task_builds_task_table_and_calls_engine(monkeypatch, client):
             return pd.DataFrame({'ENTITY': [3]})
 
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     context = pd.DataFrame(
         {
@@ -941,7 +908,7 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
         def __init__(self, **kwargs):
             captured['task_table'] = kwargs
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -949,9 +916,7 @@ def test_predict_task_uses_anchor_timestamp_from_predict_only(
             return pd.DataFrame({'ENTITY': [2]})
 
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     KumoRelationalAdapter().predict(
         client,
@@ -983,7 +948,7 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
         def __init__(self, **kwargs):
             captured['task_table'] = kwargs
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -991,9 +956,7 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
             return pd.DataFrame({'ENTITY': [2]})
 
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     KumoRelationalAdapter().predict(
         client,
@@ -1013,7 +976,7 @@ def test_predict_task_defaults_time_column_to_entity_time(monkeypatch, client):
 def test_predict_task_returns_explanation_and_forwards_options(
     monkeypatch, client
 ):
-    from nemotron_relational.rfm.rfm import Explanation
+    from kumo_relational_engine.rfm.rfm import Explanation
 
     captured = {}
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
@@ -1028,7 +991,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
 
     explanation = Explanation.__new__(Explanation)
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -1036,9 +999,7 @@ def test_predict_task_returns_explanation_and_forwards_options(
             captured.update(kwargs)
             return explanation
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     out = KumoRelationalAdapter().predict(
         client,
@@ -1186,7 +1147,7 @@ def test_capabilities_advertise_supported_task_types():
 
 
 def test_task_types_match_engine_task_type_enum():
-    task_module = pytest.importorskip('nemotron_relational.api.task')
+    task_module = pytest.importorskip('kumo_relational_engine.api.task')
     from kumo_relational_client.adapters.relational import RFM_TASK_TYPES
 
     for name in RFM_TASK_TYPES:
@@ -1195,7 +1156,7 @@ def test_task_types_match_engine_task_type_enum():
 
 def test_stype_and_dtype_belong_to_the_supported_namespace():
     # The documented way to correct an inferred semantic type is
-    # graph[table][column].stype = nemotron_relational.Stype.categorical, and the client
+    # graph[table][column].stype = kumo_relational_engine.Stype.categorical, and the client
     # presents kumo_relational_client.relational as the supported namespace. Membership is
     # asserted separately from resolution because it holds with or without the
     # engine installed -- this runs in the job that has neither.
@@ -1206,7 +1167,7 @@ def test_stype_and_dtype_belong_to_the_supported_namespace():
 
 @requires_engine
 def test_stype_and_dtype_resolve_when_the_engine_is_present():
-    # These live on the top-level relational package rather than nemotron_relational.rfm, so
+    # These live on the top-level relational package rather than kumo_relational_engine.rfm, so
     # they need their own resolution path and used to raise AttributeError.
     from kumo_relational_client import relational
 
@@ -1223,14 +1184,14 @@ def test_unknown_attribute_still_raises():
 
 @requires_engine
 def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
-    """The graph-materialization banner is owned by ``NemotronRelational.__init__``, and a
+    """The graph-materialization banner is owned by ``KumoRelational.__init__``, and a
     handle builds a fresh engine model per prediction -- so forwarding
     ``verbose`` only to ``predict`` still left that banner on stdout on every
     single call, which live verification caught.
     """
     captured = {}
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, verbose=True, **kwargs):
             captured['init_verbose'] = verbose
 
@@ -1239,9 +1200,7 @@ def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
             return pd.DataFrame({'entity': [1]})
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     KumoRelationalAdapter().predict(
         client,
@@ -1258,7 +1217,7 @@ def test_verbose_reaches_the_engine_constructor_too(monkeypatch, client):
 def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
     captured = {}
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, verbose=True, **kwargs):
             captured['init_verbose'] = verbose
 
@@ -1267,9 +1226,7 @@ def test_engine_keeps_its_own_verbose_default_when_unset(monkeypatch, client):
             return pd.DataFrame({'entity': [1]})
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     KumoRelationalAdapter().predict(
         client, KumoRelationalRequest(graph='g', query='PREDICT x')
@@ -1286,7 +1243,7 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
     r"""Regression test for `quality-clients-share-process-global-engine-state`.
 
     The engine's endpoint and credential are process-global, and the adapter
-    used to configure them and then let ``NemotronRelational`` read them back lazily --
+    used to configure them and then let ``KumoRelational`` read them back lazily --
     at the first HTTP call, after graph sampling. A second client configuring
     a different endpoint inside that window silently redirected the first
     client's prediction, uploading one tenant's relational context to another
@@ -1299,8 +1256,8 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
     """
     import threading
 
-    import nemotron_relational
-    from nemotron_relational.client.client import (
+    import kumo_relational_engine
+    from kumo_relational_engine.client.client import (
         NimClient,
     )
 
@@ -1311,14 +1268,14 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
     barrier = threading.Barrier(2)
     seen: dict[str, tuple[str, str]] = {}
 
-    class RecordingNemotronRelational(_FakeEngineModel):
+    class RecordingKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             barrier.wait()
             bound = kwargs.get('_client')
             self._resolved = (
                 bound
                 if bound is not None
-                else nemotron_relational.global_state.client
+                else kumo_relational_engine.global_state.client
             )
 
         def predict(self, query, **kwargs):
@@ -1328,9 +1285,7 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
             )
             return pd.DataFrame({'entity': []})
 
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', RecordingNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', RecordingKumoRelational)
 
     clients = {
         'A': RelationalClient(url='https://tenant-a.example', api_key='key-A'),
@@ -1420,7 +1375,7 @@ def test_predict_task_still_accepts_the_supported_frame_shapes(
         def __init__(self, **kwargs):
             pass
 
-    class FakeNemotronRelational(_FakeEngineModel):
+    class FakeKumoRelational(_FakeEngineModel):
         def __init__(self, graph, **kwargs):
             pass
 
@@ -1429,9 +1384,7 @@ def test_predict_task_still_accepts_the_supported_frame_shapes(
 
     monkeypatch.setattr(rfm_engine, 'init_client', lambda **kwargs: None)
     monkeypatch.setattr(rfm_engine, 'TaskTable', FakeTaskTable)
-    monkeypatch.setattr(
-        rfm_engine, 'NemotronRelational', FakeNemotronRelational
-    )
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', FakeKumoRelational)
 
     out = KumoRelationalAdapter().predict(
         client,
@@ -1467,7 +1420,7 @@ def _counting_engine(monkeypatch, builds: list) -> None:
         def predict(self, query, **kwargs):
             return pd.DataFrame({'entity': kwargs.get('indices') or [1]})
 
-    monkeypatch.setattr(rfm_engine, 'NemotronRelational', CountingModel)
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', CountingModel)
 
 
 def _request(graph) -> KumoRelationalRequest:
@@ -1663,7 +1616,7 @@ def test_the_old_graph_is_released_before_the_new_one_is_built(
         def predict(self, query, **kwargs):
             return pd.DataFrame({'entity': [1]})
 
-    monkeypatch.setattr(rfm_engine, 'NemotronRelational', WatchingModel)
+    monkeypatch.setattr(rfm_engine, 'KumoRelational', WatchingModel)
 
     adapter.predict(client, _request(_SignedGraph('users', signature='a')))
     adapter.predict(client, _request(_SignedGraph('orders', signature='b')))

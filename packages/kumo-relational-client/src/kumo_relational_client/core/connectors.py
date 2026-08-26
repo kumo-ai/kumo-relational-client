@@ -7,8 +7,8 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
-from nemotron_structured_connectors import read as _read
-from nemotron_structured_connectors.sql import (
+from kumo_connectors import read as _read
+from kumo_connectors.sql import (
     ConnectorError,
     MissingBackendError,
 )

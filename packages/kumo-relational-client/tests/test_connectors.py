@@ -32,7 +32,7 @@ def test_missing_backend_maps_to_missing_extra_error(
     extra,
     driver,
 ):
-    from nemotron_structured_connectors.sql import MissingBackendError
+    from kumo_connectors.sql import MissingBackendError
 
     def raise_missing(source, **kwargs):
         raise MissingBackendError(extra, driver)

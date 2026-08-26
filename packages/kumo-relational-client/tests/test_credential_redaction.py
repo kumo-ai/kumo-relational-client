@@ -50,7 +50,7 @@ def test_scrub_userinfo_removes_the_credential_from_free_text(text, expected):
 
 
 def test_the_url_stays_readable_through_the_property():
-    # Redaction covers what is rendered, not what is stored: the NemotronRelational
+    # Redaction covers what is rendered, not what is stored: the KumoRelational
     # adapter hands this URL to the driver and the credential has to survive.
     assert Transport(_URL).url == _URL
 

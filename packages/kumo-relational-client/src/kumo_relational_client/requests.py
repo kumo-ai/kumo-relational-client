@@ -43,13 +43,13 @@ class KumoRelationalRequest(ModelRequest):
     ``client.relational(graph).predict(query, ...)``. With ``explain`` set (a
     ``bool``, an ``ExplainConfig``, or an ``ExplainConfig`` dict) the prediction
     is limited to a single entity and ``client.relational(...).predict(...)``
-    returns a ``nemotron_relational.rfm.rfm.Explanation`` (its ``prediction`` attribute
+    returns a ``kumo_relational_engine.rfm.rfm.Explanation`` (its ``prediction`` attribute
     holds the plain prediction DataFrame) instead of a bare DataFrame.
 
     Filling in ``Explanation.summary`` calls an external LLM endpoint (OpenAI
     by default) with the query, the predictions and the raw subgraph cell
     values. Pass ``explain=dict(skip_summary=True)`` to keep that data on the
-    machine; see ``nemotron_relational.rfm.ExplainConfig`` for the full disclosure.
+    machine; see ``kumo_relational_engine.rfm.ExplainConfig`` for the full disclosure.
     """
 
     model: ClassVar[str] = 'kumo-relational'

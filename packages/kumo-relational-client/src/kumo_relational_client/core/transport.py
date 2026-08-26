@@ -52,7 +52,7 @@ def redact_url(url: str | None) -> str | None:
     through here first, so the credential does not travel with the diagnosis
     into a log aggregator or a bug report.
 
-    Mirrors ``nemotron_relational.client.client.redact_url``, which guards the same
+    Mirrors ``kumo_relational_engine.client.client.redact_url``, which guards the same
     credential on the Kumo Relational path. The two cannot share one implementation:
     this package must not import the optional driver, and the package both
     depend on is a SQL-connector package with no URL handling. Keep them in

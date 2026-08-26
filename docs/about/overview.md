@@ -19,7 +19,7 @@ graph-aware in-context learning).
   serves any registered model through a handle of its own,
   `client.relational(...).predict(...)`, returning a pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
-  every platform. Heavy drivers, such as Nemotron Relational's native graph sampler, are
+  every platform. Heavy drivers, such as Kumo Relational's native graph sampler, are
   opt-in extras.
 - **NIM-first and secure by default.** The client talks to a NIM you control;
   your data stays on your infrastructure, and authentication is owned by the
@@ -56,7 +56,7 @@ the relevant subgraph and returns predictions for the entities you name.
   client builds requests against this contract so one client serves both models.
 - **Model adapter.** A per-model module that shapes a typed request into the
   wire envelope and normalizes the response into a pandas DataFrame.
-- **Driver.** A model's heavy client-side runtime. Nemotron Relational ships one (graph
+- **Driver.** A model's heavy client-side runtime. Kumo Relational ships one (graph
   building, native neighbor sampling, PQL).
 - **In-context learning (ICL).** The model predicts from labeled context rows
   in a single forward pass rather than training per dataset.
@@ -66,8 +66,8 @@ the relevant subgraph and returns predictions for the entities you name.
 | Component | Package | Role |
 | --- | --- | --- |
 | Client | `kumo-relational-client` | The `RelationalClient`, typed requests, and per-model adapters. Pure Python. |
-| Nemotron Relational driver | `nemotron_relational` | Graph, samplers, native `relationallib`, and PQL for the relational model. Installed via the `[relational]` extra. |
-| Connectors | `nemotron-structured-connectors` | Shared data-source connectors (SQLite, DuckDB, Snowflake, Databricks, S3) used by the client and the driver. |
+| Kumo Relational driver | `kumo_relational_engine` | Graph, samplers, native `relationallib`, and PQL for the relational model. Installed via the `[relational]` extra. |
+| Connectors | `kumo-connectors` | Shared data-source connectors (SQLite, DuckDB, Snowflake, Databricks, S3) used by the client and the driver. |
 
 ## Learn More
 

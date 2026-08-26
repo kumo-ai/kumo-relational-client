@@ -27,8 +27,8 @@ reported issues addressed under its coordinated disclosure policy. See the
 
 ## Supported versions
 
-The client is distributed as three packages, `kumo-relational-client`, `nemotron_relational`, and
-`nemotron-structured-connectors`, released together. Only the latest released version of each
+The client is distributed as three packages, `kumo-relational-client`, `kumo_relational_engine`, and
+`kumo-connectors`, released together. Only the latest released version of each
 receives security fixes; there are no long-term-support branches. Fixes ship in
 a new release rather than as patches to older ones.
 

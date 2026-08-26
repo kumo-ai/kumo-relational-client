@@ -8,7 +8,7 @@ per-model adapters; heavy model drivers are optional extras.
 
 ```bash
 pip install kumo-relational-client              # the client on its own
-pip install kumo-relational-client[relational]     # adds Nemotron Relational (native driver)
+pip install kumo-relational-client[relational]     # adds Kumo Relational (native driver)
 pip install kumo-relational-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
 pip install kumo-relational-client[all]         # Kumo Relational, every data-source backend,
                                      # and [databricks-serving]
@@ -110,9 +110,9 @@ rather than the call as a whole, so a retried call can take up to
 `(max_retries + 1) * timeout` plus backoff. Each client holds its own transport
 and registry, so multiple clients can target different endpoints at once,
 including concurrently: a prediction always goes to the endpoint and credential
-of the client that started it. The Nemotron Relational driver underneath still keeps a
+of the client that started it. The Kumo Relational driver underneath still keeps a
 process-wide configuration that each prediction reconfigures, so drive it
-through `RelationalClient` rather than mixing in direct `nemotron_relational.init()` calls.
+through `RelationalClient` rather than mixing in direct `kumo_relational_engine.init()` calls.
 `close()` (or leaving the `with` block) releases the pooled connections and
 retires the client; use a new `RelationalClient` afterwards.
 

@@ -22,9 +22,9 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 VERSION_FILES = {
-    'nemotron-structured-connectors': 'packages/nemotron-structured-connectors/src/nemotron_structured_connectors/__init__.py',
+    'kumo-connectors': 'packages/kumo-connectors/src/kumo_connectors/__init__.py',
     'kumo-relational-client': 'packages/kumo-relational-client/src/kumo_relational_client/_version.py',
-    'nemotron-relational': 'packages/nemotron-relational/src/nemotron_relational/_version.py',
+    'kumo-relational-engine': 'packages/kumo-relational-engine/src/kumo_relational_engine/_version.py',
 }
 
 _VERSION_RE = re.compile(

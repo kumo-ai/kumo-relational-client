@@ -204,7 +204,7 @@ class RelationalModel:
             run_mode: ``'debug'``, ``'fast'``, ``'normal'`` or ``'best'`` --
                 how much context the model is given. Explanations require
                 ``'fast'``.
-            explain: ``True``, a ``nemotron_relational.ExplainConfig`` or its
+            explain: ``True``, a ``kumo_relational_engine.ExplainConfig`` or its
                 dict form.
                 Limits the request to a single entity and makes this call
                 return an ``Explanation`` instead of a DataFrame. Filling in
@@ -235,7 +235,7 @@ class RelationalModel:
             num_hops: The number of hops to sample when generating the context.
             inference_config: Inference-time model configuration, e.g.
                 ``dict(num_estimators=4, output_type='quantiles')``. See
-                ``nemotron_relational.rfm.NemotronRelational.predict`` for the supported keys; a key
+                ``kumo_relational_engine.rfm.KumoRelational.predict`` for the supported keys; a key
                 outside that set is rejected rather than dropped.
             return_embeddings: Whether to also return an embedding per
                 prediction example.
@@ -254,7 +254,7 @@ class RelationalModel:
                 not accept raises ``RelationalError('INVALID_REQUEST')``.
 
         Returns:
-            The predictions as a ``pd.DataFrame``, or a ``nemotron_relational``
+            The predictions as a ``pd.DataFrame``, or a ``kumo_relational_engine``
             ``Explanation`` when ``explain`` is set (the frame is then on its
             ``prediction`` attribute).
 
@@ -428,7 +428,7 @@ class RelationalModel:
                 ``predict_task``.
 
         Returns:
-            The predictions as a ``pd.DataFrame``, or a ``nemotron_relational``
+            The predictions as a ``pd.DataFrame``, or a ``kumo_relational_engine``
             ``Explanation`` when ``explain`` is set (the frame is then on its
             ``prediction`` attribute).
 

@@ -21,7 +21,7 @@ Apache-2.0 licence the code is released under.
 | A problem with the NIM itself rather than the client | Your NVIDIA support channel for that NIM |
 
 A bug report is most useful with the package versions (`pip show
-kumo-relational-client nemotron-structured-connectors nemotron-relational`), the
+kumo-relational-client kumo-connectors kumo-relational-engine`), the
 Python version and platform, the smallest script that reproduces the problem,
 and the full traceback. `RelationalError` and its subclasses carry a stable `code`
 field, include it.
@@ -31,8 +31,8 @@ field, include it.
 Three packages are released together and share a version:
 
 - `kumo-relational-client`: the client and its model handles
-- `nemotron-structured-connectors`: reading source tables from warehouses
-- `nemotron-relational`: the relational driver, graph building and PQL
+- `kumo-connectors`: reading source tables from warehouses
+- `kumo-relational-engine`: the relational driver, graph building and PQL
 
 If you are unsure which is at fault, file against the repository; triage is our
 job, not yours.

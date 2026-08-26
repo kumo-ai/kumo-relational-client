@@ -4,7 +4,7 @@
 
 """The adapter's serving-mode branch, without the native relational driver.
 
-``test_nemotron_relational_adapter.py`` skips everything when ``nemotron_relational.rfm`` is unusable,
+``test_kumo_relational_engine_adapter.py`` skips everything when ``kumo_relational_engine.rfm`` is unusable,
 which on a machine without the compiled ``relationallib`` is everything. That is the
 repo's existing convention and it left the branch added for Databricks Model
 Serving with no coverage at all.
@@ -33,21 +33,21 @@ from kumo_relational_client.requests import KumoRelationalRequest
 _CLIENT_TOKEN = object()
 
 # Everything here runs against a stub. The one exception is the cross-layer
-# agreement test, which has to import nemotron_relational's real validator -- a stub cannot
+# agreement test, which has to import kumo_relational_engine's real validator -- a stub cannot
 # stand in for the thing being compared. It runs in integration_tests, which
 # installs the engine; client_tests does not.
-requires_nemotron_relational = pytest.mark.skipif(
-    importlib.util.find_spec('nemotron_relational') is None,
-    reason='nemotron_relational is not installed; the cross-layer check needs the real one',
+requires_kumo_relational_engine = pytest.mark.skipif(
+    importlib.util.find_spec('kumo_relational_engine') is None,
+    reason='kumo_relational_engine is not installed; the cross-layer check needs the real one',
 )
 
 
 @pytest.fixture()
 def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
-    """A stand-in for nemotron_relational.rfm that records how it was initialized."""
+    """A stand-in for kumo_relational_engine.rfm that records how it was initialized."""
     calls: dict[str, Any] = {}
 
-    class _NemotronRelational:
+    class _KumoRelational:
         def __init__(self, graph: Any, **kwargs: Any) -> None:
             calls['graph'] = graph
 
@@ -71,10 +71,10 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
 
     # The adapter resolves HTTPException out of sys.modules at call time, so a
     # stub carrying the real signature is enough. Importing the real
-    # nemotron_relational.exceptions instead would cost this file the property its
+    # kumo_relational_engine.exceptions instead would cost this file the property its
     # docstring claims -- and the client_tests job, which installs no engine,
     # is the only place the branch gets covered.
-    exceptions = types.ModuleType('nemotron_relational.exceptions')
+    exceptions = types.ModuleType('kumo_relational_engine.exceptions')
 
     class _HTTPError(Exception):
         def __init__(
@@ -90,23 +90,23 @@ def engine(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
 
     exceptions.HTTPException = _HTTPError
 
-    module = types.ModuleType('nemotron_relational.rfm')
+    module = types.ModuleType('kumo_relational_engine.rfm')
     module.init = lambda **kw: calls.setdefault('init', kw)
     module.init_client = lambda **kw: calls.setdefault('init', kw)
     module.init_databricks_serving = lambda endpoint, **kw: calls.setdefault(
         'init_databricks_serving', {'endpoint': endpoint, **kw}
     )
-    module.NemotronRelational = _NemotronRelational
+    module.KumoRelational = _KumoRelational
     module._CLIENT_TOKEN = _CLIENT_TOKEN
 
-    parent = types.ModuleType('nemotron_relational')
+    parent = types.ModuleType('kumo_relational_engine')
     parent.rfm = module
     parent.exceptions = exceptions
 
-    monkeypatch.setitem(sys.modules, 'nemotron_relational', parent)
-    monkeypatch.setitem(sys.modules, 'nemotron_relational.rfm', module)
+    monkeypatch.setitem(sys.modules, 'kumo_relational_engine', parent)
+    monkeypatch.setitem(sys.modules, 'kumo_relational_engine.rfm', module)
     monkeypatch.setitem(
-        sys.modules, 'nemotron_relational.exceptions', exceptions
+        sys.modules, 'kumo_relational_engine.exceptions', exceptions
     )
     module.calls = calls
     return module
@@ -292,10 +292,10 @@ _BAD_ENDPOINTS = [
 ]
 
 
-@requires_nemotron_relational
+@requires_kumo_relational_engine
 @pytest.mark.parametrize('endpoint', _BAD_ENDPOINTS)
 def test_the_two_endpoint_validation_layers_agree(endpoint: str) -> None:
-    """ServingTarget and nemotron_relational's DatabricksServingClient validate the same
+    """ServingTarget and kumo_relational_engine's DatabricksServingClient validate the same
     endpoint independently, with the same predicates in the same order. Only
     the raised type differs, so tightening one and not the other is a silent
     divergence -- this pins the messages themselves as equal.
@@ -303,7 +303,7 @@ def test_the_two_endpoint_validation_layers_agree(endpoint: str) -> None:
     The rejected value is never echoed by either: a pasted workspace URL is
     the one input guaranteed to be able to carry credentials.
     """
-    from nemotron_relational.client.databricks_serving import (
+    from kumo_relational_engine.client.databricks_serving import (
         DatabricksServingClient,
     )
 
@@ -325,15 +325,15 @@ def test_the_two_endpoint_validation_layers_agree(endpoint: str) -> None:
 
 
 def _missing_sdk() -> Exception:
-    """Verbatim what nemotron_relational raises when databricks-sdk is absent."""
+    """Verbatim what kumo_relational_engine raises when databricks-sdk is absent."""
     return ImportError(
         "Databricks Model Serving support requires the 'databricks-serving' "
-        "extra: pip install 'nemotron_relational[databricks-serving]'"
+        "extra: pip install 'kumo_relational_engine[databricks-serving]'"
     )
 
 
 def _ambient_auth_failed() -> Exception:
-    from nemotron_relational.exceptions import HTTPException
+    from kumo_relational_engine.exceptions import HTTPException
 
     return HTTPException(
         503,
@@ -364,7 +364,7 @@ def test_engine_init_failures_are_translated_at_the_boundary(
     code,
     says,
 ) -> None:
-    """nemotron_relational names its own extra, so an unwrapped ImportError tells someone
+    """kumo_relational_engine names its own extra, so an unwrapped ImportError tells someone
     who installed kumo-relational-client[databricks-serving] to install a package they
     never named. Nothing from the engine reaches the caller untranslated."""
 
@@ -379,7 +379,7 @@ def test_engine_init_failures_are_translated_at_the_boundary(
         )
     assert caught.value.code == code
     assert says in caught.value.message
-    assert 'nemotron_relational[' not in caught.value.message
+    assert 'kumo_relational_engine[' not in caught.value.message
 
 
 def test_engine_failure_on_the_serving_path_keeps_its_own_message(
@@ -408,7 +408,7 @@ def test_engine_failure_on_the_serving_path_keeps_its_own_message(
         def predict(self, query: str, **kwargs: Any) -> pd.DataFrame:
             raise RuntimeError('NIM said: payload too large')
 
-    monkeypatch.setattr(engine, 'NemotronRelational', _Failing)
+    monkeypatch.setattr(engine, 'KumoRelational', _Failing)
 
     with pytest.raises(RelationalError) as excinfo:
         KumoRelationalAdapter().predict(

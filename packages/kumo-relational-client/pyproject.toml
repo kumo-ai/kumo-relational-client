@@ -32,7 +32,7 @@ dependencies = [
     "requests>=2.28",
     "numpy>=1.24",
     "pandas>=2.0",
-    "nemotron-structured-connectors>=1.0,<2",
+    "kumo-connectors>=1.0,<2",
 ]
 
 [project.urls]
@@ -42,40 +42,40 @@ Issues = "https://github.com/NVIDIA/kumo-relational-client/issues"
 
 [project.optional-dependencies]
 relational = [
-    "nemotron-relational>=1.0,<2",
+    "kumo-relational-engine>=1.0,<2",
 ]
 sqlite = [
-    "nemotron-structured-connectors[sqlite]",
+    "kumo-connectors[sqlite]",
 ]
 duckdb = [
-    "nemotron-structured-connectors[duckdb]",
+    "kumo-connectors[duckdb]",
 ]
 snowflake = [
-    "nemotron-structured-connectors[snowflake]",
+    "kumo-connectors[snowflake]",
 ]
 databricks = [
-    "nemotron-structured-connectors[databricks]",
+    "kumo-connectors[databricks]",
 ]
 # Invoking a served model, as opposed to `databricks` above, which is SQL data
 # access. Kept distinct so neither drags in the other.
 databricks-serving = [
-    "nemotron-relational[databricks-serving]>=1.0,<2",
+    "kumo-relational-engine[databricks-serving]>=1.0,<2",
 ]
 # Invoking a served model, as opposed to `snowflake` above, which is SQL data
 # access. Kept distinct so neither drags in the other.
 snowflake-serving = [
-    "nemotron-relational[snowflake-serving]>=1.0,<2",
+    "kumo-relational-engine[snowflake-serving]>=1.0,<2",
 ]
 s3 = [
-    "nemotron-structured-connectors[s3]",
+    "kumo-connectors[s3]",
 ]
 # Deliberately not part of `all`: the explanation summary POSTs row data to a
 # third-party LLM endpoint, so installing it stays an explicit opt-in.
 explain = [
-    "nemotron-relational[explain]>=1.0,<2",
+    "kumo-relational-engine[explain]>=1.0,<2",
 ]
 relbench = [
-    "nemotron-relational[relbench]>=1.0,<2",
+    "kumo-relational-engine[relbench]>=1.0,<2",
 ]
 all = [
     "kumo-relational-client[relational,sqlite,duckdb,snowflake,databricks,databricks-serving,s3]",

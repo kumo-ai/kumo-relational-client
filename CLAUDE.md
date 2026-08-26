@@ -9,10 +9,10 @@ serve models itself: every prediction is an HTTP call to a NIM you point it at.
 | Package | Import | What it is |
 | --- | --- | --- |
 | `kumo-relational-client` | `kumo_relational_client` | The client. Pure Python, no heavy dependencies. |
-| `nemotron-structured-connectors` | `nemotron_structured_connectors` | Reads source tables from sqlite, duckdb, Snowflake, Databricks, S3. |
-| `nemotron-relational` | `nemotron_relational` | The relational driver: graph building, PQL, and a compiled neighbor sampler. |
+| `kumo-connectors` | `kumo_connectors` | Reads source tables from sqlite, duckdb, Snowflake, Databricks, S3. |
+| `kumo-relational-engine` | `kumo_relational_engine` | The relational driver: graph building, PQL, and a compiled neighbor sampler. |
 
-`nemotron-relational` ships prebuilt wheels for Linux x86_64 (`manylinux_2_28`)
+`kumo-relational-engine` ships prebuilt wheels for Linux x86_64 (`manylinux_2_28`)
 on CPython 3.10-3.13 only, and no source distribution. It does not install on
 macOS, Windows, or arm64. The client and connectors are pure Python and install
 anywhere.
@@ -49,7 +49,7 @@ forecast step. Row order is not a contract. See
 **Drive the relational model only through `RelationalClient`.** The driver keeps a
 process-wide configuration that each prediction reconfigures. Predictions are
 pinned to their own client and are unaffected, but calling
-`nemotron_relational.init()` directly in the same process changes what that
+`kumo_relational_engine.init()` directly in the same process changes what that
 global points at. Do not mix the two.
 
 **Branch on the error code, not the message.** Every failure raises
@@ -77,7 +77,7 @@ python -m pytest packages/kumo-relational-client/tests -m 'not live_nim' -q
 ```
 
 Tests marked `live_nim` need a running NIM and are excluded by default. The
-relational package's tests run from `packages/nemotron-relational`, because some
+relational package's tests run from `packages/kumo-relational-engine`, because some
 of them invoke `scripts/` and read paths relative to the working directory.
 
 Lint and format with `ruff` before pushing; the formatter owns line length.

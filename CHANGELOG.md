@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+### Changed
+
+- **All three distributions now carry the Kumo name.** `nemotron-relational`
+  becomes `kumo-relational-engine` and `nemotron-structured-connectors` becomes
+  `kumo-connectors`, alongside the client's earlier rename to
+  `kumo-relational-client`. Import packages follow: `kumo_relational_engine`
+  and `kumo_connectors`. `NemotronRelational` and `NemotronRelationalError`
+  become `KumoRelational` and `KumoRelationalError`.
+- The engine's internal column sentinels move from `__nemotron_*` to
+  `__kumo_*`. These name columns the request declares by name, so the NIM reads
+  them as opaque identifiers; the rename was verified against a live NIM.
+- The engine package is named for what it is rather than for the model: the
+  model id stays `kumo-relational`, so a package called `kumo-relational` would
+  have meant two different things.
+
 ### Removed
 
 - **The tabular surface is gone.** `client.tabular()`, `TabularModel`, the

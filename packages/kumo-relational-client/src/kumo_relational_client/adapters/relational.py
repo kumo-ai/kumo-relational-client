@@ -29,7 +29,7 @@ from kumo_relational_client.requests import (
 )
 
 if TYPE_CHECKING:
-    from nemotron_relational.rfm.rfm import Explanation
+    from kumo_relational_engine.rfm.rfm import Explanation
 
 _UNSET = object()
 
@@ -45,13 +45,15 @@ RFM_TASK_TYPES = (
 
 
 def _load_engine() -> Any:
-    r"""Import the optional ``nemotron_relational`` engine, surfacing a clear extra error."""
+    r"""Import the optional ``kumo_relational_engine`` engine, surfacing a clear extra error."""
     try:
-        import nemotron_relational.rfm as rfm_engine
+        import kumo_relational_engine.rfm as rfm_engine
     except ModuleNotFoundError as error:
-        if error.name != 'nemotron_relational':
+        if error.name != 'kumo_relational_engine':
             raise
-        raise MissingExtraError('relational', 'nemotron-relational') from error
+        raise MissingExtraError(
+            'relational', 'kumo-relational-engine'
+        ) from error
     return rfm_engine
 
 
@@ -59,25 +61,25 @@ def _is_explain_config(value: Any) -> bool:
     r"""Return ``True`` when ``value`` is a driver ``ExplainConfig`` instance.
 
     Imported lazily so this adapter still imports without the optional
-    ``nemotron_relational`` engine installed.
+    ``kumo_relational_engine`` engine installed.
     """
     try:
-        from nemotron_relational.rfm.rfm import ExplainConfig
+        from kumo_relational_engine.rfm.rfm import ExplainConfig
     except Exception:
         return False
     return isinstance(value, ExplainConfig)
 
 
 def _engine_http_error_types() -> tuple[type[BaseException], ...]:
-    r"""nemotron_relational's ``HTTPException``, or an empty tuple if it cannot be imported.
+    r"""kumo_relational_engine's ``HTTPException``, or an empty tuple if it cannot be imported.
 
     Looked up lazily for the same reason the engine itself is: this adapter
-    must import without the optional ``nemotron_relational`` engine installed. ``except ()``
+    must import without the optional ``kumo_relational_engine`` engine installed. ``except ()``
     matches nothing, which is the right behaviour when there is no engine to
     have raised.
     """
     try:
-        from nemotron_relational.exceptions import HTTPException
+        from kumo_relational_engine.exceptions import HTTPException
     except Exception:
         return ()
     return (HTTPException,)
@@ -123,8 +125,8 @@ def _init_serving(rfm_engine: Any, target: ServingTarget) -> None:
 
     Every failure is translated at this boundary, the way
     :mod:`kumo_relational_client.core.connectors` translates the connector layer's. The
-    ``ImportError`` case is the reason this exists: nemotron_relational names *its own*
-    extra (``pip install 'nemotron_relational[databricks-serving]'``), which a user who
+    ``ImportError`` case is the reason this exists: kumo_relational_engine names *its own*
+    extra (``pip install 'kumo_relational_engine[databricks-serving]'``), which a user who
     installed ``kumo-relational-client[databricks-serving]`` never asked for and cannot
     act on.
     """
@@ -204,7 +206,7 @@ def _reject_reserved_options(options: dict[str, Any]) -> None:
 def _driver_error_types() -> tuple[Any, Any]:
     r"""The driver's classified error types, or ``(None, None)`` without it."""
     try:
-        from nemotron_relational.exceptions import (
+        from kumo_relational_engine.exceptions import (
             InvalidResponseError,
             NimFailureError,
         )
@@ -221,7 +223,7 @@ def _engine_init_error_types() -> tuple[type[BaseException], ...]:
     ``ValueError`` keeps this boundary working against either version.
     """
     try:
-        from nemotron_relational.exceptions import ClientInitializationError
+        from kumo_relational_engine.exceptions import ClientInitializationError
     except Exception:
         return (ValueError,)
     return (ClientInitializationError,)
@@ -237,7 +239,7 @@ def _translate_init_error(error: BaseException) -> RelationalError:
     retry, an unreachable or slow endpoint may be.
     """
     try:
-        from nemotron_relational.exceptions import (
+        from kumo_relational_engine.exceptions import (
             AuthenticationError,
             NimTimeoutError,
             NimUnreachableError,
@@ -466,7 +468,7 @@ def _coerce_result(
     result: Any, wants_explanation: bool
 ) -> pd.DataFrame | Explanation:
     if wants_explanation:
-        from nemotron_relational.rfm.rfm import Explanation
+        from kumo_relational_engine.rfm.rfm import Explanation
 
         if not isinstance(result, Explanation):
             raise TypeError(
@@ -489,10 +491,10 @@ def _build_engine_model(
     graph-materialization banner; a reused model prints none, which is correct
     since no materialization happens."""
     if 'verbose' in options:
-        return engine.NemotronRelational(
+        return engine.KumoRelational(
             graph, verbose=options['verbose'], _client=api_client
         )
-    return engine.NemotronRelational(graph, _client=api_client)
+    return engine.KumoRelational(graph, _client=api_client)
 
 
 def _graph_signature(graph: Any) -> Any | None:

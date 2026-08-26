@@ -129,7 +129,7 @@ directly.
 
 ## Explanations
 
-When `explain` is set, the call returns a `nemotron_relational` `Explanation` instead of a
+When `explain` is set, the call returns a `kumo_relational_engine` `Explanation` instead of a
 `DataFrame`. The frame described above is still available on its `prediction`
 attribute, with the same shape rules.
 

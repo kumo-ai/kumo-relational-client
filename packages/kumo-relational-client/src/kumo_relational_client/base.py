@@ -16,7 +16,7 @@ from kumo_relational_client.errors import UnknownModelError
 from kumo_relational_client.requests import ModelRequest
 
 if TYPE_CHECKING:
-    from nemotron_relational.rfm.rfm import Explanation
+    from kumo_relational_engine.rfm.rfm import Explanation
 
 # Quoted whole: `Explanation` is a TYPE_CHECKING-only name, and a runtime
 # `X | 'forward ref'` is a TypeError. The string is never evaluated unless a

@@ -17,7 +17,7 @@ import requests
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(REPO, 'packages/kumo-relational-client/src'))
-sys.path.insert(0, os.path.join(REPO, 'packages/nemotron-relational/src'))
+sys.path.insert(0, os.path.join(REPO, 'packages/kumo-relational-engine/src'))
 
 from kumo_relational_client import RelationalClient, relational  # noqa: E402
 from kumo_relational_client.errors import RelationalError  # noqa: E402

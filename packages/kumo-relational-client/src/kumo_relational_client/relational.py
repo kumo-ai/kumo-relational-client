@@ -16,8 +16,8 @@ from kumo_relational_client.errors import MissingExtraError
 # routinely emit partial-conversion diagnostics; the driver gives them a
 # dedicated category precisely so a caller can filter or escalate just those.
 # `MaterializedPredictionRequest` and `TaskTable` do not: the first is produced
-# only by `NemotronRelational.materialize_*` and the second built internally by the adapter,
-# and `NemotronRelational` is deliberately absent, so nothing on the supported surface
+# only by `KumoRelational.materialize_*` and the second built internally by the adapter,
+# and `KumoRelational` is deliberately absent, so nothing on the supported surface
 # returns or accepts either.
 __all__ = [
     'Dtype',
@@ -33,8 +33,8 @@ __all__ = [
 _ROOT_NAMES = frozenset({'Dtype', 'Stype'})
 
 if TYPE_CHECKING:
-    from nemotron_relational import Dtype, Stype
-    from nemotron_relational.rfm import (
+    from kumo_relational_engine import Dtype, Stype
+    from kumo_relational_engine.rfm import (
         ExplainConfig,
         Explanation,
         Graph,
@@ -48,18 +48,20 @@ def _import(module_name: str) -> Any:
     try:
         module = __import__(module_name, fromlist=['__name__'])
     except ModuleNotFoundError as error:
-        if error.name != 'nemotron_relational':
+        if error.name != 'kumo_relational_engine':
             raise
-        raise MissingExtraError('relational', 'nemotron-relational') from error
+        raise MissingExtraError(
+            'relational', 'kumo-relational-engine'
+        ) from error
     return module
 
 
 def __getattr__(name: str) -> Any:
     if name in __all__:
         module = _import(
-            'nemotron_relational'
+            'kumo_relational_engine'
             if name in _ROOT_NAMES
-            else 'nemotron_relational.rfm'
+            else 'kumo_relational_engine.rfm'
         )
         return getattr(module, name)
     raise AttributeError(

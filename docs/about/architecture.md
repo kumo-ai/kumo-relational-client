@@ -17,14 +17,14 @@ flowchart TD
     app["Your application"] --> client["RelationalClient (kumo-relational-client)"]
     client --> registry["AdapterRegistry"]
     registry --> rfm["Kumo Relational adapter"]
-    rfm --> driver["nemotron_relational driver: graph, sampler, PQL"]
+    rfm --> driver["kumo_relational_engine driver: graph, sampler, PQL"]
     client --> transport["Transport (HTTP)"]
     driver --> nimclient["NimClient (HTTP)"]
     driver -.-> serving["DatabricksServingClient"]
     transport --> nim["Universal TFM NIM"]
     nimclient --> nim
     serving --> endpoint["Databricks Model Serving endpoint"]
-    client --> connectors["nemotron-structured-connectors"]
+    client --> connectors["kumo-connectors"]
     driver --> connectors
 ```
 
@@ -43,14 +43,14 @@ Requests do not all leave through the same object. The client holds a
 client's own calls such as `/v1/models`. Kumo Relational does not predict through
 it: the client hands its address and credential to the driver, which opens its
 own pooled session (`NimClient`) and sends from there. The two are separate implementations of the same HTTP contract, because
-`nemotron_relational` cannot depend on `kumo-relational-client`; the dependency runs the other way.
+`kumo_relational_engine` cannot depend on `kumo-relational-client`; the dependency runs the other way.
 
-The Nemotron Relational driver underneath does keep a process-wide configuration, which
+The Kumo Relational driver underneath does keep a process-wide configuration, which
 each prediction reconfigures. The adapter applies that configuration and
 resolves the resulting client as one atomic step, then binds it to that
 prediction, so a concurrent prediction from a differently configured client
 cannot re-point it. What remains shared is the driver global itself: direct
-`nemotron_relational.init()` callers, and anything else reading it, see whichever client
+`kumo_relational_engine.init()` callers, and anything else reading it, see whichever client
 configured it last. Drive the driver through `RelationalClient` only.
 
 ### Adapter Layer
@@ -67,8 +67,8 @@ core does not change.
 ### Driver Layer
 
 A driver is a model's heavy client-side runtime, packaged as its own
-distribution. The Nemotron Relational driver (`nemotron_relational`) performs graph building, native
-neighbor sampling through a compiled extension, and PQL parsing. The Nemotron Relational
+distribution. The Kumo Relational driver (`kumo_relational_engine`) performs graph building, native
+neighbor sampling through a compiled extension, and PQL parsing. The Kumo Relational
 adapter lazy-imports this driver, so base installs stay lightweight and
 platform-independent.
 
@@ -113,20 +113,20 @@ not by the client.
 
 Two endpoints are read rather than predicted against, and not by the same
 caller. `RelationalClient.health_ready()` issues `GET /v1/health/ready` and reports
-whether it answered 200. The Nemotron Relational driver checks more before its first
+whether it answered 200. The Kumo Relational driver checks more before its first
 prediction: it reads `/v1/health/ready` for a ready status and then
 `/v1/models`, and fails if the endpoint does not advertise
-`nemotron-relational`. Nothing
+`kumo-relational-engine`. Nothing
 on the client path reads `/v1/models`.
 
 ## External Integration Points
 
-- **Data sources.** Both the client and the Nemotron Relational driver read tables through
-  the shared `nemotron-structured-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
+- **Data sources.** Both the client and the Kumo Relational driver read tables through
+  the shared `kumo-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
 - **NIM endpoint.** Any NIM that implements the Universal TFM API. The Kumo Relational
   path additionally requires the endpoint to advertise
-  `nemotron-relational` in
+  `kumo-relational-engine` in
   `/v1/models`.
 - **Databricks Model Serving.** `RelationalClient.for_databricks_serving(name)`
   targets a named serving endpoint through the Databricks SDK. There is no base
@@ -157,10 +157,10 @@ kumo-relational-client/
     │       │   └── relational.py #   relational (lazy-wraps the driver)
     │       ├── wire/          #   the on-the-wire request and response shapes
     │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
-    ├── nemotron-structured-connectors/        # shared data-source connectors (pure python)
-    │   └── src/nemotron_structured_connectors/
-    └── nemotron-relational/                # the relational driver (native build)
-        └── src/nemotron_relational/
+    ├── kumo-connectors/        # shared data-source connectors (pure python)
+    │   └── src/kumo_connectors/
+    └── kumo-relational-engine/                # the relational driver (native build)
+        └── src/kumo_relational_engine/
 ```
 
 ## Adding a Model
@@ -179,7 +179,7 @@ kumo-relational-client/
 the wire envelope. It is the shape the handle builds for the adapter, not a
 user-facing API.
 
-`NemotronRelational.predict()` takes a PQL query plus an entity graph and
+`KumoRelational.predict()` takes a PQL query plus an entity graph and
 builds, samples and sends the request as one fused operation. There is no
 standalone "build a payload from two flat DataFrames" step to call into.
 Reimplementing that outside the driver would duplicate PQL parsing, subgraph

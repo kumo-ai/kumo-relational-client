@@ -1,6 +1,6 @@
 ---
 title: "NVIDIA Kumo Relational Client Environment Variables"
-description: "Reference for the environment variables that configure the NVIDIA Kumo Relational Client, the Nemotron Relational driver, and the data-source connectors."
+description: "Reference for the environment variables that configure the NVIDIA Kumo Relational Client, the Kumo Relational driver, and the data-source connectors."
 template-library-version: "1.0.0"
 ---
 
@@ -8,19 +8,19 @@ template-library-version: "1.0.0"
 
 This page lists the environment variables the NVIDIA Kumo Relational Client reads. Most
 configuration is passed directly to `RelationalClient` in code; the variables below
-cover the Nemotron Relational driver's connection defaults, logging, and the data-source
+cover the Kumo Relational driver's connection defaults, logging, and the data-source
 connectors.
 
-## Nemotron Relational Driver
+## Kumo Relational Driver
 
-The Nemotron Relational driver reads these variables when you use the `nemotron_relational` model
+The Kumo Relational driver reads these variables when you use the `kumo_relational_engine` model
 without passing the values explicitly.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
 | `KUMO_RELATIONAL_API_ENDPOINT` | Conditional | None | URL of the Universal TFM API NIM. Used when a NIM URL is not provided in code. Read when the driver initializes; importing the package never connects. |
 | `KUMO_RELATIONAL_API_KEY` | No | None | API key sent to the NIM as `X-API-Key`. NIMs are unauthenticated by contract, so this is only needed when the deployment fronts the NIM with an authenticating gateway. It is refused on a plaintext `http://` endpoint other than localhost. |
-| `KUMO_RELATIONAL_LOG` | No | `INFO` | Log level for the Nemotron Relational driver, for example `DEBUG`, `INFO`, or `WARNING`. |
+| `KUMO_RELATIONAL_LOG` | No | `INFO` | Log level for the Kumo Relational driver, for example `DEBUG`, `INFO`, or `WARNING`. |
 | `KUMO_RELATIONAL_DISABLE_SESSIONS` | No | Unset | Set to `1`/`true` to stop a multi-batch prediction from sharing one uploaded context through a NIM session. Each batch then re-uploads the full context, which the progress output reports. Only affects transport cost; predictions are unchanged. Passing `random_seed=None` has the same effect, because unseeded runs re-sample neighborhoods per batch. |
 
 ## Explanation Summary (Third-Party LLM)

@@ -44,10 +44,10 @@ class RelationalClient:
     started it, including when clients are used concurrently from several
     threads. Use it as a context manager, or call ``close()``.
 
-    One caveat on the Nemotron Relational path: the driver underneath keeps a process-wide
+    One caveat on the Kumo Relational path: the driver underneath keeps a process-wide
     configuration, which each prediction reconfigures. Predictions are pinned
     to their own client and are unaffected, but the driver's own
-    ``nemotron_relational.init()`` and anything else reading that global observe whichever
+    ``kumo_relational_engine.init()`` and anything else reading that global observe whichever
     client configured it last. Do not mix ``RelationalClient`` with direct driver
     initialization in one process.
 
@@ -258,7 +258,7 @@ class RelationalClient:
 
         Not a public API: run inference through ``client.relational(...)``.
         Returns the adapter's typed result: a
-        prediction ``pd.DataFrame``, or a ``nemotron_relational.rfm.rfm.Explanation`` when a
+        prediction ``pd.DataFrame``, or a ``kumo_relational_engine.rfm.rfm.Explanation`` when a
         Kumo Relational request asks to explain.
         """
         self._transport._require_open()

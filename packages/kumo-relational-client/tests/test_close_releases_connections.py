@@ -5,7 +5,7 @@
 r"""What ``RelationalClient.close()`` has to release.
 
 The client owns one pool, its transport. A model backed by a driver does not
-send through that pool: the Nemotron Relational driver opens its own, so closing the
+send through that pool: the Kumo Relational driver opens its own, so closing the
 transport alone left it open for the life of the process. These cover the
 release path that closes both, and the constraint that makes it safe to
 release a pool another client may still be using.
@@ -108,7 +108,7 @@ def test_two_clients_close_independently() -> None:
     assert not b._transport._closed
 
 
-def test_nemotron_relational_adapter_close_is_inert_before_any_prediction() -> (
+def test_kumo_relational_engine_adapter_close_is_inert_before_any_prediction() -> (
     None
 ):
     r"""Closing a client that never ran a prediction must not import the driver,
@@ -123,7 +123,7 @@ def test_nemotron_relational_adapter_close_is_inert_before_any_prediction() -> (
     adapter.close()
 
 
-def test_nemotron_relational_adapter_releases_the_engine_it_opened(
+def test_kumo_relational_engine_adapter_releases_the_engine_it_opened(
     monkeypatch,
 ) -> None:
     from kumo_relational_client.adapters import relational as adapter_module
@@ -147,7 +147,7 @@ def test_nemotron_relational_adapter_releases_the_engine_it_opened(
     assert released == [token]
 
 
-def test_nemotron_relational_adapter_does_not_release_twice(
+def test_kumo_relational_engine_adapter_does_not_release_twice(
     monkeypatch,
 ) -> None:
     r"""A second close has nothing left to release; releasing again would

@@ -7,7 +7,7 @@ template-library-version: "1.0.0"
 # Installation Guide for the NVIDIA Kumo Relational Client
 
 Install the NVIDIA Kumo Relational Client with pip. The base package installs the client and
-every lightweight model; optional extras add the Nemotron Relational driver and data-source
+every lightweight model; optional extras add the Kumo Relational driver and data-source
 connectors so you install only what you need.
 
 ## Prerequisites
@@ -31,7 +31,7 @@ Add extras in brackets to install additional capabilities.
 | Command | You get |
 | --- | --- |
 | `pip install "kumo-relational-client"` | The client on its own. |
-| `pip install "kumo-relational-client[relational]"` | Adds the Nemotron Relational driver (native graph sampler and PQL). |
+| `pip install "kumo-relational-client[relational]"` | Adds the Kumo Relational driver (native graph sampler and PQL). |
 | `pip install "kumo-relational-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
 | `pip install "kumo-relational-client[databricks-serving]"` | Reaches a Kumo Relational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
 | `pip install "kumo-relational-client[all]"` | Kumo Relational, every data-source connector, and `[databricks-serving]`. |
@@ -43,7 +43,7 @@ Two extras are deliberately outside `[all]` and must be named:
 | `pip install "kumo-relational-client[explain]"` | Fills in `Explanation.summary`, which POSTs row data to a third-party LLM endpoint. Kept opt-in for that reason. |
 | `pip install "kumo-relational-client[relbench]"` | The RelBench datasets used by `Graph.from_relbench()`. |
 
-For example, to install the client with the Nemotron Relational driver and Snowflake
+For example, to install the client with the Kumo Relational driver and Snowflake
 connector:
 
 ```bash
@@ -77,7 +77,7 @@ If you installed the `[relational]` extra, confirm the driver's native extension
 loads:
 
 ```bash
-python -c "import nemotron_relational.relationallib as k; print(hasattr(k.NeighborSampler, 'seed'))"
+python -c "import kumo_relational_engine.relationallib as k; print(hasattr(k.NeighborSampler, 'seed'))"
 ```
 
 Expected output:
@@ -90,13 +90,13 @@ True
 
 - **`No matching distribution found for kumo-relational-client`.** Confirm your Python is
   3.10 or newer and that `pip` can reach your configured package index.
-- **`No matching distribution found for nemotron_relational`.** The `[relational]` extra has
+- **`No matching distribution found for kumo_relational_engine`.** The `[relational]` extra has
   prebuilt wheels only for Linux x86_64 (`manylinux_2_28`) on Python 3.10–3.13,
   and no source distribution is published, so there is nothing to fall back to
   on another platform, macOS included. Install the base `kumo-relational-client` and run
-  Nemotron Relational from a Linux x86_64 host, or build the driver from source.
+  Kumo Relational from a Linux x86_64 host, or build the driver from source.
 - **The native extension fails to import after installing `[relational]`.**
-  Reinstall the `nemotron_relational` wheel for your exact Python version, and confirm your
+  Reinstall the `kumo_relational_engine` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.
 
 ## Next Steps

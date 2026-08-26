@@ -36,8 +36,8 @@ def format_invalid_params(params: Sequence[Any] | None) -> str:
     concatenate unconditionally.
 
     Note:
-        ``nemotron_relational.rfm.rfm`` carries an equivalent renderer for the NemotronRelational
-        path. The two cannot share one: ``nemotron_relational`` does not depend on
+        ``kumo_relational_engine.rfm.rfm`` carries an equivalent renderer for the KumoRelational
+        path. The two cannot share one: ``kumo_relational_engine`` does not depend on
         ``kumo_relational_client``, and the package both do depend on is a SQL-connector
         package with no HTTP surface. Keep the rendered shape in step.
     """
@@ -109,7 +109,7 @@ class UnknownModelError(RelationalError):
 class MissingExtraError(RelationalError):
     r"""An optional dependency this call needs is not installed.
 
-    The Nemotron Relational engine and the connector drivers ship as extras, so the client can
+    The Kumo Relational engine and the connector drivers ship as extras, so the client can
     be installed without them. The message names the ``pip install`` that fixes
     it. Code: ``MISSING_EXTRA``.
     """

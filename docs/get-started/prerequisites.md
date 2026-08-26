@@ -14,7 +14,7 @@ following requirements.
 ### Compute
 
 The base client (`kumo-relational-client`) is pure Python and has no special hardware
-requirements. The Nemotron Relational driver performs graph sampling on the CPU of the
+requirements. The Kumo Relational driver performs graph sampling on the CPU of the
 machine that runs the client; the model itself runs on the NIM's GPU, not on
 your client machine.
 
@@ -22,7 +22,7 @@ your client machine.
 
 ### Operating System
 
-The Nemotron Relational driver ships prebuilt binary wheels for the following platforms:
+The Kumo Relational driver ships prebuilt binary wheels for the following platforms:
 
 | Platform | Supported |
 | --- | --- |
@@ -67,7 +67,7 @@ Before you continue to installation, confirm the following:
 
 ## Troubleshoot Prerequisites
 
-- **`No matching distribution found for nemotron_relational`.** Your platform or Python
+- **`No matching distribution found for kumo_relational_engine`.** Your platform or Python
   version is outside the wheel matrix (Linux x86_64, Python 3.10–3.13), and no
   source distribution is published to fall back to. Install the base
   `kumo-relational-client` without the `[relational]` extra, or use a supported host and
