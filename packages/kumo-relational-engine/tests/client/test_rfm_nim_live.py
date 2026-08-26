@@ -43,13 +43,29 @@ from rfm_nim_payloads import (
     nim_v1_without_inference_payload,
 )
 
-_ENV_VAR = 'RFM_NIM_BASE_URL'
+# The client package and the end-to-end script gate on the KUMO_RELATIONAL_*
+# names; accept those first so one export runs every live suite, and keep the
+# older RFM_NIM_* spellings working.
+_ENV_VAR = 'KUMO_RELATIONAL_NIM_BASE_URL'
+_LEGACY_ENV_VAR = 'RFM_NIM_BASE_URL'
+
+
+def _live_url() -> str | None:
+    return os.environ.get(_ENV_VAR) or os.environ.get(_LEGACY_ENV_VAR)
+
+
+def _live_api_key() -> str | None:
+    return os.environ.get('KUMO_RELATIONAL_NIM_API_KEY') or os.environ.get(
+        'RFM_NIM_API_KEY'
+    )
+
+
 _PREFLIGHT_ERROR: str | None = None
 
 pytestmark = [
     pytest.mark.live_nim,
     pytest.mark.skipif(
-        not os.environ.get(_ENV_VAR),
+        not _live_url(),
         reason=f'set {_ENV_VAR} to run live KumoRelational NIM tests',
     ),
 ]
@@ -65,10 +81,10 @@ def _env_bool(name: str, default: bool) -> bool:
 @pytest.fixture(scope='module')
 def live_nim() -> Iterator[LiveNimClient]:
     client = LiveNimClient(
-        os.environ[_ENV_VAR],
+        _live_url(),
         timeout_seconds=float(os.environ.get('RFM_NIM_TIMEOUT_SECONDS', '30')),
         verify_ssl=_env_bool('RFM_NIM_VERIFY_SSL', True),
-        api_key=os.environ.get('RFM_NIM_API_KEY'),
+        api_key=_live_api_key(),
     )
     yield client
     client.session.close()

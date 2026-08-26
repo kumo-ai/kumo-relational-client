@@ -9,7 +9,7 @@ Databricks backends), the PQL parser, and the HTTP client that talks to a Univer
 TFM NIM.
 
 It is imported as `kumo_relational_engine` and is normally installed transitively via the client's
-`kumo_relational_engine` extra rather than on its own:
+`relational` extra rather than on its own:
 
 ```bash
 pip install kumo-relational-client[relational]      # pulls the kumo_relational_engine driver

@@ -24,6 +24,9 @@ from kumo_relational_client.errors import RelationalError  # noqa: E402
 
 URL = os.environ['KUMO_RELATIONAL_NIM_BASE_URL'].rstrip('/')
 KEY = os.environ.get('KUMO_RELATIONAL_NIM_API_KEY')
+# NIMs are unauthenticated by contract; only send the header when a
+# deployment fronts one with an authenticating gateway.
+HEADERS = {'X-API-Key': KEY} if KEY else {}
 EXPECTED_MODEL = 'kumo-relational'
 
 RESULTS: list[tuple[str, bool, str]] = []
@@ -72,7 +75,7 @@ print('=' * 12, 'transport / management', '=' * 12)
 
 
 def _models():
-    r = requests.get(f'{URL}/v1/models', headers={'X-API-Key': KEY}, timeout=30)
+    r = requests.get(f'{URL}/v1/models', headers=HEADERS, timeout=30)
     r.raise_for_status()
     ids = [m['id'] for m in r.json()['data']]
     assert ids == [EXPECTED_MODEL], f'served {ids}, expected [{EXPECTED_MODEL}]'
@@ -83,7 +86,7 @@ check(f'/v1/models serves exactly {EXPECTED_MODEL}', _models)
 
 
 def _old_id_gone():
-    r = requests.get(f'{URL}/v1/models', headers={'X-API-Key': KEY}, timeout=30)
+    r = requests.get(f'{URL}/v1/models', headers=HEADERS, timeout=30)
     ids = [m['id'] for m in r.json()['data']]
     assert 'nemotron-relational' not in ids, 'old id still served'
     return 'retired id absent'
@@ -219,6 +222,10 @@ check('malformed query is rejected', _bad_query)
 
 
 def _bad_key():
+    # Only meaningful against a deployment that authenticates; a bare NIM
+    # serves an unknown key happily, and that is not a defect.
+    if not KEY:
+        return 'skipped: this deployment does not authenticate'
     r = requests.get(
         f'{URL}/v1/models', headers={'X-API-Key': 'wrong'}, timeout=30
     )
