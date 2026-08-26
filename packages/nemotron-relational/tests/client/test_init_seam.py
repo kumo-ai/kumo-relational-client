@@ -5,7 +5,7 @@
 """Initializing against something other than a base URL.
 
 The RFM path reads its client from ``GlobalState.client``. That used to be
-hardwired to build a ``RelationalClient`` from ``_url``, so a deployment addressed by
+hardwired to build a ``NimClient`` from ``_url``, so a deployment addressed by
 name rather than by URL was unreachable. These tests cover the seam and, more
 importantly, that the raw-NIM path is unchanged by it.
 """
@@ -17,7 +17,7 @@ from typing import Any
 
 import nemotron_relational
 import pytest
-from nemotron_relational.client.client import RelationalClient
+from nemotron_relational.client.client import NimClient
 from nemotron_relational.client.databricks_serving import (
     DatabricksServingClient,
 )
@@ -194,19 +194,19 @@ def test_serving_reinit_replaces_cached_clients_in_other_threads() -> None:
 
 
 def test_url_mode_is_unchanged(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A URL still builds an authenticated RelationalClient, and is still required.
+    """A URL still builds an authenticated NimClient, and is still required.
 
     ``authenticate()`` probes the NIM; serving mode has no equivalent, but the
     URL path must not have quietly lost it.
     """
     called: list[bool] = []
     monkeypatch.setattr(
-        RelationalClient, 'authenticate', lambda self: called.append(True)
+        NimClient, 'authenticate', lambda self: called.append(True)
     )
 
     nemotron_relational.init(url='http://nim.test')
 
-    assert isinstance(nemotron_relational.global_state.client, RelationalClient)
+    assert isinstance(nemotron_relational.global_state.client, NimClient)
     assert nemotron_relational.global_state._url == 'http://nim.test'
     assert nemotron_relational.global_state._client_factory is None
     assert called == [True]
@@ -221,9 +221,9 @@ def test_switching_modes_replaces_the_client(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Re-initializing must not leave a stale client of the previous kind."""
-    monkeypatch.setattr(RelationalClient, 'authenticate', lambda self: None)
+    monkeypatch.setattr(NimClient, 'authenticate', lambda self: None)
     nemotron_relational.init(url='http://nim.test')
-    assert isinstance(nemotron_relational.global_state.client, RelationalClient)
+    assert isinstance(nemotron_relational.global_state.client, NimClient)
 
     nemotron_relational.init_databricks_serving(
         'kumo-relational', workspace_client=_Workspace()

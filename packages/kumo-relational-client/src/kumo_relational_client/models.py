@@ -150,7 +150,7 @@ class RelationalModel:
     r"""A Kumo Relational handle bound to a graph, offering the familiar
     ``model.predict(query, ...)`` call from the old client.
 
-    Returned by :meth:`RelationalClient.nemotron_relational`. It is a thin, stateless wrapper: the
+    Returned by :meth:`RelationalClient.relational`. It is a thin, stateless wrapper: the
     graph is supplied once, and each :meth:`predict` builds a
     :class:`KumoRelationalRequest` and runs it through the owning client, so advanced
     knobs are plain keyword arguments instead of an ``options`` dict.

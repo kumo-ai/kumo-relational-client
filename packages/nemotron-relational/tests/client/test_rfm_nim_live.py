@@ -11,7 +11,7 @@ from urllib.parse import quote
 
 import pytest
 import requests
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 from nemotron_relational.client.rfm import RFMAPI
 from rfm_nim_hardening_cases import (
     EXPECTED_REJECTION_CASES,
@@ -150,7 +150,7 @@ def test_live_nim_smoke_preflight(live_nim: LiveNimClient) -> None:
 def test_live_nim_smoke_public_sdk_prediction(
     live_nim: LiveNimClient,
 ) -> None:
-    client = RelationalClient(
+    client = NimClient(
         live_nim.base_url,
         api_key=live_nim.api_key,
         verify_ssl=live_nim.verify_ssl,

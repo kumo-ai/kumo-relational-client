@@ -19,7 +19,7 @@ from nemotron_relational.api.pquery import ValidatedPredictiveQuery
 from nemotron_relational.api.rfm.context import Table
 from nemotron_relational.api.task import TaskType
 from nemotron_relational.api.typing import Stype
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 from nemotron_relational.client.generated import tfm_api as tfm_api_module
 from nemotron_relational.client.rfm import RFMAPI
 from nemotron_relational.rfm import Graph, NemotronRelational, TaskTable
@@ -136,7 +136,7 @@ def test_predict_posts_universal_json_payload(
     )
 
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(
         ltv,
@@ -479,7 +479,7 @@ def test_entity_identity_survives_batch_local_row_indexes(
     )
     mock_api.delete(f'{MOCK_URL}/v1/sessions/{session_id}', status_code=204)
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     with model.batch_mode(batch_size=1):
         result = model.predict(ltv, indices=[3, 1], verbose=False)
@@ -511,7 +511,7 @@ def test_explain_surfaces_summary_from_nim_wrapped_details(
     )
 
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(ltv, indices=[0], explain=True, verbose=False)
 
@@ -569,7 +569,7 @@ def test_explain_matches_live_nim_shape_with_no_summary(
     )
 
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(
         ltv,
@@ -608,7 +608,7 @@ def test_explain_requests_explanation_output_field(
     )
 
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(ltv, indices=[0], explain=True, verbose=False)
 
@@ -700,7 +700,7 @@ def test_explain_generates_nl_summary_for_v2_1_payload(
         ),
     )
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(ltv, indices=[0], explain=True, verbose=False)
 
@@ -743,7 +743,7 @@ def test_explain_skips_generation_when_skip_summary(
         ),
     )
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(
         ltv,
@@ -787,7 +787,7 @@ def test_explain_prefers_server_summary_over_generation(
         ),
     )
     model = NemotronRelational(user_store_graph, verbose=False)
-    model._client = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
+    model._client = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))  # type: ignore
 
     result = model.predict(ltv, indices=[0], explain=True, verbose=False)
 

@@ -7,7 +7,7 @@ import logging
 import nemotron_relational
 import pytest
 from nemotron_relational.client.client import (
-    RelationalClient,
+    NimClient,
     redact_url,
     scrub_userinfo,
 )
@@ -85,7 +85,7 @@ def test_scrub_userinfo_strips_credentials_from_free_text(
 
 
 def test_connection_error_message_does_not_leak_url_userinfo() -> None:
-    client = RelationalClient(
+    client = NimClient(
         f'https://svc:{_SECRET}@127.0.0.1:1', timeout=0.2, max_retries=0
     )
 
@@ -97,7 +97,7 @@ def test_connection_error_message_does_not_leak_url_userinfo() -> None:
 
 def test_invalid_url_message_does_not_leak_url_userinfo() -> None:
     with pytest.raises(ValueError) as caught:
-        RelationalClient(f'ftp://svc:{_SECRET}@nim.example')
+        NimClient(f'ftp://svc:{_SECRET}@nim.example')
 
     assert _SECRET not in str(caught.value)
 
@@ -107,7 +107,7 @@ def test_not_ready_message_does_not_leak_url_userinfo(requests_mock) -> None:
     requests_mock.get(
         f'{url}/v1/health/ready', status_code=200, json={'status': 'nope'}
     )
-    client = RelationalClient(url)
+    client = NimClient(url)
 
     with pytest.raises(ValueError) as caught:
         client.authenticate()

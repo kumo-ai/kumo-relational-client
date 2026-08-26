@@ -272,7 +272,7 @@ def _raise_init_error(url: str, exc: BaseException) -> NoReturn:
     ) from exc
 
 
-class RelationalClient:
+class NimClient:
     def __init__(
         self,
         url: str,

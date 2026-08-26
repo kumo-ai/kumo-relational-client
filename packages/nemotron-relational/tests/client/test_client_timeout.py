@@ -21,7 +21,7 @@ import nemotron_relational
 import nemotron_relational.rfm as rfm_engine
 import pytest
 import requests
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 
 _READY_BODY = json.dumps({'status': 'healthy', 'check': 'ready'})
 _MODELS_BODY = json.dumps(
@@ -76,7 +76,7 @@ def _serve(delay: float = 0.0) -> Iterator[str]:
 
 def test_post_honours_the_configured_timeout():
     with _serve(delay=5.0) as url:
-        client = RelationalClient(url, timeout=0.5)
+        client = NimClient(url, timeout=0.5)
         started = time.monotonic()
         with pytest.raises(requests.Timeout):
             client._post('/v1/predictions', json={})
@@ -86,7 +86,7 @@ def test_post_honours_the_configured_timeout():
 
 def test_per_call_timeout_overrides_the_client_default():
     with _serve(delay=5.0) as url:
-        client = RelationalClient(url, timeout=30.0)
+        client = NimClient(url, timeout=30.0)
         with pytest.raises(requests.Timeout):
             client._post('/v1/predictions', json={}, timeout=0.5)
 
@@ -107,7 +107,7 @@ def test_max_retries_reaches_the_transport_policy():
     """/
     client-max-retries-never-reaches-the-nemotron_relational-path.md
 
-    `RelationalClient(max_retries=...)` is documented without a model qualifier, next
+    `NimClient(max_retries=...)` is documented without a model qualifier, next
     to `timeout`, which was made to reach both paths. This client used to
     hardcode `total=10, connect=3, read=3, status=5` regardless, so `0` still
     retried and a raised value changed nothing -- and its prediction `POST` was
@@ -115,9 +115,7 @@ def test_max_retries_reaches_the_transport_policy():
     excludes `POST`.
     """
     for max_retries in (0, 3, 7):
-        client = RelationalClient(
-            'https://tenant.example', max_retries=max_retries
-        )
+        client = NimClient('https://tenant.example', max_retries=max_retries)
         policy = client._session.get_adapter(
             'https://tenant.example/v1/predictions'
         ).max_retries
@@ -134,7 +132,7 @@ def test_a_server_chosen_retry_after_is_capped():
     retried request could park the caller for.
     """
     policy = (
-        RelationalClient('https://tenant.example')
+        NimClient('https://tenant.example')
         ._session.get_adapter('https://tenant.example/v1/predictions')
         .max_retries
     )
@@ -148,7 +146,7 @@ def test_session_create_is_held_out_of_the_post_retries():
     re-sent create strands one pinned context per attempt. The routes below it
     are replayable and keep the full policy.
     """
-    client = RelationalClient('https://tenant.example', max_retries=3)
+    client = NimClient('https://tenant.example', max_retries=3)
     create = client._session.get_adapter(
         'https://tenant.example/v1/sessions'
     ).max_retries
@@ -173,7 +171,7 @@ def test_a_read_timeout_is_not_retried_and_keeps_its_type():
     from their side, and the driver's message says so.
     """
     with _serve(delay=5.0) as url:
-        client = RelationalClient(url, timeout=0.5, max_retries=3)
+        client = NimClient(url, timeout=0.5, max_retries=3)
         started = time.monotonic()
         with pytest.raises(requests.Timeout):
             client._post('/v1/predictions', json={})

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-r"""``RelationalClient`` carries every Kumo Relational prediction, so it must enforce the
+r"""``NimClient`` carries every Kumo Relational prediction, so it must enforce the
 credential guards the other client documents, and importing the package must
 not reach the network.
 """
@@ -22,7 +22,7 @@ import pytest
 import requests
 from nemotron_relational.client.client import (
     _MAX_RESPONSE_BYTES,
-    RelationalClient,
+    NimClient,
     _raise_init_error,
 )
 from nemotron_relational.exceptions import InvalidResponseError
@@ -62,7 +62,7 @@ def _serve() -> Iterator[tuple[ThreadingHTTPServer, str]]:
 
 def test_plaintext_url_with_an_api_key_is_refused() -> None:
     with pytest.raises(ValueError, match='plaintext HTTP'):
-        RelationalClient('http://nim.test:8000', api_key='SECRET')
+        NimClient('http://nim.test:8000', api_key='SECRET')
 
 
 @pytest.mark.parametrize(
@@ -74,24 +74,22 @@ def test_plaintext_url_with_an_api_key_is_refused() -> None:
     ],
 )
 def test_supported_endpoints_still_accept_an_api_key(url: str) -> None:
-    assert RelationalClient(url, api_key='SECRET')._url == url
+    assert NimClient(url, api_key='SECRET')._url == url
 
 
 def test_plaintext_url_without_an_api_key_is_allowed() -> None:
-    assert (
-        RelationalClient('http://nim.test:8000')._url == 'http://nim.test:8000'
-    )
+    assert NimClient('http://nim.test:8000')._url == 'http://nim.test:8000'
 
 
 @pytest.mark.parametrize('url', ['nim.test:8000', 'ftp://nim.test', 'http://'])
 def test_unusable_urls_are_refused(url: str) -> None:
     with pytest.raises(ValueError):
-        RelationalClient(url)
+        NimClient(url)
 
 
 def test_non_string_url_is_refused() -> None:
     with pytest.raises(ValueError, match='url must be a string'):
-        RelationalClient(123)  # type: ignore[arg-type]
+        NimClient(123)  # type: ignore[arg-type]
 
 
 def test_init_error_body_is_truncated() -> None:
@@ -266,7 +264,7 @@ def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(
     origin, target = redirect_servers
     origin['redirect_to'] = target['url'] + '/v1/health/ready'
 
-    RelationalClient(origin['url'], api_key='SECRET-TEST-KEY').authenticate()
+    NimClient(origin['url'], api_key='SECRET-TEST-KEY').authenticate()
 
     assert origin['headers'][0]['X-API-Key'] == 'SECRET-TEST-KEY'
     assert target['headers']
@@ -281,7 +279,7 @@ def test_api_key_is_kept_on_a_same_origin_redirect(
     origin, _ = redirect_servers
     origin['redirect_to'] = origin['url'] + '/v1/health/ready/'
 
-    RelationalClient(origin['url'], api_key='SECRET-TEST-KEY').authenticate()
+    NimClient(origin['url'], api_key='SECRET-TEST-KEY').authenticate()
 
     assert len(origin['headers']) >= 2
     assert all(
@@ -300,7 +298,7 @@ def test_redirects_are_still_followed(
     origin, target = redirect_servers
     origin['redirect_to'] = target['url'] + '/v1/health/ready'
 
-    RelationalClient(origin['url']).authenticate()
+    NimClient(origin['url']).authenticate()
 
     assert len(target['headers']) == 1
     assert len(origin['headers']) == 2
@@ -357,7 +355,7 @@ def test_a_compressed_body_cannot_inflate_past_the_cap() -> None:
     assert len(compressed) < _MAX_RESPONSE_BYTES // 100
 
     with _serve_body(compressed, gzip_encoded=True) as url:
-        client = RelationalClient(url)
+        client = NimClient(url)
         with pytest.raises(InvalidResponseError, match='byte limit'):
             client._post('/v1/predictions', json={'model': 'kumo-relational'})
 
@@ -373,7 +371,7 @@ def test_a_large_legal_body_is_still_delivered_in_full() -> None:
     assert 8_000_000 < len(body) < _MAX_RESPONSE_BYTES
 
     with _serve_body(body) as url:
-        client = RelationalClient(url)
+        client = NimClient(url)
         response = client._post(
             '/v1/predictions', json={'model': 'kumo-relational'}
         )

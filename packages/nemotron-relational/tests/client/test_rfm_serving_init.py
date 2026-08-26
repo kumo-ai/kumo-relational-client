@@ -37,7 +37,7 @@ class _Workspace:
 def _init(
     rfm_engine: Any, endpoint: str = 'kumo-relational', **kwargs: Any
 ) -> None:
-    """Initialize the way ``RelationalClient`` does, token included.
+    """Initialize the way ``NimClient`` does, token included.
 
     Every test below stands in for that caller; a bare call is refused, which
     ``test_a_direct_call_is_refused`` covers.

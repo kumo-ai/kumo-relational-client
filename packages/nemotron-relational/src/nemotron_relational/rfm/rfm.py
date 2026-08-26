@@ -40,7 +40,7 @@ from nemotron_relational.api.rfm import (
 from nemotron_relational.api.rfm.context import Context, Table
 from nemotron_relational.api.task import TaskType
 from nemotron_relational.api.typing import AggregationType, ProblemType, Stype
-from nemotron_relational.client.client import RelationalClient
+from nemotron_relational.client.client import NimClient
 from nemotron_relational.client.rfm import RFMAPI
 from nemotron_relational.exceptions import HTTPException, NimFailureError
 from nemotron_relational.mixin import CastMixin
@@ -740,7 +740,7 @@ class NemotronRelational:
         verbose: bool | ProgressLogger = True,
         optimize: bool = False,
         *,
-        _client: RelationalClient | None = None,
+        _client: NimClient | None = None,
     ) -> None:
         graph = graph.validate()
         self._graph_def = graph._to_api_graph_definition()

@@ -86,9 +86,9 @@ def test_client_cache_follows_the_current_endpoint(monkeypatch):
     """
     import threading
 
-    from nemotron_relational.client.client import RelationalClient
+    from nemotron_relational.client.client import NimClient
 
-    monkeypatch.setattr(RelationalClient, 'authenticate', lambda self: None)
+    monkeypatch.setattr(NimClient, 'authenticate', lambda self: None)
 
     a = ('https://tenant-a.example', 'key-A')
     b = ('https://tenant-b.example', 'key-B')

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 
 
 def test_authenticate_accepts_universal_tfm_nim(requests_mock):
@@ -28,7 +28,7 @@ def test_authenticate_accepts_universal_tfm_nim(requests_mock):
         },
     )
 
-    RelationalClient(base_url).authenticate()
+    NimClient(base_url).authenticate()
 
 
 @pytest.mark.parametrize(
@@ -56,7 +56,7 @@ def test_authenticate_rejects_unready_universal_tfm_nim(
     )
 
     with pytest.raises(ValueError):
-        RelationalClient(base_url).authenticate()
+        NimClient(base_url).authenticate()
 
     assert requests_mock.call_count == 1
 
@@ -68,4 +68,4 @@ def test_authenticate_surfaces_gateway_auth_error(requests_mock, status_code):
     requests_mock.get(f'{base_url}/v1/models', status_code=status_code)
 
     with pytest.raises(ValueError, match='authentication failed'):
-        RelationalClient(base_url, api_key='wrong-key').authenticate()
+        NimClient(base_url, api_key='wrong-key').authenticate()

@@ -2,11 +2,11 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from .client import RelationalClient
+from .client import NimClient
 from .databricks_serving import DatabricksServingClient, ServingResponse
 
 __all__ = [
     'DatabricksServingClient',
-    'RelationalClient',
+    'NimClient',
     'ServingResponse',
 ]

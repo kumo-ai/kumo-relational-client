@@ -8,7 +8,7 @@ import pytest
 from conftest import MOCK_URL
 from nemotron_relational.api.pquery import ValidatedPredictiveQuery
 from nemotron_relational.api.rfm import RFMPredictResponse
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 from nemotron_relational.client.rfm import RFMAPI
 from nemotron_relational.exceptions import HTTPException, InvalidResponseError
 from nemotron_relational.rfm import Graph, NemotronRelational
@@ -288,7 +288,7 @@ def test_rfmapi_create_session_returns_id(mock_api: Any) -> None:
         f'{MOCK_URL}/v1/sessions',
         json={'session_id': 'sess_x', 'ttl_seconds': 3600},
     )
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     assert api.create_session({'model': 'kumo-relational'}) == 'sess_x'
 
 
@@ -300,21 +300,21 @@ def test_rfmapi_create_session_requires_id(mock_api: Any) -> None:
     the ``ValueError`` one, which blames the request.
     """
     mock_api.post(f'{MOCK_URL}/v1/sessions', json={'ttl_seconds': 3600})
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(InvalidResponseError, match='session_id'):
         api.create_session({'model': 'kumo-relational'})
 
 
 def test_rfmapi_create_session_rejects_a_non_json_body(mock_api: Any) -> None:
     mock_api.post(f'{MOCK_URL}/v1/sessions', text='<html>gateway</html>')
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(InvalidResponseError):
         api.create_session({'model': 'kumo-relational'})
 
 
 def test_rfmapi_delete_session_issues_delete(mock_api: Any) -> None:
     matcher = mock_api.delete(f'{MOCK_URL}/v1/sessions/sess_x', status_code=204)
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     api.delete_session('sess_x')
     assert matcher.called
 
@@ -336,7 +336,7 @@ def test_rfmapi_session_predict_targets_session_path(mock_api: Any) -> None:
     matcher = mock_api.post(
         f'{MOCK_URL}/v1/sessions/sess_x/predictions', json=_response
     )
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     request = {
         'predict': {
             'instance_table': {'columns': [INSTANCE_ID], 'rows': [[0]]}

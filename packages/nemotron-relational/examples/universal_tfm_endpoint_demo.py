@@ -32,7 +32,7 @@ import nemotron_relational.rfm as rfm
 import pandas as pd
 from nemotron_relational.api.typing import Stype
 from nemotron_relational.client import (
-    RelationalClient as EngineRelationalClient,
+    NimClient,
 )
 from nemotron_relational.client.endpoints import Endpoint, HTTPMethod
 
@@ -128,7 +128,7 @@ def run_sdk_route_descriptors(
 ) -> None:
     """Show low-level client route descriptors for non-predict NIM routes."""
     print('\n=== client route descriptors for NIM metadata ===')
-    client = EngineRelationalClient(base_url, api_key=api_key)
+    client = NimClient(base_url, api_key=api_key)
 
     endpoint_examples = (
         ('health live', Endpoint('/v1/health/live', HTTPMethod.GET)),

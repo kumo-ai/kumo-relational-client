@@ -30,7 +30,7 @@ from nemotron_relational.exceptions import (
     NimUnreachableError,
     UnknownDatasetError,
 )
-from nemotron_relational.client.client import RelationalClient, redact_url
+from nemotron_relational.client.client import NimClient, redact_url
 from nemotron_relational.client.transport import RFMTransport
 
 initialize_logging()
@@ -107,7 +107,7 @@ class GlobalState(metaclass=Singleton):
     def client(self) -> RFMTransport:
         r"""The request client for this thread.
 
-        A :class:`RelationalClient` for the raw-NIM deployment, or whatever
+        A :class:`NimClient` for the raw-NIM deployment, or whatever
         ``_client_factory`` builds otherwise.
 
         Cached per thread and keyed by the configuration it was built from.
@@ -149,7 +149,7 @@ class GlobalState(metaclass=Singleton):
         if self._client_factory is not None:
             client = self._client_factory()
         else:
-            client = RelationalClient(
+            client = NimClient(
                 self._url,
                 self._api_key,
                 verify_ssl=self._verify_ssl,
@@ -207,7 +207,7 @@ def init(
             return
         global_state.clear()
 
-    client = RelationalClient(
+    client = NimClient(
         url=url,
         api_key=api_key,
         verify_ssl=verify_ssl,
@@ -480,10 +480,10 @@ __all__ = [
     'HTTPException',
     'InvalidResponseError',
     'NemotronRelationalError',
+    'NimClient',
     'NimFailureError',
     'NimTimeoutError',
     'NimUnreachableError',
-    'RelationalClient',
     'Stype',
     'UnknownDatasetError',
     '__version__',

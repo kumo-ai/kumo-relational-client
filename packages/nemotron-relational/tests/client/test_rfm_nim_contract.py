@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 import requests
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 from nemotron_relational.client.endpoints import HTTPMethod
 from nemotron_relational.client.generated.tfm_api import (
     TFM_ENDPOINTS_BY_OPERATION_ID,
@@ -67,7 +67,7 @@ def test_rfm_api_predict_posts_current_v1_payload_and_parses_response(
         },
     )
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     payload = nim_v1_smoke_payload()
     result = api.predict(
         payload,
@@ -107,7 +107,7 @@ def test_rfm_api_predict_reattaches_anchor_times(mock_api: Any) -> None:
         },
     )
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     result = api.predict(
         nim_v1_smoke_payload(),
         entity_ids=[601],
@@ -148,7 +148,7 @@ def test_rfm_api_predict_rejects_misaligned_anchor_times(
         },
     )
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     with pytest.raises(ValueError, match='different lengths'):
         api.predict(
             nim_v1_smoke_payload(),
@@ -159,7 +159,7 @@ def test_rfm_api_predict_rejects_misaligned_anchor_times(
 
 
 def test_sdk_prediction_endpoint_matches_current_nim_v1_route() -> None:
-    client = RelationalClient(MOCK_URL, api_key='DISABLED')
+    client = NimClient(MOCK_URL, api_key='DISABLED')
     endpoint = TFMOperations.run_prediction.endpoint
 
     assert endpoint.get_path() == NIM_V1_PREDICTION_PATH
@@ -169,7 +169,7 @@ def test_sdk_prediction_endpoint_matches_current_nim_v1_route() -> None:
 
 
 def test_sdk_health_endpoint_matches_current_nim_route() -> None:
-    client = RelationalClient(MOCK_URL, api_key='DISABLED')
+    client = NimClient(MOCK_URL, api_key='DISABLED')
 
     assert NIM_HEALTH_READY_PATH == '/v1/health/ready'
     assert client._format_endpoint_url(NIM_HEALTH_READY_PATH) == (
@@ -198,7 +198,7 @@ def test_sdk_generated_session_endpoints_match_current_nim_routes(
     method: HTTPMethod,
     current_nim_path: str,
 ) -> None:
-    client = RelationalClient(MOCK_URL, api_key='DISABLED')
+    client = NimClient(MOCK_URL, api_key='DISABLED')
     endpoint = TFM_ENDPOINTS_BY_OPERATION_ID[operation_id]
 
     assert endpoint.method == method
@@ -222,7 +222,7 @@ def test_sdk_rest_authenticate_accepts_current_nim_surface(
         },
     )
 
-    client = RelationalClient(MOCK_URL)
+    client = NimClient(MOCK_URL)
     client.authenticate()
 
 
@@ -245,7 +245,7 @@ def test_rfm_api_predict_does_not_mutate_request_payload(
     payload = nim_v1_smoke_payload()
     original = deepcopy(payload)
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     api.predict(
         payload,
         entity_ids=[601],
@@ -303,7 +303,7 @@ def test_rfm_api_predict_maps_varied_prediction_item_shapes(
         },
     )
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     payload = nim_v1_smoke_payload()
     payload['predict']['instance_table']['rows'] = [
         [601, '2025-02-01T00:00:00Z'],
@@ -401,7 +401,7 @@ def test_rfm_api_predict_renders_multiclass_long_format(
         },
     )
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     result = api.predict(
         nim_v1_smoke_payload(),
         entity_ids=[601],
@@ -445,7 +445,7 @@ def test_prediction_response_rejects_bad_probability_shape(
 
     from nemotron_relational.exceptions import InvalidResponseError
 
-    api = RFMAPI(RelationalClient(MOCK_URL, api_key='DISABLED'))
+    api = RFMAPI(NimClient(MOCK_URL, api_key='DISABLED'))
     # A mis-shaped *response* is the server's error, not the caller's, so it
     # surfaces as InvalidResponseError with the driver reason preserved rather
     # than as a bare TypeError from deep inside the parser.

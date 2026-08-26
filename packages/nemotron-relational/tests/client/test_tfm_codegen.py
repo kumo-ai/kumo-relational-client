@@ -12,7 +12,7 @@ from dataclasses import fields
 from pathlib import Path
 
 import pytest
-from nemotron_relational.client import RelationalClient
+from nemotron_relational.client import NimClient
 from nemotron_relational.client.endpoints import HTTPMethod
 from nemotron_relational.client.generated.tfm_api import (
     TFM_ENDPOINTS_BY_OPERATION_ID,
@@ -60,7 +60,7 @@ def test_generated_tfm_api_runtime_metadata() -> None:
 
 
 def test_generated_tfm_api_paths_are_service_root_relative() -> None:
-    client = RelationalClient('https://example.test', api_key=None)
+    client = NimClient('https://example.test', api_key=None)
 
     assert client._format_endpoint_url(
         TFMOperations.run_prediction.endpoint.get_path()

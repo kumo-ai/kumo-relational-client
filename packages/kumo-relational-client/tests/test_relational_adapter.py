@@ -1301,14 +1301,12 @@ def test_concurrent_clients_predict_against_their_own_endpoint(
 
     import nemotron_relational
     from nemotron_relational.client.client import (
-        RelationalClient as EngineRelationalClient,
+        NimClient,
     )
 
     from kumo_relational_client import RelationalClient
 
-    monkeypatch.setattr(
-        EngineRelationalClient, 'authenticate', lambda self: None
-    )
+    monkeypatch.setattr(NimClient, 'authenticate', lambda self: None)
 
     barrier = threading.Barrier(2)
     seen: dict[str, tuple[str, str]] = {}
