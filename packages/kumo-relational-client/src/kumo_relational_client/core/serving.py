@@ -8,10 +8,10 @@ r"""Addressing a model served by a managed platform rather than by URL.
 URL. A Databricks Model Serving endpoint is addressed by *name* through a
 workspace client, so there is no URL, no API key, and no readiness route.
 
-This carries that target instead. It exposes the same ``url``,
-``health_ready`` and ``predict`` members a :class:`Transport` does, but every
-one of them refuses: each raises an :class:`RelationalError` naming the endpoint and
-the reason it does not apply. An adapter reaching for one is a bug, and it
+This carries that target instead. It exposes the same ``url`` and
+``health_ready`` members a :class:`Transport` does, but both refuse: each raises
+an :class:`RelationalError` naming the endpoint and the reason it does not
+apply. An adapter reaching for one is a bug, and it
 surfaces as that error rather than as a plausible-looking value or a request
 to nowhere.
 """

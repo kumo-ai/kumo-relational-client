@@ -71,7 +71,7 @@ least 90 days of history before the anchor time, or the request is rejected.
 
 ### Check Which Models the Client Can Serve
 
-Both calls describe the client's own adapters, not the endpoint it points at.
+Both describe the client itself, not the endpoint it points at.
 Neither contacts the NIM, so they answer before you have one running, and a NIM
 serving only one of these models still reports both.
 

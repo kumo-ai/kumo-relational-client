@@ -104,3 +104,63 @@ def test_delete_session_escapes_the_session_id() -> None:
     api = RFMAPI(client)  # type: ignore[arg-type]
     api.delete_session('../../etc')
     assert client.paths == ['/v1/sessions/..%2F..%2Fetc']
+
+
+def test_every_redirect_hop_is_released_unread() -> None:
+    r"""``_read_capped`` bounds the response this client parses, but it only
+    runs after ``requests`` returns. Redirect hops are consumed before that, in
+    full and uncapped, so each is released instead.
+    """
+    from unittest import mock
+
+    import requests
+    from kumo_relational_engine.client.client import _Session
+
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+            self.reads = 0
+
+        def close(self) -> None:
+            self.closed = True
+
+        def read(self, *args: object, **kwargs: object) -> bytes:
+            self.reads += 1
+            return b'x' * 1024 if self.reads == 1 else b''
+
+    def _redirect(url: str, location: str) -> requests.Response:
+        response = requests.Response()
+        response.raw = _Raw()  # type: ignore[assignment]
+        response.status_code = 307
+        response.url = url
+        response.headers['Location'] = location
+        return response
+
+    session = _Session()
+    first = _redirect('https://a.test/v1/predictions', 'https://b.test/x')
+    second = _redirect('https://b.test/x', 'https://c.test/y')
+    final = requests.Response()
+    final.status_code = 200
+    final.url = 'https://c.test/y'
+    final.raw = second.raw  # type: ignore[assignment]
+
+    sent = [second, final]
+
+    def _send(
+        _self: object, request: object, **kwargs: object
+    ) -> requests.Response:
+        response = sent.pop(0)
+        response.request = request  # type: ignore[assignment]
+        return response
+
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://a.test/v1/predictions')
+    )
+    first.request = prepared
+
+    with mock.patch.object(_Session, 'send', _send):
+        list(session.resolve_redirects(first, prepared))
+
+    assert first.raw.closed and second.raw.closed  # type: ignore[union-attr]
+    assert first.raw.reads == 0  # type: ignore[union-attr]
+    assert second.raw.reads == 0  # type: ignore[union-attr]

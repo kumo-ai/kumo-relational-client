@@ -4,10 +4,11 @@
 
 ### Fixed
 
-- **A redirect was an unbounded read.** `requests` releases each redirect hop's
-  socket by reading its body in full, with no cap, before following it. This
-  package never needs those bytes and they are attacker-controlled on a
-  misconfigured endpoint, so a hop's socket is now closed rather than drained.
+- **A redirect was an unbounded read, on both HTTP paths.** `requests` releases
+  each redirect hop's socket by reading its body in full, with no cap, before
+  following it, so the relational driver's response cap only ever bounded the
+  last leg of an exchange. Every hop is now closed rather than drained, in the
+  client and in the driver alike.
   The visible difference is that a connection is not reused across a redirect;
   redirects are still followed and the API key is still dropped when one crosses
   origin. One related gap is left open on purpose: urllib3 drains a retryable

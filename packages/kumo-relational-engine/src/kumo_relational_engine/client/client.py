@@ -162,6 +162,48 @@ class _Session(requests.Session):
     other way. This is the same arrangement as ``_validate_url`` above.
     """
 
+    @staticmethod
+    def _release_unread(resp: object) -> None:
+        r"""Give up a redirect hop's socket without reading its body.
+
+        ``_read_capped`` bounds the response this client finally parses, but it
+        only runs once ``requests`` has returned. Redirect hops are consumed
+        before that, in full and uncapped, to release their sockets. Closing
+        each one instead keeps the cap meaningful for the whole exchange rather
+        than just its last leg.
+        """
+        if not isinstance(resp, requests.Response):
+            return
+        raw = getattr(resp, 'raw', None)
+        if raw is not None:
+            raw.close()
+        resp._content = b''
+        resp._content_consumed = True  # type: ignore[attr-defined]
+
+    def resolve_redirects(  # type: ignore[override]
+        self,
+        resp: requests.Response,
+        req: requests.PreparedRequest,
+        **kwargs: Any,
+    ) -> Any:
+        r"""Follow redirects without reading the bodies they carry.
+
+        Every hop is released, not just the first: ``requests`` resolves the
+        rest inside the generator below and reads each as it loops, so each is
+        released as it is yielded.
+        """
+        # ``Session.send`` calls this for every response, redirect or not, so
+        # the check matters: releasing unconditionally would close the body of
+        # a successful response before the caller ever saw it.
+        if self.get_redirect_target(resp) is not None:
+            self._release_unread(resp)
+        for hop in super().resolve_redirects(resp, req, **kwargs):
+            if isinstance(hop, requests.Response) and (
+                self.get_redirect_target(hop) is not None
+            ):
+                self._release_unread(hop)
+            yield hop
+
     def rebuild_auth(
         self,
         prepared_request: requests.PreparedRequest,

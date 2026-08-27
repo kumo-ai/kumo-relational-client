@@ -15,9 +15,9 @@ graph-aware in-context learning).
 
 ## Benefits
 
-- **One client for every model.** A single `RelationalClient` connects to a NIM and
-  serves any registered model through a handle of its own,
-  `client.relational(...).predict(...)`, returning a pandas DataFrame.
+- **One way in.** A single `RelationalClient` connects to a NIM and serves the
+  model through a handle, `client.relational(...).predict(...)`, returning a
+  pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
   every platform. Heavy drivers, such as Kumo Relational's native graph sampler, are
   opt-in extras.

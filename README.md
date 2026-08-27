@@ -129,10 +129,10 @@ The transport pools connections and retries transient failures (429, 500, 502,
 503, 504) with backoff. Tune it per client with
 `RelationalClient(url, timeout=30, max_retries=3)`.
 
-Two things are worth knowing. `client.models()` describes the client's own
-registry rather than the connected endpoint, so a NIM serving only one model
-still reports both, and the mismatch surfaces as an error on the first
-prediction. And the relational driver keeps a process-wide configuration that
+Two things are worth knowing. `client.models()` describes the client itself
+rather than the connected endpoint, so it answers without a live connection and
+a NIM serving something else surfaces as an error on the first prediction. And
+the relational driver keeps a process-wide configuration that
 each prediction reconfigures, so drive it through `RelationalClient` rather than
 mixing in direct `kumo_relational_engine.init()` calls.
 

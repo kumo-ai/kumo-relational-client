@@ -25,9 +25,6 @@ _DEFAULT_BACKOFF_FACTOR = 0.5
 _RETRY_STATUS = (429, 500, 502, 503, 504)
 _RETRY_AFTER_MAX_SECONDS = 60
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
-# Well above any real prediction response -- a full-precision float64 column
-# for a million rows is ~25 MB of JSON -- but far below what a compressed
-# hostile body can inflate to.
 _USERINFO_RE = re.compile(r'(?<=//)[^/@\s]+@')
 
 
@@ -138,6 +135,23 @@ class _Session(requests.Session):
     client at a URL that does not redirect.
     """
 
+    @staticmethod
+    def _release_unread(resp: object) -> None:
+        r"""Give up a redirect hop's socket without reading its body.
+
+        Close rather than drain: the connection is surrendered instead of being
+        read to the end so it can be reused. Marking the body consumed is what
+        stops ``requests`` reading it afterwards -- ``resp.content`` returns the
+        empty bytes set here instead of pulling from the socket.
+        """
+        if not isinstance(resp, requests.Response):
+            return
+        raw = getattr(resp, 'raw', None)
+        if raw is not None:
+            raw.close()
+        resp._content = b''
+        resp._content_consumed = True  # type: ignore[attr-defined]
+
     def resolve_redirects(  # type: ignore[override]
         self,
         resp: requests.Response,
@@ -149,16 +163,23 @@ class _Session(requests.Session):
         ``requests`` consumes each hop's body (``resp.content``) to release the
         socket, with no cap. This layer never needs those bytes -- the only
         request it makes reports a status -- and they are attacker-controlled on
-        a misconfigured endpoint, so the socket is released by closing it
-        instead of by reading it.
+        a misconfigured endpoint.
+
+        Every hop is released, not just the first. ``requests`` resolves the
+        rest inside the generator below, reading each one as it loops, so each
+        is released as it is yielded -- before control returns to that loop.
         """
-        # Close rather than drain: the socket is given up instead of being
-        # read to the end so it can be reused. Redirects are rare here, so
-        # trading connection reuse for a bounded read is the right way round.
-        resp.raw.close()
-        resp._content = b''
-        resp._content_consumed = True  # type: ignore[attr-defined]
-        return super().resolve_redirects(resp, req, **kwargs)
+        # ``Session.send`` calls this for every response, redirect or not, so
+        # the check matters: releasing unconditionally would close the body of
+        # a successful response before the caller ever saw it.
+        if self.get_redirect_target(resp) is not None:
+            self._release_unread(resp)
+        for hop in super().resolve_redirects(resp, req, **kwargs):
+            if isinstance(hop, requests.Response) and (
+                self.get_redirect_target(hop) is not None
+            ):
+                self._release_unread(hop)
+            yield hop
 
     def rebuild_auth(
         self,
@@ -245,19 +266,11 @@ def _build_session(
     max_retries: int,
     backoff_factor: float,
 ) -> requests.Session:
-    r"""The pooled session, with ``POST /v1/sessions`` held out of the retries.
+    r"""The pooled session behind this transport's one request.
 
-    Creating a session fits and pins the context in the worker's memory before
-    the response is written, so a re-sent ``POST`` leaves one orphaned pinned
-    context per attempt: the client keeps only the last ``session_id`` and can
-    never ``DELETE`` the earlier ones. That is a side effect the client cannot
-    reconcile, unlike ``/v1/predictions``, which the same policy may safely
-    replay.
-
-    ``requests`` resolves an adapter by longest matching URL prefix, so the
-    stricter policy is mounted on the exact create-session URL and the ordinary
-    one re-mounted on the routes below it: scoring against a pinned context and
-    releasing one are both replayable and keep the full policy.
+    A single retry policy covers it: the only route this package calls is
+    ``GET /v1/health/ready``, which has no side effect to reconcile and is safe
+    to replay. The driver keeps its own session for the routes that do.
     """
     session = _Session()
     if api_key:

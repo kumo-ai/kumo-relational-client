@@ -38,8 +38,8 @@ prediction is issued against the endpoint and credential of the client that
 started it.
 
 Requests do not all leave through the same object. The client holds a
-`Transport`, a pooled HTTP session with retry and backoff, which serves the
-client's own calls such as `/v1/models`. Kumo Relational does not predict through
+`Transport`, a pooled HTTP session with retry and backoff, which serves the one
+call the client makes itself, `/v1/health/ready`. Predictions do not go through
 it: the client hands its address and credential to the driver, which opens its
 own pooled session (`NimClient`) and sends from there. The two are separate implementations of the same HTTP contract, because
 `kumo_relational_engine` cannot depend on `kumo-relational-client`; the dependency runs the other way.

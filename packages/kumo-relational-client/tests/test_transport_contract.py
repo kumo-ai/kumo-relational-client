@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
+from unittest import mock
 
 import pytest
 import requests
@@ -376,3 +377,92 @@ def test_a_redirect_body_is_discarded_rather_than_read() -> None:
     assert raw.closed, 'the redirect socket was not closed'
     assert raw.read_calls == 0, 'the redirect body was read'
     assert response.content == b''
+
+
+def _redirect_response(url: str, location: str) -> requests.Response:
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+            self.reads = 0
+
+        def close(self) -> None:
+            self.closed = True
+
+        def read(self, *args: object, **kwargs: object) -> bytes:
+            self.reads += 1
+            return b'x' * 1024 if self.reads == 1 else b''
+
+    response = requests.Response()
+    response.raw = _Raw()  # type: ignore[assignment]
+    response.status_code = 307
+    response.url = url
+    response.headers['Location'] = location
+    return response
+
+
+def test_every_redirect_hop_is_released_not_just_the_first() -> None:
+    r"""``requests`` resolves hops after the first inside its own generator and
+    reads each one as it loops, so a guard that released only the response it
+    was handed still left the rest to be read in full.
+    """
+    session = _Session()
+    first = _redirect_response(
+        'https://a.test/v1/health/ready', 'https://b.test/x'
+    )
+    second = _redirect_response('https://b.test/x', 'https://c.test/y')
+    final = requests.Response()
+    final.status_code = 200
+    final.url = 'https://c.test/y'
+    final.raw = second.raw  # type: ignore[assignment]
+
+    sent = [second, final]
+
+    def _send(
+        _self: object, request: object, **kwargs: object
+    ) -> requests.Response:
+        response = sent.pop(0)
+        response.request = request  # type: ignore[assignment]
+        return response
+
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://a.test/v1/health/ready')
+    )
+    first.request = prepared
+
+    with mock.patch.object(_Session, 'send', _send):
+        list(session.resolve_redirects(first, prepared))
+
+    assert first.raw.closed, 'the first hop was not released'  # type: ignore[union-attr]
+    assert second.raw.closed, 'the second hop was not released'  # type: ignore[union-attr]
+    assert first.raw.reads == 0  # type: ignore[union-attr]
+    assert second.raw.reads == 0, 'the second hop body was read'  # type: ignore[union-attr]
+
+
+def test_a_response_that_is_not_a_redirect_is_left_alone() -> None:
+    r"""``Session.send`` runs the redirect resolver over every response, so
+    releasing without checking closes the body of a successful one before its
+    caller reads it. The driver reads its prediction bodies through this.
+    """
+
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    ok = requests.Response()
+    ok.raw = _Raw()  # type: ignore[assignment]
+    ok.status_code = 200
+    ok.url = 'https://nim.test/v1/health/ready'
+
+    session = _Session()
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://nim.test/v1/health/ready')
+    )
+    ok.request = prepared
+
+    list(session.resolve_redirects(ok, prepared))
+
+    assert not ok.raw.closed, 'a non-redirect response was released'  # type: ignore[union-attr]
+    assert not ok._content_consumed
