@@ -232,7 +232,7 @@ enumerated by mermaid's own bundled license manifest.
   here explicitly; its text is at https://mozilla.org/MPL/2.0/.
   https://github.com/cure53/DOMPurify/blob/3.4.0/LICENSE
 
-  js-yaml 4.1.0
+  js-yaml 4.1.1
   License: MIT (full text below)
   https://github.com/nodeca/js-yaml
 
@@ -254,9 +254,9 @@ enumerated by mermaid's own bundled license manifest.
     - Runge-Kutta spring physics function generator, adapted from Framer.js,
       Copyright Koen Bok, License: MIT
 
-  The remaining components declared by mermaid 11.12.1 and bundled into the same
+  The remaining components declared by mermaid 11.15.0 and bundled into the same
   file, as enumerated from mermaid's own package manifest. Licenses are the ones
-  each project declares.
+  each project declares at the version mermaid pins.
 
     @braintree/sanitize-url            License: MIT
     @iconify/utils                     License: MIT
@@ -265,6 +265,8 @@ enumerated by mermaid's own bundled license manifest.
       https://github.com/chevrotain/chevrotain
       and langium, License: MIT
       https://github.com/eclipse-langium/langium
+    @upsetjs/venn.js                   License: MIT
+      https://github.com/upsetjs/venn.js
     cytoscape-cose-bilkent             License: MIT
     cytoscape-fcose                    License: MIT
     d3                                 License: ISC (full text below)
@@ -273,11 +275,19 @@ enumerated by mermaid's own bundled license manifest.
       https://github.com/d3/d3-sankey
     dagre-d3-es                        License: MIT
     dayjs                              License: MIT
+    es-toolkit                         License: MIT
+      https://github.com/toss/es-toolkit
     katex                              License: MIT
+    khroma                             License: MIT
+      khroma declares no license field in its package metadata, so a scanner
+      reports it as unknown. The license file at its v2.1.0 tag grants MIT, and
+      that is the source of this entry.
+      https://github.com/fabiospampinato/khroma/blob/v2.1.0/license
     marked                             License: MIT
     roughjs                            License: MIT
     stylis                             License: MIT
     ts-dedent                          License: MIT
+    uuid                               License: MIT
 
 MIT License, as it applies to the MIT-licensed components listed above:
 
