@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 
 
 def _default_adapter() -> KumoRelationalAdapter:
-    r"""The one adapter this client serves.
+    r"""The one adapter this client supports.
 
     Imported here rather than at module scope so that importing the client does
     not pull in the adapter module, which reaches for the relational driver.

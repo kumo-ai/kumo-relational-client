@@ -99,7 +99,7 @@ with RelationalClient(url='http://localhost:8000') as client:
     )
 ```
 
-`client.models()` names the model this client serves and
+`client.models()` names the model this client supports and
 `client.capabilities("kumo-relational")` describes it. Both read the client, not
 the endpoint: they answer without a connection, and a NIM serving something else
 surfaces as an error from the NIM on the first prediction. The transport pools connections and retries
@@ -122,6 +122,6 @@ surface, you reach it through `client.relational(graph)`.
 
 ## Serving another model
 
-There is no adapter registry: this client serves `kumo-relational` and nothing
+There is no adapter registry: this client supports `kumo-relational` and nothing
 else. A second model would mean a second adapter module and a branch in
 `RelationalClient`, which is a deliberate change rather than an extension point.

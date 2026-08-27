@@ -160,7 +160,7 @@ kumo-relational-client/
 
 ## Serving Another Model
 
-There is no registry and no adapter interface: the client serves
+There is no registry and no adapter interface: the client supports
 `kumo-relational` and dispatches to one adapter. A second model would mean a
 second adapter module and a branch in `RelationalClient` -- a deliberate change,
 not an extension point. A model needing a heavy runtime would ship it under

@@ -6,8 +6,8 @@ template-library-version: "1.0.0"
 
 # Quickstart for the NVIDIA Kumo Relational Client
 
-This quickstart shows you how to connect to a NIM and run a prediction with each
-model. A `RelationalClient` owns one connection to a NIM, and each model has its own
+This quickstart shows you how to connect to a NIM and run a prediction. A
+`RelationalClient` owns one connection to a NIM and reaches the model through a
 typed handle.
 
 ## Prerequisites

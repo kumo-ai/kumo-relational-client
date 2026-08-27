@@ -59,7 +59,7 @@ class UnknownModelError(RelationalError):
 
     def __init__(self, model: str, known: list[str]) -> None:
         super().__init__(
-            f'Unknown model {model!r}; this client serves: {sorted(known)}',
+            f'Unknown model {model!r}; this client supports: {sorted(known)}',
             code='UNKNOWN_MODEL',
             details={'model': model, 'known_models': sorted(known)},
         )

@@ -25,8 +25,8 @@
   `registry=` argument to `RelationalClient` are gone. They existed to choose
   between a tabular and a relational model; with one model they were an
   interface with a single implementation. The client now holds one adapter.
-  `models()` and `capabilities()` are unchanged from a caller's side and still
-  need no live endpoint.
+  `models()` and `capabilities()` remain, still answer without a live endpoint,
+  and now describe the one model: `models()` reports `['kumo-relational']`.
 - **`Transport.predict`, `create_session`, `session_predict`, `delete_session`
   and their helpers.** No source path called them: predictions and sessions go
   through the driver's own connection, and the driver owns session lifecycle.

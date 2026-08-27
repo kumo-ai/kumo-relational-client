@@ -124,15 +124,14 @@ class _Session(requests.Session):
 
     Redirects are still followed, and their bodies are discarded unread rather
     than consumed, so a redirect chain cannot be used to make this layer read an
-    unbounded response. This covers the credential only. A
-    ``307``/``308`` therefore re-sends the request *body* -- the caller's whole
-    context -- to the redirect target, including
-    across an ``https`` to ``http`` downgrade, which ``_validate_url`` never
-    sees because it runs at construction against the configured URL. That is
-    an accepted trade: refusing redirects outright breaks legitimate ``308``
-    normalisation, and the endpoint being redirected *from* was already trusted
-    with the same payload. A caller who cannot accept it should point the
-    client at a URL that does not redirect.
+    unbounded response.
+
+    The only request this session carries is ``GET /v1/health/ready``, which has
+    no body to re-send: predictions leave through the driver's own session,
+    which keeps its own copy of this guard. What a redirect can still do here is
+    move the readiness check to another host, including across an ``https`` to
+    ``http`` downgrade that ``_validate_url`` never sees, because it runs at
+    construction against the configured URL. The credential does not follow.
     """
 
     @staticmethod

@@ -441,7 +441,8 @@ def test_every_redirect_hop_is_released_not_just_the_first() -> None:
 def test_a_response_that_is_not_a_redirect_is_left_alone() -> None:
     r"""``Session.send`` runs the redirect resolver over every response, so
     releasing without checking closes the body of a successful one before its
-    caller reads it. The driver reads its prediction bodies through this.
+    caller reads it. The driver's copy of this guard sits on the path that does
+    read prediction bodies, where the same mistake would lose them.
     """
 
     class _Raw:
