@@ -22,7 +22,7 @@ def test_the_vendored_examples_record_where_they_came_from(
 ) -> None:
     r"""A copy without a source is a copy nobody can check, and these exist to
     be checked against the contract they were taken from."""
-    assert provenance['source_repository'].endswith('structured-data-api.git')
+    assert provenance['source_repository'] == 'structured-data-api'
     assert len(provenance['source_revision']) == 40
     assert provenance['source_path'] == 'examples'
 

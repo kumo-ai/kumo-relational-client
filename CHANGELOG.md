@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+
+- The generated TFM bindings now carry a `PROVENANCE.json` recording their own
+  SHA-256 alongside the contract revision and spec hash they were built from,
+  and a test asserts it. The drift tests need a checkout of the contract, which
+  only a maintainer has, so they skip everywhere else; this catches the failure
+  that does not need the contract to detect, which is the generated file being
+  edited by hand rather than regenerated. The generator writes the record, so
+  regenerating moves both together.
+
 ### Changed
 
 - **All three distributions now carry the Kumo name.** `nemotron-relational`
@@ -10,6 +20,9 @@
   `kumo-relational-client`. Import packages follow: `kumo_relational_engine`
   and `kumo_connectors`. `NemotronRelational` and `NemotronRelationalError`
   become `KumoRelational` and `KumoRelationalError`.
+- The vendored contract examples record their source as `structured-data-api`
+  rather than an internal URL that would be unreachable for anyone reading
+  this repository.
 - The engine's internal column sentinels move from `__nemotron_*` to
   `__kumo_*`. These name columns the request declares by name, so the NIM reads
   them as opaque identifiers; the rename was verified against a live NIM.

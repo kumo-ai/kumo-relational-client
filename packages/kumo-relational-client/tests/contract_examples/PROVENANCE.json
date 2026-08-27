@@ -7,6 +7,6 @@
     "kumo-relational/session_prediction_kumo_relational_binary_classification.json": "1608633888302dfce01c9f6a8d0764b41f7ae52c49bc7aea4e2bab1351aedcee"
   },
   "source_path": "examples",
-  "source_repository": "https://gitlab-master.nvidia.com/kumo-tfm-nims/structured-data-api.git",
+  "source_repository": "structured-data-api",
   "source_revision": "9ca10eeef619d2afd3aec3f6bbab3ce72196a61a"
 }

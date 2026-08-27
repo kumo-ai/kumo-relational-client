@@ -102,6 +102,7 @@ def main() -> int:
 
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(code)
+    _write_provenance(output, code, args.spec)
     return 0
 
 
@@ -405,6 +406,48 @@ def _constant_lines(
                 lines.append(declaration)
     lines.extend(['', ''])
     return lines
+
+
+def _write_provenance(output: Path, code: str, spec_source: str) -> None:
+    r"""Record what was generated, beside the generated file.
+
+    The drift tests need a checkout of the contract, which most environments do
+    not have. This record lets those environments still detect the failure that
+    does not need it: the generated file edited by hand rather than
+    regenerated. It moves with the file precisely because it is written here.
+    """
+    import json
+
+    stamped = re.search(r'# Source SHA256: ([0-9a-f]{64})', code)
+    record = {
+        'generated_file': output.name,
+        'generated_sha256': hashlib.sha256(code.encode()).hexdigest(),
+        'generator': 'scripts/generate_tfm_api.py',
+        'source_path': Path(spec_source).name,
+        'source_repository': 'structured-data-api',
+        'source_revision': _spec_revision(spec_source),
+        'source_sha256': stamped.group(1) if stamped else '',
+    }
+    (output.parent / 'PROVENANCE.json').write_text(
+        json.dumps(record, indent=2, sort_keys=True) + '\n'
+    )
+
+
+def _spec_revision(spec_source: str) -> str:
+    r"""The contract's git revision, when the spec came from a checkout."""
+    import subprocess
+
+    path = Path(spec_source)
+    if not path.exists():
+        return ''
+    try:
+        return subprocess.check_output(
+            ['git', '-C', str(path.parent), 'rev-parse', 'HEAD'],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (subprocess.CalledProcessError, OSError):
+        return ''
 
 
 def _sorted_dunder_all(names: list[str]) -> list[str]:
