@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Removed
+
+- **The multi-model dispatch layer.** `ModelAdapter`, `AdapterRegistry` and the
+  `registry=` argument to `RelationalClient` are gone. They existed to choose
+  between a tabular and a relational model; with one model they were an
+  interface with a single implementation. The client now holds one adapter.
+  `models()` and `capabilities()` are unchanged from a caller's side and still
+  need no live endpoint.
+- **`Transport.predict`, `create_session`, `session_predict`, `delete_session`
+  and their helpers.** No source path called them: predictions and sessions go
+  through the driver's own connection, and the driver owns session lifecycle.
+  The client's transport now does what it actually did -- carry configuration,
+  report readiness, and close. `ServingTarget.predict` goes for the same reason.
+- `format_invalid_params`, which only the removed error path used. The driver
+  renders these and the adapter passes them through as error details.
+
 ### Added
 
 - The generated TFM bindings now carry a `PROVENANCE.json` recording their own

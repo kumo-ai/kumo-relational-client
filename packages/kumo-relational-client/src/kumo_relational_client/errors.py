@@ -16,47 +16,11 @@ Messages are written for people and will change; codes will not.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Any
 
 #: Entries rendered from an RFC-9457 ``invalid_params`` list before the rest
 #: are summarised as a count. A rejected batch can name thousands of rows.
 MAX_INVALID_PARAMS = 5
-
-
-def format_invalid_params(params: Sequence[Any] | None) -> str:
-    r"""Render a NIM's per-field validation diagnosis into a message suffix.
-
-    A validation failure answers with RFC-9457 ``invalid_params``, naming the
-    exact table, row and column it rejected, while the top-level ``detail`` is
-    often only "Request validation failed." Dropping the list leaves the caller
-    with nothing to act on.
-
-    Returns the empty string when there is nothing to render, so callers can
-    concatenate unconditionally.
-
-    Note:
-        ``kumo_relational_engine.rfm.rfm`` carries an equivalent renderer for the KumoRelational
-        path. The two cannot share one: ``kumo_relational_engine`` does not depend on
-        ``kumo_relational_client``, and the package both do depend on is a SQL-connector
-        package with no HTTP surface. Keep the rendered shape in step.
-    """
-    if not isinstance(params, (list, tuple)):
-        return ''
-    entries = []
-    for param in params[:MAX_INVALID_PARAMS]:
-        if not isinstance(param, dict):
-            continue
-        name, reason = param.get('name'), param.get('reason')
-        if name and reason:
-            entries.append(f'{name}: {reason}')
-        elif name or reason:
-            entries.append(str(name or reason))
-    if not entries:
-        return ''
-    omitted = len(params) - len(entries)
-    more = f' (and {omitted} more)' if omitted > 0 else ''
-    return ' ' + '; '.join(entries) + more
 
 
 class RelationalError(Exception):

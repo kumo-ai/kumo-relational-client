@@ -64,26 +64,19 @@ def test_client_repr_does_not_render_a_credential_carried_in_the_url():
 def test_transport_errors_do_not_render_a_credential_carried_in_the_url():
     transport = Transport(_URL, timeout=1.0, max_retries=0)
     with requests_mock.Mocker() as mock:
-        mock.post(
-            f'{_URL}/v1/predictions',
+        mock.get(
+            f'{_URL}/v1/health/ready',
             # `requests` quotes the requested URL back in its own message, so
             # the credential reaches the caller through the driver exception
             # as well as through the URL this layer names.
-            exc=requests.ConnectTimeout(f'timed out for {_URL}/v1/predictions'),
+            exc=requests.ConnectTimeout(
+                f'timed out for {_URL}/v1/health/ready'
+            ),
         )
         with pytest.raises(RelationalError) as caught:
-            transport.predict({'model': 'kumo-relational'})
+            transport.health_ready()
     assert _SECRET not in str(caught.value)
     assert 'nim.example' in str(caught.value)
-
-
-def test_a_non_json_body_is_reported_without_the_credential():
-    transport = Transport(_URL, timeout=1.0, max_retries=0)
-    with requests_mock.Mocker() as mock:
-        mock.post(f'{_URL}/v1/predictions', text='not json')
-        with pytest.raises(RelationalError) as caught:
-            transport.predict({'model': 'kumo-relational'})
-    assert _SECRET not in str(caught.value)
 
 
 def test_an_unusable_url_is_reported_without_the_credential():

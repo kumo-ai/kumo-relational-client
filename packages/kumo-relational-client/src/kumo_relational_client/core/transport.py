@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import json
 import math
 import re
 import warnings
@@ -16,13 +15,9 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from kumo_relational_client.errors import (
-    NimRequestError,
     RelationalError,
-    format_invalid_params,
 )
 
-_PREDICTIONS_PATH = '/v1/predictions'
-_SESSIONS_PATH = '/v1/sessions'
 _HEALTH_READY_PATH = '/v1/health/ready'
 _DEFAULT_TIMEOUT_SECONDS = 60.0
 _DEFAULT_MAX_RETRIES = 3
@@ -243,25 +238,6 @@ def _snippet(text: str) -> str:
     return f'{text[:_MAX_BODY_SNIPPET]}... [truncated, {len(text)} chars total]'
 
 
-def _read_capped(response: requests.Response, url: str) -> bytes:
-    r"""Reads a streamed response body, refusing anything past the cap.
-
-    ``requests`` inflates ``Content-Encoding: gzip`` with no ratio limit, so
-    an unbounded read lets a small compressed body expand into hundreds of
-    megabytes of client memory before anything is parsed.
-    """
-    body = bytearray()
-    for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
-        if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
-            raise RelationalError(
-                f'Response body from {redact_url(url)} exceeds the '
-                f'{_MAX_RESPONSE_BYTES} byte limit',
-                code='TRANSPORT_ERROR',
-            )
-        body.extend(chunk)
-    return bytes(body)
-
-
 def _path_segment(value: str) -> str:
     r"""Escapes a server-chosen id before it is spliced into a URL path, so a
     hostile or malformed ``session_id`` cannot redirect the call to another
@@ -296,15 +272,6 @@ def _build_session(
     adapter = HTTPAdapter(max_retries=_build_retry(max_retries, backoff_factor))
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-    session.mount(
-        url + _SESSIONS_PATH,
-        HTTPAdapter(
-            max_retries=_build_retry(
-                max_retries, backoff_factor, retry_post=False
-            )
-        ),
-    )
-    session.mount(url + _SESSIONS_PATH + '/', adapter)
     return session
 
 
@@ -393,121 +360,3 @@ class Transport:
                 f'{scrub_userinfo(str(error))}',
                 code='TRANSPORT_ERROR',
             ) from error
-
-    def predict(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._post(_PREDICTIONS_PATH, payload)
-
-    def create_session(self, payload: dict[str, Any]) -> dict[str, Any]:
-        r"""Pins a context server-side; ``payload`` carries the context-only
-        sections of a prediction request.
-        """
-        return self._post(_SESSIONS_PATH, payload)
-
-    def session_predict(
-        self,
-        session_id: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        r"""Scores rows against a pinned context; ``payload`` carries only the
-        per-call sections.
-        """
-        return self._post(
-            f'{_SESSIONS_PATH}/{_path_segment(session_id)}/predictions', payload
-        )
-
-    def delete_session(self, session_id: str) -> None:
-        r"""Releases a pinned context. Idempotent server-side: the NIM answers
-        204 whether or not the session is still there.
-        """
-        self._require_open()
-        url = f'{self._url}{_SESSIONS_PATH}/{_path_segment(session_id)}'
-        try:
-            with self._session.delete(
-                url,
-                timeout=min(self._timeout, _DELETE_TIMEOUT_SECONDS),
-                verify=self._verify_ssl,
-                stream=True,
-            ) as response:
-                status_code = response.status_code
-                content = _read_capped(response, url)
-        except requests.RequestException as error:
-            raise RelationalError(
-                f'Request to {redact_url(url)} failed: '
-                f'{scrub_userinfo(str(error))}',
-                code='TRANSPORT_ERROR',
-            ) from error
-        if status_code >= 400:
-            raise _to_nim_error(status_code, content)
-
-    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self._require_open()
-        url = self._url + path
-        try:
-            with self._session.post(
-                url,
-                json=payload,
-                timeout=self._timeout,
-                verify=self._verify_ssl,
-                stream=True,
-            ) as response:
-                status_code = response.status_code
-                content = _read_capped(response, url)
-        except requests.RequestException as error:
-            raise RelationalError(
-                f'Request to {redact_url(url)} failed: '
-                f'{scrub_userinfo(str(error))}',
-                code='TRANSPORT_ERROR',
-            ) from error
-        if status_code >= 400:
-            raise _to_nim_error(status_code, content)
-        try:
-            # A deeply nested body raises RecursionError, which is a
-            # RuntimeError and would otherwise escape the RelationalError contract.
-            body = json.loads(content)
-        except (ValueError, RecursionError) as error:
-            raise RelationalError(
-                f'Invalid JSON response from {redact_url(url)}',
-                code='TRANSPORT_ERROR',
-            ) from error
-        if not isinstance(body, dict):
-            raise RelationalError(
-                f'Expected a JSON object from {redact_url(url)}, got '
-                f'{type(body).__name__}',
-                code='TRANSPORT_ERROR',
-            )
-        return body
-
-
-def _to_nim_error(status_code: int, content: bytes) -> NimRequestError:
-    try:
-        body = json.loads(content)
-    except (ValueError, RecursionError):
-        body = {}
-    if not isinstance(body, dict):
-        body = {}
-    code = body.get('code')
-    reported = (
-        body.get('detail')
-        or body.get('title')
-        or content.decode('utf-8', 'replace')
-    )
-    message = (
-        _snippet(str(reported))
-        if reported
-        else (f'NIM request failed with status {status_code}')
-    )
-    # A validation failure's top-level detail is often only "Request validation
-    # failed."; the per-field diagnosis is in invalid_params, so render it into
-    # the message rather than leaving it for the caller to dig out of details.
-    message += format_invalid_params(body.get('invalid_params'))
-    details = {
-        key: value
-        for key, value in body.items()
-        if key not in ('code', 'detail', 'title', 'type', 'status', 'instance')
-    }
-    return NimRequestError(
-        status_code,
-        code=code,
-        message=message,
-        details=details,
-    )

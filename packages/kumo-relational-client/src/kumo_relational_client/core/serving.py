@@ -100,14 +100,6 @@ class ServingTarget:
             code='UNSUPPORTED_FEATURE',
         )
 
-    def predict(self, payload: dict[str, Any]) -> dict[str, Any]:
-        raise RelationalError(
-            f'the model served at {self.endpoint!r} does not support '
-            'serving-mode invocation through the generic transport; only '
-            'Kumo Relational does',
-            code='UNSUPPORTED_FEATURE',
-        )
-
 
 @dataclass(frozen=True)
 class DatabricksServingTarget(ServingTarget):

@@ -258,17 +258,12 @@ def test_both_construction_paths_populate_the_same_fields() -> None:
         pytest.param(
             lambda c: c.health_ready(), 'UNSUPPORTED_FEATURE', id='health_ready'
         ),
-        pytest.param(
-            lambda c: DatabricksServingTarget('kumo-relational').predict({}),
-            'UNSUPPORTED_FEATURE',
-            id='predict',
-        ),
     ],
 )
 def test_a_serving_target_refuses_what_does_not_apply(refuse, code) -> None:
-    """A serving endpoint has no URL, no readiness route, and no generic
-    prediction path. Each member exists only to say so, naming the endpoint,
-    rather than returning a plausible-looking value."""
+    """A serving endpoint has no URL and no readiness route. Each member
+    exists only to say so, naming the endpoint, rather than returning a
+    plausible-looking value."""
     from kumo_relational_client import RelationalClient
 
     with pytest.raises(RelationalError) as caught:

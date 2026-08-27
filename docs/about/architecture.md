@@ -15,8 +15,7 @@ is a peer adapter, while a model's optional driver holds its client-side compute
 ```mermaid
 flowchart TD
     app["Your application"] --> client["RelationalClient (kumo-relational-client)"]
-    client --> registry["AdapterRegistry"]
-    registry --> rfm["Kumo Relational adapter"]
+    client --> rfm["Kumo Relational adapter"]
     rfm --> driver["kumo_relational_engine driver: graph, sampler, PQL"]
     client --> transport["Transport (HTTP)"]
     driver --> nimclient["NimClient (HTTP)"]
@@ -32,8 +31,8 @@ flowchart TD
 
 ### Client Layer
 
-`RelationalClient` owns the endpoint address and an `AdapterRegistry`. Because each
-client owns its own registry and configuration, several clients can target
+`RelationalClient` owns the endpoint address and one adapter. Because each
+client owns its own adapter and configuration, several clients can target
 different endpoints or tenants in the same process, concurrently: every
 prediction is issued against the endpoint and credential of the client that
 started it.
@@ -55,14 +54,12 @@ configured it last. Drive the driver through `RelationalClient` only.
 
 ### Adapter Layer
 
-Every model is a peer module implementing the `ModelAdapter` interface and
-registered in the client's `AdapterRegistry`. An adapter advertises its
+The model is served by one adapter module. It advertises its
 capabilities, shapes an internal typed request (`KumoRelationalRequest`,
 `KumoRelationalTaskRequest`,
 built by the model handles, and not importable from `kumo_relational_client`) into the
 Universal TFM API envelope, and normalizes the NIM's response into a consistent
-pandas DataFrame. Adding a model means adding one adapter module, and the client
-core does not change.
+pandas DataFrame.
 
 ### Driver Layer
 
@@ -152,7 +149,7 @@ kumo-relational-client/
     │       ├── requests.py     #   the internal typed requests handles build
     │       ├── errors.py       #   the exception hierarchy
     │       ├── core/           #   HTTP transport, connectors, serving targets
-    │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
+    │       ├── base.py         #   ModelCapabilities + the result type
     │       ├── adapters/       #   one peer module per model
     │       │   └── relational.py #   relational (lazy-wraps the driver)
     │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
@@ -162,15 +159,14 @@ kumo-relational-client/
         └── src/kumo_relational_engine/
 ```
 
-## Adding a Model
+## Serving Another Model
 
-1. Add `packages/kumo-relational-client/src/kumo_relational_client/adapters/<model>.py`
-   implementing `ModelAdapter`, and register it in `_default_registry()` in
-   `client.py`. The core never changes.
-2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its
-   own distribution and add a `[<model>]` extra. The adapter lazy-imports the
-   driver so base installs stay light.
-3. A dependency-free model needs no driver and no extra.
+There is no registry and no adapter interface: the client serves
+`kumo-relational` and dispatches to one adapter. A second model would mean a
+second adapter module and a branch in `RelationalClient` -- a deliberate change,
+not an extension point. A model needing a heavy runtime would ship it under
+`packages/<driver>/` as its own distribution behind an extra, the way the
+relational driver does, so base installs stay light.
 
 ## Why the Relational Adapter Wraps the Driver
 

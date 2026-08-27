@@ -12,7 +12,7 @@ from kumo_relational_client import (
     RelationalClient,
     RelationalModel,
 )
-from kumo_relational_client.base import ModelAdapter, ModelCapabilities
+from kumo_relational_client.base import ModelCapabilities
 from kumo_relational_client.errors import RelationalError
 from kumo_relational_client.requests import (
     KumoRelationalRequest,
@@ -20,10 +20,16 @@ from kumo_relational_client.requests import (
 )
 
 
-class _CapturingAdapter(ModelAdapter):
+class _CapturingAdapter:
     """Records the request it receives and returns a fixed DataFrame, so a
     handle can be driven end-to-end through the real RelationalClient
-    dispatch without a live NIM."""
+    dispatch without a live NIM.
+
+    Stands in for the client's single adapter; it needs no base class, only the
+    attributes the client reads."""
+
+    def close(self):
+        return None
 
     def __init__(self, name, request_type, result):
         self.name = name
@@ -43,7 +49,7 @@ class _CapturingAdapter(ModelAdapter):
 
 def _client_with(adapter) -> RelationalClient:
     client = RelationalClient(url='http://nim.test')
-    client._register(adapter)
+    client._adapter = adapter
     return client
 
 

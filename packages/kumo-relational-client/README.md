@@ -121,11 +121,8 @@ driver (`Graph`, `LocalTable`, `Stype`, `Dtype`, `ExplainConfig`, ...); you
 never import the driver package directly. The model itself is not on that
 surface, you reach it through `client.relational(graph)`.
 
-## Adding a model
+## Serving another model
 
-Implement `ModelAdapter` in `kumo_relational_client/adapters/<model>.py` with a typed
-request, export it from `kumo_relational_client/adapters/__init__.py`, and add it to
-`kumo_relational_client.client._default_registry`. Out of tree, build an `AdapterRegistry`
-yourself and pass it as `RelationalClient(url, registry=...)`. Models needing a heavy
-runtime ship it as a separate driver distribution behind an extra; the adapter
-lazy-imports the driver so base installs stay light.
+There is no adapter registry: this client serves `kumo-relational` and nothing
+else. A second model would mean a second adapter module and a branch in
+`RelationalClient`, which is a deliberate change rather than an extension point.

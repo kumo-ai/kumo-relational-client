@@ -11,7 +11,6 @@ a local ``http.server`` instead.
 
 from __future__ import annotations
 
-import gzip
 import threading
 import time
 from collections.abc import Iterator
@@ -23,12 +22,11 @@ import pytest
 import urllib3.util.retry
 
 from kumo_relational_client.core.transport import (
-    _MAX_RESPONSE_BYTES,
     _RETRY_AFTER_MAX_SECONDS,
     Transport,
     _build_retry,
 )
-from kumo_relational_client.errors import NimRequestError, RelationalError
+from kumo_relational_client.errors import RelationalError
 
 _REFUSED_URL = 'http://127.0.0.1:1'
 _RETRY_AFTER_SECONDS = 3600
@@ -106,10 +104,8 @@ def test_retry_policy_retries_transient_status_on_a_real_socket():
         url,
     ):
         transport = Transport(url, max_retries=3, backoff_factor=0.0)
-        assert transport.predict({'model': 'kumo-relational'}) == {
-            'predictions': []
-        }
-    assert server.received == ['/v1/predictions'] * 3
+        assert transport.health_ready() is True
+    assert server.received == ['/v1/health/ready'] * 3
 
 
 def test_retry_after_header_is_capped(monkeypatch):
@@ -126,9 +122,7 @@ def test_retry_after_header_is_capped(monkeypatch):
         _Reply(status=503, headers={'Retry-After': str(_RETRY_AFTER_SECONDS)}),
         _Reply(),
     ) as (_, url):
-        Transport(url, max_retries=1, backoff_factor=0.0).predict(
-            {'model': 'kumo-relational'}
-        )
+        Transport(url, max_retries=1, backoff_factor=0.0).health_ready()
 
     assert slept == [
         _RETRY_AFTER_MAX_SECONDS
@@ -142,7 +136,7 @@ def test_timeout_bounds_a_slow_response():
         transport = Transport(url, timeout=0.5, max_retries=0)
         started = time.monotonic()
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-relational'})
+            transport.health_ready()
         elapsed = time.monotonic() - started
     assert excinfo.value.code == 'TRANSPORT_ERROR'
     assert elapsed < 4.0
@@ -155,132 +149,12 @@ def test_health_ready_wraps_unreachable_host():
     assert excinfo.value.code == 'TRANSPORT_ERROR'
 
 
-def test_gzip_bomb_is_refused_instead_of_inflated():
-    r"""A small compressed body that inflates past the cap must not be parsed.
-
-    Without the cap ``requests`` inflates this to ``_MAX_RESPONSE_BYTES + 1``
-    bytes of valid JSON and ``predict`` returns it.
-    """
-    bomb = gzip.compress(
-        _predictions_body(_MAX_RESPONSE_BYTES + 1), compresslevel=1
-    )
-    assert len(bomb) < 1024 * 1024
-
-    with _serve(_Reply(raw=bomb, headers={'Content-Encoding': 'gzip'})) as (
-        _,
-        url,
-    ):
-        transport = Transport(url, max_retries=0)
-        with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-relational'})
-
-    assert excinfo.value.code == 'TRANSPORT_ERROR'
-    assert 'exceeds' in str(excinfo.value)
-
-
-@pytest.mark.parametrize('encode', [False, True])
-def test_large_legitimate_response_is_returned_intact(encode):
-    r"""The cap must be generous: an 8 MB prediction body still parses."""
-    body = _predictions_body(8 * 1024 * 1024)
-    headers = {'Content-Encoding': 'gzip'} if encode else {}
-    raw = gzip.compress(body, compresslevel=1) if encode else body
-
-    with _serve(_Reply(raw=raw, headers=headers)) as (_, url):
-        transport = Transport(url, max_retries=0)
-        result = transport.predict({'model': 'kumo-relational'})
-
-    assert len(body) > 8 * 1024 * 1024
-    assert len(result['predictions']) == body.count(b',') + 1
-
-
-def test_oversized_error_body_is_refused_before_it_becomes_a_message():
-    bomb = gzip.compress(b'x' * (_MAX_RESPONSE_BYTES + 1), compresslevel=1)
-
-    with _serve(
-        _Reply(status=500, raw=bomb, headers={'Content-Encoding': 'gzip'})
-    ) as (_, url):
-        transport = Transport(url, max_retries=0)
-        with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-relational'})
-
-    assert not isinstance(excinfo.value, NimRequestError)
-    assert excinfo.value.code == 'TRANSPORT_ERROR'
-
-
-def test_deeply_nested_json_stays_inside_the_error_contract():
-    r"""``json`` raises ``RecursionError`` -- a ``RuntimeError``, not a
-    ``ValueError`` -- so ``except RelationalError`` used to miss it entirely.
-    """
-    depth = 200_000
-    nested = b'[' * depth + b']' * depth
-
-    with _serve(_Reply(raw=nested)) as (_, url):
-        transport = Transport(url, max_retries=0)
-        with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-relational'})
-
-    assert excinfo.value.code == 'TRANSPORT_ERROR'
-
-
 def test_closed_transport_stops_issuing_requests():
     with _serve(_Reply()) as (server, url):
         transport = Transport(url, max_retries=0)
-        transport.predict({'model': 'kumo-relational'})
+        transport.health_ready()
         transport.close()
         with pytest.raises(RelationalError) as excinfo:
-            transport.predict({'model': 'kumo-relational'})
-        with pytest.raises(RelationalError):
             transport.health_ready()
     assert excinfo.value.code == 'INVALID_CONFIGURATION'
-    assert server.received == ['/v1/predictions']
-
-
-def test_a_slow_session_create_is_not_retried():
-    """Creating a session fits and pins the context before the response is
-    written, so a read timeout that hides the answer from the client leaves the
-    session behind on the NIM. Retrying makes one such orphan per attempt, and
-    the client keeps at most the last id, so the earlier ones can never be
-    released. The server-side request log is the ground truth here: the client
-    genuinely cannot see the sessions it stranded.
-    """
-    with _serve(
-        _Reply(delay=2.0),
-        _Reply(delay=2.0),
-        _Reply(body='{"session_id": "s2"}'),
-    ) as (server, url):
-        transport = Transport(
-            url, timeout=0.5, max_retries=2, backoff_factor=0.0
-        )
-        with pytest.raises(RelationalError) as excinfo:
-            transport.create_session({'model': 'kumo-relational'})
-
-    assert excinfo.value.code == 'TRANSPORT_ERROR'
-    assert server.received == ['/v1/sessions']
-
-
-def test_the_replayable_session_routes_keep_the_retry_policy():
-    r"""Only the create is held out. Scoring against a pinned context is
-    replayable, and must not lose its resilience to the narrower policy mounted
-    on the prefix above it -- nor may the plain prediction route, which shares
-    no prefix with either.
-    """
-    with _serve(_Reply(status=503), _Reply()) as (server, url):
-        transport = Transport(url, max_retries=2, backoff_factor=0.0)
-        transport.session_predict('s1', {'predict': {}})
-    assert server.received == ['/v1/sessions/s1/predictions'] * 2
-
-    with _serve(_Reply(status=503), _Reply()) as (server, url):
-        transport = Transport(url, max_retries=2, backoff_factor=0.0)
-        transport.predict({'model': 'kumo-relational'})
-    assert server.received == ['/v1/predictions'] * 2
-
-
-def test_session_create_still_retries_a_connection_that_never_established():
-    r"""Holding ``POST`` out of the retryable methods switches off the read and
-    status retries but not the connect ones, which is the intent: a request
-    that never reached the server cannot have pinned anything.
-    """
-    policy = _build_retry(3, 0.0, retry_post=False)
-    assert policy.connect == 3
-    assert not policy._is_method_retryable('POST')
-    assert policy._is_method_retryable('GET')
+    assert server.received == ['/v1/health/ready']

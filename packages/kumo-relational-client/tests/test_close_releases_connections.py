@@ -16,14 +16,10 @@ from __future__ import annotations
 import pytest
 
 from kumo_relational_client import RelationalClient
-from kumo_relational_client.base import (
-    AdapterRegistry,
-    ModelAdapter,
-    ModelCapabilities,
-)
+from kumo_relational_client.base import ModelCapabilities
 
 
-class _Recording(ModelAdapter):
+class _Recording:
     r"""An adapter that records its close, and optionally fails it."""
 
     request_type = ()
@@ -47,20 +43,10 @@ class _Recording(ModelAdapter):
             raise self._error
 
 
-def test_default_adapter_close_does_nothing() -> None:
-    r"""An adapter with no pool of its own must not have to implement this."""
-
-    class Bare(_Recording):
-        pass
-
-    adapter = Bare('bare')
-    ModelAdapter.close(adapter)
-
-
 def test_closing_a_client_closes_its_adapters() -> None:
     client = RelationalClient(url='http://nim.test')
     adapter = _Recording('recording')
-    client._register(adapter)
+    client._adapter = adapter
 
     client.close()
 
@@ -72,25 +58,12 @@ def test_closing_a_client_still_closes_the_transport_if_an_adapter_fails() -> (
 ):
     r"""The transport is the pool that cannot be rebuilt, so it wins."""
     client = RelationalClient(url='http://nim.test')
-    client._register(_Recording('broken', error=RuntimeError('no')))
+    client._adapter = _Recording('broken', error=RuntimeError('no'))
 
     with pytest.raises(RuntimeError, match='no'):
         client.close()
 
     assert client._transport._closed
-
-
-def test_one_failing_adapter_does_not_strand_the_others() -> None:
-    registry = AdapterRegistry()
-    first = _Recording('a', error=RuntimeError('first'))
-    second = _Recording('b')
-    registry.register(first)
-    registry.register(second)
-
-    with pytest.raises(RuntimeError, match='first'):
-        registry.close()
-
-    assert second.closed == 1
 
 
 def test_two_clients_close_independently() -> None:
@@ -99,8 +72,8 @@ def test_two_clients_close_independently() -> None:
         RelationalClient(url='http://b.test'),
     )
     a_adapter, b_adapter = _Recording('x'), _Recording('x')
-    a._register(a_adapter)
-    b._register(b_adapter)
+    a._adapter = a_adapter
+    b._adapter = b_adapter
 
     a.close()
 
