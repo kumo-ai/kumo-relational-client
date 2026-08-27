@@ -84,11 +84,12 @@
   the client's own `RelationalClient` were both named `RelationalClient`, so a
   module importing both silently bound whichever came last.
 
-- **The models are now addressed as `kumo-relational` and `kumo-tabular`.** The
-  previous ids `nemotron-relational` and `nemotron-tabular` are not accepted. A
-  request naming an old id is rejected by the NIM, so this is a breaking change
-  for any caller that passes a model id explicitly; `client.relational(...)` and
-  `client.tabular(...)` pick the right id on their own and need no edit.
+- **The model is now addressed as `kumo-relational`.** The previous id
+  `nemotron-relational` is not accepted. A request naming the old id is rejected
+  by the NIM, so this is a breaking change for any caller that passes a model id
+  explicitly; `client.relational(...)` picks the right id on its own and needs no
+  edit. The contract also renamed `nemotron-tabular` to `kumo-tabular`, which the
+  generated bindings still carry even though this client no longer serves it.
 - The vendored contract examples and the generated TFM bindings were re-synced
   from the canonical contract, which carries the same rename.
 - The bindings generator now emits output that already satisfies the repo's lint

@@ -4,10 +4,8 @@
 
 r"""The error surface a caller can rely on.
 
-Two things are being pinned: that ``except RelationalError`` catches everything the
-client raises and each subclass is importable to branch on, and that a NIM's
-per-field validation diagnosis reaches the message instead of being buried in
-``details``.
+What is pinned here: ``except RelationalError`` catches everything this package
+raises, and each subclass is importable so a caller can branch on it.
 """
 
 from __future__ import annotations
@@ -70,6 +68,3 @@ def test_status_code_is_reachable_for_branching() -> None:
     )
     assert error.status_code == 429
     assert str(error) == '[429 RATE_LIMIT_EXCEEDED] slow down'
-
-
-# --- invalid_params rendering ----------------------------------------------

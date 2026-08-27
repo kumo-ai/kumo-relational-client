@@ -6,8 +6,8 @@ template-library-version: "1.0.0"
 
 # NVIDIA Kumo Relational Client Architecture
 
-The NVIDIA Kumo Relational Client separates a small, universal client from the heavy runtimes
-that individual models need. The client is symmetric across models, since every model
+The NVIDIA Kumo Relational Client separates a small, universal client from the
+heavy runtime the model needs. The client stays thin because the model
 is a peer adapter, while a model's optional driver holds its client-side compute.
 
 ## High-Level Architecture Diagram
@@ -143,8 +143,8 @@ kumo-relational-client/
 └── packages/
     ├── kumo-relational-client/            # the client (pure python, universal wheel)
     │   └── src/kumo_relational_client/
-    │       ├── client.py       #   RelationalClient: the entry point and its registry
-    │       ├── models.py       #   the per-model handles the client hands back
+    │       ├── client.py       #   RelationalClient: the entry point
+    │       ├── models.py       #   the handles the client hands back
     │       ├── requests.py     #   the internal typed requests handles build
     │       ├── errors.py       #   the exception hierarchy
     │       ├── core/           #   HTTP transport, connectors, serving targets

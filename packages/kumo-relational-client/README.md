@@ -100,15 +100,14 @@ with RelationalClient(url='http://localhost:8000') as client:
 ```
 
 `client.models()` names the model this client serves and
-`client.capabilities("kumo-relational")` describes one of them. Both read the
-client-side registry, not the endpoint: a NIM serving only one of these models
-still reports both, and a mismatch surfaces as an error from the NIM on the
-first prediction. The transport pools connections and retries
+`client.capabilities("kumo-relational")` describes it. Both read the client, not
+the endpoint: they answer without a connection, and a NIM serving something else
+surfaces as an error from the NIM on the first prediction. The transport pools connections and retries
 transient failures (429/5xx) with backoff; tune it per client with
 `RelationalClient(url, timeout=30, max_retries=3)`. `timeout` bounds each attempt
 rather than the call as a whole, so a retried call can take up to
 `(max_retries + 1) * timeout` plus backoff. Each client holds its own transport
-and registry, so multiple clients can target different endpoints at once,
+and adapter, so multiple clients can target different endpoints at once,
 including concurrently: a prediction always goes to the endpoint and credential
 of the client that started it. The Kumo Relational driver underneath still keeps a
 process-wide configuration that each prediction reconfigures, so drive it

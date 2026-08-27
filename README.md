@@ -158,8 +158,8 @@ except RelationalError as exc:
 Full documentation is under [`docs/`](docs/index.md):
 
 - [Overview](docs/about/overview.md), what the client is and when to use it
-- [Architecture](docs/about/architecture.md), how the client, adapters, drivers
-  and connectors fit together, and how to add a model
+- [Architecture](docs/about/architecture.md), how the client, adapter, driver
+  and connectors fit together
 - [Prerequisites](docs/get-started/prerequisites.md) and
   [Installation](docs/get-started/installation.md)
 - [Quickstart](docs/get-started/quickstart.md)

@@ -53,7 +53,7 @@ the relevant subgraph and returns predictions for the entities you name.
 ## Core Concepts
 
 - **Universal TFM API.** The shared HTTP contract every structured-data NIM implements. The
-  client builds requests against this contract so one client serves both models.
+  client builds requests against this contract.
 - **Model adapter.** A per-model module that shapes a typed request into the
   wire envelope and normalizes the response into a pandas DataFrame.
 - **Driver.** A model's heavy client-side runtime. Kumo Relational ships one (graph

@@ -69,11 +69,11 @@ To use your own tables instead, pass DataFrames to
 aggregation window your data can support: a query over `0, 90, days` needs at
 least 90 days of history before the anchor time, or the request is rejected.
 
-### Check Which Models the Client Can Serve
+### Check What the Client Can Serve
 
 Both describe the client itself, not the endpoint it points at.
 Neither contacts the NIM, so they answer before you have one running, and a NIM
-serving only one of these models still reports both.
+serving something else surfaces on the first prediction rather than here.
 
 ```python
 from kumo_relational_client import RelationalClient
