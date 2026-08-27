@@ -11,7 +11,6 @@ import kumo_relational_engine
 from kumo_relational_engine.client.transport import RFMTransport
 
 from .base import Table
-from .backend.local import LocalTable
 from .diagnostics import (
     GraphSanitizationReport,
     SanitizationStatus,
@@ -261,3 +260,20 @@ __all__ = [
     'init_databricks_serving',
     'init_snowflake_serving',
 ]
+
+
+def __getattr__(name: str) -> object:
+    r"""Resolve ``LocalTable`` only when something asks for it.
+
+    Importing it here would pull in ``backend.local``, which requires the
+    compiled neighbour sampler at import time. That made every path through
+    this package depend on the extension, including the Databricks and
+    Snowflake serving paths, which run inference on the endpoint and never
+    sample locally. Deferring the import keeps the requirement where the
+    requirement actually is.
+    """
+    if name == 'LocalTable':
+        from .backend.local import LocalTable
+
+        return LocalTable
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')

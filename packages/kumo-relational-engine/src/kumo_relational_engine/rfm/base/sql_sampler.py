@@ -28,6 +28,39 @@ if TYPE_CHECKING:
 EdgeType = tuple[str, str, str]
 
 
+# Every SQL backend joins against a temporary key table whose columns carry
+# this prefix. A source column sharing one of those names makes the generated
+# join ambiguous, so the prefix is reserved.
+RESERVED_COLUMN_PREFIX = '__kumo_'
+
+
+def _reject_reserved_columns(graph: 'Graph') -> None:
+    r"""Refuse a source column that would collide with an internal one.
+
+    The generated joins select the temporary key table's ``__kumo_*`` columns
+    beside the caller's own projections. A source column of the same name makes
+    the reference ambiguous, which the warehouse reports as a binder error
+    naming only the column -- and nothing in that message points back here.
+    Saying so up front, with the table and column, costs one pass over the
+    schema.
+    """
+    collisions = [
+        f'{table.name}.{column.name}'
+        for table in graph.tables.values()
+        for column in table.columns
+        if column.name.startswith(RESERVED_COLUMN_PREFIX)
+    ]
+    if collisions:
+        raise ValueError(
+            f'{", ".join(sorted(collisions))} '
+            f'{"use names" if len(collisions) > 1 else "uses a name"} '
+            f'reserved by the SQL backends: a column may not start with '
+            f'{RESERVED_COLUMN_PREFIX!r}, because the generated joins already '
+            f'select columns of that name and the reference would be '
+            f'ambiguous. Rename the column, or project it under another name.'
+        )
+
+
 class SQLSampler(Sampler):
     # The character used to quote SQL identifiers. Backends whose dialect does
     # not use double quotes (*e.g.*, Databricks uses backticks) override this:
@@ -39,6 +72,8 @@ class SQLSampler(Sampler):
         verbose: bool | ProgressLogger = True,
     ) -> None:
         super().__init__(graph=graph, verbose=verbose)
+
+        _reject_reserved_columns(graph)
 
         self._warned_random_seed = False
 

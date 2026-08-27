@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import logging
 import math
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -71,6 +72,7 @@ class RFMAPI:
             entity_ids=entity_ids,
             instance_ids=instance_ids,
             anchor_times=anchor_times,
+            requested_model=request.get('model'),
         )
 
     def create_session(self, request: Mapping[str, Any]) -> str:
@@ -154,6 +156,7 @@ class RFMAPI:
         entity_ids: Sequence[Any],
         instance_ids: Sequence[Any],
         anchor_times: Sequence[Any] | None,
+        requested_model: str | None = None,
     ) -> RFMPredictResponse:
         # The identity mappings describe the request we sent, so a mismatch
         # among them is a caller-side contract error and must not be reported
@@ -162,6 +165,7 @@ class RFMAPI:
         _validate_identity_mappings(entity_ids, instance_ids, anchor_times)
         try:
             prediction_response = PredictionResponse.from_dict(response.json())
+            _warn_on_unexpected_model(prediction_response, requested_model)
             return _prediction_response_to_rfm(
                 prediction_response,
                 entity_ids=entity_ids,
@@ -284,6 +288,29 @@ def _prediction_item_to_ranking_rows(
             row['EXPLANATION'] = item.explanation
         rows.append(row)
     return rows
+
+
+def _warn_on_unexpected_model(
+    prediction_response: Any,
+    requested_model: str | None,
+) -> None:
+    r"""Say so when a NIM answers as a model we did not ask for.
+
+    The contract requires the response to carry a ``model`` but does not
+    require it to echo the request, so a mismatch is not a protocol violation
+    and must not fail the call. It is still worth surfacing: predictions that
+    came from a different model than the caller selected otherwise look
+    indistinguishable from the ones they wanted.
+    """
+    served = getattr(prediction_response, 'model', None)
+    if not requested_model or not served or served == requested_model:
+        return
+    logging.getLogger('kumo_relational_engine').warning(
+        'Requested model %r but the deployment answered as %r; the '
+        'predictions came from the model it names.',
+        requested_model,
+        served,
+    )
 
 
 def _validate_identity_mappings(
