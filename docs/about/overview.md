@@ -8,7 +8,7 @@ template-library-version: "1.0.0"
 
 The NVIDIA Kumo Relational Client is one Python client for
 NVIDIA's structured-data foundation model NIMs, served behind the Universal TFM
-API. A thin, model-agnostic client dispatches through per-model handles to
+API. A thin client dispatches through model handles to
 per-model adapters; heavy model drivers are optional and installed only when you
 ask for them. One model is available today: **Kumo Relational** (relational,
 graph-aware in-context learning).

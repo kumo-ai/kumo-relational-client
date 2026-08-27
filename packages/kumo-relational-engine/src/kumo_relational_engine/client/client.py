@@ -180,7 +180,8 @@ class _Session(requests.Session):
 def _read_capped(response: requests.Response, url: str) -> requests.Response:
     r"""Reads a streamed response body under a cap, then re-attaches it.
 
-    Mirrors ``kumo_relational_client.core.transport._read_capped``. ``requests`` inflates
+    The client package no longer reads a response body, so this cap lives here
+    alone: it is the only side that parses what a NIM returns. ``requests`` inflates
     ``Content-Encoding: gzip`` with no ratio limit, so an unbounded read lets a
     small compressed body expand into hundreds of megabytes of client memory
     before anything is parsed.

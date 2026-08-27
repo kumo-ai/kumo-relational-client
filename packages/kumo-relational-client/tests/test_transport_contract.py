@@ -13,36 +13,17 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
 
 import pytest
+import requests
 from urllib3.util.retry import Retry
 
 from kumo_relational_client import RelationalClient
 from kumo_relational_client.core import transport as transport_module
-from kumo_relational_client.core.transport import Transport
+from kumo_relational_client.core.transport import Transport, _Session
 from kumo_relational_client.errors import RelationalError
 from kumo_relational_client.requests import ModelRequest
 
 _HEALTH_PATH = '/v1/health/ready'
 _URL = 'http://nim.example.com:8000'
-
-
-def _canned_response(request_id: str = 'pred_123') -> dict:
-    return {
-        'id': request_id,
-        'model': 'kumo-relational',
-        'predictions': [
-            {
-                'row_index': 0,
-                'prediction': 'yes',
-                'probabilities': {'yes': 0.8, 'no': 0.2},
-            },
-            {
-                'row_index': 1,
-                'prediction': 'no',
-                'probabilities': {'yes': 0.3, 'no': 0.7},
-            },
-        ],
-        'metadata': {'task_kind': 'classification'},
-    }
 
 
 def test_predict_unknown_model_raises():
@@ -121,7 +102,9 @@ def test_transport_mounts_retry_policy():
     assert retry.total == 5
     assert 429 in retry.status_forcelist
     assert 503 in retry.status_forcelist
-    assert 'POST' in retry.allowed_methods
+    # GET is the only request this transport makes, so it is the only method
+    # that needs to be retryable.
+    assert retry.allowed_methods == frozenset({'GET'})
 
 
 def test_retry_policy_survives_urllib3_without_retry_after_max(monkeypatch):
@@ -350,3 +333,44 @@ def test_the_warning_does_not_carry_the_credential():
             'https://user:secret@nim.example.com', verify_ssl=False
         ).close()
     assert 'secret' not in str(caught[0].message)
+
+
+def test_a_redirect_body_is_discarded_rather_than_read() -> None:
+    r"""``requests`` releases a redirect's socket by reading its body in full,
+    with no cap, before following the hop. This layer never needs those bytes
+    and they are attacker-controlled on a misconfigured endpoint, so the socket
+    is closed instead. Without this, a redirect chain is an unbounded read.
+    """
+
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+            self.read_calls = 0
+
+        def close(self) -> None:
+            self.closed = True
+
+        def read(self, *args: object, **kwargs: object) -> bytes:
+            self.read_calls += 1
+            return b'x' * 1024
+
+    raw = _Raw()
+    session = _Session()
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://nim.test/v1/health/ready')
+    )
+    response = requests.Response()
+    response.raw = raw  # type: ignore[assignment]
+    response.status_code = 307
+    response.url = prepared.url or ''
+    response.request = prepared
+    response.headers['Location'] = 'https://elsewhere.test/v1/health/ready'
+
+    # Take the first hop only: the generator stops before it is sent, which is
+    # after the redirect response has been released.
+    hops = session.resolve_redirects(response, prepared, yield_requests=True)
+    next(hops, None)
+
+    assert raw.closed, 'the redirect socket was not closed'
+    assert raw.read_calls == 0, 'the redirect body was read'
+    assert response.content == b''

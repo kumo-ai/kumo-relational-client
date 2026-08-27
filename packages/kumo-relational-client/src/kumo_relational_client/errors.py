@@ -20,7 +20,6 @@ from typing import Any
 
 #: Entries rendered from an RFC-9457 ``invalid_params`` list before the rest
 #: are summarised as a count. A rejected batch can name thousands of rows.
-MAX_INVALID_PARAMS = 5
 
 
 class RelationalError(Exception):
@@ -54,11 +53,11 @@ class RelationalError(Exception):
 
 
 class UnknownModelError(RelationalError):
-    r"""A request named a model no registered adapter serves.
+    r"""A request named a model this client does not serve.
 
-    Raised by :meth:`~kumo_relational_client.RelationalClient.capabilities` and when dispatching
-    a request whose ``model`` is not in the client's registry. Code:
-    ``UNKNOWN_MODEL``.
+    Raised by :meth:`~kumo_relational_client.RelationalClient.capabilities` and
+    when dispatching a request whose ``model`` is not the one this client
+    serves. Code: ``UNKNOWN_MODEL``.
     """
 
     def __init__(self, model: str, known: list[str]) -> None:

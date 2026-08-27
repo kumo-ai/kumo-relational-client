@@ -12,8 +12,6 @@ per-field validation diagnosis reaches the message instead of being buried in
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
 import kumo_relational_client
@@ -23,18 +21,6 @@ from kumo_relational_client import (
     RelationalError,
     UnknownModelError,
 )
-
-
-def _problem(**overrides: object) -> bytes:
-    body = {
-        'type': '/problems/validation-failed',
-        'status': 422,
-        'code': 'INVALID_SCHEMA',
-        'detail': 'Request validation failed.',
-    }
-    body.update(overrides)
-    return json.dumps(body).encode()
-
 
 # --- the public surface -----------------------------------------------------
 

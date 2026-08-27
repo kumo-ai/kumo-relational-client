@@ -120,7 +120,7 @@ query over `0, 90, days` needs 90 days of history before the anchor time.
 
 ### Several endpoints at once
 
-Each `RelationalClient` holds its own transport and registry, so clients can
+Each `RelationalClient` holds its own transport and adapter, so clients can
 target different endpoints or tenants concurrently, including from several
 threads. A prediction always goes to the endpoint and credential of the client
 that started it.

@@ -422,10 +422,9 @@ def _problem_document(error: Exception) -> dict[str, Any]:
 def _invalid_params_summary(document: dict[str, Any]) -> str:
     r"""Render the NIM's per-field validation diagnosis.
 
-    ``kumo_relational_client.errors.format_invalid_params`` is the counterpart on the client
-    side and must render the same shape. The two cannot share one
-    implementation: ``kumo_relational_engine`` does not depend on ``kumo_relational_client``, and the
-    package both depend on is a SQL-connector package with no HTTP surface.
+    This is the only renderer: the client package passes ``invalid_params``
+    through as error details rather than formatting them, so the shape a caller
+    sees is decided here.
 
     The NIM names the exact table, row and column it rejected in
     ``invalid_params``; the top-level ``detail`` is often only "Request

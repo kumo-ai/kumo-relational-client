@@ -1,6 +1,6 @@
 ---
 title: "NVIDIA Kumo Relational Client Architecture"
-description: "How the NVIDIA Kumo Relational Client is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
+description: "How the NVIDIA Kumo Relational Client is structured: a thin client, one model adapter, an optional model driver, and shared data-source connectors."
 template-library-version: "1.0.0"
 ---
 
@@ -113,7 +113,7 @@ caller. `RelationalClient.health_ready()` issues `GET /v1/health/ready` and repo
 whether it answered 200. The Kumo Relational driver checks more before its first
 prediction: it reads `/v1/health/ready` for a ready status and then
 `/v1/models`, and fails if the endpoint does not advertise
-`kumo-relational-engine`. Nothing
+`kumo-relational`. Nothing
 on the client path reads `/v1/models`.
 
 ## External Integration Points
@@ -122,8 +122,7 @@ on the client path reads `/v1/models`.
   the shared `kumo-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
 - **NIM endpoint.** Any NIM that implements the Universal TFM API. The Kumo Relational
-  path additionally requires the endpoint to advertise
-  `kumo-relational-engine` in
+  path additionally requires the endpoint to advertise `kumo-relational` in
   `/v1/models`.
 - **Databricks Model Serving.** `RelationalClient.for_databricks_serving(name)`
   targets a named serving endpoint through the Databricks SDK. There is no base

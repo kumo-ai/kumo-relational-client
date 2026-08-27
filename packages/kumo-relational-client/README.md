@@ -1,7 +1,7 @@
 # kumo-relational-client
 
 Client for NVIDIA structured-data foundation model NIMs served behind the
-Universal TFM API. A thin, model-agnostic client dispatches typed requests to
+Universal TFM API. A thin client dispatches typed requests to
 per-model adapters; heavy model drivers are optional extras.
 
 ## Install

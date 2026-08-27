@@ -36,12 +36,6 @@ _RETRY_AFTER_CAP_APPLIES = (
 )
 
 
-def _predictions_body(size: int) -> bytes:
-    r"""A syntactically valid prediction response of roughly ``size`` bytes."""
-    filler = b'0,' * (max(size - 18, 0) // 2)
-    return b'{"predictions":[' + filler + b'0]}'
-
-
 @dataclass
 class _Reply:
     status: int = 200

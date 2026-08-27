@@ -8,7 +8,7 @@ import math
 import re
 import warnings
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -24,17 +24,10 @@ _DEFAULT_MAX_RETRIES = 3
 _DEFAULT_BACKOFF_FACTOR = 0.5
 _RETRY_STATUS = (429, 500, 502, 503, 504)
 _RETRY_AFTER_MAX_SECONDS = 60
-_MAX_BODY_SNIPPET = 512
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
 # Well above any real prediction response -- a full-precision float64 column
 # for a million rows is ~25 MB of JSON -- but far below what a compressed
 # hostile body can inflate to.
-_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
-_RESPONSE_CHUNK_BYTES = 1024 * 1024
-# Deleting a session is a bookkeeping call the server answers immediately, and
-# it runs on cleanup paths where the caller is no longer waiting on a result.
-# The full request timeout would let an unreachable endpoint stall a teardown.
-_DELETE_TIMEOUT_SECONDS = 10.0
 _USERINFO_RE = re.compile(r'(?<=//)[^/@\s]+@')
 
 
@@ -132,7 +125,9 @@ class _Session(requests.Session):
     verbatim, so without this the configured endpoint could hand the API key
     to any host it names, defeating ``_validate_url``.
 
-    Redirects are still followed, and this covers the credential only. A
+    Redirects are still followed, and their bodies are discarded unread rather
+    than consumed, so a redirect chain cannot be used to make this layer read an
+    unbounded response. This covers the credential only. A
     ``307``/``308`` therefore re-sends the request *body* -- the caller's whole
     context -- to the redirect target, including
     across an ``https`` to ``http`` downgrade, which ``_validate_url`` never
@@ -142,6 +137,28 @@ class _Session(requests.Session):
     with the same payload. A caller who cannot accept it should point the
     client at a URL that does not redirect.
     """
+
+    def resolve_redirects(  # type: ignore[override]
+        self,
+        resp: requests.Response,
+        req: requests.PreparedRequest,
+        **kwargs: Any,
+    ) -> Any:
+        r"""Follow redirects without reading the bodies they carry.
+
+        ``requests`` consumes each hop's body (``resp.content``) to release the
+        socket, with no cap. This layer never needs those bytes -- the only
+        request it makes reports a status -- and they are attacker-controlled on
+        a misconfigured endpoint, so the socket is released by closing it
+        instead of by reading it.
+        """
+        # Close rather than drain: the socket is given up instead of being
+        # read to the end so it can be reused. Redirects are rare here, so
+        # trading connection reuse for a bounded read is the right way round.
+        resp.raw.close()
+        resp._content = b''
+        resp._content_consumed = True  # type: ignore[attr-defined]
+        return super().resolve_redirects(resp, req, **kwargs)
 
     def rebuild_auth(
         self,
@@ -192,25 +209,19 @@ def _validate_limits(timeout: Any, max_retries: Any) -> None:
         )
 
 
-def _build_retry(
-    max_retries: int,
-    backoff_factor: float,
-    *,
-    retry_post: bool = True,
-) -> Retry:
+def _build_retry(max_retries: int, backoff_factor: float) -> Retry:
     r"""The retry policy this transport's requests run under.
 
     ``retry_after_max`` caps how long a server-chosen ``Retry-After`` header
     may park the caller; it needs urllib3 >= 2.3, and older versions fall back
     to urllib3's own (6 hour) cap.
 
-    ``retry_post=False`` drops ``POST`` from the retryable methods, which
-    switches off the read and status retries for a route whose side effect the
-    client cannot reconcile. Connection failures stay retryable either way:
-    urllib3 gates read and status retries on the method but not connect ones,
-    and a request that never reached the server cannot have had an effect.
+    Only ``GET`` is retryable, which is every request this transport makes.
+    Connection failures stay retryable regardless: urllib3 gates read and status
+    retries on the method but not connect ones, and a request that never reached
+    the server cannot have had an effect.
     """
-    methods = {'GET', 'POST'} if retry_post else {'GET'}
+    methods = {'GET'}
     options: dict[str, Any] = {
         'total': max_retries,
         'connect': max_retries,
@@ -226,24 +237,6 @@ def _build_retry(
         return Retry(retry_after_max=_RETRY_AFTER_MAX_SECONDS, **options)
     except TypeError:
         return Retry(**options)
-
-
-def _snippet(text: str) -> str:
-    r"""A one-line, length-capped view of a response body, so a multi-megabyte
-    HTML error page cannot become a multi-megabyte exception message.
-    """
-    text = ' '.join(text.split())
-    if len(text) <= _MAX_BODY_SNIPPET:
-        return text
-    return f'{text[:_MAX_BODY_SNIPPET]}... [truncated, {len(text)} chars total]'
-
-
-def _path_segment(value: str) -> str:
-    r"""Escapes a server-chosen id before it is spliced into a URL path, so a
-    hostile or malformed ``session_id`` cannot redirect the call to another
-    route.
-    """
-    return quote(value, safe='')
 
 
 def _build_session(
@@ -346,6 +339,12 @@ class Transport:
         try:
             # Streamed and closed unread: only the status matters, and the
             # body is attacker-controlled on a misconfigured endpoint.
+            # Redirect hops are released by closing rather than reading, in
+            # `_Session.resolve_redirects`. One gap remains: urllib3 drains a
+            # retryable 4xx/5xx body before retrying it, so a hostile endpoint
+            # can still be read up to `max_retries` times. Closing that would
+            # mean not retrying a status here at all, which is a change to the
+            # documented retry contract rather than an implementation detail.
             with self._session.get(
                 self._url + _HEALTH_READY_PATH,
                 timeout=self._timeout,
