@@ -351,8 +351,10 @@ def test_a_redirect_body_is_discarded_rather_than_read() -> None:
             self.closed = True
 
         def read(self, *args: object, **kwargs: object) -> bytes:
+            # Bounded on purpose: if the guard regresses, the assertion below
+            # fails rather than this looping forever feeding an uncapped read.
             self.read_calls += 1
-            return b'x' * 1024
+            return b'x' * 1024 if self.read_calls == 1 else b''
 
     raw = _Raw()
     session = _Session()

@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Fixed
+
+- **A redirect was an unbounded read.** `requests` releases each redirect hop's
+  socket by reading its body in full, with no cap, before following it. This
+  package never needs those bytes and they are attacker-controlled on a
+  misconfigured endpoint, so a hop's socket is now closed rather than drained.
+  The visible difference is that a connection is not reused across a redirect;
+  redirects are still followed and the API key is still dropped when one crosses
+  origin. One related gap is left open on purpose: urllib3 drains a retryable
+  4xx/5xx body before retrying, so a hostile endpoint can still be read up to
+  `max_retries` times. Closing that would mean not retrying a status at all,
+  which is a change to what `max_retries` promises.
+- The architecture guide said an endpoint must advertise `kumo-relational-engine`
+  in `/v1/models`. That is the distribution name; the driver checks for the model
+  id `kumo-relational`.
+
 ### Removed
 
 - **The multi-model dispatch layer.** `ModelAdapter`, `AdapterRegistry` and the
