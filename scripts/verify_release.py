@@ -14,7 +14,7 @@ Usage:
         [--require-wheel-only] [--attempts N] [--delay SECONDS]
 
 ``--require-wheel-only`` additionally fails if the index lists an sdist for
-the version (nemotron_relational must never publish source distributions).
+the version (kumo_relational_engine must never publish source distributions).
 """
 
 from __future__ import annotations

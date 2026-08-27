@@ -1,0 +1,118 @@
+[project]
+name = "kumo-relational-client"
+dynamic = ["version"]
+authors = [
+    {name = "NVIDIA"},
+]
+description = "Client for the NVIDIA Kumo Relational structured-data foundation model NIM"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+keywords = [
+    "structured-data",
+    "foundation-model",
+    "relational",
+]
+# Only the interpreter versions CI builds and tests; see `requires-python`.
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "requests>=2.28",
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "kumo-connectors>=1.0,<2",
+]
+
+[project.urls]
+Homepage = "https://github.com/NVIDIA/kumo-relational-client"
+Source = "https://github.com/NVIDIA/kumo-relational-client"
+Issues = "https://github.com/NVIDIA/kumo-relational-client/issues"
+
+[project.optional-dependencies]
+relational = [
+    "kumo-relational-engine>=1.0,<2",
+]
+sqlite = [
+    "kumo-connectors[sqlite]",
+]
+duckdb = [
+    "kumo-connectors[duckdb]",
+]
+snowflake = [
+    "kumo-connectors[snowflake]",
+]
+databricks = [
+    "kumo-connectors[databricks]",
+]
+# Invoking a served model, as opposed to `databricks` above, which is SQL data
+# access. Kept distinct so neither drags in the other.
+databricks-serving = [
+    "kumo-relational-engine[databricks-serving]>=1.0,<2",
+]
+# Invoking a served model, as opposed to `snowflake` above, which is SQL data
+# access. Kept distinct so neither drags in the other.
+snowflake-serving = [
+    "kumo-relational-engine[snowflake-serving]>=1.0,<2",
+]
+s3 = [
+    "kumo-connectors[s3]",
+]
+# Deliberately not part of `all`: the explanation summary POSTs row data to a
+# third-party LLM endpoint, so installing it stays an explicit opt-in.
+explain = [
+    "kumo-relational-engine[explain]>=1.0,<2",
+]
+relbench = [
+    "kumo-relational-engine[relbench]>=1.0,<2",
+]
+all = [
+    "kumo-relational-client[relational,sqlite,duckdb,snowflake,databricks,databricks-serving,s3]",
+]
+test = [
+    "pytest",
+    "pytest-mock",
+    "requests-mock",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["kumo_relational_client*"]
+
+[tool.setuptools.package-data]
+"kumo_relational_client" = ["py.typed"]
+
+[tool.setuptools.dynamic]
+version = {attr = "kumo_relational_client._version.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-q"]
+# An xfail that starts passing is a fixed bug, and should fail the run so it
+# gets un-marked rather than sitting there silently.
+xfail_strict = true
+markers = [
+    "live_nim: opt-in live TFM NIM tests using KUMO_RELATIONAL_NIM_BASE_URL",
+]
+
+[tool.ruff]
+# Inherit the workspace lint baseline so this package cannot silently opt out of
+# it; see the root pyproject.toml for the shared rule set.
+extend = "../../pyproject.toml"
+line-length = 80
+target-version = "py310"

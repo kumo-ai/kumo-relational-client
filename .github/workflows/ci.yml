@@ -3,7 +3,7 @@
 # The three packages depend on each other and are not on a public index, so
 # every job installs them from the working tree, in dependency order:
 # connectors, then the relational driver, then the client. Installing the
-# client alone makes pip look for `nemotron-structured-connectors` on PyPI, where
+# client alone makes pip look for `kumo-connectors` on PyPI, where
 # it does not exist. Backend extras are installed so their tests import rather
 # than failing at collection; tests needing a live warehouse still skip.
 name: CI
@@ -23,11 +23,11 @@ concurrency:
 
 env:
   LINT_PATHS: >-
-    packages/nemotron-relational/src packages/nemotron-relational/tests
-    packages/nemotron-relational/examples
-    packages/nemotron-structured-client/src packages/nemotron-structured-client/tests
-    packages/nemotron-structured-connectors/src
-    packages/nemotron-structured-connectors/tests
+    packages/kumo-relational-engine/src packages/kumo-relational-engine/tests
+    packages/kumo-relational-engine/examples
+    packages/kumo-relational-client/src packages/kumo-relational-client/tests
+    packages/kumo-connectors/src
+    packages/kumo-connectors/tests
     e2e scripts examples
 
 jobs:
@@ -71,8 +71,8 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-connectors[sqlite,duckdb,s3,test]'
-      - run: python -m pytest packages/nemotron-structured-connectors/tests -q
+          './packages/kumo-connectors[sqlite,duckdb,s3,test]'
+      - run: python -m pytest packages/kumo-connectors/tests -q
 
   client-tests:
     runs-on: ubuntu-latest
@@ -83,13 +83,13 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-connectors[sqlite,duckdb]'
+          './packages/kumo-connectors[sqlite,duckdb]'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-client[sqlite,duckdb,test]'
-      - run: python -c "import nemotron_structured; from nemotron_structured import relational"
+          './packages/kumo-relational-client[sqlite,duckdb,test]'
+      - run: python -c "import kumo_relational_client; from kumo_relational_client import relational"
       - run: >-
-          python -m pytest packages/nemotron-structured-client/tests
+          python -m pytest packages/kumo-relational-client/tests
           -m 'not live_nim' -q
 
   relational-tests:
@@ -105,15 +105,15 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-connectors[databricks,duckdb]'
+          './packages/kumo-connectors[databricks,duckdb]'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-relational[test,explain,databricks,databricks-serving,duckdb]'
+          './packages/kumo-relational-engine[test,explain,databricks,databricks-serving,duckdb]'
       - run: >-
-          python -c "import nemotron_relational.relationallib as relationallib;
+          python -c "import kumo_relational_engine.relationallib as relationallib;
           assert hasattr(relationallib.NeighborSampler, 'seed')"
       - run: python -m pytest tests --quiet --disable-warnings -m 'not live_nim'
-        working-directory: packages/nemotron-relational
+        working-directory: packages/kumo-relational-engine
 
   relational-contract-tests:
     runs-on: ubuntu-latest
@@ -124,16 +124,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install --editable './packages/nemotron-structured-connectors'
+      - run: python -m pip install --editable './packages/kumo-connectors'
       - run: >-
           WITH_RELATIONALLIB=0 python -m pip install --editable
-          './packages/nemotron-relational[test]'
+          './packages/kumo-relational-engine[test]'
       - run: >-
           python -m pytest tests/client/test_rfm_nim_contract.py
           tests/client/test_rfm_nim_hardening_cases.py
           tests/client/test_rfm_nim_live_harness.py
           tests/client/test_rfm_serving_init.py -q
-        working-directory: packages/nemotron-relational
+        working-directory: packages/kumo-relational-engine
 
   integration-tests:
     runs-on: ubuntu-latest
@@ -148,18 +148,18 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-connectors[sqlite,duckdb]'
-      - run: python -m pip install --editable './packages/nemotron-relational'
+          './packages/kumo-connectors[sqlite,duckdb]'
+      - run: python -m pip install --editable './packages/kumo-relational-engine'
       - run: >-
           python -m pip install --editable
-          './packages/nemotron-structured-client[relational,sqlite,duckdb,test]'
+          './packages/kumo-relational-client[relational,sqlite,duckdb,test]'
       - run: >-
-          python -c "import nemotron_structured; from nemotron_structured import relational;
-          import nemotron_relational.relationallib as k;
+          python -c "import kumo_relational_client; from kumo_relational_client import relational;
+          import kumo_relational_engine.relationallib as k;
           assert hasattr(k.NeighborSampler, 'seed'); relational.Graph;
-          assert not hasattr(relational, 'NemotronRelational')"
+          assert not hasattr(relational, 'KumoRelational')"
       - run: >-
-          python -m pytest packages/nemotron-structured-client/tests
+          python -m pytest packages/kumo-relational-client/tests
           -m 'not live_nim' -q
 
   wheels:
@@ -174,9 +174,9 @@ jobs:
           for PYTAG in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313; do
             "/opt/python/${PYTAG}/bin/python" -m pip install --upgrade pip build
             "/opt/python/${PYTAG}/bin/python" -m build --wheel \
-              --outdir wheelhouse packages/nemotron-relational
+              --outdir wheelhouse packages/kumo-relational-engine
           done
-          for wheel in wheelhouse/nemotron_relational-*.whl; do
+          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
             auditwheel repair "$wheel" --wheel-dir dist
           done
           /opt/python/cp312-cp312/bin/python -m pip install twine
@@ -203,9 +203,9 @@ jobs:
         with:
           name: wheels
           path: dist
-      - run: python -m pip install ./packages/nemotron-structured-connectors
-      - run: python -m pip install dist/nemotron_relational-*-cp$(echo "${{ matrix.python }}" | tr -d .)-*.whl
+      - run: python -m pip install ./packages/kumo-connectors
+      - run: python -m pip install dist/kumo_relational_engine-*-cp$(echo "${{ matrix.python }}" | tr -d .)-*.whl
       - run: >-
-          python -c "import nemotron_relational.relationallib as relationallib;
+          python -c "import kumo_relational_engine.relationallib as relationallib;
           assert hasattr(relationallib.NeighborSampler, 'seed')"
-      - run: python -c "from nemotron_relational.rfm import Graph, NemotronRelational"
+      - run: python -c "from kumo_relational_engine.rfm import Graph, KumoRelational"

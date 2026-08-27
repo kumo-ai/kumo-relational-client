@@ -1,10 +1,10 @@
 ---
-title: "NVIDIA Nemotron Structured Client Prediction Output"
-description: "Reference for the shape and columns of the DataFrame returned by Nemotron Relational predictions, which vary by task type."
+title: "NVIDIA Kumo Relational Client Prediction Output"
+description: "Reference for the shape and columns of the DataFrame returned by Kumo Relational predictions, which vary by task type."
 template-library-version: "1.0.0"
 ---
 
-# NVIDIA Nemotron Structured Client Prediction Output
+# NVIDIA Kumo Relational Client Prediction Output
 
 Both `predict()` and `predict_task()` return a `pandas.DataFrame`, but **the
 number of rows and the set of columns depend on the task type**. Only binary
@@ -129,7 +129,7 @@ directly.
 
 ## Explanations
 
-When `explain` is set, the call returns a `nemotron_relational` `Explanation` instead of a
+When `explain` is set, the call returns a `kumo_relational_engine` `Explanation` instead of a
 `DataFrame`. The frame described above is still available on its `prediction`
 attribute, with the same shape rules.
 

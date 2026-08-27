@@ -1,0 +1,12 @@
+{
+  "files": {
+    "kumo-relational/prediction_kumo_relational_binary_classification.json": "1f617dfd1dc9d0ad3b43437b4cc57b71c394cd04a79e3e2b59a5c4876c4199f8",
+    "kumo-relational/prediction_kumo_relational_forecasting.json": "3886b95218ae78ab07c3a26fd5988d9bc06560a3088b1e6e733fadf02f8f6dcf",
+    "kumo-relational/prediction_kumo_relational_temporal_link_prediction.json": "96a705d275f240894e882d75efcfa0faeffaf05722972fdd5598f25c7a3f9b34",
+    "kumo-relational/session_create_kumo_relational_binary_classification.json": "69dfabc769a9de3920532227339fba77ae9fc9fd1e291a574add6a3b0f557e36",
+    "kumo-relational/session_prediction_kumo_relational_binary_classification.json": "1608633888302dfce01c9f6a8d0764b41f7ae52c49bc7aea4e2bab1351aedcee"
+  },
+  "source_path": "examples",
+  "source_repository": "structured-data-api",
+  "source_revision": "9ca10eeef619d2afd3aec3f6bbab3ce72196a61a"
+}
