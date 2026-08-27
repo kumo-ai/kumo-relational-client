@@ -16,7 +16,9 @@ Before you start, you must complete the following prerequisites:
 
 1. Install the client. For the relational example, install the Kumo Relational extra:
    `pip install "kumo-relational-client[relational]"`.
-2. Identify the URL of a running Universal TFM API NIM.
+2. Identify the URL of a running Universal TFM API NIM, and an API key if it
+   is a hosted one. See [Prerequisites](prerequisites.md#nim-endpoint-access)
+   for how to get either.
 
 ## Quickstart Steps
 

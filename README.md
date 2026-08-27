@@ -4,7 +4,7 @@ Make predictions on tables and relational data with NVIDIA Kumo
 structured-data foundation models, without training a model for each dataset.
 
 ```bash
-pip install kumo-relational-client
+pip install kumo-relational-client[relational]
 ```
 
 ## Overview
@@ -58,12 +58,37 @@ live endpoint.
 ## Requirements
 
 - **Python** 3.10 to 3.13.
-- **A reachable NIM** serving `kumo-relational`.
+- **A reachable NIM** serving `kumo-relational`. See
+  [Getting a NIM](#getting-a-nim).
 - **No GPU** on the client. The NIM owns that.
 - **OS and architecture.** The client and connectors are pure Python and
   install anywhere. The `[relational]` extra is a native build, published as
   `manylinux_2_28` wheels for Linux x86-64 on CPython 3.10 to 3.13, with no
   source distribution.
+
+## Getting a NIM
+
+The client sends requests; the model runs in a NIM you point it at. There are
+two ways to have one.
+
+**A hosted endpoint.** Find the model in the
+[NVIDIA API catalog](https://build.nvidia.com), generate an API key, and pass
+the endpoint and key to `RelationalClient`. Nothing to deploy.
+
+**The container, run yourself.** Pull the NIM from the
+[NGC catalog](https://catalog.ngc.nvidia.com) and run it on your own GPU host,
+then point the client at it. Use this when the data cannot leave your
+environment.
+
+Either way the client needs only the URL and, for a hosted endpoint, the key:
+
+```python
+client = RelationalClient(url="https://...", api_key="nvapi-...")
+```
+
+`RelationalClient` takes both explicitly; it reads nothing from the
+environment. For what the models do and how to size a deployment, see the
+[product documentation](https://docs.nvidia.com/sdgm/rfm/overview).
 
 ## Installation
 
