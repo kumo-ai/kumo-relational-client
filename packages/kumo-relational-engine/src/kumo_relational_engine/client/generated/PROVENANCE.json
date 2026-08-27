@@ -1,6 +1,6 @@
 {
   "generated_file": "tfm_api.py",
-  "generated_sha256": "4a9b1c5dd72296187f591eb720d92393efffa8773a671366a4fe802fbe411d10",
+  "generated_sha256": "a694e8aced700493776a44ef256071770a955680f97f6246313aed63fe2f6f41",
   "generator": "scripts/generate_tfm_api.py",
   "source_path": "nim-sd.openapi.yaml",
   "source_repository": "structured-data-api",
