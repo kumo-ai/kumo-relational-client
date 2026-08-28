@@ -1,8 +1,22 @@
 # Changelog
 
-## Unreleased
+## 1.0.0: all three packages
 
-### Fixed
+The first release. Three packages are released together and share one version:
+they are only ever tested against each other, so independent numbering carried
+information nobody could act on.
+
+One model ships, `kumo-relational`, reached through `client.relational(...)`.
+The ids `tabicl`, `kumo-rfm`, `nemotron-relational` and `nemotron-relational-v1`
+are not accepted.
+
+This is the first release under the `kumo-*` names and the first as open source.
+Alongside the licensing and contribution scaffolding, it closes the defects found
+by testing the client end to end against a live NIM and by a file-by-file review
+of every first-party module. Sections below this one are pre-release history,
+published under distribution names that no longer exist.
+
+### Fixed: read this before upgrading
 
 - **A redirect was an unbounded read, on both HTTP paths.** `requests` releases
   each redirect hop's socket by reading its body in full, with no cap, before
@@ -18,22 +32,33 @@
 - The architecture guide said an endpoint must advertise `kumo-relational-engine`
   in `/v1/models`. That is the distribution name; the driver checks for the model
   id `kumo-relational`.
+- **The vendored mermaid bundle was a modified copy described as an unmodified
+  one.** A repo-wide rename had rewritten two identifiers inside the minified
+  file. It is restored to mermaid 11.15.0 exactly as published, its digest is
+  pinned, and the bundled components are re-enumerated from that release: khroma
+  and uuid restored, `@upsetjs/venn.js` and `es-toolkit` added, js-yaml
+  corrected to 4.1.1. Rendering is unchanged.
+- The generated OpenAPI bindings carried no copyright header. The generator now
+  emits one.
 
-### Removed
 
-- **The multi-model dispatch layer.** `ModelAdapter`, `AdapterRegistry` and the
-  `registry=` argument to `RelationalClient` are gone. They existed to choose
-  between a tabular and a relational model; with one model they were an
-  interface with a single implementation. The client now holds one adapter.
-  `models()` and `capabilities()` remain, still answer without a live endpoint,
-  and now describe the one model: `models()` reports `['kumo-relational']`.
-- **`Transport.predict`, `create_session`, `session_predict`, `delete_session`
-  and their helpers.** No source path called them: predictions and sessions go
-  through the driver's own connection, and the driver owns session lifecycle.
-  The client's transport now does what it actually did -- carry configuration,
-  report readiness, and close. `ServingTarget.predict` goes for the same reason.
-- `format_invalid_params`, which only the removed error path used. The driver
-  renders these and the adapter passes them through as error details.
+- **Python 3.10 was broken.** `kumo_relational_engine` imported
+  `typing.assert_never`, which is 3.11+, so `import kumo_relational_engine`
+  failed on the floor all three packages declare.
+- **A credential in the endpoint URL reached `kumo-relational-client`'s error messages,
+  logs and reprs.** `https://user:token@host` is a supported way to address a
+  deployment; the userinfo is now stripped everywhere the URL is rendered, as
+  `kumo_relational_engine` already did.
+- `sample_rows` accepted any value: its bound returned the `ValueError` instead
+  of raising it, so the exception was stored as the field.
+- `Graph.from_relbench` could not name 22 of the 33 published RelBench
+  datasets. A fixed-width prefix strip mangled every name without a `rel-`
+  prefix, so no `dbinfer-`, `tgbl-`, `tgbn-` or `thgl-` dataset could be
+  listed or fetched.
+- Snowflake `SHOW`, `DESC` and `LIST` failed as `QUERY_FAILED: Unknown error`.
+- A 15-table graph was refused by a guard whose message said the limit was
+  "more than 15", which made RelBench `rel-trial` unusable.
+- A negative `lag_timesteps` was ignored rather than rejected.
 
 ### Added
 
@@ -44,6 +69,22 @@
   that does not need the contract to detect, which is the generated file being
   edited by hand rather than regenerated. The generator writes the record, so
   regenerating moves both together.
+
+
+- **A root exception per package.** `kumo_relational_engine.KumoRelationalError`
+  and `kumo_connectors.ConnectorError` are now the single base each package raises
+  from; `MissingBackendError` joins the latter. Every class keeps the built-in
+  it derived from, so existing `except ValueError` / `except RuntimeError`
+  keeps working.
+- Connection-time failures are typed (`AuthenticationError`,
+  `NimUnreachableError`, `NimTimeoutError`) and translated at the
+  `kumo-relational-client` boundary, so a wrong API key or an unreachable NIM is caught by
+  `except RelationalError` instead of escaping as a bare `ValueError`.
+- Reading a warehouse raises `GraphConstructionError` rather than the driver's
+  own exception, which shared no base with anything else the client raises.
+- **Python 3.13 wheels.** `kumo_relational_engine` builds and tests cp310 through
+  cp313.
+- Composite primary keys, and quoted identifiers in predictive queries.
 
 ### Changed
 
@@ -63,22 +104,6 @@
   model id stays `kumo-relational`, so a package called `kumo-relational` would
   have meant two different things.
 
-### Removed
-
-- **The tabular surface is gone.** `client.tabular()`, `TabularModel`, the
-  `kumo-tabular` adapter and its request types are removed, and
-  `client.models()` now reports `['kumo-relational']` alone. No endpoint serves
-  `kumo-tabular`, and the model is not being released, so the client no longer
-  offers a method that cannot reach a model. The contract still defines
-  `kumo-tabular`, so re-adding an adapter later is additive rather than
-  breaking.
-- The end-to-end scripts that drove the tabular path are removed, replaced by
-  `e2e/run_relational_e2e.py`. The connectors end-to-end script went with them:
-  it scored warehouse tables through the tabular path, and the relational path
-  needs a time column those tables do not have. The connectors package keeps its
-  own unit tests.
-
-### Changed
 
 - The relational engine's HTTP connection to a NIM is now `NimClient`. It and
   the client's own `RelationalClient` were both named `RelationalClient`, so a
@@ -97,61 +122,9 @@
   after generation and the byte-for-byte drift test against the contract is
   enforceable again.
 
-## 1.0.0: all three packages
 
-The first release under the `nemotron-*` names, and the first public one. All
-three packages now share a single version: they are released together and only
-ever tested against each other, so independent numbering carried information
-nobody could act on. Earlier numbering (`kumo-relational-client` 0.x,
-`nemotron_relational` 2.x, `nemotron-structured-connectors` 0.x) was published
-under the previous distribution names and stops here.
-
-The models are addressed as `nemotron-tabular` and `nemotron-relational`. The
-older ids `tabicl`, `kumo-rfm` and `nemotron-relational-v1` are not accepted.
-
-Prepares the client for release as open source. Alongside the licensing and
-contribution scaffolding, this closes the defects found by testing the client
-end to end against a live NIM, and by a file-by-file review of every
-first-party module.
-
-### Fixed: read this before upgrading
-
-- **Python 3.10 was broken.** `nemotron_relational` imported `typing.assert_never`, which
-  is 3.11+, so `import nemotron_relational` failed on the floor all three packages declare.
-- **A credential in the endpoint URL reached `kumo-relational-client`'s error messages,
-  logs and reprs.** `https://user:token@host` is a supported way to address a
-  deployment; the userinfo is now stripped everywhere the URL is rendered, as
-  `nemotron_relational` already did.
-- `sample_rows` accepted any value: its bound returned the `ValueError` instead
-  of raising it, so the exception was stored as the field.
-- `Graph.from_relbench` could not name 22 of the 33 published RelBench
-  datasets. A fixed-width prefix strip mangled every name without a `rel-`
-  prefix, so no `dbinfer-`, `tgbl-`, `tgbn-` or `thgl-` dataset could be
-  listed or fetched.
-- Snowflake `SHOW`, `DESC` and `LIST` failed as `QUERY_FAILED: Unknown error`.
-- A 15-table graph was refused by a guard whose message said the limit was
-  "more than 15", which made RelBench `rel-trial` unusable.
-- A negative `lag_timesteps` was ignored rather than rejected.
-
-### Added
-
-- **A root exception per package.** `nemotron_relational.NemotronRelationalError` and
-  `nemotron_structured_connectors.ConnectorError` are now the single base each package raises
-  from; `MissingBackendError` joins the latter. Every class keeps the built-in
-  it derived from, so existing `except ValueError` / `except RuntimeError`
-  keeps working.
-- Connection-time failures are typed (`AuthenticationError`,
-  `NimUnreachableError`, `NimTimeoutError`) and translated at the
-  `kumo-relational-client` boundary, so a wrong API key or an unreachable NIM is caught by
-  `except RelationalError` instead of escaping as a bare `ValueError`.
-- Reading a warehouse raises `GraphConstructionError` rather than the driver's
-  own exception, which shared no base with anything else the client raises.
-- **Python 3.13 wheels.** `nemotron_relational` builds and tests cp310 through cp313.
-- Composite primary keys, and quoted identifiers in predictive queries.
-
-### Changed
-
-- `import nemotron_relational` no longer reconfigures logging for the whole process. It had
+- `import kumo_relational_engine` no longer reconfigures logging for the whole
+  process. It had
   raised `matplotlib`, `urllib3` and `snowflake` to `ERROR`, and installed a
   handler even where the application had already configured one.
 - Errors that reported a caller's mistake through an interpreter's internals
@@ -161,6 +134,36 @@ first-party module.
   named instead of being blamed on the `PREDICT` clause.
 - Multiclass classification is reachable from `predict()`; the reference said
   otherwise.
+
+### Removed
+
+- **The multi-model dispatch layer.** `ModelAdapter`, `AdapterRegistry` and the
+  `registry=` argument to `RelationalClient` are gone. They existed to choose
+  between a tabular and a relational model; with one model they were an
+  interface with a single implementation. The client now holds one adapter.
+  `models()` and `capabilities()` remain, still answer without a live endpoint,
+  and now describe the one model: `models()` reports `['kumo-relational']`.
+- **`Transport.predict`, `create_session`, `session_predict`, `delete_session`
+  and their helpers.** No source path called them: predictions and sessions go
+  through the driver's own connection, and the driver owns session lifecycle.
+  The client's transport now does what it actually did -- carry configuration,
+  report readiness, and close. `ServingTarget.predict` goes for the same reason.
+- `format_invalid_params`, which only the removed error path used. The driver
+  renders these and the adapter passes them through as error details.
+
+
+- **The tabular surface is gone.** `client.tabular()`, `TabularModel`, the
+  `kumo-tabular` adapter and its request types are removed, and
+  `client.models()` now reports `['kumo-relational']` alone. No endpoint serves
+  `kumo-tabular`, and the model is not being released, so the client no longer
+  offers a method that cannot reach a model. The contract still defines
+  `kumo-tabular`, so re-adding an adapter later is additive rather than
+  breaking.
+- The end-to-end scripts that drove the tabular path are removed, replaced by
+  `e2e/run_relational_e2e.py`. The connectors end-to-end script went with them:
+  it scored warehouse tables through the tabular path, and the relational path
+  needs a time column those tables do not have. The connectors package keeps its
+  own unit tests.
 
 ## kumo-relational-client 0.2.1 · nemotron_relational 2.24.1 · nemotron-structured-connectors 0.3.0
 
