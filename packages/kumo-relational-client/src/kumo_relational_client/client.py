@@ -5,11 +5,9 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kumo_relational_client.base import (
-    AdapterRegistry,
-    ModelAdapter,
     ModelCapabilities,
     PredictResult,
     request_type_names,
@@ -20,25 +18,31 @@ from kumo_relational_client.core.serving import (
     SnowflakeServingTarget,
 )
 from kumo_relational_client.core.transport import Transport, redact_url
-from kumo_relational_client.errors import RelationalError
+from kumo_relational_client.errors import RelationalError, UnknownModelError
 from kumo_relational_client.models import (
     RelationalModel,
 )
 from kumo_relational_client.requests import ModelRequest
 
-
-def _default_registry() -> AdapterRegistry:
+if TYPE_CHECKING:
     from kumo_relational_client.adapters import KumoRelationalAdapter
 
-    registry = AdapterRegistry()
-    registry.register(KumoRelationalAdapter())
-    return registry
+
+def _default_adapter() -> KumoRelationalAdapter:
+    r"""The one adapter this client supports.
+
+    Imported here rather than at module scope so that importing the client does
+    not pull in the adapter module, which reaches for the relational driver.
+    """
+    from kumo_relational_client.adapters import KumoRelationalAdapter
+
+    return KumoRelationalAdapter()
 
 
 class RelationalClient:
     r"""A connection to one Universal TFM NIM.
 
-    Each ``RelationalClient`` owns its own transport and adapter registry, so several
+    Each ``RelationalClient`` owns its own transport, so several
     clients can target different endpoints (or tenants) at once: a prediction
     is always issued against the endpoint and credential of the client that
     started it, including when clients are used concurrently from several
@@ -66,7 +70,6 @@ class RelationalClient:
         verify_ssl: bool = True,
         timeout: float = 60.0,
         max_retries: int = 3,
-        registry: AdapterRegistry | None = None,
     ) -> None:
         r"""Opens a client against one NIM.
 
@@ -92,8 +95,6 @@ class RelationalClient:
                 re-sent create would orphan a pinned context on the NIM.
                 Distinct from ``predict(num_retries=...)``, which retries a
                 Kumo Relational prediction at the application level and defaults to 1.
-            registry: The adapter registry to dispatch with. Defaults to the
-                built-in Kumo Relational adapter.
         """
         self._configure(
             Transport(
@@ -103,13 +104,11 @@ class RelationalClient:
                 timeout=timeout,
                 max_retries=max_retries,
             ),
-            registry,
         )
 
     def _configure(
         self,
         transport: Transport | ServingTarget,
-        registry: AdapterRegistry | None,
     ) -> None:
         r"""The one place an ``RelationalClient``'s fields are populated.
 
@@ -117,9 +116,7 @@ class RelationalClient:
         client cannot be missing from clients built the other way.
         """
         self._transport = transport
-        self._registry = (
-            registry if registry is not None else _default_registry()
-        )
+        self._adapter = _default_adapter()
 
     @classmethod
     def for_databricks_serving(
@@ -127,7 +124,6 @@ class RelationalClient:
         endpoint: str,
         *,
         workspace_client: Any | None = None,
-        registry: AdapterRegistry | None = None,
     ) -> RelationalClient:
         r"""A client for a model served by Databricks Model Serving.
 
@@ -144,7 +140,6 @@ class RelationalClient:
             workspace_client: An existing ``WorkspaceClient``. When omitted one
                 is built from the ambient Databricks configuration, which is
                 how a notebook authenticates without handling a token.
-            registry: As for the constructor.
 
         Raises:
             RelationalError: with ``code='INVALID_CONFIGURATION'`` if ``endpoint`` is
@@ -158,7 +153,6 @@ class RelationalClient:
         """
         return cls._from_transport(
             DatabricksServingTarget(endpoint, workspace_client),
-            registry,
         )
 
     @classmethod
@@ -167,7 +161,6 @@ class RelationalClient:
         service: str,
         *,
         session: Any | None = None,
-        registry: AdapterRegistry | None = None,
     ) -> RelationalClient:
         r"""A client for a model served on Snowpark Container Services.
 
@@ -185,7 +178,6 @@ class RelationalClient:
                 ``snowflake.connector`` connection. When omitted the active
                 Snowpark session is used, which is how a Snowflake notebook
                 connects without handling credentials.
-            registry: As for the constructor.
 
         Raises:
             RelationalError: with ``code='INVALID_CONFIGURATION'`` if ``service`` is
@@ -197,14 +189,12 @@ class RelationalClient:
         """
         return cls._from_transport(
             SnowflakeServingTarget(service, session),
-            registry,
         )
 
     @classmethod
     def _from_transport(
         cls,
         transport: Transport | ServingTarget,
-        registry: AdapterRegistry | None = None,
     ) -> RelationalClient:
         r"""Build a client around an already-constructed target.
 
@@ -213,7 +203,7 @@ class RelationalClient:
         entirely. Both then land in ``_configure``.
         """
         client = cls.__new__(cls)
-        client._configure(transport, registry)
+        client._configure(transport)
         return client
 
     @property
@@ -224,10 +214,10 @@ class RelationalClient:
     def models(self) -> list[str]:
         r"""The model ids this client can serve.
 
-        Describes the client's own adapter registry, not the connected
-        endpoint: a NIM serving only one of these models still reports both.
+        Describes the client itself, not the connected endpoint: this is not
+        read from the NIM and needs no live connection.
         """
-        return self._registry.names()
+        return [self._adapter.name]
 
     def capabilities(self, model: str) -> ModelCapabilities:
         r"""What ``model`` supports (tasks, outputs, request type).
@@ -235,7 +225,9 @@ class RelationalClient:
         Like :meth:`models`, this describes the client-side adapter and is not
         read from the connected endpoint.
         """
-        return self._registry.get(model).capabilities()
+        if model != self._adapter.name:
+            raise UnknownModelError(model, [self._adapter.name])
+        return self._adapter.capabilities()
 
     def health_ready(self) -> bool:
         r"""Whether the NIM answers ``GET /v1/health/ready`` with 200.
@@ -262,15 +254,16 @@ class RelationalClient:
         Kumo Relational request asks to explain.
         """
         self._transport._require_open()
-        adapter = self._registry.get(request.model)
-        if not isinstance(request, adapter.request_type):
+        if request.model != self._adapter.name:
+            raise UnknownModelError(request.model, [self._adapter.name])
+        if not isinstance(request, self._adapter.request_type):
             raise RelationalError(
                 f'model {request.model!r} expects a '
-                f'{request_type_names(adapter.request_type)}, got '
+                f'{request_type_names(self._adapter.request_type)}, got '
                 f'{type(request).__name__}',
                 code='INVALID_REQUEST',
             )
-        return adapter.predict(self._transport, request)
+        return self._adapter.predict(self._transport, request)
 
     def close(self) -> None:
         r"""Releases the pooled connections and retires this client.
@@ -286,7 +279,7 @@ class RelationalClient:
         rebuilt on demand.
         """
         try:
-            self._registry.close()
+            self._adapter.close()
         finally:
             self._transport.close()
 
@@ -309,7 +302,3 @@ class RelationalClient:
             else f'url={redact_url(self._transport.url)!r}'
         )
         return f'RelationalClient({where}, models={self.models()})'
-
-    def _register(self, adapter: ModelAdapter) -> None:
-        r"""Add a model adapter to this client's registry."""
-        self._registry.register(adapter)

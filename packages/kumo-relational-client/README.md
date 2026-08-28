@@ -1,7 +1,7 @@
 # kumo-relational-client
 
 Client for NVIDIA structured-data foundation model NIMs served behind the
-Universal TFM API. A thin, model-agnostic client dispatches typed requests to
+Universal TFM API. A thin client dispatches typed requests to
 per-model adapters; heavy model drivers are optional extras.
 
 ## Install
@@ -99,16 +99,15 @@ with RelationalClient(url='http://localhost:8000') as client:
     )
 ```
 
-`client.models()` lists the models this client has adapters for and
-`client.capabilities("kumo-relational")` describes one of them. Both read the
-client-side registry, not the endpoint: a NIM serving only one of these models
-still reports both, and a mismatch surfaces as an error from the NIM on the
-first prediction. The transport pools connections and retries
+`client.models()` names the model this client supports and
+`client.capabilities("kumo-relational")` describes it. Both read the client, not
+the endpoint: they answer without a connection, and a NIM serving something else
+surfaces as an error from the NIM on the first prediction. The transport pools connections and retries
 transient failures (429/5xx) with backoff; tune it per client with
 `RelationalClient(url, timeout=30, max_retries=3)`. `timeout` bounds each attempt
 rather than the call as a whole, so a retried call can take up to
 `(max_retries + 1) * timeout` plus backoff. Each client holds its own transport
-and registry, so multiple clients can target different endpoints at once,
+and adapter, so multiple clients can target different endpoints at once,
 including concurrently: a prediction always goes to the endpoint and credential
 of the client that started it. The Kumo Relational driver underneath still keeps a
 process-wide configuration that each prediction reconfigures, so drive it
@@ -121,11 +120,8 @@ driver (`Graph`, `LocalTable`, `Stype`, `Dtype`, `ExplainConfig`, ...); you
 never import the driver package directly. The model itself is not on that
 surface, you reach it through `client.relational(graph)`.
 
-## Adding a model
+## Serving another model
 
-Implement `ModelAdapter` in `kumo_relational_client/adapters/<model>.py` with a typed
-request, export it from `kumo_relational_client/adapters/__init__.py`, and add it to
-`kumo_relational_client.client._default_registry`. Out of tree, build an `AdapterRegistry`
-yourself and pass it as `RelationalClient(url, registry=...)`. Models needing a heavy
-runtime ship it as a separate driver distribution behind an extra; the adapter
-lazy-imports the driver so base installs stay light.
+There is no adapter registry: this client supports `kumo-relational` and nothing
+else. A second model would mean a second adapter module and a branch in
+`RelationalClient`, which is a deliberate change rather than an extension point.

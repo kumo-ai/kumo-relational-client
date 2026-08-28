@@ -4,10 +4,10 @@
 
 """Wait until a published release is visible on a PyPI simple index.
 
-Artifactory's simple index can lag a successful twine upload, so the verify
-stage polls until the release files appear (or a deadline passes) before the
-job goes on to ``pip install`` the release. Uses only the standard library:
-the verify jobs run before anything is installed.
+A simple index can lag a successful twine upload, so the verify stage polls
+until the release files appear (or a deadline passes) before the job goes on to
+``pip install`` the release. Uses only the standard library: the verify jobs run
+before anything is installed.
 
 Usage:
     verify_release.py <distribution> <version> --index <simple-index-url>

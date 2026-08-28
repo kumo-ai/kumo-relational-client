@@ -33,7 +33,7 @@ def test_two_clients_have_independent_transports():
     assert a.url == 'http://a.test'
     assert b.url == 'http://b.test'
     assert a._transport is not b._transport
-    assert a._registry is not b._registry
+    assert a._adapter is not b._adapter
 
 
 def test_context_manager_closes_transport():

@@ -1,6 +1,6 @@
 ---
 title: "Installation Guide for the NVIDIA Kumo Relational Client"
-description: "Install the NVIDIA Kumo Relational Client and its optional model drivers and data-source connectors from the NVIDIA internal package index."
+description: "Install the NVIDIA Kumo Relational Client and its optional model drivers and data-source connectors with pip."
 template-library-version: "1.0.0"
 ---
 

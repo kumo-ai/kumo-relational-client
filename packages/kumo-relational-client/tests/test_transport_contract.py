@@ -11,37 +11,20 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import ClassVar
+from unittest import mock
 
 import pytest
+import requests
 from urllib3.util.retry import Retry
 
 from kumo_relational_client import RelationalClient
 from kumo_relational_client.core import transport as transport_module
-from kumo_relational_client.core.transport import _PREDICTIONS_PATH, Transport
-from kumo_relational_client.errors import NimRequestError, RelationalError
+from kumo_relational_client.core.transport import Transport, _Session
+from kumo_relational_client.errors import RelationalError
 from kumo_relational_client.requests import ModelRequest
 
+_HEALTH_PATH = '/v1/health/ready'
 _URL = 'http://nim.example.com:8000'
-
-
-def _canned_response(request_id: str = 'pred_123') -> dict:
-    return {
-        'id': request_id,
-        'model': 'kumo-relational',
-        'predictions': [
-            {
-                'row_index': 0,
-                'prediction': 'yes',
-                'probabilities': {'yes': 0.8, 'no': 0.2},
-            },
-            {
-                'row_index': 1,
-                'prediction': 'no',
-                'probabilities': {'yes': 0.3, 'no': 0.7},
-            },
-        ],
-        'metadata': {'task_kind': 'classification'},
-    }
 
 
 def test_predict_unknown_model_raises():
@@ -77,9 +60,9 @@ def test_health_ready_false_on_503(requests_mock):
 
 def test_client_sends_api_key_header(requests_mock):
     https_url = 'https://nim.example.com:8000'
-    requests_mock.post(https_url + '/v1/predictions', json=_canned_response())
+    requests_mock.get(https_url + _HEALTH_PATH, status_code=200)
     client = Transport(https_url, api_key='secret')
-    client.predict({'model': 'kumo-relational'})
+    client.health_ready()
     assert requests_mock.last_request.headers['X-API-Key'] == 'secret'
 
 
@@ -114,82 +97,15 @@ def test_non_string_url_is_rejected_at_construction():
     assert 'url must be a string' in str(excinfo.value)
 
 
-def test_invalid_json_success_response_raises_transport_error(requests_mock):
-    requests_mock.post(_URL + '/v1/predictions', text='not json')
-    client = Transport(_URL)
-    with pytest.raises(RelationalError) as excinfo:
-        client.predict({'model': 'kumo-relational'})
-    assert excinfo.value.code == 'TRANSPORT_ERROR'
-
-
-def test_non_object_json_success_response_raises_transport_error(requests_mock):
-    requests_mock.post(_URL + '/v1/predictions', json=['a', 'b'])
-    client = Transport(_URL)
-    with pytest.raises(RelationalError) as excinfo:
-        client.predict({'model': 'kumo-relational'})
-    assert excinfo.value.code == 'TRANSPORT_ERROR'
-
-
-def test_non_object_json_error_body_is_handled(requests_mock):
-    requests_mock.post(_URL + '/v1/predictions', status_code=500, json=['boom'])
-    client = Transport(_URL)
-    with pytest.raises(NimRequestError) as excinfo:
-        client.predict({'model': 'kumo-relational'})
-    assert excinfo.value.status_code == 500
-
-
-def test_session_endpoints_use_the_contract_routes(requests_mock):
-    requests_mock.post(
-        _URL + '/v1/sessions', json={'session_id': 'sess-1'}, status_code=201
-    )
-    requests_mock.post(
-        _URL + '/v1/sessions/sess-1/predictions', json={'predictions': []}
-    )
-    requests_mock.delete(_URL + '/v1/sessions/sess-1', status_code=204)
-
-    transport = Transport(_URL)
-    assert transport.create_session({'context': {}})['session_id'] == 'sess-1'
-    assert transport.session_predict('sess-1', {'predict': {}}) == {
-        'predictions': []
-    }
-    assert transport.delete_session('sess-1') is None
-
-
-def test_session_id_cannot_escape_its_path_segment(requests_mock):
-    r"""A server-chosen id is spliced into a URL; without escaping, one holding
-    ``../`` would send the next call to a different route entirely.
-    """
-    requests_mock.delete(
-        _URL + '/v1/sessions/..%2F..%2Fv1%2Fpredictions', status_code=204
-    )
-
-    Transport(_URL).delete_session('../../v1/predictions')
-
-    assert requests_mock.last_request.path.lower() == (
-        '/v1/sessions/..%2f..%2fv1%2fpredictions'
-    )
-
-
-def test_delete_session_reports_a_server_error(requests_mock):
-    requests_mock.delete(
-        _URL + '/v1/sessions/sess-1',
-        status_code=500,
-        json={'code': 'INTERNAL_ERROR', 'detail': 'boom'},
-    )
-
-    with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).delete_session('sess-1')
-
-    assert excinfo.value.status_code == 500
-
-
 def test_transport_mounts_retry_policy():
     transport = Transport(_URL, max_retries=5)
     retry = transport._session.get_adapter(_URL).max_retries
     assert retry.total == 5
     assert 429 in retry.status_forcelist
     assert 503 in retry.status_forcelist
-    assert 'POST' in retry.allowed_methods
+    # GET is the only request this transport makes, so it is the only method
+    # that needs to be retryable.
+    assert retry.allowed_methods == frozenset({'GET'})
 
 
 def test_retry_policy_survives_urllib3_without_retry_after_max(monkeypatch):
@@ -230,7 +146,7 @@ def _make_handler(state: dict) -> type[BaseHTTPRequestHandler]:
     class _Handler(BaseHTTPRequestHandler):
         protocol_version = 'HTTP/1.1'
 
-        def do_POST(self) -> None:
+        def _respond(self) -> None:
             state['headers'].append(dict(self.headers))
             self.rfile.read(int(self.headers.get('Content-Length') or 0))
             location = state.get('redirect_to')
@@ -247,6 +163,12 @@ def _make_handler(state: dict) -> type[BaseHTTPRequestHandler]:
             self.send_header('Content-Length', str(len(body)))
             self.end_headers()
             self.wfile.write(body)
+
+        def do_GET(self) -> None:
+            self._respond()
+
+        def do_POST(self) -> None:
+            self._respond()
 
         def log_message(self, *args: object) -> None:
             pass
@@ -276,11 +198,9 @@ def servers() -> Iterator[tuple[dict, dict]]:
 
 def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(servers):
     origin, target = servers
-    origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
+    origin['redirect_to'] = target['url'] + _HEALTH_PATH
 
-    Transport(origin['url'], api_key='secret').predict(
-        {'model': 'kumo-relational'}
-    )
+    Transport(origin['url'], api_key='secret').health_ready()
 
     assert origin['headers'][0]['X-API-Key'] == 'secret'
     assert target['headers'][0].get('X-API-Key') is None
@@ -288,11 +208,9 @@ def test_api_key_is_not_forwarded_across_a_cross_origin_redirect(servers):
 
 def test_api_key_is_kept_on_a_same_origin_redirect(servers):
     origin, _ = servers
-    origin['redirect_to'] = origin['url'] + '/v1/predictions/'
+    origin['redirect_to'] = origin['url'] + _HEALTH_PATH + '/'
 
-    Transport(origin['url'], api_key='secret').predict(
-        {'model': 'kumo-relational'}
-    )
+    Transport(origin['url'], api_key='secret').health_ready()
 
     assert len(origin['headers']) == 2
     assert origin['headers'][1]['X-API-Key'] == 'secret'
@@ -300,50 +218,10 @@ def test_api_key_is_kept_on_a_same_origin_redirect(servers):
 
 def test_redirects_are_still_followed(servers):
     origin, target = servers
-    origin['redirect_to'] = target['url'] + _PREDICTIONS_PATH
+    origin['redirect_to'] = target['url'] + _HEALTH_PATH
 
-    body = Transport(origin['url']).predict({'model': 'kumo-relational'})
-
-    assert body == {'predictions': []}
+    assert Transport(origin['url']).health_ready() is True
     assert len(target['headers']) == 1
-
-
-def test_nim_error_string_carries_the_http_status(requests_mock):
-    requests_mock.post(
-        _URL + '/v1/predictions',
-        status_code=422,
-        json={'detail': 'schema validation failed', 'code': 'INVALID_SCHEMA'},
-    )
-
-    with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'kumo-relational'})
-    assert str(excinfo.value) == (
-        '[422 INVALID_SCHEMA] schema validation failed'
-    )
-
-
-def test_nim_error_string_carries_the_status_without_a_code(requests_mock):
-    requests_mock.post(
-        _URL + '/v1/predictions', status_code=403, text='Forbidden'
-    )
-
-    with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'kumo-relational'})
-    assert str(excinfo.value) == '[403] Forbidden'
-
-
-def test_nim_error_truncates_a_huge_response_body(requests_mock):
-    requests_mock.post(
-        _URL + '/v1/predictions',
-        status_code=502,
-        text='<html>' + 'x' * 3_000_000 + '</html>',
-    )
-
-    with pytest.raises(NimRequestError) as excinfo:
-        Transport(_URL).predict({'model': 'kumo-relational'})
-    assert len(str(excinfo.value)) < 1024
-    assert 'truncated' in str(excinfo.value)
-    assert excinfo.value.status_code == 502
 
 
 @pytest.mark.parametrize(
@@ -382,23 +260,6 @@ def test_url_without_a_host_is_rejected_at_construction(api_key):
     assert 'missing a host' in str(excinfo.value)
 
 
-def test_predict_after_close_is_rejected(requests_mock):
-    requests_mock.post(_URL + '/v1/predictions', json=_canned_response())
-    client = RelationalClient(url=_URL)
-    client.close()
-
-    @dataclass
-    class _AnyRequest(ModelRequest):
-        model: ClassVar[str] = 'kumo-relational'
-
-    # The closed-transport check runs before adapter dispatch, so the request
-    # only has to name a registered model.
-    with pytest.raises(RelationalError) as excinfo:
-        client._predict(_AnyRequest())
-    assert excinfo.value.code == 'INVALID_CONFIGURATION'
-    assert requests_mock.call_count == 0
-
-
 # ---------------------------------------------------------------------------
 # Both transports must satisfy the same internal contract.
 #
@@ -428,11 +289,13 @@ _TRANSPORTS = [
 
 
 @pytest.mark.parametrize('build', _TRANSPORTS)
-def test_transport_exposes_what_predict_calls(build):
+def test_transport_exposes_the_surface_the_client_uses(build):
     # Named explicitly rather than derived from Transport: the point is to pin
-    # the surface _predict depends on, not to mirror whatever Transport grows.
+    # the surface the client depends on, not to mirror whatever Transport
+    # grows. Predictions leave through the driver's own connection, so the
+    # client only needs these three.
     target = build()
-    for name in ('_require_open', 'close', 'health_ready', 'predict'):
+    for name in ('_require_open', 'close', 'health_ready'):
         assert callable(getattr(target, name, None)), (
             f'{type(target).__name__} is missing {name}()'
         )
@@ -471,3 +334,136 @@ def test_the_warning_does_not_carry_the_credential():
             'https://user:secret@nim.example.com', verify_ssl=False
         ).close()
     assert 'secret' not in str(caught[0].message)
+
+
+def test_a_redirect_body_is_discarded_rather_than_read() -> None:
+    r"""``requests`` releases a redirect's socket by reading its body in full,
+    with no cap, before following the hop. This layer never needs those bytes
+    and they are attacker-controlled on a misconfigured endpoint, so the socket
+    is closed instead. Without this, a redirect chain is an unbounded read.
+    """
+
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+            self.read_calls = 0
+
+        def close(self) -> None:
+            self.closed = True
+
+        def read(self, *args: object, **kwargs: object) -> bytes:
+            # Bounded on purpose: if the guard regresses, the assertion below
+            # fails rather than this looping forever feeding an uncapped read.
+            self.read_calls += 1
+            return b'x' * 1024 if self.read_calls == 1 else b''
+
+    raw = _Raw()
+    session = _Session()
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://nim.test/v1/health/ready')
+    )
+    response = requests.Response()
+    response.raw = raw  # type: ignore[assignment]
+    response.status_code = 307
+    response.url = prepared.url or ''
+    response.request = prepared
+    response.headers['Location'] = 'https://elsewhere.test/v1/health/ready'
+
+    # Take the first hop only: the generator stops before it is sent, which is
+    # after the redirect response has been released.
+    hops = session.resolve_redirects(response, prepared, yield_requests=True)
+    next(hops, None)
+
+    assert raw.closed, 'the redirect socket was not closed'
+    assert raw.read_calls == 0, 'the redirect body was read'
+    assert response.content == b''
+
+
+def _redirect_response(url: str, location: str) -> requests.Response:
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+            self.reads = 0
+
+        def close(self) -> None:
+            self.closed = True
+
+        def read(self, *args: object, **kwargs: object) -> bytes:
+            self.reads += 1
+            return b'x' * 1024 if self.reads == 1 else b''
+
+    response = requests.Response()
+    response.raw = _Raw()  # type: ignore[assignment]
+    response.status_code = 307
+    response.url = url
+    response.headers['Location'] = location
+    return response
+
+
+def test_every_redirect_hop_is_released_not_just_the_first() -> None:
+    r"""``requests`` resolves hops after the first inside its own generator and
+    reads each one as it loops, so a guard that released only the response it
+    was handed still left the rest to be read in full.
+    """
+    session = _Session()
+    first = _redirect_response(
+        'https://a.test/v1/health/ready', 'https://b.test/x'
+    )
+    second = _redirect_response('https://b.test/x', 'https://c.test/y')
+    final = requests.Response()
+    final.status_code = 200
+    final.url = 'https://c.test/y'
+    final.raw = second.raw  # type: ignore[assignment]
+
+    sent = [second, final]
+
+    def _send(
+        _self: object, request: object, **kwargs: object
+    ) -> requests.Response:
+        response = sent.pop(0)
+        response.request = request  # type: ignore[assignment]
+        return response
+
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://a.test/v1/health/ready')
+    )
+    first.request = prepared
+
+    with mock.patch.object(_Session, 'send', _send):
+        list(session.resolve_redirects(first, prepared))
+
+    assert first.raw.closed, 'the first hop was not released'  # type: ignore[union-attr]
+    assert second.raw.closed, 'the second hop was not released'  # type: ignore[union-attr]
+    assert first.raw.reads == 0  # type: ignore[union-attr]
+    assert second.raw.reads == 0, 'the second hop body was read'  # type: ignore[union-attr]
+
+
+def test_a_response_that_is_not_a_redirect_is_left_alone() -> None:
+    r"""``Session.send`` runs the redirect resolver over every response, so
+    releasing without checking closes the body of a successful one before its
+    caller reads it. The driver's copy of this guard sits on the path that does
+    read prediction bodies, where the same mistake would lose them.
+    """
+
+    class _Raw:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    ok = requests.Response()
+    ok.raw = _Raw()  # type: ignore[assignment]
+    ok.status_code = 200
+    ok.url = 'https://nim.test/v1/health/ready'
+
+    session = _Session()
+    prepared = session.prepare_request(
+        requests.Request('GET', 'https://nim.test/v1/health/ready')
+    )
+    ok.request = prepared
+
+    list(session.resolve_redirects(ok, prepared))
+
+    assert not ok.raw.closed, 'a non-redirect response was released'  # type: ignore[union-attr]
+    assert not ok._content_consumed

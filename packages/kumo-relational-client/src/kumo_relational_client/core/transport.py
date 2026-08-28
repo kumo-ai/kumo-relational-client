@@ -4,42 +4,27 @@
 
 from __future__ import annotations
 
-import json
 import math
 import re
 import warnings
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import urlparse
 
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from kumo_relational_client.errors import (
-    NimRequestError,
     RelationalError,
-    format_invalid_params,
 )
 
-_PREDICTIONS_PATH = '/v1/predictions'
-_SESSIONS_PATH = '/v1/sessions'
 _HEALTH_READY_PATH = '/v1/health/ready'
 _DEFAULT_TIMEOUT_SECONDS = 60.0
 _DEFAULT_MAX_RETRIES = 3
 _DEFAULT_BACKOFF_FACTOR = 0.5
 _RETRY_STATUS = (429, 500, 502, 503, 504)
 _RETRY_AFTER_MAX_SECONDS = 60
-_MAX_BODY_SNIPPET = 512
 _LOCAL_HOSTS = frozenset({'localhost', '127.0.0.1', '::1'})
-# Well above any real prediction response -- a full-precision float64 column
-# for a million rows is ~25 MB of JSON -- but far below what a compressed
-# hostile body can inflate to.
-_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
-_RESPONSE_CHUNK_BYTES = 1024 * 1024
-# Deleting a session is a bookkeeping call the server answers immediately, and
-# it runs on cleanup paths where the caller is no longer waiting on a result.
-# The full request timeout would let an unreachable endpoint stall a teardown.
-_DELETE_TIMEOUT_SECONDS = 10.0
 _USERINFO_RE = re.compile(r'(?<=//)[^/@\s]+@')
 
 
@@ -137,16 +122,63 @@ class _Session(requests.Session):
     verbatim, so without this the configured endpoint could hand the API key
     to any host it names, defeating ``_validate_url``.
 
-    Redirects are still followed, and this covers the credential only. A
-    ``307``/``308`` therefore re-sends the request *body* -- the caller's whole
-    context -- to the redirect target, including
-    across an ``https`` to ``http`` downgrade, which ``_validate_url`` never
-    sees because it runs at construction against the configured URL. That is
-    an accepted trade: refusing redirects outright breaks legitimate ``308``
-    normalisation, and the endpoint being redirected *from* was already trusted
-    with the same payload. A caller who cannot accept it should point the
-    client at a URL that does not redirect.
+    Redirects are still followed, and their bodies are discarded unread rather
+    than consumed, so a redirect chain cannot be used to make this layer read an
+    unbounded response.
+
+    The only request this session carries is ``GET /v1/health/ready``, which has
+    no body to re-send: predictions leave through the driver's own session,
+    which keeps its own copy of this guard. What a redirect can still do here is
+    move the readiness check to another host, including across an ``https`` to
+    ``http`` downgrade that ``_validate_url`` never sees, because it runs at
+    construction against the configured URL. The credential does not follow.
     """
+
+    @staticmethod
+    def _release_unread(resp: object) -> None:
+        r"""Give up a redirect hop's socket without reading its body.
+
+        Close rather than drain: the connection is surrendered instead of being
+        read to the end so it can be reused. Marking the body consumed is what
+        stops ``requests`` reading it afterwards -- ``resp.content`` returns the
+        empty bytes set here instead of pulling from the socket.
+        """
+        if not isinstance(resp, requests.Response):
+            return
+        raw = getattr(resp, 'raw', None)
+        if raw is not None:
+            raw.close()
+        resp._content = b''
+        resp._content_consumed = True  # type: ignore[attr-defined]
+
+    def resolve_redirects(  # type: ignore[override]
+        self,
+        resp: requests.Response,
+        req: requests.PreparedRequest,
+        **kwargs: Any,
+    ) -> Any:
+        r"""Follow redirects without reading the bodies they carry.
+
+        ``requests`` consumes each hop's body (``resp.content``) to release the
+        socket, with no cap. This layer never needs those bytes -- the only
+        request it makes reports a status -- and they are attacker-controlled on
+        a misconfigured endpoint.
+
+        Every hop is released, not just the first. ``requests`` resolves the
+        rest inside the generator below, reading each one as it loops, so each
+        is released as it is yielded -- before control returns to that loop.
+        """
+        # ``Session.send`` calls this for every response, redirect or not, so
+        # the check matters: releasing unconditionally would close the body of
+        # a successful response before the caller ever saw it.
+        if self.get_redirect_target(resp) is not None:
+            self._release_unread(resp)
+        for hop in super().resolve_redirects(resp, req, **kwargs):
+            if isinstance(hop, requests.Response) and (
+                self.get_redirect_target(hop) is not None
+            ):
+                self._release_unread(hop)
+            yield hop
 
     def rebuild_auth(
         self,
@@ -197,25 +229,19 @@ def _validate_limits(timeout: Any, max_retries: Any) -> None:
         )
 
 
-def _build_retry(
-    max_retries: int,
-    backoff_factor: float,
-    *,
-    retry_post: bool = True,
-) -> Retry:
+def _build_retry(max_retries: int, backoff_factor: float) -> Retry:
     r"""The retry policy this transport's requests run under.
 
     ``retry_after_max`` caps how long a server-chosen ``Retry-After`` header
     may park the caller; it needs urllib3 >= 2.3, and older versions fall back
     to urllib3's own (6 hour) cap.
 
-    ``retry_post=False`` drops ``POST`` from the retryable methods, which
-    switches off the read and status retries for a route whose side effect the
-    client cannot reconcile. Connection failures stay retryable either way:
-    urllib3 gates read and status retries on the method but not connect ones,
-    and a request that never reached the server cannot have had an effect.
+    Only ``GET`` is retryable, which is every request this transport makes.
+    Connection failures stay retryable regardless: urllib3 gates read and status
+    retries on the method but not connect ones, and a request that never reached
+    the server cannot have had an effect.
     """
-    methods = {'GET', 'POST'} if retry_post else {'GET'}
+    methods = {'GET'}
     options: dict[str, Any] = {
         'total': max_retries,
         'connect': max_retries,
@@ -233,62 +259,17 @@ def _build_retry(
         return Retry(**options)
 
 
-def _snippet(text: str) -> str:
-    r"""A one-line, length-capped view of a response body, so a multi-megabyte
-    HTML error page cannot become a multi-megabyte exception message.
-    """
-    text = ' '.join(text.split())
-    if len(text) <= _MAX_BODY_SNIPPET:
-        return text
-    return f'{text[:_MAX_BODY_SNIPPET]}... [truncated, {len(text)} chars total]'
-
-
-def _read_capped(response: requests.Response, url: str) -> bytes:
-    r"""Reads a streamed response body, refusing anything past the cap.
-
-    ``requests`` inflates ``Content-Encoding: gzip`` with no ratio limit, so
-    an unbounded read lets a small compressed body expand into hundreds of
-    megabytes of client memory before anything is parsed.
-    """
-    body = bytearray()
-    for chunk in response.iter_content(_RESPONSE_CHUNK_BYTES):
-        if len(body) + len(chunk) > _MAX_RESPONSE_BYTES:
-            raise RelationalError(
-                f'Response body from {redact_url(url)} exceeds the '
-                f'{_MAX_RESPONSE_BYTES} byte limit',
-                code='TRANSPORT_ERROR',
-            )
-        body.extend(chunk)
-    return bytes(body)
-
-
-def _path_segment(value: str) -> str:
-    r"""Escapes a server-chosen id before it is spliced into a URL path, so a
-    hostile or malformed ``session_id`` cannot redirect the call to another
-    route.
-    """
-    return quote(value, safe='')
-
-
 def _build_session(
     url: str,
     api_key: str | None,
     max_retries: int,
     backoff_factor: float,
 ) -> requests.Session:
-    r"""The pooled session, with ``POST /v1/sessions`` held out of the retries.
+    r"""The pooled session behind this transport's one request.
 
-    Creating a session fits and pins the context in the worker's memory before
-    the response is written, so a re-sent ``POST`` leaves one orphaned pinned
-    context per attempt: the client keeps only the last ``session_id`` and can
-    never ``DELETE`` the earlier ones. That is a side effect the client cannot
-    reconcile, unlike ``/v1/predictions``, which the same policy may safely
-    replay.
-
-    ``requests`` resolves an adapter by longest matching URL prefix, so the
-    stricter policy is mounted on the exact create-session URL and the ordinary
-    one re-mounted on the routes below it: scoring against a pinned context and
-    releasing one are both replayable and keep the full policy.
+    A single retry policy covers it: the only route this package calls is
+    ``GET /v1/health/ready``, which has no side effect to reconcile and is safe
+    to replay. The driver keeps its own session for the routes that do.
     """
     session = _Session()
     if api_key:
@@ -296,15 +277,6 @@ def _build_session(
     adapter = HTTPAdapter(max_retries=_build_retry(max_retries, backoff_factor))
     session.mount('http://', adapter)
     session.mount('https://', adapter)
-    session.mount(
-        url + _SESSIONS_PATH,
-        HTTPAdapter(
-            max_retries=_build_retry(
-                max_retries, backoff_factor, retry_post=False
-            )
-        ),
-    )
-    session.mount(url + _SESSIONS_PATH + '/', adapter)
     return session
 
 
@@ -379,6 +351,12 @@ class Transport:
         try:
             # Streamed and closed unread: only the status matters, and the
             # body is attacker-controlled on a misconfigured endpoint.
+            # Redirect hops are released by closing rather than reading, in
+            # `_Session.resolve_redirects`. One gap remains: urllib3 drains a
+            # retryable 4xx/5xx body before retrying it, so a hostile endpoint
+            # can still be read up to `max_retries` times. Closing that would
+            # mean not retrying a status here at all, which is a change to the
+            # documented retry contract rather than an implementation detail.
             with self._session.get(
                 self._url + _HEALTH_READY_PATH,
                 timeout=self._timeout,
@@ -393,121 +371,3 @@ class Transport:
                 f'{scrub_userinfo(str(error))}',
                 code='TRANSPORT_ERROR',
             ) from error
-
-    def predict(self, payload: dict[str, Any]) -> dict[str, Any]:
-        return self._post(_PREDICTIONS_PATH, payload)
-
-    def create_session(self, payload: dict[str, Any]) -> dict[str, Any]:
-        r"""Pins a context server-side; ``payload`` carries the context-only
-        sections of a prediction request.
-        """
-        return self._post(_SESSIONS_PATH, payload)
-
-    def session_predict(
-        self,
-        session_id: str,
-        payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        r"""Scores rows against a pinned context; ``payload`` carries only the
-        per-call sections.
-        """
-        return self._post(
-            f'{_SESSIONS_PATH}/{_path_segment(session_id)}/predictions', payload
-        )
-
-    def delete_session(self, session_id: str) -> None:
-        r"""Releases a pinned context. Idempotent server-side: the NIM answers
-        204 whether or not the session is still there.
-        """
-        self._require_open()
-        url = f'{self._url}{_SESSIONS_PATH}/{_path_segment(session_id)}'
-        try:
-            with self._session.delete(
-                url,
-                timeout=min(self._timeout, _DELETE_TIMEOUT_SECONDS),
-                verify=self._verify_ssl,
-                stream=True,
-            ) as response:
-                status_code = response.status_code
-                content = _read_capped(response, url)
-        except requests.RequestException as error:
-            raise RelationalError(
-                f'Request to {redact_url(url)} failed: '
-                f'{scrub_userinfo(str(error))}',
-                code='TRANSPORT_ERROR',
-            ) from error
-        if status_code >= 400:
-            raise _to_nim_error(status_code, content)
-
-    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        self._require_open()
-        url = self._url + path
-        try:
-            with self._session.post(
-                url,
-                json=payload,
-                timeout=self._timeout,
-                verify=self._verify_ssl,
-                stream=True,
-            ) as response:
-                status_code = response.status_code
-                content = _read_capped(response, url)
-        except requests.RequestException as error:
-            raise RelationalError(
-                f'Request to {redact_url(url)} failed: '
-                f'{scrub_userinfo(str(error))}',
-                code='TRANSPORT_ERROR',
-            ) from error
-        if status_code >= 400:
-            raise _to_nim_error(status_code, content)
-        try:
-            # A deeply nested body raises RecursionError, which is a
-            # RuntimeError and would otherwise escape the RelationalError contract.
-            body = json.loads(content)
-        except (ValueError, RecursionError) as error:
-            raise RelationalError(
-                f'Invalid JSON response from {redact_url(url)}',
-                code='TRANSPORT_ERROR',
-            ) from error
-        if not isinstance(body, dict):
-            raise RelationalError(
-                f'Expected a JSON object from {redact_url(url)}, got '
-                f'{type(body).__name__}',
-                code='TRANSPORT_ERROR',
-            )
-        return body
-
-
-def _to_nim_error(status_code: int, content: bytes) -> NimRequestError:
-    try:
-        body = json.loads(content)
-    except (ValueError, RecursionError):
-        body = {}
-    if not isinstance(body, dict):
-        body = {}
-    code = body.get('code')
-    reported = (
-        body.get('detail')
-        or body.get('title')
-        or content.decode('utf-8', 'replace')
-    )
-    message = (
-        _snippet(str(reported))
-        if reported
-        else (f'NIM request failed with status {status_code}')
-    )
-    # A validation failure's top-level detail is often only "Request validation
-    # failed."; the per-field diagnosis is in invalid_params, so render it into
-    # the message rather than leaving it for the caller to dig out of details.
-    message += format_invalid_params(body.get('invalid_params'))
-    details = {
-        key: value
-        for key, value in body.items()
-        if key not in ('code', 'detail', 'title', 'type', 'status', 'instance')
-    }
-    return NimRequestError(
-        status_code,
-        code=code,
-        message=message,
-        details=details,
-    )

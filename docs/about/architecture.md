@@ -1,13 +1,13 @@
 ---
 title: "NVIDIA Kumo Relational Client Architecture"
-description: "How the NVIDIA Kumo Relational Client is structured: a model-agnostic client, per-model adapters, optional model drivers, and shared data-source connectors."
+description: "How the NVIDIA Kumo Relational Client is structured: a thin client, one model adapter, an optional model driver, and shared data-source connectors."
 template-library-version: "1.0.0"
 ---
 
 # NVIDIA Kumo Relational Client Architecture
 
-The NVIDIA Kumo Relational Client separates a small, universal client from the heavy runtimes
-that individual models need. The client is symmetric across models, since every model
+The NVIDIA Kumo Relational Client separates a small, universal client from the
+heavy runtime the model needs. The client stays thin because the model
 is a peer adapter, while a model's optional driver holds its client-side compute.
 
 ## High-Level Architecture Diagram
@@ -15,8 +15,7 @@ is a peer adapter, while a model's optional driver holds its client-side compute
 ```mermaid
 flowchart TD
     app["Your application"] --> client["RelationalClient (kumo-relational-client)"]
-    client --> registry["AdapterRegistry"]
-    registry --> rfm["Kumo Relational adapter"]
+    client --> rfm["Kumo Relational adapter"]
     rfm --> driver["kumo_relational_engine driver: graph, sampler, PQL"]
     client --> transport["Transport (HTTP)"]
     driver --> nimclient["NimClient (HTTP)"]
@@ -32,15 +31,15 @@ flowchart TD
 
 ### Client Layer
 
-`RelationalClient` owns the endpoint address and an `AdapterRegistry`. Because each
-client owns its own registry and configuration, several clients can target
+`RelationalClient` owns the endpoint address and one adapter. Because each
+client owns its own adapter and configuration, several clients can target
 different endpoints or tenants in the same process, concurrently: every
 prediction is issued against the endpoint and credential of the client that
 started it.
 
 Requests do not all leave through the same object. The client holds a
-`Transport`, a pooled HTTP session with retry and backoff, which serves the
-client's own calls such as `/v1/models`. Kumo Relational does not predict through
+`Transport`, a pooled HTTP session with retry and backoff, which serves the one
+call the client makes itself, `/v1/health/ready`. Predictions do not go through
 it: the client hands its address and credential to the driver, which opens its
 own pooled session (`NimClient`) and sends from there. The two are separate implementations of the same HTTP contract, because
 `kumo_relational_engine` cannot depend on `kumo-relational-client`; the dependency runs the other way.
@@ -55,14 +54,12 @@ configured it last. Drive the driver through `RelationalClient` only.
 
 ### Adapter Layer
 
-Every model is a peer module implementing the `ModelAdapter` interface and
-registered in the client's `AdapterRegistry`. An adapter advertises its
+The model is served by one adapter module. It advertises its
 capabilities, shapes an internal typed request (`KumoRelationalRequest`,
 `KumoRelationalTaskRequest`,
 built by the model handles, and not importable from `kumo_relational_client`) into the
 Universal TFM API envelope, and normalizes the NIM's response into a consistent
-pandas DataFrame. Adding a model means adding one adapter module, and the client
-core does not change.
+pandas DataFrame.
 
 ### Driver Layer
 
@@ -116,7 +113,7 @@ caller. `RelationalClient.health_ready()` issues `GET /v1/health/ready` and repo
 whether it answered 200. The Kumo Relational driver checks more before its first
 prediction: it reads `/v1/health/ready` for a ready status and then
 `/v1/models`, and fails if the endpoint does not advertise
-`kumo-relational-engine`. Nothing
+`kumo-relational`. Nothing
 on the client path reads `/v1/models`.
 
 ## External Integration Points
@@ -125,8 +122,7 @@ on the client path reads `/v1/models`.
   the shared `kumo-connectors` package (SQLite, DuckDB, Snowflake, Databricks),
   so each warehouse is reached through one place.
 - **NIM endpoint.** Any NIM that implements the Universal TFM API. The Kumo Relational
-  path additionally requires the endpoint to advertise
-  `kumo-relational-engine` in
+  path additionally requires the endpoint to advertise `kumo-relational` in
   `/v1/models`.
 - **Databricks Model Serving.** `RelationalClient.for_databricks_serving(name)`
   targets a named serving endpoint through the Databricks SDK. There is no base
@@ -147,12 +143,12 @@ kumo-relational-client/
 └── packages/
     ├── kumo-relational-client/            # the client (pure python, universal wheel)
     │   └── src/kumo_relational_client/
-    │       ├── client.py       #   RelationalClient: the entry point and its registry
-    │       ├── models.py       #   the per-model handles the client hands back
+    │       ├── client.py       #   RelationalClient: the entry point
+    │       ├── models.py       #   the handles the client hands back
     │       ├── requests.py     #   the internal typed requests handles build
     │       ├── errors.py       #   the exception hierarchy
     │       ├── core/           #   HTTP transport, connectors, serving targets
-    │       ├── base.py         #   ModelAdapter interface + AdapterRegistry
+    │       ├── base.py         #   ModelCapabilities + the result type
     │       ├── adapters/       #   one peer module per model
     │       │   └── relational.py #   relational (lazy-wraps the driver)
     │       └── relational.py  #   explicit, lazily-resolved surface onto the driver
@@ -162,15 +158,14 @@ kumo-relational-client/
         └── src/kumo_relational_engine/
 ```
 
-## Adding a Model
+## Serving Another Model
 
-1. Add `packages/kumo-relational-client/src/kumo_relational_client/adapters/<model>.py`
-   implementing `ModelAdapter`, and register it in `_default_registry()` in
-   `client.py`. The core never changes.
-2. If the model needs a heavy runtime, add it under `packages/<driver>/` as its
-   own distribution and add a `[<model>]` extra. The adapter lazy-imports the
-   driver so base installs stay light.
-3. A dependency-free model needs no driver and no extra.
+There is no registry and no adapter interface: the client supports
+`kumo-relational` and dispatches to one adapter. A second model would mean a
+second adapter module and a branch in `RelationalClient` -- a deliberate change,
+not an extension point. A model needing a heavy runtime would ship it under
+`packages/<driver>/` as its own distribution behind an extra, the way the
+relational driver does, so base installs stay light.
 
 ## Why the Relational Adapter Wraps the Driver
 

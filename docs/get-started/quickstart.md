@@ -6,8 +6,8 @@ template-library-version: "1.0.0"
 
 # Quickstart for the NVIDIA Kumo Relational Client
 
-This quickstart shows you how to connect to a NIM and run a prediction with each
-model. A `RelationalClient` owns one connection to a NIM, and each model has its own
+This quickstart shows you how to connect to a NIM and run a prediction. A
+`RelationalClient` owns one connection to a NIM and reaches the model through a
 typed handle.
 
 ## Prerequisites
@@ -16,7 +16,9 @@ Before you start, you must complete the following prerequisites:
 
 1. Install the client. For the relational example, install the Kumo Relational extra:
    `pip install "kumo-relational-client[relational]"`.
-2. Identify the URL of a running Universal TFM API NIM.
+2. Identify the URL of a running Universal TFM API NIM, and an API key if it
+   is a hosted one. See [Prerequisites](prerequisites.md#nim-endpoint-access)
+   for how to get either.
 
 ## Quickstart Steps
 
@@ -69,11 +71,11 @@ To use your own tables instead, pass DataFrames to
 aggregation window your data can support: a query over `0, 90, days` needs at
 least 90 days of history before the anchor time, or the request is rejected.
 
-### Check Which Models the Client Can Serve
+### Check What the Client Can Serve
 
-Both calls describe the client's own adapters, not the endpoint it points at.
+Both describe the client itself, not the endpoint it points at.
 Neither contacts the NIM, so they answer before you have one running, and a NIM
-serving only one of these models still reports both.
+serving something else surfaces on the first prediction rather than here.
 
 ```python
 from kumo_relational_client import RelationalClient

@@ -1,11 +1,11 @@
 # Public CI, mirroring the checks the client is released under.
 #
-# The three packages depend on each other and are not on a public index, so
-# every job installs them from the working tree, in dependency order:
+# The three packages depend on each other, and CI tests the working tree rather
+# than a release, so every job installs them from source in dependency order:
 # connectors, then the relational driver, then the client. Installing the
-# client alone makes pip look for `kumo-connectors` on PyPI, where
-# it does not exist. Backend extras are installed so their tests import rather
-# than failing at collection; tests needing a live warehouse still skip.
+# client alone would resolve its siblings from the index and test a release
+# instead of this commit. Backend extras are installed so their tests import
+# rather than failing at collection; tests needing a live warehouse still skip.
 name: CI
 
 on:

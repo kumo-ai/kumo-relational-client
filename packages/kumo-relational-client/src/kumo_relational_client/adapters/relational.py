@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import pandas as pd
 
 from kumo_relational_client.base import (
-    ModelAdapter,
     ModelCapabilities,
     request_type_names,
 )
@@ -518,7 +517,14 @@ def _graph_signature(graph: Any) -> Any | None:
         return None
 
 
-class KumoRelationalAdapter(ModelAdapter):
+class KumoRelationalAdapter:
+    r"""Translates a relational request into a call on the driver.
+
+    The client holds one of these. It is not an extension point: the client
+    serves a single model, and the request types below are the only ones it
+    accepts.
+    """
+
     name = 'kumo-relational'
     request_type = (KumoRelationalRequest, KumoRelationalTaskRequest)
 
@@ -677,7 +683,7 @@ class KumoRelationalAdapter(ModelAdapter):
         The engine keeps its own connection pool, separate from the client's
         transport, so closing the client alone would leave it open. Skipped
         when this adapter never configured the engine, so that closing a
-        client that only ever used another model does not import the driver.
+        client that never ran a prediction does not import the driver.
         """
         self._engine_cache = threading.local()
         if not self._opened_engine_client:

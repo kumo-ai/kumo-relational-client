@@ -58,6 +58,12 @@ At runtime, the client needs network access to a Universal TFM API NIM. Set the
 endpoint when you create the client, or through the `KUMO_RELATIONAL_API_ENDPOINT`
 environment variable for the Kumo Relational path.
 
+You can use a hosted endpoint from the [NVIDIA API
+catalog](https://build.nvidia.com), which needs an API key and nothing deployed,
+or pull the NIM container from the [NGC
+catalog](https://catalog.ngc.nvidia.com) and run it on your own GPU host when
+the data cannot leave your environment.
+
 ## Pre-Installation Checklist
 
 Before you continue to installation, confirm the following:
@@ -72,8 +78,8 @@ Before you continue to installation, confirm the following:
   source distribution is published to fall back to. Install the base
   `kumo-relational-client` without the `[relational]` extra, or use a supported host and
   interpreter.
-- **Cannot reach the package index.** Confirm you are connected to the NVIDIA
-  network, then retry the install.
+- **Cannot reach the package index.** Confirm `pip` can reach PyPI, including
+  through any proxy or mirror your environment requires, then retry.
 
 ## Next Steps
 
