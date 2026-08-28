@@ -17,9 +17,9 @@ on CPython 3.10-3.13 only, and no source distribution. It does not install on
 macOS, Windows, or arm64. The client and connectors are pure Python and install
 anywhere.
 
-## Two models, one client
+## One model, one client
 
-`RelationalClient` dispatches to whichever model you ask for:
+`RelationalClient` reaches the one model it serves:
 
 ```python
 from kumo_relational_client import RelationalClient
@@ -34,8 +34,8 @@ with RelationalClient(url='http://localhost:8000') as client:
 capability, so a future model of the same shape is a `model=` argument rather
 than a new method.
 
-`client.models()` lists what the client can dispatch, and
-`client.capabilities(model)` describes one model. Neither needs a live endpoint.
+`client.models()` reports `['kumo-relational']`, and
+`client.capabilities(model)` describes it. Neither needs a live endpoint.
 
 ## Things that are easy to get wrong
 
