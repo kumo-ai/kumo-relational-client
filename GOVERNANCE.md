@@ -46,6 +46,40 @@ Breaking changes are avoided within a major version. Where one is unavoidable,
 it is called out in [CHANGELOG.md](CHANGELOG.md) under a heading that says so,
 with the migration in the same entry.
 
+### Cutting one
+
+Two kinds of tag exist and they do different things. `v1.0.0` marks the release
+of all three packages together and carries the GitHub release notes; it uploads
+nothing. A tag of the form `<distribution>/v<version>`, such as
+`kumo-connectors/v1.0.0`, is what publishes that one distribution to PyPI
+through [the publish workflow](.github/workflows/publish.yml).
+
+From a merged, green `main`:
+
+1. Bump `__version__` in all three packages to the same number. If the number
+   crosses a major boundary, move the `kumo-*` pins in
+   `packages/kumo-relational-client/pyproject.toml` and
+   `packages/kumo-relational-engine/setup.py` with it, or the client will
+   refuse the engine it was released alongside.
+2. Write the entry in [CHANGELOG.md](CHANGELOG.md).
+3. Push the three publish tags **one at a time, in this order**:
+   `kumo-connectors`, then `kumo-relational-engine`, then
+   `kumo-relational-client`. Wait for each tag's publish run to go green before
+   pushing the next; pushing them together starts three independent runs, and
+   the client would try to install before its siblings are on the index. The
+   client pins the other two, so its verify job is what proves the set released
+   together installs together.
+4. Tag and push `v<version>` and write the GitHub release notes.
+
+A version can never be uploaded to PyPI twice, even after deleting it, so the
+tag guard runs before anything is built and refuses a tag that disagrees with
+the declared `__version__`. If you get that far and the number was wrong, the
+only way out is a new version.
+
+Publishing needs a PyPI trusted publisher for each distribution and a
+repository environment named `pypi`; both are configured outside this
+repository and are described at the top of the publish workflow.
+
 ## Changing this document
 
 Governance changes are made by maintainers, as a pull request like any other, so

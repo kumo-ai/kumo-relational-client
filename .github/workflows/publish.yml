@@ -1,0 +1,219 @@
+# Publishes one distribution to PyPI, triggered by its release tag.
+#
+# Tags are per distribution and carry the version: `kumo-connectors/v1.0.0`.
+# The repository also carries plain `v1.0.0` tags marking a release of all three
+# together; those deliberately do not match here, because publishing is per
+# distribution and each is uploaded under its own name.
+#
+# Publish one at a time, in the order given in GOVERNANCE.md, waiting for each
+# run before pushing the next tag. A client that pins `kumo-connectors>=1.0,<2`
+# cannot install until that version of connectors is on the index, and the
+# verify job is what proves it arrived.
+#
+# An upload cannot be undone: PyPI never allows a version to be re-uploaded,
+# even after a delete. So the guard runs everything it can before a build
+# starts, in this order: the ref must be a tag, its name must match the
+# allowlist, `release_tag_check.py` must find a known distribution whose
+# declared `__version__` equals the tagged version, and the commit must be an
+# ancestor of main. Every build job needs the guard, so none runs if any of
+# that fails. The verify job then treats an upload as unproven until the index
+# serves it and the artifact installs and imports from there.
+#
+# Two things have to exist outside this repository first: a PyPI trusted
+# publisher for each distribution, pointing at this repository, this workflow
+# and the environment named `pypi`; and that environment itself. GitHub creates
+# it implicitly with no protection, so add required reviewers there if an
+# upload should wait for a human. Nothing in this file can gate that.
+name: Publish
+
+on:
+  push:
+    tags: ['*/v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    env:
+      # Through env, never `${{ }}` in a run: body. Git accepts a tag with
+      # shell metacharacters, and an expression is pasted into the script
+      # source before bash parses it, so interpolating one would run it.
+      TAG: ${{ github.ref_name }}
+      # `ref_name` reads the same for a branch as for a tag, and a branch may
+      # contain a slash, so only `ref_type` proves a tag exists.
+      REF_TYPE: ${{ github.ref_type }}
+    outputs:
+      distribution: ${{ steps.tag.outputs.distribution }}
+      version: ${{ steps.tag.outputs.version }}
+      module: ${{ steps.tag.outputs.module }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - id: tag
+        run: |
+          if [ "$REF_TYPE" != 'tag' ]; then
+            echo "::error::refusing to publish from a $REF_TYPE; run this against the release tag"
+            exit 1
+          fi
+
+          if ! printf '%s' "$TAG" | grep -qxE '[a-z][a-z0-9-]*/v[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::refusing to publish from '$TAG'; expected <distribution>/v<major>.<minor>.<patch>"
+            exit 1
+          fi
+
+          python scripts/release_tag_check.py "$TAG"
+
+          DISTRIBUTION="${TAG%%/v*}"
+          VERSION="${TAG##*/v}"
+          echo "distribution=$DISTRIBUTION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "module=$(printf '%s' "$DISTRIBUTION" | tr '-' '_')" >> "$GITHUB_OUTPUT"
+          echo "publishing $DISTRIBUTION $VERSION from $TAG"
+
+      - name: Refuse a tag that is not on main
+        run: |
+          git fetch --quiet origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_SHA is not an ancestor of main; publish only from merged code"
+            exit 1
+          fi
+
+  # No sdist: the C++ sources are not distributed, so one would be an
+  # uninstallable placeholder that pip still prefers where no wheel matches.
+  build-engine:
+    needs: guard
+    if: needs.guard.outputs.distribution == 'kumo-relational-engine'
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    env:
+      WITH_RELATIONALLIB: '1'
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: |
+          for PYTAG in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313; do
+            "/opt/python/${PYTAG}/bin/python" -m pip install --upgrade pip build
+            "/opt/python/${PYTAG}/bin/python" -m build --wheel \
+              --outdir wheelhouse packages/kumo-relational-engine
+          done
+          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
+            auditwheel repair "$wheel" --wheel-dir dist
+          done
+          /opt/python/cp312-cp312/bin/python -m pip install twine
+          /opt/python/cp312-cp312/bin/python -m twine check dist/*
+      - name: Refuse an sdist
+        run: test "$(find dist -name '*.tar.gz' | wc -l)" -eq 0
+      - name: Refuse anything but four wheels of the tagged version
+        run: |
+          test "$(find dist -name "kumo_relational_engine-${VERSION}-*.whl" | wc -l)" -eq 4
+          test "$(find dist -name '*.whl' | wc -l)" -eq 4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  build-pure:
+    needs: guard
+    if: needs.guard.outputs.distribution != 'kumo-relational-engine'
+    runs-on: ubuntu-latest
+    env:
+      DISTRIBUTION: ${{ needs.guard.outputs.distribution }}
+      MODULE: ${{ needs.guard.outputs.module }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --upgrade pip build twine
+      - run: python -m build --outdir dist "packages/$DISTRIBUTION"
+      - run: python -m twine check dist/*
+      - name: Refuse anything but one wheel of the tagged version
+        run: |
+          test "$(find dist -name "${MODULE}-${VERSION}-*.whl" | wc -l)" -eq 1
+          test "$(find dist -name '*.whl' | wc -l)" -eq 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  publish:
+    needs: [guard, build-engine, build-pure]
+    # One build job is always skipped, so the default "all needs succeeded"
+    # would never run this. `!cancelled()` not `always()`: never upload from a
+    # cancelled run.
+    if: >-
+      !cancelled() && needs.guard.result == 'success'
+      && (needs.build-engine.result == 'success' || needs.build-pure.result == 'success')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/project/${{ needs.guard.outputs.distribution }}/${{ needs.guard.outputs.version }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  verify:
+    needs: [guard, publish]
+    runs-on: ubuntu-latest
+    env:
+      DISTRIBUTION: ${{ needs.guard.outputs.distribution }}
+      MODULE: ${{ needs.guard.outputs.module }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Wait for the index to serve it
+        run: |
+          if [ "$DISTRIBUTION" = 'kumo-relational-engine' ]; then
+            set -- --require-wheel-only
+          else
+            set --
+          fi
+          python scripts/verify_release.py "$DISTRIBUTION" "$VERSION" \
+            --index https://pypi.org/simple "$@"
+
+      - name: Install from the index and import it
+        run: |
+          # The pins are major-range, so a plain install would resolve older
+          # siblings and pass. The extra plus the three-way assert is the only
+          # proof that the set released together installs together.
+          if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
+            SPEC="${DISTRIBUTION}[relational]==${VERSION}"
+          else
+            SPEC="${DISTRIBUTION}==${VERSION}"
+          fi
+
+          python -m venv /tmp/from-index
+          /tmp/from-index/bin/python -m pip install --upgrade pip
+          /tmp/from-index/bin/python -m pip install "$SPEC"
+          /tmp/from-index/bin/python -c '
+          import importlib, os
+          want = os.environ["VERSION"]
+          if os.environ["DISTRIBUTION"] == "kumo-relational-client":
+              names = ["kumo_relational_client", "kumo_relational_engine", "kumo_connectors"]
+          else:
+              names = [os.environ["MODULE"]]
+          for name in names:
+              found = importlib.import_module(name).__version__
+              assert found == want, f"{name} installed as {found}, expected {want}"
+              print("installed from the index:", name, found)
+          '
