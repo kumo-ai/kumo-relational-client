@@ -42,11 +42,38 @@ A PostgreSQL schema is a namespace that groups tables within a database.
 `schema` to use the connection's current schema. Connection details can be an
 open psycopg connection, a URI/libpq conninfo string, explicit keywords, or
 standard `PG*` environment variables. See the generic
-[`postgres.py`](examples/rfm/postgres.py) example. The
-[`kumo_relational_engine_adventureworks_lakebase.py`](examples/rfm/notebooks/kumo_relational_engine_adventureworks_lakebase.py)
-notebook is a provider-specific migration and parity utility for copying the
-AdventureWorks example into Lakebase; it is not a duplicate prediction
-walkthrough.
+[`postgres.py`](examples/rfm/postgres.py) example.
+
+Lakebase exposes a PostgreSQL endpoint, so tables that already exist there use
+the same API. Obtain a database credential using the Databricks-supported
+authentication flow, open a psycopg connection, and pass it to
+`Graph.from_postgres()`:
+
+```python
+import psycopg
+from kumo_relational_client import relational
+
+connection = psycopg.connect(
+    host=lakebase_host,
+    dbname=database,
+    user=database_user,
+    password=oauth_token,
+    sslmode='require',
+)
+graph = relational.Graph.from_postgres(
+    connection=connection,
+    schema='public',
+)
+```
+
+This connects directly to existing tables. It does not register Lakebase in
+Unity Catalog, copy data, or create schemas and tables.
+
+Temporal neighbor sampling returns the exact latest rows at or before each
+anchor time. On large fact tables, a PostgreSQL index matching
+`(foreign_key, time_column DESC, primary_key)` can accelerate that query
+without changing which rows are selected. The client never creates indexes or
+otherwise modifies source tables.
 
 Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
 (`manylinux_2_28` x86-64); no source distribution is published.

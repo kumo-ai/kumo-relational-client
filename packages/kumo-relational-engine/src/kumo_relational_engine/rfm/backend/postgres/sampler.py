@@ -2,8 +2,8 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import hashlib
 import json
-import math
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -47,6 +47,14 @@ class PostgresSampler(SQLSampler):
         for table in graph.tables.values():
             assert isinstance(table, PostgresTable)
             self._connection = table._connection
+        self._postgres_type_dict: dict[str, dict[str, str]] = {
+            table.name: {
+                column.name: table._postgres_type(column.name)
+                or self._elem_type(column.dtype)
+                for column in table.columns
+            }
+            for table in graph.tables.values()
+        }
         self._num_rows_dict: dict[str, int] = {
             table.name: cast(int, table._num_rows)
             for table in graph.tables.values()
@@ -80,17 +88,30 @@ class PostgresSampler(SQLSampler):
         return 'text'
 
     @staticmethod
-    def _coerce_id(value: Any, dtype: Dtype) -> Any:
+    def _coerce_id(value: Any, dtype: Dtype, postgres_type: str) -> Any:
+        if hasattr(value, 'item'):
+            value = value.item()
         if dtype.is_int():
             return int(value)
         if dtype.is_float():
+            if postgres_type.lower().startswith(('numeric', 'decimal')):
+                return str(value)
             return float(value)
         return str(value)
 
     @staticmethod
     def _postgres_seed(random_seed: int) -> float:
-        r"""Map an arbitrary integer seed into PostgreSQL's [-1, 1] range."""
-        return ((random_seed % 2_000_001) - 1_000_000) / 1_000_000
+        r"""Map an integer seed stably into PostgreSQL's ``[-1, 1]`` range.
+
+        Hashing avoids the guaranteed collisions every 2,000,001 values that
+        a direct modulo mapping would introduce. PostgreSQL accepts a double,
+        so the final mapping necessarily has finite precision.
+        """
+        digest = hashlib.blake2b(
+            str(random_seed).encode('ascii'), digest_size=8
+        ).digest()
+        value = int.from_bytes(digest, byteorder='big', signed=False)
+        return 2.0 * value / ((1 << 64) - 1) - 1.0
 
     def _chunk_rows(
         self,
@@ -127,17 +148,24 @@ class PostgresSampler(SQLSampler):
         )
 
     @staticmethod
-    def _json_cte(dtype: Dtype, fields: tuple[str, ...] = ()) -> str:
-        elem = PostgresSampler._elem_type(dtype)
+    def _json_cte(
+        postgres_type: str,
+        fields: tuple[str, ...] = (),
+        time_type: str = 'timestamp',
+    ) -> str:
         select = ['(ordinality - 1)::bigint AS __KUMO_BATCH__']
         if fields:
-            select.append(f"(value->>'id')::{elem} AS __KUMO_ID__")
+            select.append(f"(value->>'id')::{postgres_type} AS __KUMO_ID__")
             if 'e' in fields:
-                select.append("(value->>'e')::timestamp AS __KUMO_END_TIME__")
+                select.append(
+                    f"(value->>'e')::{time_type} AS __KUMO_END_TIME__"
+                )
             if 's' in fields:
-                select.append("(value->>'s')::timestamp AS __KUMO_START_TIME__")
+                select.append(
+                    f"(value->>'s')::{time_type} AS __KUMO_START_TIME__"
+                )
         else:
-            select.append(f"(value #>> '{{}}')::{elem} AS __KUMO_ID__")
+            select.append(f"(value #>> '{{}}')::{postgres_type} AS __KUMO_ID__")
         return (
             'WITH TMP AS (\n'
             f'  SELECT {", ".join(select)}\n'
@@ -145,6 +173,15 @@ class PostgresSampler(SQLSampler):
             '       AS input(value, ordinality)\n'
             ')\n'
         )
+
+    def _postgres_type(self, table_name: str, column: str) -> str:
+        return self._postgres_type_dict[table_name][column]
+
+    @staticmethod
+    def _serialize_time(value: Any) -> str | None:
+        if pd.isna(value):
+            return None
+        return pd.Timestamp(value).isoformat()
 
     def _sanitize_output(
         self, table_name: str, frame: pd.DataFrame
@@ -227,8 +264,9 @@ class PostgresSampler(SQLSampler):
                 frame = _frame(cursor)
         else:
             dtype = self.table_dtype_dict[table_name][key]
+            postgres_type = self._postgres_type(table_name, key)
             key_ref = self.table_column_ref_dict[table_name][key]
-            sql = self._json_cte(dtype)
+            sql = self._json_cte(postgres_type)
             sql += (
                 f'SELECT {", ".join(projections)}\n'
                 'FROM TMP\n'
@@ -237,7 +275,10 @@ class PostgresSampler(SQLSampler):
             )
             if filters:
                 sql += f'\nWHERE {" AND ".join(filters)}'
-            rows = [self._coerce_id(value, dtype) for value in entity_ids]
+            rows = [
+                self._coerce_id(value, dtype, postgres_type)
+                for value in entity_ids
+            ]
             frame = self._flatten(sql, rows)
 
         return _sanitize_postgres_frame(
@@ -305,9 +346,10 @@ class PostgresSampler(SQLSampler):
             return pd.DataFrame(), np.empty(0, dtype=int)
         key = self.primary_key_dict[table_name]
         dtype = self.table_dtype_dict[table_name][key]
+        postgres_type = self._postgres_type(table_name, key)
         key_ref = self.table_column_ref_dict[table_name][key]
         projections = self._projections(table_name, columns)
-        sql = self._json_cte(dtype)
+        sql = self._json_cte(postgres_type)
         sql += (
             'SELECT * FROM (\n'
             '  SELECT TMP.__KUMO_BATCH__, '
@@ -322,7 +364,7 @@ class PostgresSampler(SQLSampler):
             'WHERE __KUMO_ROW__ = 1\n'
             'ORDER BY __KUMO_BATCH__'
         )
-        rows = [self._coerce_id(value, dtype) for value in index]
+        rows = [self._coerce_id(value, dtype, postgres_type) for value in index]
         return self._sanitize_output(table_name, self._flatten(sql, rows))
 
     def _by_fkey(
@@ -336,34 +378,20 @@ class PostgresSampler(SQLSampler):
     ) -> tuple[pd.DataFrame, np.ndarray]:
         time_column = self.time_column_dict.get(table_name)
         dtype = self.table_dtype_dict[table_name][foreign_key]
+        postgres_type = self._postgres_type(table_name, foreign_key)
         fields: tuple[str, ...] = ()
         if time_column is not None and anchor_time is not None:
-            dst_table_name = next(
-                dst
-                for key, dst in self.foreign_key_dict[table_name]
-                if key == foreign_key
-            )
-            num_facts = self.num_rows_dict[table_name]
-            num_entities = self.num_rows_dict[dst_table_name]
-            minimum = self.get_min_time([table_name])
-            maximum = self.get_max_time([table_name])
-            frequency = num_facts / num_entities
-            frequency /= max((maximum - minimum).total_seconds(), 1)
-            seconds = min(
-                math.ceil(5 * num_neighbors / frequency),
-                5 * 365 * 24 * 60 * 60,
-            )
-            end_time = anchor_time.dt.strftime('%Y-%m-%d %H:%M:%S')
-            start_time = (
-                anchor_time - pd.Timedelta(seconds=seconds)
-            ).dt.strftime('%Y-%m-%d %H:%M:%S')
+            end_time = [self._serialize_time(value) for value in anchor_time]
             rows: list = [
-                {'id': self._coerce_id(i, dtype), 'e': e, 's': s}
-                for i, e, s in zip(index, end_time, start_time)
+                {
+                    'id': self._coerce_id(i, dtype, postgres_type),
+                    'e': e,
+                }
+                for i, e in zip(index, end_time)
             ]
-            fields = ('e', 's')
+            fields = ('e',)
         else:
-            rows = [self._coerce_id(i, dtype) for i in index]
+            rows = [self._coerce_id(i, dtype, postgres_type) for i in index]
 
         key_ref = self.table_column_ref_dict[table_name][foreign_key]
         projections = self._projections(table_name, columns)
@@ -373,27 +401,29 @@ class PostgresSampler(SQLSampler):
             else self.table_column_ref_dict[table_name][time_column]
         )
         order_by = self._neighbor_order_by(table_name, time_ref, key_ref)
-        sql = self._json_cte(dtype, fields)
+        time_type = (
+            'timestamp'
+            if time_column is None
+            else self._postgres_type(table_name, time_column)
+        )
+        sql = self._json_cte(postgres_type, fields, time_type)
         sql += (
-            'SELECT * FROM (\n'
-            '  SELECT TMP.__KUMO_BATCH__, '
-            f'{", ".join(projections)},\n'
-            '         ROW_NUMBER() OVER (PARTITION BY '
-            'TMP.__KUMO_BATCH__\n'
-            f'           ORDER BY {order_by}) AS __KUMO_ROW__\n'
-            '  FROM TMP\n'
-            f'  JOIN {self.source_name_dict[table_name]}\n'
-            f'    ON {key_ref} = TMP.__KUMO_ID__\n'
+            'SELECT TMP.__KUMO_BATCH__, sampled.*\n'
+            'FROM TMP\n'
+            'JOIN LATERAL (\n'
+            f'  SELECT {", ".join(projections)},\n'
+            f'         ROW_NUMBER() OVER (ORDER BY {order_by}) '
+            'AS __KUMO_ROW__\n'
+            f'  FROM {self.source_name_dict[table_name]}\n'
+            f'  WHERE {key_ref} = TMP.__KUMO_ID__\n'
         )
         if fields:
             assert time_ref is not None
-            sql += (
-                f'   AND {time_ref} <= TMP.__KUMO_END_TIME__\n'
-                f'   AND {time_ref} > TMP.__KUMO_START_TIME__\n'
-            )
+            sql += f'    AND {time_ref} <= TMP.__KUMO_END_TIME__\n'
         sql += (
-            ') AS sampled\n'
-            f'WHERE __KUMO_ROW__ <= {num_neighbors}\n'
+            f'  ORDER BY {order_by}\n'
+            f'  LIMIT {num_neighbors}\n'
+            ') AS sampled ON TRUE\n'
             'ORDER BY __KUMO_BATCH__, __KUMO_ROW__'
         )
         return self._sanitize_output(table_name, self._flatten(sql, rows))
@@ -410,27 +440,39 @@ class PostgresSampler(SQLSampler):
     ) -> tuple[pd.DataFrame, np.ndarray]:
         time_column = self.time_column_dict[table_name]
         dtype = self.table_dtype_dict[table_name][foreign_key]
-        end_time = (anchor_time + max_offset).dt.strftime('%Y-%m-%d %H:%M:%S')
+        postgres_type = self._postgres_type(table_name, foreign_key)
+        time_type = self._postgres_type(table_name, time_column)
+        end_time = [
+            self._serialize_time(value) for value in anchor_time + max_offset
+        ]
         if min_offset is None:
             fields = ('e',)
             rows: list = [
-                {'id': self._coerce_id(i, dtype), 'e': e}
+                {
+                    'id': self._coerce_id(i, dtype, postgres_type),
+                    'e': e,
+                }
                 for i, e in zip(index, end_time)
             ]
         else:
             fields = ('e', 's')
-            start_time = (anchor_time + min_offset).dt.strftime(
-                '%Y-%m-%d %H:%M:%S'
-            )
+            start_time = [
+                self._serialize_time(value)
+                for value in anchor_time + min_offset
+            ]
             rows = [
-                {'id': self._coerce_id(i, dtype), 'e': e, 's': s}
+                {
+                    'id': self._coerce_id(i, dtype, postgres_type),
+                    'e': e,
+                    's': s,
+                }
                 for i, e, s in zip(index, end_time, start_time)
             ]
 
         key_ref = self.table_column_ref_dict[table_name][foreign_key]
         time_ref = self.table_column_ref_dict[table_name][time_column]
         projections = self._projections(table_name, columns)
-        sql = self._json_cte(dtype, fields)
+        sql = self._json_cte(postgres_type, fields, time_type)
         sql += (
             'SELECT TMP.__KUMO_BATCH__, '
             f'{", ".join(projections)}\n'

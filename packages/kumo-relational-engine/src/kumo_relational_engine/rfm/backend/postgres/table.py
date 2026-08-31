@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -35,7 +36,11 @@ def _frame(cursor: Any) -> pd.DataFrame:
         '__kumo_row__': '__KUMO_ROW__',
     }
     names = [helper_names.get(name, name) for name in names]
-    return pd.DataFrame(rows, columns=names)
+    # Preserve the Python scalars exactly until `_sanitize_postgres_frame` can
+    # apply the declared PostgreSQL types. Letting pandas infer here converts
+    # an integer column containing NULL to float64 and irreversibly rounds
+    # values above 2**53 before the nullable Int64 conversion can run.
+    return pd.DataFrame(rows, columns=names, dtype=object)
 
 
 def _sanitize_postgres_frame(
@@ -51,6 +56,16 @@ def _sanitize_postgres_frame(
     the graph both declare them as integers. Pandas' nullable extension dtypes
     retain the declared wire type without inventing sentinel values.
     """
+
+    def stringify(value: Any) -> str | None:
+        if value is None or value is pd.NA:
+            return None
+        if not isinstance(value, (dict, list)) and bool(pd.isna(value)):
+            return None
+        if isinstance(value, (dict, list)):
+            return json.dumps(value, separators=(',', ':'))
+        return str(value)
+
     for name, dtype in dtype_dict.items():
         if name not in df:
             continue
@@ -60,6 +75,11 @@ def _sanitize_postgres_frame(
             df[name] = pd.array(df[name], dtype='Float64')
         elif dtype == Dtype.bool:
             df[name] = pd.array(df[name], dtype='boolean')
+        elif dtype == Dtype.string:
+            df[name] = pd.array(
+                df[name].map(stringify),
+                dtype='string',
+            )
     return Table._sanitize(
         df=df,
         dtype_dict=dtype_dict,
@@ -96,6 +116,7 @@ class PostgresTable(Table):
 
         self._connection = connection
         self._schema = schema
+        self._source_postgres_type_dict: dict[str, str] = {}
         super().__init__(
             name=name,
             source_name=source_name,
@@ -122,11 +143,20 @@ class PostgresTable(Table):
     def _get_source_columns(self) -> list[SourceColumn]:
         with self._connection.cursor() as cursor:
             cursor.execute(
-                'SELECT column_name, data_type, udt_name, numeric_scale,\n'
-                '       is_nullable, table_schema, table_name\n'
-                'FROM information_schema.columns\n'
-                'WHERE table_schema = %s AND table_name = %s\n'
-                'ORDER BY ordinal_position',
+                'SELECT c.column_name, c.data_type, c.udt_name,\n'
+                '       c.numeric_scale, c.is_nullable, c.table_schema,\n'
+                '       c.table_name,\n'
+                '       pg_catalog.format_type(a.atttypid, a.atttypmod)\n'
+                'FROM information_schema.columns c\n'
+                'JOIN pg_catalog.pg_namespace n\n'
+                '  ON n.nspname = c.table_schema\n'
+                'JOIN pg_catalog.pg_class rel\n'
+                '  ON rel.relnamespace = n.oid AND rel.relname = c.table_name\n'
+                'JOIN pg_catalog.pg_attribute a\n'
+                '  ON a.attrelid = rel.oid AND a.attname = c.column_name\n'
+                ' AND a.attnum > 0 AND NOT a.attisdropped\n'
+                'WHERE c.table_schema = %s AND c.table_name = %s\n'
+                'ORDER BY c.ordinal_position',
                 (self._schema, self._source_name),
             )
             rows = cursor.fetchall()
@@ -139,32 +169,64 @@ class PostgresTable(Table):
 
             cursor.execute(
                 'SELECT tc.constraint_type, tc.constraint_name,\n'
-                '       kcu.column_name\n'
+                '       kcu.column_name, kcu.ordinal_position\n'
                 'FROM information_schema.table_constraints tc\n'
                 'JOIN information_schema.key_column_usage kcu\n'
                 '  ON tc.constraint_catalog = kcu.constraint_catalog\n'
                 ' AND tc.constraint_schema = kcu.constraint_schema\n'
                 ' AND tc.constraint_name = kcu.constraint_name\n'
                 'WHERE tc.table_schema = %s AND tc.table_name = %s\n'
-                "  AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE')",
+                '  AND tc.constraint_type IN '
+                "('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY')",
                 (self._schema, self._source_name),
             )
             constraints = cursor.fetchall()
 
-        counts = Counter(name for _, name, _ in constraints)
+        grouped_constraints: dict[tuple[str, str], list[tuple[int, str]]] = {}
+        for constraint_type, name, column, position in constraints:
+            grouped_constraints.setdefault((constraint_type, name), []).append(
+                (position, column)
+            )
+        for (
+            constraint_type,
+            name,
+        ), positioned_columns in grouped_constraints.items():
+            if constraint_type != 'PRIMARY KEY' or len(positioned_columns) == 1:
+                continue
+            columns = [column for _, column in sorted(positioned_columns)]
+            raise ValueError(
+                f"Composite primary key constraint '{name}' on PostgreSQL "
+                f"table '{self.source_name}' uses columns {columns}. "
+                'Automatic PostgreSQL graph discovery currently supports '
+                'only single-column primary keys.'
+            )
+
+        counts = Counter(name for _, name, *_ in constraints)
         primary_keys: set[str] = set()
         unique_keys: set[str] = set()
-        for constraint_type, name, column in constraints:
+        relational_keys: set[str] = set()
+        for constraint_type, name, column, _ in constraints:
             if counts[name] != 1:
                 continue
             if constraint_type == 'PRIMARY KEY':
                 primary_keys.add(column)
-            unique_keys.add(column)
+            if constraint_type in {'PRIMARY KEY', 'UNIQUE'}:
+                unique_keys.add(column)
+            relational_keys.add(column)
+
+        self._source_postgres_type_dict = {
+            column: postgres_type for column, *_, postgres_type in rows
+        }
 
         return [
             SourceColumn(
                 name=column,
-                dtype=self._to_dtype(dtype, udt_name, numeric_scale),
+                dtype=(
+                    Dtype.string
+                    if column in relational_keys
+                    and dtype.strip().lower() in {'numeric', 'decimal'}
+                    else self._to_dtype(dtype, udt_name, numeric_scale)
+                ),
                 is_primary_key=column in primary_keys,
                 is_unique_key=column in unique_keys,
                 is_nullable=is_nullable != 'NO',
@@ -176,7 +238,8 @@ class PostgresTable(Table):
         with self._connection.cursor() as cursor:
             cursor.execute(
                 'SELECT tc.constraint_name, kcu.column_name,\n'
-                '       ccu.table_schema, ccu.table_name, ccu.column_name\n'
+                '       target_kcu.table_schema, target_kcu.table_name,\n'
+                '       target_kcu.column_name, kcu.ordinal_position\n'
                 'FROM information_schema.table_constraints tc\n'
                 'JOIN information_schema.referential_constraints rc\n'
                 '  ON tc.constraint_catalog = rc.constraint_catalog\n'
@@ -186,17 +249,37 @@ class PostgresTable(Table):
                 '  ON tc.constraint_catalog = kcu.constraint_catalog\n'
                 ' AND tc.constraint_schema = kcu.constraint_schema\n'
                 ' AND tc.constraint_name = kcu.constraint_name\n'
-                'JOIN information_schema.constraint_column_usage ccu\n'
-                '  ON rc.unique_constraint_catalog = ccu.constraint_catalog\n'
-                ' AND rc.unique_constraint_schema = ccu.constraint_schema\n'
-                ' AND rc.unique_constraint_name = ccu.constraint_name\n'
+                'JOIN information_schema.key_column_usage target_kcu\n'
+                '  ON rc.unique_constraint_catalog = '
+                'target_kcu.constraint_catalog\n'
+                ' AND rc.unique_constraint_schema = '
+                'target_kcu.constraint_schema\n'
+                ' AND rc.unique_constraint_name = '
+                'target_kcu.constraint_name\n'
+                ' AND target_kcu.ordinal_position = '
+                'kcu.position_in_unique_constraint\n'
                 "WHERE tc.constraint_type = 'FOREIGN KEY'\n"
-                '  AND tc.table_schema = %s AND tc.table_name = %s',
+                '  AND tc.table_schema = %s AND tc.table_name = %s\n'
+                'ORDER BY tc.constraint_name, kcu.ordinal_position',
                 (self._schema, self._source_name),
             )
             rows = cursor.fetchall()
 
         counts = Counter(row[0] for row in rows)
+        for constraint_name, count in counts.items():
+            if count == 1:
+                continue
+            constraint_rows = [row for row in rows if row[0] == constraint_name]
+            constraint_rows.sort(key=lambda row: row[5])
+            columns = [row[1] for row in constraint_rows]
+            referenced_columns = [row[4] for row in constraint_rows]
+            raise ValueError(
+                f"Composite foreign key constraint '{constraint_name}' on "
+                f"PostgreSQL table '{self.source_name}' uses columns "
+                f'{columns} referencing {referenced_columns}. Automatic '
+                'PostgreSQL graph discovery currently supports only '
+                'single-column foreign keys.'
+            )
         return [
             SourceForeignKey(
                 name=row[1],
@@ -206,6 +289,10 @@ class PostgresTable(Table):
             for row in rows
             if counts[row[0]] == 1
         ]
+
+    def _postgres_type(self, column: str) -> str | None:
+        r"""Return PostgreSQL's own cast spelling for a source column."""
+        return self._source_postgres_type_dict.get(column)
 
     def _get_source_sample_df(self) -> pd.DataFrame:
         columns = [quote_ident(col) for col in self._source_column_dict]
