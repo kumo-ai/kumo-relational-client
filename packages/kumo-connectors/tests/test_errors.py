@@ -116,6 +116,16 @@ def test_missing_databricks_driver_raises_missing_backend():
     assert excinfo.value.backend == 'databricks'
 
 
+@pytest.mark.skipif(
+    _driver_installed('psycopg'),
+    reason='psycopg driver installed',
+)
+def test_missing_postgres_driver_raises_missing_backend():
+    with pytest.raises(MissingBackendError) as excinfo:
+        read('postgres', table='items')
+    assert excinfo.value.backend == 'postgres'
+
+
 def test_require_driver_returns_module():
     module = require_driver('duckdb', 'duckdb', 'duckdb')
     assert module.__name__ == 'duckdb'

@@ -4,7 +4,8 @@
 
 r"""Seed the AdventureWorks tables the Snowflake notebook reads.
 
-The peer of whatever loaded ``main.kumo_rfm.aw_*`` for the Databricks notebook.
+The peer of whatever loaded ``main.kumo_rfm.adventureworks_*`` for the
+Databricks notebook.
 Source is Microsoft's own OLTP install script, which ships the tables as
 headerless tab-separated files, so the column names come from the AdventureWorks
 DDL rather than from the files.
@@ -226,10 +227,10 @@ COLUMN_TYPES = {
 }
 
 PRIMARY_KEYS = {
-    'aw_customers': 'CustomerID',
-    'aw_products': 'ProductID',
-    'aw_sales_order_headers': 'SalesOrderID',
-    'aw_sales_order_details': 'SalesOrderDetailID',
+    'adventureworks_customers': 'CustomerID',
+    'adventureworks_products': 'ProductID',
+    'adventureworks_sales_order_headers': 'SalesOrderID',
+    'adventureworks_sales_order_details': 'SalesOrderDetailID',
 }
 
 
@@ -347,7 +348,9 @@ def create_table(
 
 def build() -> dict[str, pd.DataFrame]:
     """Read the four extracts and shape them the way the notebook expects."""
-    paths = download(Path(os.environ.get('AW_CACHE', '/tmp/aw')))
+    paths = download(
+        Path(os.environ.get('ADVENTUREWORKS_CACHE', '/tmp/adventureworks'))
+    )
     frames = {
         name: read_table(paths[name], columns)
         for name, columns in SOURCES.items()
@@ -421,10 +424,10 @@ def build() -> dict[str, pd.DataFrame]:
         )
 
     return {
-        'aw_customers': customers,
-        'aw_products': products,
-        'aw_sales_order_headers': headers,
-        'aw_sales_order_details': details,
+        'adventureworks_customers': customers,
+        'adventureworks_products': products,
+        'adventureworks_sales_order_headers': headers,
+        'adventureworks_sales_order_details': details,
     }
 
 

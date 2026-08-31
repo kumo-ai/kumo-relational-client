@@ -56,6 +56,9 @@ snowflake = [
 databricks = [
     "kumo-connectors[databricks]",
 ]
+postgres = [
+    "kumo-connectors[postgres]",
+]
 # Invoking a served model, as opposed to `databricks` above, which is SQL data
 # access. Kept distinct so neither drags in the other.
 databricks-serving = [
@@ -78,7 +81,7 @@ relbench = [
     "kumo-relational-engine[relbench]>=1.0,<2",
 ]
 all = [
-    "kumo-relational-client[relational,sqlite,duckdb,snowflake,databricks,databricks-serving,s3]",
+    "kumo-relational-client[relational,sqlite,duckdb,snowflake,databricks,postgres,databricks-serving,s3]",
 ]
 test = [
     "pytest",

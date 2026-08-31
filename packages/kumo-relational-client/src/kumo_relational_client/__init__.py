@@ -44,8 +44,9 @@ def read(source: str, **kwargs: Any) -> pd.DataFrame:
         source: ``'local'`` (``data=`` a DataFrame/dict, or ``path=`` a CSV or
             Parquet file), ``'s3'`` (``path='s3://...'``, optional
             ``storage_options=``), or a SQL backend -- ``'sqlite'``,
-            ``'duckdb'``, ``'snowflake'``, ``'databricks'``. Each SQL backend
-            needs its extra, e.g. ``pip install 'kumo-relational-client[duckdb]'``.
+            ``'duckdb'``, ``'snowflake'``, ``'databricks'``, ``'postgres'``.
+            Each SQL backend needs its extra, e.g.
+            ``pip install 'kumo-relational-client[duckdb]'``.
         **kwargs: For a SQL source, exactly one of ``table=`` / ``query=`` plus
             that backend's connection arguments.
 

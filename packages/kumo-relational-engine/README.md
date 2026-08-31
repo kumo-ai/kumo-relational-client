@@ -5,7 +5,7 @@ The Kumo Relational driver for the [`kumo-relational-client`](../kumo-relational
 This distribution provides the heavy, client-side machinery a Kumo Relational prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
 the neighbor samplers (local native `relationallib`, plus DuckDB / SQLite / Snowflake /
-Databricks backends), the PQL parser, and the HTTP client that talks to a Universal
+Databricks / PostgreSQL backends), the PQL parser, and the HTTP client that talks to a Universal
 TFM NIM.
 
 It is imported as `kumo_relational_engine` and is normally installed transitively via the client's
@@ -22,12 +22,31 @@ call, so a prediction has to go through `kumo-relational-client`.
 ```bash
 pip install kumo-relational-engine
 # optional data backends:
-pip install "kumo-relational-engine[duckdb]"      # or [sqlite] / [snowflake] / [databricks]
+pip install "kumo-relational-engine[duckdb]"      # or [sqlite] / [snowflake] / [databricks] / [postgres]
 # optional features:
 pip install "kumo-relational-engine[explain]"     # natural-language explanation summaries
 pip install "kumo-relational-engine[relbench]"    # Graph.from_relbench() dataset loading
 pip install "kumo-relational-engine[codegen]"     # regenerate the TFM API client (see scripts/)
 ```
+
+Create a graph from PostgreSQL with `Graph.from_postgres()`:
+
+```python
+from kumo_relational_client import relational
+
+graph = relational.Graph.from_postgres(schema='public')
+```
+
+A PostgreSQL schema is a namespace that groups tables within a database.
+`public` is the usual default; replace it with your table namespace, or omit
+`schema` to use the connection's current schema. Connection details can be an
+open psycopg connection, a URI/libpq conninfo string, explicit keywords, or
+standard `PG*` environment variables. See the generic
+[`postgres.py`](examples/rfm/postgres.py) example. The
+[`kumo_relational_engine_adventureworks_lakebase.py`](examples/rfm/notebooks/kumo_relational_engine_adventureworks_lakebase.py)
+notebook is a provider-specific migration and parity utility for copying the
+AdventureWorks example into Lakebase; it is not a duplicate prediction
+walkthrough.
 
 Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
 (`manylinux_2_28` x86-64); no source distribution is published.

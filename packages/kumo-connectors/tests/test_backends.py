@@ -64,6 +64,7 @@ def test_check_connect_args_accepts_known_arguments():
     [
         ('snowflake', 'snowflake.connector', 'shema', 'schema'),
         ('databricks', 'databricks.sql', 'catalg', 'catalog'),
+        ('postgres', 'psycopg', 'hst', 'host'),
     ],
 )
 def test_connect_rejects_unknown_kwargs(backend, module, typo, intended):
@@ -99,6 +100,7 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
     [
         ('snowflake', 'snowflake.connector', 'password'),
         ('databricks', 'databricks.sql', 'catalog'),
+        ('postgres', 'psycopg', 'host'),
     ],
 )
 def test_driver_options_cannot_restate_a_validated_argument(
@@ -256,6 +258,57 @@ def test_databricks_allows_kwargs_routed_arguments(argument):
     """
     databricks = pytest.importorskip('kumo_connectors.backends.databricks')
     check_connect_args('databricks', {argument: 'x'}, databricks._CONNECT_ARGS)
+
+
+def test_postgres_forwards_pg_environment(monkeypatch):
+    postgres = pytest.importorskip('kumo_connectors.backends.postgres')
+    seen = {}
+    monkeypatch.setattr(
+        postgres.psycopg,
+        'connect',
+        lambda **kwargs: seen.update(kwargs) or _Conn(),
+    )
+    values = {
+        'PGHOST': 'postgres.example.com',
+        'PGPORT': '5432',
+        'PGDATABASE': 'analytics',
+        'PGUSER': 'analyst',
+        'PGPASSWORD': 'secret',
+        'PGSSLMODE': 'require',
+    }
+    monkeypatch.setattr(postgres.os, 'getenv', values.get)
+
+    postgres.connect()
+
+    assert seen == {
+        'host': 'postgres.example.com',
+        'port': '5432',
+        'dbname': 'analytics',
+        'user': 'analyst',
+        'password': 'secret',
+        'sslmode': 'require',
+    }
+
+
+def test_postgres_conninfo_is_positional(monkeypatch):
+    postgres = pytest.importorskip('kumo_connectors.backends.postgres')
+    seen = {}
+
+    def fake_connect(*args, **kwargs):
+        seen['args'] = args
+        seen['kwargs'] = kwargs
+        return _Conn()
+
+    monkeypatch.setattr(postgres.psycopg, 'connect', fake_connect)
+
+    postgres.connect(
+        'postgresql://user:password@host/database', sslmode='require'
+    )
+
+    assert seen == {
+        'args': ('postgresql://user:password@host/database',),
+        'kwargs': {'sslmode': 'require'},
+    }
 
 
 def test_databricks_still_rejects_a_misspelled_argument():

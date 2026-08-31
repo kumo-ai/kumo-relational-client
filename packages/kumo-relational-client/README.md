@@ -9,7 +9,7 @@ per-model adapters; heavy model drivers are optional extras.
 ```bash
 pip install kumo-relational-client              # the client on its own
 pip install kumo-relational-client[relational]     # adds Kumo Relational (native driver)
-pip install kumo-relational-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[s3])
+pip install kumo-relational-client[sqlite]      # data-source reads ([duckdb]/[snowflake]/[databricks]/[postgres]/[s3])
 pip install kumo-relational-client[all]         # Kumo Relational, every data-source backend,
                                      # and [databricks-serving]
 pip install kumo-relational-client[explain]     # Kumo Relational plus the explanation-summary LLM
@@ -17,6 +17,9 @@ pip install kumo-relational-client[explain]     # Kumo Relational plus the expla
                                      # because it enables the third-party data
                                      # egress described below.
 ```
+
+Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
+direct PostgreSQL connection, including a direct connection to Lakebase.
 
 ## Quickstart
 
