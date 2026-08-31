@@ -57,6 +57,13 @@ falls back to these variables.
 | `DATABRICKS_CATALOG` | No | Default catalog. |
 | `DATABRICKS_SCHEMA` | No | Default schema. |
 
+### Partner telemetry attribution
+
+SDK-created Databricks clients attribute usage to NVIDIA Kumo Relational
+Client. SQL uses `nvidia_kumo-relational-client/<connectors-version>`; Model
+Serving uses the installed `kumo-relational-engine` version. Caller-owned
+clients are unchanged.
+
 ## Snowflake Connector
 
 The Snowflake connector is configured through connection arguments rather than

@@ -6,7 +6,9 @@ from __future__ import annotations
 
 import pytest
 
+from kumo_connectors import __version__ as sdk_version
 from kumo_connectors import connect
+from kumo_connectors._databricks_telemetry import databricks_user_agent
 from kumo_connectors.backends import mark_owned, owns_connection
 from kumo_connectors.sql import (
     ConnectorError,
@@ -91,7 +93,30 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
 
     backend.connect(catalog='c', driver_options={'use_cloud_fetch': True})
 
-    assert seen == {'catalog': 'c', 'use_cloud_fetch': True}
+    assert seen == {
+        'catalog': 'c',
+        'use_cloud_fetch': True,
+        'user_agent_entry': databricks_user_agent(sdk_version),
+    }
+
+
+def test_databricks_sdk_attribution_preserves_a_caller_entry(monkeypatch):
+    pytest.importorskip('databricks.sql')
+    from kumo_connectors.backends import databricks as backend
+
+    seen = {}
+    monkeypatch.setattr(
+        backend.databricks_sql,
+        'connect',
+        lambda **kwargs: seen.update(kwargs) or _Conn(),
+    )
+    monkeypatch.setattr(backend.os, 'getenv', lambda name: None)
+
+    backend.connect(user_agent_entry='customer_product/9.9.9')
+
+    assert seen['user_agent_entry'] == databricks_user_agent(
+        sdk_version, 'customer_product/9.9.9'
+    )
 
 
 @pytest.mark.parametrize(

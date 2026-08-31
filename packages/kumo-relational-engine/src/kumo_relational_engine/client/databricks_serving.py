@@ -31,6 +31,12 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
+from kumo_relational_engine._version import __version__
+from kumo_relational_engine.client._databricks_telemetry import (
+    DATABRICKS_PARTNER,
+    DATABRICKS_PRODUCT,
+    databricks_product_version,
+)
 from kumo_relational_engine.client.endpoints import Endpoint
 from kumo_relational_engine.client.generated.tfm_api import TFMOperations
 from kumo_relational_engine.client.transport import ServingResponse
@@ -176,7 +182,16 @@ class DatabricksServingClient:
                 "'kumo_relational_engine[databricks-serving]'"
             ) from error
         try:
-            return WorkspaceClient(config=Config(http_timeout_seconds=timeout))
+            config = Config(
+                http_timeout_seconds=timeout,
+                product=DATABRICKS_PRODUCT,
+                product_version=databricks_product_version(__version__),
+            )
+            # Keep attribution on the client we own. The module-level
+            # useragent.with_partner/with_product API changes process-wide
+            # state and could relabel unrelated Databricks clients.
+            config.with_user_agent_extra('partner', DATABRICKS_PARTNER)
+            return WorkspaceClient(config=config)
         except Exception:
             raise HTTPException(
                 503,
