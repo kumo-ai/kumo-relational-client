@@ -52,11 +52,11 @@ def parse_query_locally(
         query: The predictive query.
         graph_definition: The graph the query is written against.
         query_validation_type: Which model's rule set to validate under.
-            Defaults to the relational SDK's. The tabular pathway passes
-            :obj:`QueryValidationType.TABULAR`, which adds the task gate;
-            everything else about the parse is shared, so both pathways
-            accept exactly the same syntax and report the same diagnostics
-            for everything but the tasks they differ on.
+            :obj:`None` resolves to :obj:`QueryValidationType.RFM_SDK`, the
+            value this function hard-coded before the argument existed, so
+            every caller that omits it keeps its previous behaviour. The
+            tabular pathway passes :obj:`QueryValidationType.TFM`, which adds
+            the task gate; the rest of the parse is shared.
     """
     try:
         from kumo_relational_engine.pql.parser.parser import (

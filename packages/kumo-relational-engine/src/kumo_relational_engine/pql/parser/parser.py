@@ -44,7 +44,7 @@ class QueryValidationType(Enum):
     # The tabular foundation model. It reads the same PQL and the same graph
     # as the relational modes, so it shares their query structure rules, and
     # answers a strictly smaller set of tasks, which `TabularValidator` gates.
-    TABULAR = 'TABULAR'
+    TFM = 'TFM'
 
     def is_enterprise(self) -> bool:
         return self == QueryValidationType.ENTERPRISE
@@ -56,7 +56,7 @@ class QueryValidationType(Enum):
         return self in {
             QueryValidationType.RFM_SDK,
             QueryValidationType.RFM_SDK_V2,
-            QueryValidationType.TABULAR,
+            QueryValidationType.TFM,
         }
 
     def is_demo(self) -> bool:
@@ -65,8 +65,8 @@ class QueryValidationType(Enum):
     def is_sdk_v2(self) -> bool:
         return self == QueryValidationType.RFM_SDK_V2
 
-    def is_tabular(self) -> bool:
-        return self == QueryValidationType.TABULAR
+    def is_tfm(self) -> bool:
+        return self == QueryValidationType.TFM
 
 
 class _QuietErrorStrategy(DefaultErrorStrategy):

@@ -161,11 +161,9 @@ class PredictiveQueryValidator:
         if not response.ok:
             return None, response
 
-        # validate the tabular task gate. It runs ahead of the relational
-        # checks below because several of the shapes it rejects are also
-        # rejected there, and a caller on the tabular pathway needs the
-        # diagnostic that names their model, not the relational one.
-        if self.query_validation_type.is_tabular():
+        # tabular task validation. It runs before the rfm checks below so
+        # that a tabular query is rejected with a tabular error message.
+        if self.query_validation_type.is_tfm():
             self.tabular_validator = TabularValidator()
             response = merge(
                 response, self.tabular_validator.validate(parsed_query)

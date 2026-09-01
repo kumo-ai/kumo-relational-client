@@ -2,102 +2,74 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-import sqlite3
-from pathlib import Path
-
+import pandas as pd
 import pytest
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
+from kumo_relational_engine.api.typing import Stype
 from kumo_relational_engine.rfm import Graph
-
-pytest.importorskip(
-    'adbc_driver_sqlite', reason="'sqlite' extension not installed"
-)
-
+from kumo_relational_engine.rfm.query_parser import parse_query_locally
 from kumo_relational_engine.tfm import KumoTabular
 
 BINARY_TEMPORAL = (
-    'PREDICT COUNT(orders.*, 0, 30, days) > 0 FOR EACH users.user_id'
+    'PREDICT COUNT(ORDERS.*, 0, 30, days) > 0 FOR EACH USERS.USER_ID'
 )
-BINARY_STATIC = 'PREDICT users.age > 30 FOR EACH users.user_id'
-MULTICLASS_STATIC = 'PREDICT users.status FOR EACH users.user_id'
+BINARY_STATIC = 'PREDICT USERS.AGE > 30 FOR EACH USERS.USER_ID'
+MULTICLASS_STATIC = 'PREDICT USERS.STATUS FOR EACH USERS.USER_ID'
 REGRESSION_TEMPORAL = (
-    'PREDICT SUM(orders.amount, 0, 30, days) FOR EACH users.user_id'
+    'PREDICT SUM(ORDERS.AMOUNT, 0, 30, days) FOR EACH USERS.USER_ID'
 )
-REGRESSION_STATIC = 'PREDICT users.age FOR EACH users.user_id'
+REGRESSION_STATIC = 'PREDICT USERS.AGE FOR EACH USERS.USER_ID'
 
 LINK_PREDICTION = (
-    'PREDICT LIST_DISTINCT(orders.item_id, 0, 30, days) RANK TOP 5 '
-    'FOR EACH users.user_id'
+    'PREDICT LIST_DISTINCT(ORDERS.ITEM_ID, 0, 30, days) RANK TOP 5 '
+    'FOR EACH USERS.USER_ID'
 )
 MULTILABEL_CLASSIFY = (
-    'PREDICT LIST_DISTINCT(orders.item_id, 0, 30, days) CLASSIFY '
-    'FOR EACH users.user_id'
+    'PREDICT LIST_DISTINCT(ORDERS.ITEM_ID, 0, 30, days) CLASSIFY '
+    'FOR EACH USERS.USER_ID'
 )
 FORECAST = (
-    'PREDICT SUM(orders.amount, 0, 7, days) FORECAST 4 TIMEFRAMES '
-    'FOR EACH users.user_id'
+    'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FORECAST 4 TIMEFRAMES '
+    'FOR EACH USERS.USER_ID'
 )
 ASSUMING = (
-    'PREDICT SUM(orders.amount, 0, 30, days) FOR EACH users.user_id '
-    'ASSUMING COUNT(orders.*, 0, 30, days) > 3'
+    'PREDICT SUM(ORDERS.AMOUNT, 0, 30, days) FOR EACH USERS.USER_ID '
+    'ASSUMING COUNT(ORDERS.*, 0, 30, days) > 3'
 )
 
 
-def _create_database(path: Path) -> Path:
-    connection = sqlite3.connect(path)
-    connection.execute(
-        'CREATE TABLE users ('
-        '  user_id INTEGER PRIMARY KEY,'
-        '  age INTEGER,'
-        '  status TEXT)'
+@pytest.fixture()
+def shop_graph() -> Graph:
+    df_dict = {}
+    df_dict['USERS'] = pd.DataFrame(
+        {
+            'USER_ID': list(range(50)),
+            'AGE': [20 + i % 40 for i in range(50)],
+            'STATUS': ['ABC'[i % 3] for i in range(50)],
+        }
     )
-    connection.execute(
-        'CREATE TABLE items (  item_id INTEGER PRIMARY KEY,  category TEXT)'
+    df_dict['ITEMS'] = pd.DataFrame(
+        {
+            'ITEM_ID': list(range(9)),
+            'CATEGORY': [['burger', 'pizza', 'fries'][i % 3] for i in range(9)],
+        }
     )
-    connection.execute(
-        'CREATE TABLE orders ('
-        '  order_id INTEGER PRIMARY KEY,'
-        '  user_id INTEGER,'
-        '  item_id INTEGER,'
-        '  amount REAL,'
-        '  ts TEXT)'
+    df_dict['ORDERS'] = pd.DataFrame(
+        {
+            'ORDER_ID': list(range(200)),
+            'USER_ID': [i % 50 for i in range(200)],
+            'ITEM_ID': [i % 9 for i in range(200)],
+            'AMOUNT': [10.0 + i % 7 for i in range(200)],
+            'TIME': pd.to_datetime(
+                [f'2024-01-{i % 28 + 1:02d}' for i in range(200)]
+            ),
+        }
     )
-    connection.executemany(
-        'INSERT INTO users VALUES (?, ?, ?)',
-        [(i, 20 + i % 40, 'ABC'[i % 3]) for i in range(50)],
-    )
-    connection.executemany(
-        'INSERT INTO items VALUES (?, ?)',
-        [(i, ['burger', 'pizza', 'fries'][i % 3]) for i in range(9)],
-    )
-    connection.executemany(
-        'INSERT INTO orders VALUES (?, ?, ?, ?, ?)',
-        [
-            (i, i % 50, i % 9, 10.0 + i % 7, f'2024-01-{i % 28 + 1:02d}')
-            for i in range(200)
-        ],
-    )
-    connection.commit()
-    connection.close()
-    return path
 
-
-@pytest.fixture(scope='module')
-def shop_graph(tmp_path_factory: pytest.TempPathFactory) -> Graph:
-    path = _create_database(tmp_path_factory.mktemp('tfm') / 'shop.db')
-    return Graph.from_sqlite(
-        path,
-        tables=[
-            dict(name='users', primary_key='user_id'),
-            dict(name='items', primary_key='item_id'),
-            dict(name='orders', primary_key='order_id', time_column='ts'),
-        ],
-        edges=[
-            ('orders', 'user_id', 'users'),
-            ('orders', 'item_id', 'items'),
-        ],
-        verbose=False,
-    )
+    graph = Graph.from_data(df_dict, verbose=False)
+    graph['USERS']['AGE'].stype = Stype.numerical
+    graph['ORDERS']['AMOUNT'].stype = Stype.numerical
+    return graph
 
 
 @pytest.mark.parametrize(
@@ -114,9 +86,10 @@ def test_the_gate_passes_the_tasks_the_tabular_model_serves(
     shop_graph: Graph,
     query: str,
 ) -> None:
-    parsed = KumoTabular(shop_graph)._parse_query(query)
-
-    assert isinstance(parsed, ValidatedPredictiveQuery)
+    # Reaching the not-implemented raise is how a query says it got through
+    # the gate: `predict` validates first and declines only afterwards.
+    with pytest.raises(NotImplementedError, match='land in a later release'):
+        KumoTabular(shop_graph).predict(query, indices=[1, 2])
 
 
 @pytest.mark.parametrize(
@@ -152,7 +125,7 @@ def test_the_gate_rejects_the_tasks_the_tabular_model_cannot_answer(
     model = KumoTabular(shop_graph)
 
     with pytest.raises(ValueError, match=expected) as excinfo:
-        model._parse_query(query)
+        model.predict(query)
 
     message = str(excinfo.value)
     assert 'Tabular foundation model queries' in message
@@ -176,17 +149,19 @@ def test_the_gate_is_the_only_thing_rejecting_these(
     # Regression guard: each of these parses cleanly for the relational
     # model, so a failure here would mean the gate had stopped being the
     # reason the tabular pathway turns them away.
-    from kumo_relational_engine.rfm.query_parser import parse_query_locally
-
     parsed = parse_query_locally(query, shop_graph._to_api_graph_definition())
 
     assert isinstance(parsed, ValidatedPredictiveQuery)
 
 
-def test_kumo_tabular_validates_before_it_declines_to_predict(
+def test_an_already_validated_query_is_not_parsed_again(
     shop_graph: Graph,
 ) -> None:
-    model = KumoTabular(shop_graph)
+    # A `ValidatedPredictiveQuery` has been through a validator already, so
+    # `predict` takes it as given and goes straight to declining.
+    query = parse_query_locally(
+        LINK_PREDICTION, shop_graph._to_api_graph_definition()
+    )
 
     with pytest.raises(NotImplementedError, match='land in a later release'):
-        model.predict(BINARY_TEMPORAL, indices=[1, 2])
+        KumoTabular(shop_graph).predict(query)

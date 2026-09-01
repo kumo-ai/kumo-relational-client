@@ -18,11 +18,6 @@ from kumo_relational_engine.api.typing import (
     Stype,
 )
 
-TRAIN_A_MODEL = (
-    'To make predictions with this query, use the relational foundation '
-    'model or train a new model.'
-)
-
 
 class TabularValidator:
     r"""This class contains validation logic specific to tabular queries.
@@ -49,108 +44,58 @@ class TabularValidator:
         Returns:
             List of encountered errors/warnings.
         """
-        for rule in (
-            self._validate_ranking,
-            self._validate_multilabel,
-            self._validate_forecast,
-            self._validate_whatif,
-        ):
-            response = rule(parsed_query)
-            if not response.ok:
-                return response
-        return ValidationResponse()
-
-    def _validate_ranking(
-        self, parsed_query: ParsedPredictiveQuery
-    ) -> ValidationResponse:
         response = ValidationResponse()
-        if (
-            parsed_query.problem_type != ProblemType.RANK
-            and parsed_query.top_k is None
-        ):
-            return response
-        response.errors.append(
-            ValidationError(
-                title='Unsupported query structure',
-                message=(
-                    f'{parsed_query.target_ast.get_location().message_start}: '
-                    f'Tabular foundation model queries do not support ranking '
-                    f'or link prediction. Drop the "RANK TOP k" clause and '
-                    f'predict a single label per entity instead. '
-                    f'{TRAIN_A_MODEL}'
-                ),
-            )
-        )
-        return response
 
-    def _validate_multilabel(
-        self, parsed_query: ParsedPredictiveQuery
-    ) -> ValidationResponse:
-        response = ValidationResponse()
         target_ast = parsed_query.target_ast
         if isinstance(target_ast, Join):
             # Handles the implicit join a link prediction target carries.
             target_ast = target_ast.rhs_target
-
         is_list_distinct = self._has_list_distinct(target_ast)
-        if not (
+
+        if (
+            parsed_query.problem_type == ProblemType.RANK
+            or parsed_query.top_k is not None
+        ):
+            node = parsed_query.target_ast
+            reason = (
+                'Tabular foundation model queries do not support ranking or '
+                'link prediction. Drop the "RANK TOP k" clause and predict a '
+                'single label per entity instead.'
+            )
+        elif (
             is_list_distinct
             or parsed_query.problem_type == ProblemType.CLASSIFY
             or target_ast.stype == Stype.multicategorical
         ):
-            return response
-
-        clause = 'LIST_DISTINCT' if is_list_distinct else 'CLASSIFY'
-        response.errors.append(
-            ValidationError(
-                title='Unsupported query structure',
-                message=(
-                    f'{target_ast.get_location().message_start}: '
-                    f'Tabular foundation model queries do not support '
-                    f'multilabel tasks, so "{clause}" cannot be used here. '
-                    f'Predict a single categorical or numerical label per '
-                    f'entity instead. {TRAIN_A_MODEL}'
-                ),
+            node = target_ast
+            clause = 'LIST_DISTINCT' if is_list_distinct else 'CLASSIFY'
+            reason = (
+                f'Tabular foundation model queries do not support multilabel '
+                f'tasks, so "{clause}" cannot be used here. Predict a single '
+                f'categorical or numerical label per entity instead.'
             )
-        )
-        return response
-
-    def _validate_forecast(
-        self, parsed_query: ParsedPredictiveQuery
-    ) -> ValidationResponse:
-        response = ValidationResponse()
-        if parsed_query.problem_type != ProblemType.FORECAST:
-            return response
-        response.errors.append(
-            ValidationError(
-                title='Unsupported query structure',
-                message=(
-                    f'{parsed_query.target_ast.get_location().message_start}: '
-                    f'Tabular foundation model queries do not support '
-                    f'forecasting. Drop the "FORECAST '
-                    f'{parsed_query.num_forecasts} TIMEFRAMES" clause to '
-                    f'predict a single aggregate over one time range. '
-                    f'{TRAIN_A_MODEL}'
-                ),
+        elif parsed_query.problem_type == ProblemType.FORECAST:
+            node = parsed_query.target_ast
+            reason = (
+                f'Tabular foundation model queries do not support '
+                f'forecasting. Drop the "FORECAST '
+                f'{parsed_query.num_forecasts} TIMEFRAMES" clause to predict '
+                f'a single aggregate over one time range.'
             )
-        )
-        return response
-
-    def _validate_whatif(
-        self, parsed_query: ParsedPredictiveQuery
-    ) -> ValidationResponse:
-        response = ValidationResponse()
-        if parsed_query.whatif_ast is None:
+        elif parsed_query.whatif_ast is not None:
+            node = parsed_query.whatif_ast
+            reason = (
+                'Tabular foundation model queries do not support '
+                'counterfactuals. Drop the "ASSUMING" clause and predict '
+                'against the observed data instead.'
+            )
+        else:
             return response
+
         response.errors.append(
             ValidationError(
                 title='Unsupported query structure',
-                message=(
-                    f'{parsed_query.whatif_ast.get_location().message_start}: '
-                    f'Tabular foundation model queries do not support '
-                    f'counterfactuals. Drop the "ASSUMING" clause and predict '
-                    f'against the observed data instead. {TRAIN_A_MODEL}'
-                ),
+                message=f'{node.get_location().message_start}: {reason}',
             )
         )
         return response
