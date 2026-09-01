@@ -23,7 +23,7 @@ from kumo_relational_engine.api.typing import (
     RelOp,
     TimeUnit,
 )
-from kumo_relational_engine.rfm.pquery import PQueryPandasExecutor
+from kumo_relational_engine.pql.executor import PQueryPandasExecutor
 
 
 @pytest.mark.parametrize(

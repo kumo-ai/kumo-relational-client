@@ -22,6 +22,10 @@ internalized code, not as an instruction for re-syncing.
 
 `rewriting/` was not imported by the parse path and was not taken.
 
+`executor/` has no upstream counterpart. It was written here, moved under
+`pql/` from `rfm/pquery/` because it executes a validated query against plain
+dataframes and is not specific to the relational model.
+
 ## Changes made against that baseline
 
 Import rewrites:

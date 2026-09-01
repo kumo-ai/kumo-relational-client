@@ -21,7 +21,7 @@ from kumo_relational_engine.api.typing import (
     MemberOp,
     RelOp,
 )
-from kumo_relational_engine.rfm.pquery import PQueryExecutor
+from kumo_relational_engine.pql.executor import PQueryExecutor
 
 
 class PQueryPandasExecutor(PQueryExecutor[pd.DataFrame, pd.Series, np.ndarray]):

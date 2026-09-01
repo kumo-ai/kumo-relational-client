@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
+from kumo_relational_engine.pql.executor import PQueryPandasExecutor
 from kumo_relational_engine.rfm.backend.local import LocalGraphStore
 from kumo_relational_engine.rfm.base import DataBackend, Sampler, SamplerOutput
 from kumo_relational_engine.rfm.diagnostics import GraphSanitizationReport
-from kumo_relational_engine.rfm.pquery import PQueryPandasExecutor
 from kumo_relational_engine.utils import ProgressLogger
 
 if TYPE_CHECKING:

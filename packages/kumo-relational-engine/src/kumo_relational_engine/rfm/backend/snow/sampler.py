@@ -11,11 +11,11 @@ import pandas as pd
 import pyarrow as pa
 
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
+from kumo_relational_engine.pql.executor import PQueryPandasExecutor
 from kumo_relational_engine.rfm.backend.snow import SnowTable
 from kumo_relational_engine.rfm.backend.snow.binding import paramstyle
 from kumo_relational_engine.rfm.base import DataBackend, SQLSampler, Table
 from kumo_relational_engine.rfm.base.utils import Timestamp
-from kumo_relational_engine.rfm.pquery import PQueryPandasExecutor
 from kumo_relational_engine.utils import ProgressLogger
 
 if TYPE_CHECKING:
