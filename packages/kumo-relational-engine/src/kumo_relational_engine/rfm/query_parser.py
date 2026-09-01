@@ -44,20 +44,19 @@ def _name_the_identity(
 def parse_query_locally(
     query: str,
     graph_definition: GraphDefinition,
-    query_validation_type: 'QueryValidationType | None' = None,
+    query_validation_type: 'QueryValidationType',
 ) -> ValidatedPredictiveQuery:
     r"""Parses and validates a string query against a graph definition.
 
     Args:
         query: The predictive query.
         graph_definition: The graph the query is written against.
-        query_validation_type: Which model's rule set to validate under.
+        query_validation_type: Which model's rule set to validate under. Each
+            model accepts a different subset of PQL, so the caller names the
+            one it is validating for.
     """
     try:
-        from kumo_relational_engine.pql.parser.parser import (
-            PQLParser,
-            QueryValidationType,
-        )
+        from kumo_relational_engine.pql.parser.parser import PQLParser
         from kumo_relational_engine.pql.validator import (
             PredictiveQueryValidator,
         )
@@ -68,8 +67,6 @@ def parse_query_locally(
             'or pass a ValidatedPredictiveQuery instead.'
         ) from exc
 
-    if query_validation_type is None:
-        query_validation_type = QueryValidationType.RFM_SDK
     try:
         parsed_query = PQLParser(
             query_validation_type=query_validation_type,

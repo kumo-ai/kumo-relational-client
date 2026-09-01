@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
 from kumo_relational_engine.api.typing import Stype
+from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.rfm import Graph
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
 from kumo_relational_engine.tfm import KumoTabular
@@ -149,7 +150,11 @@ def test_the_gate_is_the_only_thing_rejecting_these(
     # Regression guard: each of these parses cleanly for the relational
     # model, so a failure here would mean the gate had stopped being the
     # reason the tabular pathway turns them away.
-    parsed = parse_query_locally(query, shop_graph._to_api_graph_definition())
+    parsed = parse_query_locally(
+        query,
+        shop_graph._to_api_graph_definition(),
+        QueryValidationType.RFM_SDK,
+    )
 
     assert isinstance(parsed, ValidatedPredictiveQuery)
 
@@ -160,7 +165,9 @@ def test_an_already_validated_query_is_not_parsed_again(
     # A `ValidatedPredictiveQuery` has been through a validator already, so
     # `predict` takes it as given and goes straight to declining.
     query = parse_query_locally(
-        LINK_PREDICTION, shop_graph._to_api_graph_definition()
+        LINK_PREDICTION,
+        shop_graph._to_api_graph_definition(),
+        QueryValidationType.RFM_SDK,
     )
 
     with pytest.raises(NotImplementedError, match='land in a later release'):

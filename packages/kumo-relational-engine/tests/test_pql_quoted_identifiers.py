@@ -17,6 +17,7 @@ from kumo_relational_engine._names import (
 from kumo_relational_engine.api.typing import Stype
 from kumo_relational_engine.pql.grammar.PQLGrammarLexer import PQLGrammarLexer
 from kumo_relational_engine.pql.grammar.PQLGrammarParser import PQLGrammarParser
+from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
 
 
@@ -193,7 +194,9 @@ def test_the_ast_holds_the_name_the_data_uses(spaced_graph) -> None:
         'FOR EACH `My People`.`Customer ID`'
     )
     validated = parse_query_locally(
-        query, spaced_graph._to_api_graph_definition()
+        query,
+        spaced_graph._to_api_graph_definition(),
+        QueryValidationType.RFM_SDK,
     )
 
     assert validated.entity_column == 'My People.Customer ID'
@@ -209,12 +212,15 @@ def test_a_rendered_query_can_be_parsed_back(spaced_graph) -> None:
     )
     graph_definition = spaced_graph._to_api_graph_definition()
 
-    rendered = parse_query_locally(query, graph_definition).to_string()
+    rendered = parse_query_locally(
+        query, graph_definition, QueryValidationType.RFM_SDK
+    ).to_string()
 
     assert '`Customer ID`' in rendered
-    assert parse_query_locally(rendered, graph_definition).to_string() == (
-        rendered
+    reparsed = parse_query_locally(
+        rendered, graph_definition, QueryValidationType.RFM_SDK
     )
+    assert reparsed.to_string() == rendered
 
 
 def test_quoting_a_spellable_name_is_accepted(spaced_graph) -> None:
@@ -228,11 +234,13 @@ def test_quoting_a_spellable_name_is_accepted(spaced_graph) -> None:
         'PREDICT COUNT(ORDERS.ORDER_ID, 0, 30, days) '
         'FOR EACH `My People`.`Customer ID`',
         graph_definition,
+        QueryValidationType.RFM_SDK,
     )
     quoted = parse_query_locally(
         'PREDICT COUNT(`ORDERS`.`ORDER_ID`, 0, 30, days) '
         'FOR EACH `My People`.`Customer ID`',
         graph_definition,
+        QueryValidationType.RFM_SDK,
     )
 
     assert quoted.to_string() == bare.to_string()

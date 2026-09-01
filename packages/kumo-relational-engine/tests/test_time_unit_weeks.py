@@ -8,6 +8,7 @@ from kumo_relational_engine.api.pquery.AST.date_offset_range import (
     DateOffsetRange,
 )
 from kumo_relational_engine.api.typing import TimeUnit
+from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.rfm import Graph
 from kumo_relational_engine.rfm.backend.local import LocalTable
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
@@ -43,6 +44,7 @@ def test_a_query_can_be_written_in_weeks(graph_definition, unit) -> None:
     query = parse_query_locally(
         f'PREDICT COUNT(orders.*, 0, 4, {unit}) FOR EACH users.user_id',
         graph_definition,
+        QueryValidationType.RFM_SDK,
     )
 
     offset = query.get_all_target_aggregations()[0].date_offset_range

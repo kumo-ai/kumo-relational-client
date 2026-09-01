@@ -17,6 +17,7 @@ from unittest.mock import patch
 import pytest
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
 from kumo_relational_engine.api.typing import ProblemType
+from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.rfm import Graph, KumoRelational
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
 
@@ -55,7 +56,9 @@ def test_kumo_rfm_parse_query_delegates_strings_to_local_parser(
     ) as mock_parse:
         assert model._parse_query(query) is ltv
 
-    mock_parse.assert_called_once_with(query, model._graph_def)
+    mock_parse.assert_called_once_with(
+        query, model._graph_def, QueryValidationType.RFM_SDK
+    )
 
 
 def test_parse_query_locally_returns_validated_query(
@@ -64,6 +67,7 @@ def test_parse_query_locally_returns_validated_query(
     query = parse_query_locally(
         'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID=0',
         user_store_graph._to_api_graph_definition(),
+        QueryValidationType.RFM_SDK,
     )
 
     assert isinstance(query, ValidatedPredictiveQuery)

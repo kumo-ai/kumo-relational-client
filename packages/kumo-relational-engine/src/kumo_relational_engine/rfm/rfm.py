@@ -2058,7 +2058,11 @@ class KumoRelational:
         if isinstance(query, ValidatedPredictiveQuery):
             return query
 
-        return parse_query_locally(query, self._graph_def)
+        from kumo_relational_engine.pql.parser.parser import QueryValidationType
+
+        return parse_query_locally(
+            query, self._graph_def, QueryValidationType.RFM_SDK
+        )
 
     @staticmethod
     def _get_task_type(

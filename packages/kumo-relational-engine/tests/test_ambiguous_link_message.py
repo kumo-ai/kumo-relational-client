@@ -4,6 +4,7 @@
 
 import pandas as pd
 import pytest
+from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.rfm import Graph
 from kumo_relational_engine.rfm.backend.local import LocalTable
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
@@ -50,6 +51,7 @@ def test_the_ambiguous_link_error_names_the_call_that_fixes_it(
         parse_query_locally(
             'PREDICT SUM(item.amount, 0, 30, days) FOR EACH customer.cust_id',
             two_links_to_customer._to_api_graph_definition(),
+            QueryValidationType.RFM_SDK,
         )
 
     message = str(raised.value)
