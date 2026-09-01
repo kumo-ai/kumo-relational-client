@@ -3,11 +3,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import warnings
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from kumo_relational_engine.api.graph import GraphDefinition
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
 from kumo_relational_engine.rfm.base import composite_key
+
+if TYPE_CHECKING:
+    from kumo_relational_engine.pql.parser.parser import QueryValidationType
 
 
 def _name_the_identity(
@@ -41,7 +44,20 @@ def _name_the_identity(
 def parse_query_locally(
     query: str,
     graph_definition: GraphDefinition,
+    query_validation_type: 'QueryValidationType | None' = None,
 ) -> ValidatedPredictiveQuery:
+    r"""Parses and validates a string query against a graph definition.
+
+    Args:
+        query: The predictive query.
+        graph_definition: The graph the query is written against.
+        query_validation_type: Which model's rule set to validate under.
+            Defaults to the relational SDK's. The tabular pathway passes
+            :obj:`QueryValidationType.TABULAR`, which adds the task gate;
+            everything else about the parse is shared, so both pathways
+            accept exactly the same syntax and report the same diagnostics
+            for everything but the tasks they differ on.
+    """
     try:
         from kumo_relational_engine.pql.parser.parser import (
             PQLParser,
@@ -57,7 +73,8 @@ def parse_query_locally(
             'or pass a ValidatedPredictiveQuery instead.'
         ) from exc
 
-    query_validation_type = QueryValidationType.RFM_SDK
+    if query_validation_type is None:
+        query_validation_type = QueryValidationType.RFM_SDK
     try:
         parsed_query = PQLParser(
             query_validation_type=query_validation_type,

@@ -28,6 +28,9 @@ from kumo_relational_engine.pql.validator.problem_type_validator import (
     ProblemTypeValidator,
 )
 from kumo_relational_engine.pql.validator.rfm_validator import RfmValidator
+from kumo_relational_engine.pql.validator.tabular_validator import (
+    TabularValidator,
+)
 from kumo_relational_engine.pql.validator.time_range_validator import (
     TimeRangeValidator,
 )
@@ -157,6 +160,18 @@ class PredictiveQueryValidator:
         response = merge(response, self.validate_list_distinct(parsed_query))
         if not response.ok:
             return None, response
+
+        # validate the tabular task gate. It runs ahead of the relational
+        # checks below because several of the shapes it rejects are also
+        # rejected there, and a caller on the tabular pathway needs the
+        # diagnostic that names their model, not the relational one.
+        if self.query_validation_type.is_tabular():
+            self.tabular_validator = TabularValidator()
+            response = merge(
+                response, self.tabular_validator.validate(parsed_query)
+            )
+            if not response.ok:
+                return None, response
 
         # validate rfm-related checks
         response = merge(response, self.rfm_validator.validate(parsed_query))
