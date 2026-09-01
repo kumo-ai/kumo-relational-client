@@ -3,6 +3,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pandas as pd
+import sqlite3
+from datetime import date, timedelta
+from pathlib import Path
+
 import pytest
 from kumo_relational_engine.api.pquery import ValidatedPredictiveQuery
 from kumo_relational_engine.api.typing import Stype
@@ -66,6 +70,38 @@ def shop_graph() -> Graph:
             ),
         }
     )
+    connection.executemany(
+        'INSERT INTO users VALUES (?, ?, ?)',
+        [(i, 20 + i % 40, 'ABC'[i % 3]) for i in range(50)],
+    )
+    connection.executemany(
+        'INSERT INTO items VALUES (?, ?)',
+        [(i, ['burger', 'pizza', 'fries'][i % 3]) for i in range(9)],
+    )
+    # The orders span half a year rather than a single month: a query with a
+    # 30-day window anchors its context a further 30 days back, and a month of
+    # data leaves no room for that.
+    connection.executemany(
+        'INSERT INTO orders VALUES (?, ?, ?, ?, ?)',
+        [
+            (
+                i,
+                i % 50,
+                i % 9,
+                10.0 + i % 7,
+                str(date(2024, 1, 1) + timedelta(days=i % 168)),
+            )
+            for i in range(200)
+        ],
+    )
+    # Index the foreign keys. Building a KumoTabular builds the backend
+    # sampler, which warns about a sqlite database without them, and the
+    # session turns that warning into an error.
+    connection.execute('CREATE INDEX orders_user_id ON orders (user_id)')
+    connection.execute('CREATE INDEX orders_item_id ON orders (item_id)')
+    connection.commit()
+    connection.close()
+    return path
 
     graph = Graph.from_data(df_dict, verbose=False)
     graph['USERS']['AGE'].stype = Stype.numerical
@@ -159,7 +195,12 @@ def test_the_gate_is_the_only_thing_rejecting_these(
     assert isinstance(parsed, ValidatedPredictiveQuery)
 
 
-def test_an_already_validated_query_is_not_parsed_again(
+@pytest.mark.filterwarnings(
+    # Predicting now generates labels, and the sqlite backend cannot seed the
+    # sampling that draws them. The session turns UserWarning into an error.
+    'ignore:.*seeded random sampling.*:UserWarning'
+)
+def test_kumo_tabular_validates_before_it_declines_to_predict(
     shop_graph: Graph,
 ) -> None:
     # A `ValidatedPredictiveQuery` has been through a validator already, so
@@ -171,4 +212,4 @@ def test_an_already_validated_query_is_not_parsed_again(
     )
 
     with pytest.raises(NotImplementedError, match='land in a later release'):
-        KumoTabular(shop_graph).predict(query)
+        model.predict(BINARY_TEMPORAL, indices=[1, 2], context_size=10)
