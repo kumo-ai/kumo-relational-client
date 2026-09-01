@@ -233,9 +233,26 @@ class PQLParser:
         _, _, response = self._parse_tree(query)
         return response
 
-    def _parse_tree(
+    def parse_raw(
         self, query: str
-    ) -> tuple[antlr4.ParserRuleContext, PQLGrammarParser, ValidationResponse]:
+    ) -> tuple[
+        antlr4.ParserRuleContext, PQLGrammarParser, list[Antlr4SyntaxError]
+    ]:
+        r"""Parses the input query and returns the errors untranslated.
+
+        :meth:`validate` is the method to reach for. This one exists for the
+        callers that parse something other than a query the user wrote --
+        a feature expression wrapped in a synthetic ``PREDICT ... FOR EACH``,
+        for instance -- and so have to rewrite the line and column of each
+        error before :class:`ErrorTranslator` bakes them into a message.
+
+        Args:
+            query: The input query.
+
+        Returns:
+            The parse tree, the parser that produced it, and every syntax
+            error ANTLR reported, in the order it reported them.
+        """
         input_stream = InputStream(query)
         lexer = PQLGrammarLexer(input_stream)
         error_listener = Delegate()
@@ -247,8 +264,14 @@ class PQLParser:
         parser.addErrorListener(error_listener)
         parser._errHandler = _QuietErrorStrategy()
         tree = parser.prog()
+        return tree, parser, error_listener.errors
+
+    def _parse_tree(
+        self, query: str
+    ) -> tuple[antlr4.ParserRuleContext, PQLGrammarParser, ValidationResponse]:
+        tree, parser, errors = self.parse_raw(query)
         translator = ErrorTranslator()
-        response = translator.translate_errors(error_listener.errors, query)
+        response = translator.translate_errors(errors, query)
         return tree, parser, response
 
     def to_lisp_tree(self, query: str) -> str:
