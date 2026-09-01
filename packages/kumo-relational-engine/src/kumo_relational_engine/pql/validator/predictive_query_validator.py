@@ -28,9 +28,7 @@ from kumo_relational_engine.pql.validator.problem_type_validator import (
     ProblemTypeValidator,
 )
 from kumo_relational_engine.pql.validator.rfm_validator import RfmValidator
-from kumo_relational_engine.pql.validator.tabular_validator import (
-    TabularValidator,
-)
+from kumo_relational_engine.pql.validator.tabular_validator import TabularValidator
 from kumo_relational_engine.pql.validator.time_range_validator import (
     TimeRangeValidator,
 )
@@ -161,8 +159,6 @@ class PredictiveQueryValidator:
         if not response.ok:
             return None, response
 
-        # tabular task validation. It runs before the rfm checks below so
-        # that a tabular query is rejected with a tabular error message.
         if self.query_validation_type.is_tfm():
             self.tabular_validator = TabularValidator()
             response = merge(

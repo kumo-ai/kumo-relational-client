@@ -41,9 +41,6 @@ class QueryValidationType(Enum):
     RFM_SDK = 'RFM_SDK'
     RFM_DEMO = 'RFM_DEMO'
     RFM_SDK_V2 = 'RFM_SDK_V2'
-    # The tabular foundation model. It reads the same PQL and the same graph
-    # as the relational modes, so it shares their query structure rules, and
-    # answers a strictly smaller set of tasks, which `TabularValidator` gates.
     TFM = 'TFM'
 
     def is_enterprise(self) -> bool:
