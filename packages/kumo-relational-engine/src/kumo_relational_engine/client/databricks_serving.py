@@ -31,12 +31,13 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from kumo_relational_engine._version import __version__
-from kumo_relational_engine.client._databricks_telemetry import (
+from kumo_connectors._databricks_telemetry import (
     DATABRICKS_PARTNER,
     DATABRICKS_PRODUCT,
     databricks_product_version,
 )
+from kumo_connectors._version import __version__
+
 from kumo_relational_engine.client.endpoints import Endpoint
 from kumo_relational_engine.client.generated.tfm_api import TFMOperations
 from kumo_relational_engine.client.transport import ServingResponse
@@ -181,11 +182,12 @@ class DatabricksServingClient:
                 "'databricks-serving' extra: pip install "
                 "'kumo_relational_engine[databricks-serving]'"
             ) from error
+        product_version = databricks_product_version(__version__)
         try:
             config = Config(
                 http_timeout_seconds=timeout,
                 product=DATABRICKS_PRODUCT,
-                product_version=databricks_product_version(__version__),
+                product_version=product_version,
             )
             # Keep attribution on the client we own. The module-level
             # useragent.with_partner/with_product API changes process-wide

@@ -22,7 +22,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 VERSION_FILES = {
-    'kumo-connectors': 'packages/kumo-connectors/src/kumo_connectors/__init__.py',
+    'kumo-connectors': 'packages/kumo-connectors/src/kumo_connectors/_version.py',
     'kumo-relational-client': 'packages/kumo-relational-client/src/kumo_relational_client/_version.py',
     'kumo-relational-engine': 'packages/kumo-relational-engine/src/kumo_relational_engine/_version.py',
 }
@@ -53,7 +53,16 @@ def check(tag: str) -> str:
             f'unknown distribution {distribution!r} in tag {tag!r}; known '
             f'distributions: {sorted(VERSION_FILES)}'
         )
-    declared = declared_version(distribution)
+    versions = {name: declared_version(name) for name in sorted(VERSION_FILES)}
+    if len(set(versions.values())) != 1:
+        rendered = ', '.join(
+            f'{name}={version}' for name, version in versions.items()
+        )
+        raise SystemExit(
+            'the three packages must be released at one shared version; '
+            f'found {rendered}'
+        )
+    declared = versions[distribution]
     if version != declared:
         raise SystemExit(
             f'tag {tag!r} says {version!r} but {VERSION_FILES[distribution]} '

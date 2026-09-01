@@ -13,15 +13,17 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 import pytest
-from kumo_relational_engine._version import __version__ as sdk_version
-from kumo_relational_engine.client._databricks_telemetry import (
+from kumo_connectors._databricks_telemetry import (
     DATABRICKS_PARTNER,
     DATABRICKS_PRODUCT,
+    DatabricksTelemetryVersionError,
     databricks_product_version,
 )
+from kumo_connectors._version import __version__ as sdk_version
 from kumo_relational_engine.client.databricks_serving import (
     REQUEST_COLUMN,
     RESPONSE_COLUMN,
@@ -545,7 +547,12 @@ def test_the_timeout_reaches_a_self_constructed_workspace_client(
     assert isinstance(seen['config'], _FakeConfig)
 
 
-def test_the_real_sdk_renders_partner_attribution() -> None:
+def test_the_real_sdk_renders_partner_attribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in tuple(os.environ):
+        if name.startswith('DATABRICKS_'):
+            monkeypatch.delenv(name)
     core = pytest.importorskip(
         'databricks.sdk.core', reason='databricks-sdk absent'
     )
@@ -561,6 +568,19 @@ def test_the_real_sdk_renders_partner_attribution() -> None:
 
     assert f'{DATABRICKS_PRODUCT}/{version}' in config.user_agent
     assert f'partner/{DATABRICKS_PARTNER}' in config.user_agent
+
+
+def test_an_invalid_sdk_version_is_not_reported_as_an_auth_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip('databricks.sdk', reason='databricks-sdk absent')
+    from kumo_relational_engine.client import databricks_serving
+
+    monkeypatch.setattr(databricks_serving, '__version__', '1.0.0.dev')
+    with pytest.raises(
+        DatabricksTelemetryVersionError, match='cannot be represented'
+    ):
+        DatabricksServingClient('kumo-relational')
 
 
 def test_the_default_timeout_allows_for_a_cold_start() -> None:

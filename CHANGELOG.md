@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Databricks connections now carry the partner User-Agent required for usage
+  attribution. The Databricks extra requires
+  `databricks-sql-connector>=4.0.3,<5`; applications pinned to the 3.x connector
+  must upgrade before installing this release. The 4.x connector no longer
+  bundles its legacy SQLAlchemy dialect.
+
 ## 1.0.0: all three packages
 
 The first release. Three packages are released together and share one version:
