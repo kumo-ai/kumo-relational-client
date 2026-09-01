@@ -36,7 +36,13 @@ def _dumps(obj: Any) -> str:
 
 
 class PostgresSampler(SQLSampler):
-    r"""Relational sampler using PostgreSQL-native SQL."""
+    r"""Relational sampler using PostgreSQL-native SQL.
+
+    Filtering, temporal predicates, ordering, and neighbor limits execute in
+    PostgreSQL. Pandas holds only rows returned by those queries. ``_by_time``
+    intentionally returns every row in the requested target window because
+    truncating that result would change the predictive-query label.
+    """
 
     def __init__(
         self,

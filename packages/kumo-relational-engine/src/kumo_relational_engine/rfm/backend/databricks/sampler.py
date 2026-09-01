@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import math
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
@@ -392,16 +393,40 @@ class DatabricksSampler(SQLSampler):
         elem = self._elem_type(dtype)
 
         end_time: pd.Series | None = None
+        start_time: pd.Series | None = None
         if time_column is not None and anchor_time is not None:
+            # In order to avoid a full table scan, we limit foreign key
+            # sampling to a certain time range, approximated by the number of
+            # rows, timestamp ranges and `num_neighbors` value.
+            # Downstream, this helps Databricks to apply data skipping:
+            dst_table_name = [
+                dst_table
+                for key, dst_table in self.foreign_key_dict[table_name]
+                if key == foreign_key
+            ][0]
+            num_facts = self.num_rows_dict[table_name]
+            num_entities = self.num_rows_dict[dst_table_name]
+            min_time = self.get_min_time([table_name])
+            max_time = self.get_max_time([table_name])
+            freq = num_facts / num_entities
+            freq = freq / max((max_time - min_time).total_seconds(), 1)
+            # Look up at most 5 years of history (and prevent out-of-bounds):
+            seconds = 5 * 365 * 24 * 60 * 60
+            seconds = min(math.ceil(5 * num_neighbors / freq), seconds)
+            offset = pd.Timedelta(seconds=seconds)
+
             end_time = anchor_time.dt.strftime('%Y-%m-%d %H:%M:%S')
+            start_time = anchor_time - offset
+            start_time = start_time.dt.strftime('%Y-%m-%d %H:%M:%S')
             rows: list = [
                 {
                     'id': self._coerce_id(i, dtype),
                     'e': e,
+                    's': s,
                 }
-                for i, e in zip(index, end_time)
+                for i, e, s in zip(index, end_time, start_time)
             ]
-            schema = f'array<struct<id:{elem},e:string>>'
+            schema = f'array<struct<id:{elem},e:string,s:string>>'
         else:
             rows = [self._coerce_id(i, dtype) for i in index]
             schema = f'array<{elem}>'
@@ -410,9 +435,10 @@ class DatabricksSampler(SQLSampler):
         projections = self._projections(table_name, columns)
 
         select = ['pos AS __KUMO_BATCH__']
-        if end_time is not None:
+        if end_time is not None and start_time is not None:
             select.append('col.id AS __KUMO_ID__')
             select.append('col.e AS __KUMO_END_TIME__')
+            select.append('col.s AS __KUMO_START_TIME__')
         else:
             select.append('col AS __KUMO_ID__')
         sql = (
@@ -427,12 +453,14 @@ class DatabricksSampler(SQLSampler):
             f'JOIN {self.source_name_dict[table_name]}\n'
             f'  ON {key_ref} = TMP.__KUMO_ID__\n'
         )
-        if end_time is not None:
+        if end_time is not None and start_time is not None:
             assert time_column is not None
             time_ref = self.table_column_ref_dict[table_name][time_column]
             sql += (
                 f' AND {time_ref} <= TMP.__KUMO_END_TIME__\n'
+                f' AND {time_ref} > TMP.__KUMO_START_TIME__\n'
                 f"WHERE {time_ref} <= '{end_time.max()}'\n"
+                f"  AND {time_ref} > '{start_time.min()}'\n"
             )
         sql += (
             'QUALIFY ROW_NUMBER() OVER (\n  PARTITION BY TMP.__KUMO_BATCH__\n'

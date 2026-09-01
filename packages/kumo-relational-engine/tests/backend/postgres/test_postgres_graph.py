@@ -234,6 +234,9 @@ def test_postgres_sampler_preserves_native_keys_and_exact_time_semantics(
     try:
         graph['orders'].time_column = 'ordered_at'
         graph['uuid_events'].time_column = 'occurred_at'
+        recording = _RecordingConnection(graph._connection)
+        for table in graph.tables.values():
+            table._connection = recording
         sampler = PostgresSampler(graph, verbose=False)
 
         customer_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
@@ -336,6 +339,36 @@ def test_postgres_sampler_preserves_native_keys_and_exact_time_semantics(
             '00000000-0000-0000-0000-000000000003',
         ]
         assert np.array_equal(open_batch, np.zeros(3, dtype=np.int64))
+
+        pkey_sql = [
+            sql
+            for sql in recording.statements
+            if 'WHERE __KUMO_ROW__ = 1' in sql
+        ]
+        assert len(pkey_sql) == 1
+
+        neighbor_sql = [
+            sql for sql in recording.statements if 'JOIN LATERAL' in sql
+        ]
+        assert len(neighbor_sql) == 3
+        assert all('LIMIT ' in sql for sql in neighbor_sql)
+        assert all('__KUMO_START_TIME__' not in sql for sql in neighbor_sql)
+        assert sum('LIMIT 2' in sql for sql in neighbor_sql) == 2
+        assert sum('LIMIT 1' in sql for sql in neighbor_sql) == 1
+
+        window_sql = [
+            sql
+            for sql in recording.statements
+            if 'ORDER BY TMP.__KUMO_BATCH__' in sql
+            and 'JOIN LATERAL' not in sql
+            and '__KUMO_END_TIME__' in sql
+        ]
+        assert len(window_sql) == 2
+        assert all(
+            'AND "occurred_at" <= TMP.__KUMO_END_TIME__' in sql
+            for sql in window_sql
+        )
+        assert sum('__KUMO_START_TIME__' in sql for sql in window_sql) == 1
     finally:
         assert graph._connection is not None
         graph._connection.close()

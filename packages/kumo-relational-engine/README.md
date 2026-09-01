@@ -29,51 +29,34 @@ pip install "kumo-relational-engine[relbench]"    # Graph.from_relbench() datase
 pip install "kumo-relational-engine[codegen]"     # regenerate the TFM API client (see scripts/)
 ```
 
-Create a graph from PostgreSQL with `Graph.from_postgres()`:
-
-```python
-from kumo_relational_client import relational
-
-graph = relational.Graph.from_postgres(schema='public')
-```
-
-A PostgreSQL schema is a namespace that groups tables within a database.
-`public` is the usual default; replace it with your table namespace, or omit
-`schema` to use the connection's current schema. Connection details can be an
-open psycopg connection, a URI/libpq conninfo string, explicit keywords, or
-standard `PG*` environment variables. See the generic
-[`postgres.py`](examples/rfm/postgres.py) example.
-
-Lakebase exposes a PostgreSQL endpoint, so tables that already exist there use
-the same API. Obtain a database credential using the Databricks-supported
-authentication flow, open a psycopg connection, and pass it to
-`Graph.from_postgres()`:
+`Graph.from_postgres()` reads existing PostgreSQL tables:
 
 ```python
 import psycopg
 from kumo_relational_client import relational
 
 connection = psycopg.connect(
-    host=lakebase_host,
+    host=host,
     dbname=database,
-    user=database_user,
-    password=oauth_token,
+    user=user,
+    password=credential,
     sslmode='require',
 )
-graph = relational.Graph.from_postgres(
-    connection=connection,
-    schema='public',
-)
+graph = relational.Graph.from_postgres(connection, schema='public')
 ```
 
-This connects directly to existing tables. It does not register Lakebase in
-Unity Catalog, copy data, or create schemas and tables.
+`schema` is the table namespace; omit it to use `current_schema()` (`public` is
+the usual default). `connection` may instead be a PostgreSQL URI/libpq string
+or a dictionary of psycopg arguments; if omitted, psycopg uses `PG*` environment
+variables. See [`postgres.py`](examples/rfm/postgres.py). Lakebase uses this same
+API through its PostgreSQL endpoint with TLS and either an OAuth token or an
+enabled native Postgres password. It reads existing tables directly—without
+Unity Catalog registration, copying data, or DDL.
 
-Temporal neighbor sampling returns the exact latest rows at or before each
-anchor time. On large fact tables, a PostgreSQL index matching
-`(foreign_key, time_column DESC, primary_key)` can accelerate that query
-without changing which rows are selected. The client never creates indexes or
-otherwise modifies source tables.
+Temporal sampling returns at most the requested latest N rows at or before each
+anchor, ordered by time descending then primary key ascending. For large fact
+tables, an index on `(foreign_key, time_column DESC, primary_key)` improves this
+pushed-down query; the SDK never creates indexes or modifies source tables.
 
 Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
 (`manylinux_2_28` x86-64); no source distribution is published.
