@@ -160,7 +160,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --editable './packages/kumo-connectors'
       - run: >-
-          WITH_RELATIONALLIB=0 python -m pip install --editable
+          python -m pip install --editable
           './packages/kumo-relational-engine[test]'
       - run: >-
           python -m pytest tests/client/test_rfm_nim_contract.py
