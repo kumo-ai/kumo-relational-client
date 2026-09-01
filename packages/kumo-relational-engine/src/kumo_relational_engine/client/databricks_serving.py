@@ -174,7 +174,7 @@ class DatabricksServingClient:
     @staticmethod
     def _default_workspace(timeout: float) -> Any:
         try:
-            from databricks.sdk import WorkspaceClient
+            from databricks.sdk import WorkspaceClient, useragent
             from databricks.sdk.core import Config
         except ImportError as error:
             raise ImportError(
@@ -183,16 +183,19 @@ class DatabricksServingClient:
                 "'kumo_relational_engine[databricks-serving]'"
             ) from error
         product_version = databricks_product_version(__version__)
+        # Databricks requires these process-wide registrations before Config
+        # construction. Newer SDKs can issue a host-metadata request while
+        # Config initializes, before per-config metadata would take effect.
+        partner_entry = f'partner/{DATABRICKS_PARTNER}'
+        if partner_entry not in useragent.to_string().split():
+            useragent.with_partner(DATABRICKS_PARTNER)
+        useragent.with_product(DATABRICKS_PRODUCT, product_version)
         try:
             config = Config(
                 http_timeout_seconds=timeout,
                 product=DATABRICKS_PRODUCT,
                 product_version=product_version,
             )
-            # Keep attribution on the client we own. The module-level
-            # useragent.with_partner/with_product API changes process-wide
-            # state and could relabel unrelated Databricks clients.
-            config.with_user_agent_extra('partner', DATABRICKS_PARTNER)
             return WorkspaceClient(config=config)
         except Exception:
             raise HTTPException(

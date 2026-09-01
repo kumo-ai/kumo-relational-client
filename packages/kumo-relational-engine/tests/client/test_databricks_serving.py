@@ -530,20 +530,34 @@ def test_the_timeout_reaches_a_self_constructed_workspace_client(
         def __init__(self, **kwargs: Any) -> None:
             seen.update(kwargs)
 
-        def with_user_agent_extra(self, key: str, value: str) -> None:
-            seen.setdefault('user_agent_extra', []).append((key, value))
-
     def _fake_workspace_client(*, config: Any) -> Any:
         seen['config'] = config
         return _Workspace()
 
     monkeypatch.setattr(core, 'Config', _FakeConfig)
     monkeypatch.setattr(sdk, 'WorkspaceClient', _fake_workspace_client)
+    monkeypatch.setattr(sdk.useragent, 'to_string', lambda: '')
+    monkeypatch.setattr(
+        sdk.useragent,
+        'with_partner',
+        lambda partner: seen.setdefault('partner', partner),
+    )
+    monkeypatch.setattr(
+        sdk.useragent,
+        'with_product',
+        lambda product, version: seen.setdefault(
+            'registered_product', (product, version)
+        ),
+    )
     DatabricksServingClient('kumo-relational', timeout=123.0)
     assert seen['http_timeout_seconds'] == 123.0
     assert seen['product'] == DATABRICKS_PRODUCT
     assert seen['product_version'] == databricks_product_version(sdk_version)
-    assert seen['user_agent_extra'] == [('partner', DATABRICKS_PARTNER)]
+    assert seen['partner'] == DATABRICKS_PARTNER
+    assert seen['registered_product'] == (
+        DATABRICKS_PRODUCT,
+        databricks_product_version(sdk_version),
+    )
     assert isinstance(seen['config'], _FakeConfig)
 
 
@@ -553,21 +567,49 @@ def test_the_real_sdk_renders_partner_attribution(
     for name in tuple(os.environ):
         if name.startswith('DATABRICKS_'):
             monkeypatch.delenv(name)
+    sdk = pytest.importorskip('databricks.sdk', reason='databricks-sdk absent')
     core = pytest.importorskip(
         'databricks.sdk.core', reason='databricks-sdk absent'
     )
-    version = databricks_product_version(sdk_version)
-    config = core.Config(
-        host='https://example.invalid',
-        token='unused-test-token',
-        auth_type='pat',
-        product=DATABRICKS_PRODUCT,
-        product_version=version,
-    )
-    config.with_user_agent_extra('partner', DATABRICKS_PARTNER)
+    monkeypatch.setenv('DATABRICKS_HOST', 'https://example.invalid')
+    monkeypatch.setenv('DATABRICKS_TOKEN', 'unused-test-token')
 
+    # Isolate the SDK's documented process-wide registration from other tests.
+    for name in ('_product_name', '_product_version'):
+        if hasattr(sdk.useragent, name):
+            monkeypatch.setattr(
+                sdk.useragent, name, getattr(sdk.useragent, name)
+            )
+    if hasattr(sdk.useragent, '_extra'):
+        monkeypatch.setattr(sdk.useragent, '_extra', list(sdk.useragent._extra))
+
+    initial_user_agents = []
+    if hasattr(core, '_BaseClient'):
+
+        def _host_metadata(client, *args, **kwargs):
+            initial_user_agents.append(client._user_agent_base)
+            return {}
+
+        monkeypatch.setattr(core._BaseClient, 'do', _host_metadata)
+
+    seen = {}
+
+    def _fake_workspace_client(*, config: Any) -> Any:
+        seen['config'] = config
+        return _Workspace()
+
+    monkeypatch.setattr(sdk, 'WorkspaceClient', _fake_workspace_client)
+    DatabricksServingClient('kumo-relational')
+    DatabricksServingClient('kumo-relational')
+
+    version = databricks_product_version(sdk_version)
+    config = seen['config']
     assert f'{DATABRICKS_PRODUCT}/{version}' in config.user_agent
     assert f'partner/{DATABRICKS_PARTNER}' in config.user_agent
+    assert config.user_agent.split().count(f'partner/{DATABRICKS_PARTNER}') == 1
+    for user_agent in initial_user_agents:
+        assert f'{DATABRICKS_PRODUCT}/{version}' in user_agent
+        assert f'partner/{DATABRICKS_PARTNER}' in user_agent
 
 
 def test_an_invalid_sdk_version_is_not_reported_as_an_auth_failure(

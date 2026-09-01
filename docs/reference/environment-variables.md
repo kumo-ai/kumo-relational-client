@@ -61,7 +61,8 @@ falls back to these variables.
 
 SDK-created Databricks clients attribute usage to NVIDIA Kumo Relational
 Client. SQL and Model Serving use the same shared SDK release version.
-Caller-owned clients are unchanged.
+For Model Serving, passing an injected client does not itself register
+attribution; Databricks SDK registration is process-wide.
 
 ## Snowflake Connector
 

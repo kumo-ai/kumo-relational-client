@@ -79,23 +79,28 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sql-connector: ['==4.0.3', '>=4,<5']
+        include:
+          - sql-connector: '==4.0.3'
+            sdk: '==0.68.0'
+          - sql-connector: '>=4,<5'
+            sdk: '>=0.68,<1.0'
     env:
       WITH_RELATIONALLIB: '0'
       DATABRICKS_SQL_CONNECTOR_SPEC: ${{ matrix.sql-connector }}
+      DATABRICKS_SDK_SPEC: ${{ matrix.sdk }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      # Exercise both the declared floor and the latest supported major.
+      # Exercise both declared floors and the latest supported dependencies.
       - run: >-
           python -m pip install
           "databricks-sql-connector${DATABRICKS_SQL_CONNECTOR_SPEC}"
-          'databricks-sdk==0.68.0'
+          "databricks-sdk${DATABRICKS_SDK_SPEC}"
       - run: python -m pip install --editable './packages/kumo-connectors'
-      # Run before test dependencies install `packaging`, so a connector that
-      # forgets to declare it cannot be masked by pytest's dependency tree.
+      # Prove the base connector and selected driver versions import cleanly
+      # before the broader test dependency set is installed.
       - run: python -c "import kumo_connectors.backends.databricks"
       - run: >-
           python -m pip install --editable
