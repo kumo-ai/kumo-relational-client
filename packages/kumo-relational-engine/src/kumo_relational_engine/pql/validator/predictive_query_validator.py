@@ -89,12 +89,9 @@ class PredictiveQueryValidator:
             ValueError: if the query is not valid.
         """
         response = ValidationResponse()
-        # If RFM, update the location interval for correct error messages
         self.rfm_validator = RfmValidator(
             self.graph, self.query_validation_type
         )
-        if self.query_validation_type.is_demo():
-            self.rfm_validator.update_location_interval(parsed_query)
 
         response = merge(response, self.validate_columns(parsed_query))
         response = merge(response, self.validate_wildcard(parsed_query))
