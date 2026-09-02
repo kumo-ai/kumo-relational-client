@@ -2,23 +2,15 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from kumo_relational_engine.api.common import StrEnum
+from kumo_relational_engine.core.backend import DataBackend
 
 
-class DataBackend(StrEnum):
-    LOCAL = 'local'
-    SQLITE = 'sqlite'
-    DUCKDB = 'duckdb'
-    SNOWFLAKE = 'snowflake'
-    DATABRICKS = 'databricks'
-
-
-from .source import SourceColumn, SourceForeignKey  # noqa: E402
-from .expression import Expression, LocalExpression  # noqa: E402
-from .column import ColumnSpec, ColumnSpecType, Column  # noqa: E402
-from .table import Table  # noqa: E402
-from .sampler import SamplerOutput, Sampler  # noqa: E402
-from .sql_sampler import SQLSampler  # noqa: E402
+from .source import SourceColumn, SourceForeignKey
+from .expression import Expression, LocalExpression
+from .column import ColumnSpec, ColumnSpecType, Column
+from .table import Table
+from .sampler import SamplerOutput, Sampler
+from .sql_sampler import SQLSampler
 
 __all__ = [
     'Column',

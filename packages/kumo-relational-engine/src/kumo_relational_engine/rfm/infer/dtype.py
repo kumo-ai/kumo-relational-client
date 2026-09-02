@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 
 from kumo_relational_engine.api.typing import Dtype
-from kumo_relational_engine.rfm.base.utils import is_datetime
+from kumo_relational_engine.core.utils import is_datetime
 
 # What `pandas.api.types.infer_dtype` reports for the contents of an `object`
 # column, mapped to the data type those values actually are. `object` is a

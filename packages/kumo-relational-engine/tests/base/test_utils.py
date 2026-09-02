@@ -7,7 +7,7 @@ from datetime import timedelta, timezone
 
 import pandas as pd
 import pytest
-from kumo_relational_engine.rfm.base.utils import Timestamp, to_datetime
+from kumo_relational_engine.core.utils import Timestamp, to_datetime
 
 
 def test_timestamp() -> None:

@@ -17,6 +17,7 @@ from kumo_relational_engine.api.source_table import UnavailableSourceTable
 from kumo_relational_engine.api.table import Column as ColumnDefinition
 from kumo_relational_engine.api.table import TableDefinition
 from kumo_relational_engine.api.typing import Dtype, Stype
+from kumo_relational_engine.core.utils import to_datetime
 from kumo_relational_engine.rfm.base import (
     Column,
     ColumnSpec,
@@ -26,7 +27,6 @@ from kumo_relational_engine.rfm.base import (
     SourceForeignKey,
     composite_key,
 )
-from kumo_relational_engine.rfm.base.utils import to_datetime
 from kumo_relational_engine.rfm.infer import (
     infer_dtype,
     infer_primary_key,

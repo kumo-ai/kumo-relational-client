@@ -8,7 +8,6 @@ import os
 import re
 import time
 import warnings
-from collections import defaultdict
 from collections.abc import Generator, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -27,12 +26,9 @@ from kumo_relational_engine.api.pquery import (
     ValidatedPredictiveQuery,
 )
 from kumo_relational_engine.api.pquery.AST import (
-    Aggregation,
     Column,
     Condition,
     Constant,
-    Join,
-    LogicalOperation,
 )
 from kumo_relational_engine.api.rfm import (
     ClassificationInferenceConfig,
@@ -42,18 +38,20 @@ from kumo_relational_engine.api.rfm import (
 )
 from kumo_relational_engine.api.rfm.context import Context, Table
 from kumo_relational_engine.api.task import TaskType
-from kumo_relational_engine.api.typing import (
-    AggregationType,
-    ProblemType,
-    Stype,
-)
 from kumo_relational_engine.client.client import NimClient
 from kumo_relational_engine.client.rfm import RFMAPI
+from kumo_relational_engine.core.defaults import (
+    MAX_PRED_SIZE,
+    MAX_TEST_SIZE,
+    OPTIMIZABLE_BACKENDS,
+    RANDOM_SEED,
+)
+from kumo_relational_engine.core.task_setup import TaskSetupMixin
+from kumo_relational_engine.core.utils import Timestamp
 from kumo_relational_engine.exceptions import HTTPException, NimFailureError
 from kumo_relational_engine.mixin import CastMixin
 from kumo_relational_engine.rfm import Graph, TaskTable
 from kumo_relational_engine.rfm.base import DataBackend, Sampler, composite_key
-from kumo_relational_engine.rfm.base.utils import Timestamp, to_naive_utc
 from kumo_relational_engine.rfm.diagnostics import GraphSanitizationReport
 from kumo_relational_engine.rfm.explain_summary import generate_summary
 from kumo_relational_engine.rfm.payload import (
@@ -69,14 +67,6 @@ from kumo_relational_engine.rfm.payload import (
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
 from kumo_relational_engine.runmode import RunMode
 from kumo_relational_engine.utils import ProgressLogger, display
-
-_RANDOM_SEED = 42
-
-_MAX_PRED_SIZE: dict[TaskType, int] = defaultdict(lambda: 1_000)
-_MAX_PRED_SIZE[TaskType.TEMPORAL_LINK_PREDICTION] = 200
-
-_MAX_TEST_SIZE: dict[TaskType, int] = defaultdict(lambda: 2_000)
-_MAX_TEST_SIZE[TaskType.TEMPORAL_LINK_PREDICTION] = 400
 
 _MAX_CONTEXT_SIZE = {
     RunMode.DEBUG: 100,
@@ -348,8 +338,6 @@ _MAX_SUBGRAPH_TABLES = 15
 _RETRY_BACKOFF_BASE_SECONDS = 2
 _CARDINALITY_RE = re.compile(r'categorical cardinality \d+ exceeds limit (\d+)')
 
-_OPTIMIZABLE_BACKENDS = frozenset({DataBackend.SQLITE, DataBackend.DUCKDB})
-
 
 def _first_uncastable(
     values: Sequence[Any], dtype: Any
@@ -559,26 +547,6 @@ def _nim_failure_error(
     )
 
 
-def _check_anchor_time(value: Any, name: str) -> Any:
-    r"""Reject an anchor time that is neither a ``Timestamp`` nor ``'entity'``,
-    and return it converted to the timezone-naive UTC the graph is held in.
-
-    A date *string* is what most pandas users reach for first, and it used to
-    land on a bare ``assert`` with an empty message, and under ``python -O``
-    on no check at all. A timezone-*aware* ``Timestamp`` is what the client's own
-    ``predict`` output carries, so it is converted rather than refused.
-    """
-    if value is None or isinstance(value, pd.Timestamp):
-        return to_naive_utc(value)
-    if isinstance(value, str) and value == 'entity':
-        return value
-    hint = f'; try pd.Timestamp({value!r})' if isinstance(value, str) else ''
-    raise TypeError(
-        f"'{name}' must be a pandas.Timestamp or the literal 'entity' (got "
-        f'{type(value).__name__} {value!r}){hint}'
-    )
-
-
 def _extract_explanation(
     prediction: pd.DataFrame,
     explain_config: ExplainConfig,
@@ -694,177 +662,7 @@ def _decode_composite_entities(
     return frame
 
 
-class _TaskSetupMixin:
-    r"""The task typing and anchor-time derivation a predictive query
-    needs before its labels can be sampled.
-
-    It lives on a mixin because :class:`KumoRelational` and the tabular
-    :class:`~kumo_relational_engine.tfm.KumoTabular` both build a
-    :class:`TaskTable` from the same query against the same sampler, and
-    the two must agree on the task type and the anchor times or the same
-    query would mean different things to the two models.
-    """
-
-    _sampler: Sampler
-
-    @staticmethod
-    def _get_task_type(
-        query: ValidatedPredictiveQuery,
-        edge_types: list[tuple[str, str, str]],
-    ) -> TaskType:
-        if query.problem_type == ProblemType.FORECAST:
-            return TaskType.FORECASTING
-
-        if isinstance(query.target_ast, (Condition, LogicalOperation)):
-            return TaskType.BINARY_CLASSIFICATION
-
-        target = query.target_ast
-        if isinstance(target, Join):
-            target = target.rhs_target
-        if isinstance(target, Aggregation):
-            if target.aggr == AggregationType.LIST_DISTINCT:
-                table_name, col_name = target.get_target_column_name().split(
-                    '.'
-                )
-                target_edge_types = [
-                    edge_type
-                    for edge_type in edge_types
-                    if edge_type[0] == table_name and edge_type[1] == col_name
-                ]
-                if len(target_edge_types) != 1:
-                    raise NotImplementedError(
-                        f'Multilabel-classification queries based on '
-                        f"'LIST_DISTINCT' are not supported yet. If you "
-                        f'planned to write a link prediction query instead, '
-                        f"make sure to register '{col_name}' as a "
-                        f'foreign key.'
-                    )
-                return TaskType.TEMPORAL_LINK_PREDICTION
-
-            return TaskType.REGRESSION
-
-        assert isinstance(target, Column)
-
-        if target.stype in {Stype.ID, Stype.categorical}:
-            return TaskType.MULTICLASS_CLASSIFICATION
-
-        if target.stype in {Stype.numerical}:
-            return TaskType.REGRESSION
-
-        raise NotImplementedError('Task type not yet supported')
-
-    def _get_default_anchor_time(
-        self,
-        query: ValidatedPredictiveQuery | None = None,
-    ) -> pd.Timestamp:
-        if query is not None and query.query_type == QueryType.TEMPORAL:
-            aggr_table_names = [
-                aggr.get_target_column_name().split('.')[0]
-                for aggr in query.get_all_target_aggregations()
-            ]
-            return self._sampler.get_max_time(aggr_table_names)
-
-        return self._sampler.get_max_time()
-
-    def _validate_time(
-        self,
-        query: ValidatedPredictiveQuery,
-        anchor_time: pd.Timestamp,
-        context_anchor_time: pd.Timestamp | None,
-        evaluate: bool,
-    ) -> None:
-
-        if len(self._sampler.time_column_dict) == 0:
-            return  # Graph without timestamps
-
-        if query.query_type == QueryType.TEMPORAL:
-            aggr_table_names = [
-                aggr.get_target_column_name().split('.')[0]
-                for aggr in query.get_all_target_aggregations()
-            ]
-            min_time = self._sampler.get_min_time(aggr_table_names)
-            max_time = self._sampler.get_max_time(aggr_table_names)
-        else:
-            min_time = self._sampler.get_min_time()
-            max_time = self._sampler.get_max_time()
-
-        if anchor_time < min_time:
-            raise ValueError(
-                f"Anchor timestamp '{anchor_time}' is before "
-                f"the earliest timestamp '{min_time}' in the "
-                f'data.'
-            )
-
-        if context_anchor_time is not None and context_anchor_time < min_time:
-            raise ValueError(
-                f'Context anchor timestamp is too early or '
-                f'aggregation time range is too large. To make '
-                f'this prediction, we would need data back to '
-                f"'{context_anchor_time}', however, your data "
-                f"only contains data back to '{min_time}'."
-            )
-
-        if query.target_ast.date_offset_range is not None:
-            end_offset = query.target_ast.date_offset_range.end_date_offset
-        else:
-            end_offset = pd.DateOffset(0)
-
-        if (
-            context_anchor_time is not None
-            and context_anchor_time > anchor_time
-        ):
-            warnings.warn(
-                f'Context anchor timestamp '
-                f"(got '{context_anchor_time}') is set to a later "
-                f'date than the prediction anchor timestamp '
-                f"(got '{anchor_time}'). Please make sure this is "
-                f'intended.'
-            )
-        elif (
-            query.query_type == QueryType.TEMPORAL
-            and context_anchor_time is not None
-            and context_anchor_time + end_offset > anchor_time
-        ):
-            warnings.warn(
-                f'Aggregation for context examples at timestamp '
-                f"'{context_anchor_time}' will leak information "
-                f'from the prediction anchor timestamp '
-                f"'{anchor_time}'. Please make sure this is "
-                f'intended.'
-            )
-
-        elif (
-            context_anchor_time is not None
-            and context_anchor_time - end_offset * query.num_forecasts
-            < min_time
-        ):
-            _time = context_anchor_time - end_offset * query.num_forecasts
-            warnings.warn(
-                f'Context anchor timestamp is too early or '
-                f'aggregation time range is too large. To form '
-                f'proper input data, we would need data back to '
-                f"'{_time}', however, your data only contains "
-                f"data back to '{min_time}'."
-            )
-
-        if not evaluate and anchor_time > max_time + pd.DateOffset(days=1):
-            warnings.warn(
-                f"Anchor timestamp '{anchor_time}' is after the "
-                f"latest timestamp '{max_time}' in the data. Please "
-                f'make sure this is intended.'
-            )
-
-        if (
-            evaluate
-            and anchor_time > max_time - end_offset * query.num_forecasts
-        ):
-            raise ValueError(
-                f'Anchor timestamp for evaluation is after the latest '
-                f"supported timestamp '{max_time - end_offset}'."
-            )
-
-
-class KumoRelational(_TaskSetupMixin):
+class KumoRelational(TaskSetupMixin):
     r"""Run Kumo Relational predictions over a relational graph.
 
     :class:`KumoRelational` provides the prediction interface for a pre-trained
@@ -926,12 +724,12 @@ class KumoRelational(_TaskSetupMixin):
             if table.has_composite_primary_key
         }
 
-        if optimize and graph.backend not in _OPTIMIZABLE_BACKENDS:
+        if optimize and graph.backend not in OPTIMIZABLE_BACKENDS:
             warnings.warn(
                 f"'optimize=True' has no effect on the "
                 f"'{graph.backend.value}' backend; it is implemented "
                 f'only for '
-                f'{sorted(b.value for b in _OPTIMIZABLE_BACKENDS)}'
+                f'{sorted(b.value for b in OPTIMIZABLE_BACKENDS)}'
             )
 
         if graph.backend == DataBackend.LOCAL:
@@ -1079,7 +877,7 @@ class KumoRelational(_TaskSetupMixin):
         inference_config: InferenceConfig | dict[str, Any] | None = None,
         num_hops: int = 2,
         max_pq_iterations: int = 10,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         verbose: bool | ProgressLogger = True,
     ) -> pd.DataFrame:
         pass
@@ -1101,7 +899,7 @@ class KumoRelational(_TaskSetupMixin):
         inference_config: InferenceConfig | dict[str, Any] | None = None,
         num_hops: int = 2,
         max_pq_iterations: int = 10,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         verbose: bool | ProgressLogger = True,
     ) -> Explanation:
         pass
@@ -1123,7 +921,7 @@ class KumoRelational(_TaskSetupMixin):
         inference_config: InferenceConfig | dict[str, Any] | None = None,
         num_hops: int = 2,
         max_pq_iterations: int = 10,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         verbose: bool | ProgressLogger = True,
     ) -> pd.DataFrame | Explanation:
         pass
@@ -1144,7 +942,7 @@ class KumoRelational(_TaskSetupMixin):
         inference_config: InferenceConfig | dict[str, Any] | None = None,
         num_hops: int = 2,
         max_pq_iterations: int = 10,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         verbose: bool | ProgressLogger = True,
     ) -> pd.DataFrame | Explanation:
         r"""Returns predictions for a predictive query.
@@ -1354,7 +1152,7 @@ class KumoRelational(_TaskSetupMixin):
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
     ) -> tuple[MaterializedPredictionRequest, ...]:
         r"""Materialize final prediction requests without contacting a NIM.
 
@@ -1495,7 +1293,7 @@ class KumoRelational(_TaskSetupMixin):
         if self._batch_size is None:
             return task.num_prediction_examples
         if self._batch_size == 'max':
-            return _MAX_PRED_SIZE[task.task_type]
+            return MAX_PRED_SIZE[task.task_type]
         return self._batch_size
 
     def _resolve_num_batches(self, task: TaskTable) -> int:
@@ -1698,7 +1496,7 @@ class KumoRelational(_TaskSetupMixin):
 
         batch_size = self._resolve_batch_size(task)
 
-        max_batch_size = _MAX_PRED_SIZE[task.task_type]
+        max_batch_size = MAX_PRED_SIZE[task.task_type]
         if batch_size > max_batch_size:
             # The example has to stay under the cap it just quoted: temporal
             # link prediction caps at 200, so a fixed `batch_size=500` told the
@@ -1814,7 +1612,7 @@ class KumoRelational(_TaskSetupMixin):
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
     ) -> pd.DataFrame:
         pass
 
@@ -1833,7 +1631,7 @@ class KumoRelational(_TaskSetupMixin):
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
     ) -> Explanation:
         pass
 
@@ -1852,7 +1650,7 @@ class KumoRelational(_TaskSetupMixin):
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
     ) -> pd.DataFrame | Explanation:
         pass
 
@@ -1870,7 +1668,7 @@ class KumoRelational(_TaskSetupMixin):
         exclude_cols_dict: dict[str, list[str]] | None = None,
         use_prediction_time: bool = False,
         top_k: int | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
     ) -> pd.DataFrame | Explanation:
         r"""Returns predictions for a custom task specification.
 
@@ -2037,7 +1835,7 @@ class KumoRelational(_TaskSetupMixin):
         size: int,
         *,
         anchor_time: pd.Timestamp | Literal['entity'] | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         max_iterations: int = 10,
     ) -> pd.DataFrame:
         r"""Returns the labels of a predictive query for a specified anchor
@@ -2055,11 +1853,11 @@ class KumoRelational(_TaskSetupMixin):
         Returns:
             The labels as a :class:`pandas.DataFrame`.
         """
-        anchor_time = _check_anchor_time(anchor_time, 'anchor_time')
+        anchor_time = self.check_anchor_time(anchor_time, 'anchor_time')
         query_def = self._parse_query(query)
 
         if anchor_time is None:
-            anchor_time = self._get_default_anchor_time(query_def)
+            anchor_time = self.get_default_anchor_time(query_def)
             if query_def.target_ast.date_offset_range is not None:
                 offset = query_def.target_ast.date_offset_range.end_date_offset
                 offset *= query_def.num_forecasts
@@ -2067,7 +1865,7 @@ class KumoRelational(_TaskSetupMixin):
 
         assert anchor_time is not None
         if isinstance(anchor_time, pd.Timestamp):
-            self._validate_time(query_def, anchor_time, None, evaluate=True)
+            self.validate_time(query_def, anchor_time, None, evaluate=True)
         else:
             assert anchor_time == 'entity'
             if query_def.entity_table not in self._sampler.time_column_dict:
@@ -2243,12 +2041,12 @@ class KumoRelational(_TaskSetupMixin):
         run_mode: RunMode = RunMode.FAST,
         lag_timesteps: int = 0,
         max_pq_iterations: int = 10,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         logger: ProgressLogger | None = None,
     ) -> TaskTable:
 
-        anchor_time = _check_anchor_time(anchor_time, 'anchor_time')
-        context_anchor_time = _check_anchor_time(
+        anchor_time = self.check_anchor_time(anchor_time, 'anchor_time')
+        context_anchor_time = self.check_anchor_time(
             context_anchor_time, 'context_anchor_time'
         )
         if max_pq_iterations < 1:
@@ -2257,13 +2055,13 @@ class KumoRelational(_TaskSetupMixin):
                 f'(got {max_pq_iterations})'
             )
 
-        task_type = self._get_task_type(
+        task_type = self.get_task_type(
             query=query,
             edge_types=self._sampler.edge_types,
         )
 
         num_train_examples = _MAX_CONTEXT_SIZE[run_mode]
-        num_test_examples = _MAX_TEST_SIZE[task_type] if indices is None else 0
+        num_test_examples = MAX_TEST_SIZE[task_type] if indices is None else 0
 
         if (
             task_type == TaskType.FORECASTING
@@ -2296,7 +2094,7 @@ class KumoRelational(_TaskSetupMixin):
             step_offset = query.target_ast.date_offset_range.end_date_offset
 
         if anchor_time is None:
-            anchor_time = self._get_default_anchor_time(query)
+            anchor_time = self.get_default_anchor_time(query)
             if num_test_examples > 0:
                 anchor_time = anchor_time - step_offset * query.num_forecasts
 
@@ -2322,7 +2120,7 @@ class KumoRelational(_TaskSetupMixin):
                 )
             if context_anchor_time is None:
                 context_anchor_time = anchor_time - step_offset
-            self._validate_time(
+            self.validate_time(
                 query,
                 anchor_time,
                 context_anchor_time,
@@ -2523,7 +2321,7 @@ class KumoRelational(_TaskSetupMixin):
         num_neighbors: list[int] | None = None,
         exclude_cols_dict: dict[str, list[str]] | None = None,
         top_k: int | None = None,
-        random_seed: int | None = _RANDOM_SEED,
+        random_seed: int | None = RANDOM_SEED,
         _validate_references: bool = True,
     ) -> Context:
 
@@ -2576,7 +2374,7 @@ class KumoRelational(_TaskSetupMixin):
             )
         else:
             anchor_time = (
-                pd.Series(self._get_default_anchor_time())
+                pd.Series(self.get_default_anchor_time())
                 .repeat(len(entity_pkey))
                 .reset_index(drop=True)
             )

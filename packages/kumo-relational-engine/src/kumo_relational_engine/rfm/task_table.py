@@ -10,8 +10,8 @@ from typing_extensions import Self
 
 from kumo_relational_engine.api.task import TaskType
 from kumo_relational_engine.api.typing import Stype
+from kumo_relational_engine.core.utils import to_naive_utc
 from kumo_relational_engine.rfm.base import Column
-from kumo_relational_engine.rfm.base.utils import to_naive_utc
 from kumo_relational_engine.rfm.infer import infer_dtype, infer_stype
 
 

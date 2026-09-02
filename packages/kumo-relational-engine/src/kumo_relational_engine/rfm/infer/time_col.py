@@ -7,7 +7,7 @@ import warnings
 
 import pandas as pd
 
-from kumo_relational_engine.rfm.base.utils import is_datetime, to_datetime
+from kumo_relational_engine.core.utils import is_datetime, to_datetime
 
 
 def infer_time_column(

@@ -6,8 +6,8 @@ import warnings
 
 import pandas as pd
 import pytest
+from kumo_relational_engine.core.utils import Timedelta, Timestamp
 from kumo_relational_engine.rfm import Graph, LocalTable
-from kumo_relational_engine.rfm.base.utils import Timedelta, Timestamp
 from kumo_relational_engine.rfm.graph import (
     _infer_timedelta_from_timestamps,
     _timedelta_to_pquery,

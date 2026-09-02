@@ -30,6 +30,7 @@ from kumo_relational_engine.api.graph import (
 )
 from kumo_relational_engine.api.table import TableDefinition
 from kumo_relational_engine.api.typing import Stype
+from kumo_relational_engine.core.utils import Timedelta
 from kumo_relational_engine.exceptions import (
     GraphConstructionError,
     KumoRelationalError,
@@ -43,7 +44,6 @@ from kumo_relational_engine.rfm.base import (
     Table,
     composite_key,
 )
-from kumo_relational_engine.rfm.base.utils import Timedelta
 from kumo_relational_engine.rfm.infer import infer_time_column
 from kumo_relational_engine.utils import display, quote_ident
 

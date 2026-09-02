@@ -4,7 +4,6 @@
 
 import warnings
 from collections.abc import Sequence
-from typing import Literal
 
 import pandas as pd
 
@@ -12,17 +11,16 @@ from kumo_relational_engine.api.pquery import (
     QueryType,
     ValidatedPredictiveQuery,
 )
+from kumo_relational_engine.core.defaults import (
+    MAX_TEST_SIZE,
+    OPTIMIZABLE_BACKENDS,
+    RANDOM_SEED,
+)
+from kumo_relational_engine.core.task_setup import TaskSetupMixin
 from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.rfm import Graph, TaskTable
 from kumo_relational_engine.rfm.base import DataBackend, Sampler
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
-from kumo_relational_engine.rfm.rfm import (
-    _MAX_TEST_SIZE,
-    _OPTIMIZABLE_BACKENDS,
-    _RANDOM_SEED,
-    _check_anchor_time,
-    _TaskSetupMixin,
-)
 from kumo_relational_engine.utils import ProgressLogger
 
 _NOT_YET_IMPLEMENTED = (
@@ -38,7 +36,7 @@ _NOT_YET_IMPLEMENTED = (
 _MAX_PQ_ITERATIONS = 10
 
 
-class KumoTabular(_TaskSetupMixin):
+class KumoTabular(TaskSetupMixin):
     r"""Run Kumo Tabular predictions over a relational graph.
 
     :class:`KumoTabular` is the tabular counterpart of
@@ -88,12 +86,12 @@ class KumoTabular(_TaskSetupMixin):
         # :meth:`KumoRelational.__init__`. The two are meant to stay
         # identical; folding them into one factory is deferred until the
         # tabular pathway knows which of the backends it actually serves.
-        if optimize and graph.backend not in _OPTIMIZABLE_BACKENDS:
+        if optimize and graph.backend not in OPTIMIZABLE_BACKENDS:
             warnings.warn(
                 f"'optimize=True' has no effect on the "
                 f"'{graph.backend.value}' backend; it is implemented "
                 f'only for '
-                f'{sorted(b.value for b in _OPTIMIZABLE_BACKENDS)}'
+                f'{sorted(b.value for b in OPTIMIZABLE_BACKENDS)}'
             )
 
         if graph.backend == DataBackend.LOCAL:
@@ -160,7 +158,7 @@ class KumoTabular(_TaskSetupMixin):
         self,
         query: ValidatedPredictiveQuery,
         context_size: int,
-        anchor_time: pd.Timestamp |  None = None,
+        anchor_time: pd.Timestamp | None = None,
         context_anchor_time: pd.Timestamp | None = None,
     ) -> TaskTable:
         r"""Turns a validated query into a :class:`TaskTable`: in-context
@@ -181,8 +179,8 @@ class KumoTabular(_TaskSetupMixin):
                 ``anchor_time``, so labelling the context cannot read data
                 from after the prediction anchor.
         """
-        anchor_time = _check_anchor_time(anchor_time, 'anchor_time')
-        context_anchor_time = _check_anchor_time(
+        anchor_time = self.check_anchor_time(anchor_time, 'anchor_time')
+        context_anchor_time = self.check_anchor_time(
             context_anchor_time, 'context_anchor_time'
         )
         if context_size < 1:
@@ -190,11 +188,11 @@ class KumoTabular(_TaskSetupMixin):
                 f"'context_size' must be greater than zero (got {context_size})"
             )
 
-        task_type = self._get_task_type(
+        task_type = self.get_task_type(
             query=query,
             edge_types=self._sampler.edge_types,
         )
-        num_pred_examples = _MAX_TEST_SIZE[task_type]
+        num_pred_examples = MAX_TEST_SIZE[task_type]
 
         if query.target_ast.date_offset_range is None:
             step_offset = pd.DateOffset(0)
@@ -202,7 +200,7 @@ class KumoTabular(_TaskSetupMixin):
             step_offset = query.target_ast.date_offset_range.end_date_offset
 
         if anchor_time is None:
-            anchor_time = self._get_default_anchor_time(query)
+            anchor_time = self.get_default_anchor_time(query)
             anchor_time = anchor_time - step_offset * query.num_forecasts
 
         if isinstance(anchor_time, pd.Timestamp):
@@ -213,7 +211,7 @@ class KumoTabular(_TaskSetupMixin):
                 )
             if context_anchor_time is None:
                 context_anchor_time = anchor_time - step_offset
-            self._validate_time(
+            self.validate_time(
                 query,
                 anchor_time,
                 context_anchor_time,
@@ -248,7 +246,7 @@ class KumoTabular(_TaskSetupMixin):
             num_test_examples=num_pred_examples,
             test_anchor_time=anchor_time,
             num_test_trials=_MAX_PQ_ITERATIONS * num_pred_examples,
-            random_seed=_RANDOM_SEED,
+            random_seed=RANDOM_SEED,
         )
         context_pkey, context_time, context_y = context
         pred_pkey, pred_time, pred_y = pred

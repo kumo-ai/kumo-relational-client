@@ -17,9 +17,9 @@ from kumo_relational_engine.api.pquery.AST import (
     LogicalOperation,
 )
 from kumo_relational_engine.api.typing import BoolOp, Dtype
+from kumo_relational_engine.core.utils import Timestamp
 from kumo_relational_engine.rfm import Graph
 from kumo_relational_engine.rfm.backend.local import LocalSampler
-from kumo_relational_engine.rfm.base.utils import Timestamp
 
 
 def test_relationallib_sampler_validation() -> None:

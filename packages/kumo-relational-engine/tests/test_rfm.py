@@ -15,13 +15,13 @@ from kumo_relational_engine.api.rfm import RFMPredictResponse
 from kumo_relational_engine.api.rfm.context import REV_REL, EdgeLayout
 from kumo_relational_engine.api.task import TaskType
 from kumo_relational_engine.api.typing import Dtype, Stype
+from kumo_relational_engine.core.utils import Timestamp
 from kumo_relational_engine.rfm import (
     Graph,
     KumoRelational,
     LocalTable,
     TaskTable,
 )
-from kumo_relational_engine.rfm.base.utils import Timestamp
 from kumo_relational_engine.rfm.rfm import Explanation
 from kumo_relational_engine.utils.progress_logger import PlainProgressLogger
 
@@ -1362,10 +1362,10 @@ def test_over_cap_batch_size_suggests_a_value_under_the_cap() -> None:
     reproduced the identical error including the identical suggestion. Checked
     for every task type, since the cap is per task type.
     """
-    from kumo_relational_engine.rfm.rfm import _MAX_PRED_SIZE
+    from kumo_relational_engine.core.defaults import MAX_PRED_SIZE
 
     for task_type in TaskType:
-        limit = _MAX_PRED_SIZE[task_type]
+        limit = MAX_PRED_SIZE[task_type]
         message = _over_cap_message(task_type, limit + 1)
         suggested = int(re.search(r'`batch_size=(\d+)`', message).group(1))
         assert suggested <= limit, task_type

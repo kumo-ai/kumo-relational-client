@@ -25,8 +25,8 @@ from kumo_relational_engine.api.rfm.context import (
     Table,
 )
 from kumo_relational_engine.api.typing import ProblemType, Stype
+from kumo_relational_engine.core.utils import Timestamp, to_naive_utc
 from kumo_relational_engine.rfm.base import DataBackend
-from kumo_relational_engine.rfm.base.utils import Timestamp, to_naive_utc
 from kumo_relational_engine.rfm.diagnostics import GraphSanitizationReport
 from kumo_relational_engine.rfm.pquery import PQueryPandasExecutor
 from kumo_relational_engine.utils import ProgressLogger

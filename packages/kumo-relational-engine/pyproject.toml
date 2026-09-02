@@ -242,7 +242,7 @@ ignore = [
 "src/kumo_relational_engine/exceptions.py" = ["N818"]
 # `Timestamp` and `Timedelta` are drop-in replacements for the pandas
 # constructors they wrap, and read as such at every call site.
-"src/kumo_relational_engine/rfm/base/utils.py" = ["N802"]
+"src/kumo_relational_engine/core/utils.py" = ["N802"]
 # The AST and parser modules document the grammar shape they handle in
 # comments -- `# "AGGR ( column , int , int )"`, `# (condition)` -- which
 # ERA001 cannot tell apart from commented-out code.
