@@ -26,7 +26,6 @@ from kumo_relational_engine.api.typing import (
     StrOp,
     Stype,
 )
-from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.pql.validator.utils import (
     col_name,
     merge,
@@ -44,16 +43,10 @@ class RfmValidator:
 
     Args:
         graph: The graph that query is written for.
-        query_validation_type: The rfm validation level flag.
     """
 
-    def __init__(
-        self,
-        graph: GraphDefinition,
-        query_validation_type: QueryValidationType = QueryValidationType.ENTERPRISE,
-    ):
+    def __init__(self, graph: GraphDefinition):
         self.graph = graph
-        self.query_validation_type = query_validation_type
 
     def validate(
         self, parsed_query: ParsedPredictiveQuery
@@ -67,37 +60,6 @@ class RfmValidator:
             List of encountered errors/warnings.
         """
         response = ValidationResponse()
-        if parsed_query.rfm_query:
-            # TODO: deprecate the `rfm_query` field. It does not need to be
-            # user-facing
-            assert self.query_validation_type.is_rfm()
-        if self.query_validation_type.is_enterprise():
-            # Ensure that non-RFM queries aren't using RFM syntax
-            if parsed_query.for_each == FOR:
-                response.errors.append(
-                    ValidationError(
-                        title='Invalid query structure',
-                        message=(
-                            '"FOR" clause is only supported for Kumo Relational '
-                            'foundation model, use FOR EACH when '
-                            'training your own model.'
-                        ),
-                    )
-                )
-            if parsed_query.rfm_entity_ids is not None:
-                response.errors.append(
-                    ValidationError(
-                        title='Invalid query structure',
-                        message=(
-                            'Specifying entities is only supported for '
-                            'Kumo Relational foundation model, not when '
-                            'training your own model.'
-                        ),
-                    )
-                )
-            return response
-
-        assert self.query_validation_type.is_rfm()
 
         # Disable multilabel everything
         target_ast = parsed_query.target_ast
