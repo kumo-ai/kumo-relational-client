@@ -35,7 +35,7 @@ count; then its primary key, time column and end time column.
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from kumo_relational_engine.rfm.base.graph import Graph
@@ -45,6 +45,29 @@ if TYPE_CHECKING:
 # version instead would throw away every downstream cache on a release that had
 # nothing to do with fingerprinting.
 FINGERPRINT_VERSION = 1
+
+
+class _Column(Protocol):
+    r"""What this reads off a column. Named so a rename fails a type check.
+
+    Read through getattr the fields would go missing silently, and the
+    fingerprint would quietly stop telling apart graphs that differ.
+    """
+
+    name: str
+    stype: Any
+    dtype: Any
+
+
+class _Table(Protocol):
+    r"""What this reads off a table."""
+
+    name: str
+    columns: Any
+    primary_key: Any
+    primary_key_columns: Any
+    time_column: Any
+    end_time_column: Any
 
 
 def _term(value: object) -> str:
@@ -58,11 +81,11 @@ def _term(value: object) -> str:
     return f'{len(text)}:{text}'
 
 
-def _column_terms(column: Any) -> list[str]:
+def _column_terms(column: _Column) -> list[str]:
     return [_term(column.name), _term(column.stype), _term(column.dtype)]
 
 
-def _table_terms(table: Any) -> list[str]:
+def _table_terms(table: _Table) -> list[str]:
     r"""Everything about a table that a prediction can see.
 
     Columns are named in their own order rather than sorted, because that order

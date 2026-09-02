@@ -1219,8 +1219,10 @@ class KumoRelational:
         try:
             return graph_fingerprint(self._graph)
         except Exception:
-            logging.getLogger('kumo_relational_engine').debug(
-                'Graph could not be fingerprinted', exc_info=True
+            logging.getLogger('kumo_relational_engine').warning(
+                'Graph could not be fingerprinted, so this prediction cannot '
+                'be told apart from one over a different graph.',
+                exc_info=True,
             )
             return ''
 
