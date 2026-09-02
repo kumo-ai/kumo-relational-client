@@ -305,7 +305,8 @@ jobs:
           python -m venv /tmp/serverless-sdk
           /tmp/serverless-sdk/bin/python -m pip install --upgrade pip
           /tmp/serverless-sdk/bin/python -m pip install \
-            --only-binary=:all: --find-links dist \
+            --only-binary=:all: --no-cache-dir --find-links dist \
+            --report /tmp/serverless-sdk-install.json \
             "kumo-relational-client[databricks,databricks-serving]==${SDK_VERSION}" \
             "kumo-relational-engine==${SDK_VERSION}" \
             "kumo-connectors==${SDK_VERSION}"
@@ -313,3 +314,5 @@ jobs:
         run: >-
           /tmp/serverless-sdk/bin/python scripts/verify_serverless_install.py
           "$SDK_VERSION" ${{ matrix.architecture }}
+          --install-report /tmp/serverless-sdk-install.json
+          --wheel-directory dist

@@ -9,14 +9,50 @@ from __future__ import annotations
 import argparse
 import json
 import platform
+from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlparse
 
 import kumo_connectors
 import kumo_relational_client
 import kumo_relational_engine
 import kumo_relational_engine.relationallib as relationallib
 import pandas as pd
+from databricks import sdk as databricks_sdk
 from kumo_relational_client import RelationalClient, relational
+
+_DISTRIBUTIONS = {
+    'kumo-connectors',
+    'kumo-relational-client',
+    'kumo-relational-engine',
+}
+
+
+def _normalized(name: str) -> str:
+    return name.lower().replace('_', '-').replace('.', '-')
+
+
+def _verify_install_report(
+    report_path: Path, wheel_directory: Path, version: str
+) -> None:
+    report = json.loads(report_path.read_text())
+    installs = {
+        _normalized(item['metadata']['name']): item
+        for item in report.get('install', [])
+        if _normalized(item['metadata']['name']) in _DISTRIBUTIONS
+    }
+    assert set(installs) == _DISTRIBUTIONS, installs
+
+    wheel_directory = wheel_directory.resolve()
+    for name, item in installs.items():
+        assert item['metadata']['version'] == version, item['metadata']
+        url = urlparse(item['download_info']['url'])
+        assert url.scheme == 'file', f'{name} was not installed locally: {url}'
+        wheel = Path(unquote(url.path)).resolve()
+        assert wheel.parent == wheel_directory, (
+            f'{name} came from {wheel}, expected {wheel_directory}'
+        )
+        assert wheel.suffix == '.whl', f'{name} did not come from a wheel'
 
 
 class _Endpoints:
@@ -54,7 +90,18 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('version')
     parser.add_argument('architecture', choices=('x86_64', 'aarch64'))
+    parser.add_argument('--install-report', type=Path)
+    parser.add_argument('--wheel-directory', type=Path)
     options = parser.parse_args()
+
+    if (options.install_report is None) != (options.wheel_directory is None):
+        parser.error(
+            '--install-report and --wheel-directory must be supplied together'
+        )
+    if options.install_report is not None:
+        _verify_install_report(
+            options.install_report, options.wheel_directory, options.version
+        )
 
     actual_architecture = platform.machine().lower()
     aliases = {'amd64': 'x86_64', 'arm64': 'aarch64'}
@@ -63,6 +110,7 @@ def main() -> None:
         f'running on {actual_architecture}, expected {options.architecture}'
     )
     assert platform.python_version_tuple()[:2] == ('3', '12')
+    assert hasattr(databricks_sdk, 'WorkspaceClient')
 
     versions = {
         'kumo-relational-client': kumo_relational_client.__version__,

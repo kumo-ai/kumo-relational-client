@@ -209,14 +209,55 @@ jobs:
           name: dist
           path: dist/*
 
+  verify-engine-builds:
+    needs: [guard, assemble-engine]
+    if: >-
+      !cancelled() && needs.guard.result == 'success'
+      && needs.guard.outputs.distribution == 'kumo-relational-engine'
+      && needs.assemble-engine.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            architecture: x86_64
+          - runner: ubuntu-24.04-arm
+            architecture: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      ARCHITECTURE: ${{ matrix.architecture }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install and import the exact tag-built native wheel
+        run: |
+          python -m venv /tmp/tag-engine
+          /tmp/tag-engine/bin/python -m pip install --upgrade pip
+          /tmp/tag-engine/bin/python -m pip install --no-cache-dir \
+            --only-binary=:all: \
+            dist/kumo_relational_engine-${VERSION}-cp312-cp312-*${ARCHITECTURE}.whl
+          /tmp/tag-engine/bin/python -c \
+            'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+
   publish:
-    needs: [guard, assemble-engine, build-pure]
+    needs: [guard, assemble-engine, verify-engine-builds, build-pure]
     # One build job is always skipped, so the default "all needs succeeded"
     # would never run this. `!cancelled()` not `always()`: never upload from a
     # cancelled run.
     if: >-
       !cancelled() && needs.guard.result == 'success'
-      && (needs.assemble-engine.result == 'success' || needs.build-pure.result == 'success')
+      && (
+        (needs.assemble-engine.result == 'success'
+          && needs.verify-engine-builds.result == 'success')
+        || needs.build-pure.result == 'success'
+      )
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -282,6 +323,10 @@ jobs:
               assert found == want, f"{name} installed as {found}, expected {want}"
               print("installed from the index:", name, found)
           '
+          if [ "$DISTRIBUTION" = 'kumo-relational-engine' ]; then
+            /tmp/from-index/bin/python -c \
+              'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+          fi
           if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
             /tmp/from-index/bin/python scripts/verify_serverless_install.py \
               "$VERSION" x86_64
