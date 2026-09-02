@@ -42,12 +42,18 @@ MAX_ENTITY_LIST_LENGTH = 1000
 MAX_TOP_K = 20
 
 
-class RfmValidator:
-    r"""This class contains validation logic specific to RFM queries.
+class FoundationModelValidator:
+    r"""The validation every foundation-model query goes through.
+
+    It applies to the tabular model as well as the relational one:
+    :meth:`QueryValidationType.is_rfm` is true for :obj:`TFM`, so a tabular
+    query is checked here first and then narrowed by
+    :class:`~kumo_relational_engine.pql.validator.tabular_validator.TabularValidator`,
+    which rejects the shapes the tabular model cannot answer.
 
     Args:
         graph: The graph that query is written for.
-        query_validation_type: The rfm validation level flag.
+        query_validation_type: The validation level flag.
     """
 
     def __init__(

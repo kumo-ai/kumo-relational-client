@@ -23,12 +23,16 @@ from kumo_relational_engine.api.pquery.AST import (
 from kumo_relational_engine.api.task import TaskType
 from kumo_relational_engine.api.typing import AggregationType, ProblemType
 from kumo_relational_engine.pql.parser.parser import QueryValidationType
+from kumo_relational_engine.pql.validator.foundation_model_validator import (
+    FoundationModelValidator,
+)
 from kumo_relational_engine.pql.validator.join_validator import JoinValidator
 from kumo_relational_engine.pql.validator.problem_type_validator import (
     ProblemTypeValidator,
 )
-from kumo_relational_engine.pql.validator.rfm_validator import RfmValidator
-from kumo_relational_engine.pql.validator.tabular_validator import TabularValidator
+from kumo_relational_engine.pql.validator.tabular_validator import (
+    TabularValidator,
+)
 from kumo_relational_engine.pql.validator.time_range_validator import (
     TimeRangeValidator,
 )
@@ -90,12 +94,15 @@ class PredictiveQueryValidator:
             ValueError: if the query is not valid.
         """
         response = ValidationResponse()
-        # If RFM, update the location interval for correct error messages
-        self.rfm_validator = RfmValidator(
+        # In demo mode, shift the location interval so error
+        # messages point at the right span of the query.
+        self.foundation_model_validator = FoundationModelValidator(
             self.graph, self.query_validation_type
         )
         if self.query_validation_type.is_demo():
-            self.rfm_validator.update_location_interval(parsed_query)
+            self.foundation_model_validator.update_location_interval(
+                parsed_query
+            )
 
         response = merge(response, self.validate_columns(parsed_query))
         response = merge(response, self.validate_wildcard(parsed_query))
@@ -167,8 +174,10 @@ class PredictiveQueryValidator:
             if not response.ok:
                 return None, response
 
-        # validate rfm-related checks
-        response = merge(response, self.rfm_validator.validate(parsed_query))
+        # validate the checks every foundation-model query shares
+        response = merge(
+            response, self.foundation_model_validator.validate(parsed_query)
+        )
         if not response.ok:
             return None, response
 

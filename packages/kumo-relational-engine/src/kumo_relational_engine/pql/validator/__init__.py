@@ -6,15 +6,15 @@ from .type_validator import TypeValidator
 from .time_range_validator import TimeRangeValidator
 from .join_validator import JoinValidator
 from .problem_type_validator import ProblemTypeValidator
-from .rfm_validator import RfmValidator
+from .foundation_model_validator import FoundationModelValidator
 from .tabular_validator import TabularValidator
 from .predictive_query_validator import PredictiveQueryValidator
 
 __all__ = [
+    'FoundationModelValidator',
     'JoinValidator',
     'PredictiveQueryValidator',
     'ProblemTypeValidator',
-    'RfmValidator',
     'TabularValidator',
     'TimeRangeValidator',
     'TypeValidator',

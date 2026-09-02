@@ -33,8 +33,8 @@ Six local patches, all of which are now simply part of this code:
 
 1. `validator/problem_type_validator.py`, reject `TOP K` without `RANK`, and
    reject non-positive `TOP K`.
-2. `validator/rfm_validator.py`, also shift the `whatif_ast` location interval
-   by the query offset.
+2. `validator/foundation_model_validator.py`, also shift the `whatif_ast` location interval by the
+   query offset.
 3. `validator/type_validator.py`, map the `'Constant'` node kind to
    `ConstantNodeTypeValidator`. Fixes a baseline bug that used
    `ColumnNodeTypeValidator`.

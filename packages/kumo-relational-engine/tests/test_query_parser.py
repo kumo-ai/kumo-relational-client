@@ -104,7 +104,9 @@ def test_demo_prefix_offsets_assuming_location(
         PQLParser,
         QueryValidationType,
     )
-    from kumo_relational_engine.pql.validator.rfm_validator import RfmValidator
+    from kumo_relational_engine.pql.validator.foundation_model_validator import (
+        FoundationModelValidator,
+    )
 
     prefix = 'EXPLAIN '
     parsed = PQLParser(
@@ -117,7 +119,7 @@ def test_demo_prefix_offsets_assuming_location(
     assert parsed.whatif_ast is not None
     original_start_col = parsed.whatif_ast.location.start_col
 
-    RfmValidator(
+    FoundationModelValidator(
         user_store_graph._to_api_graph_definition(),
         QueryValidationType.RFM_DEMO,
     ).update_location_interval(parsed)
