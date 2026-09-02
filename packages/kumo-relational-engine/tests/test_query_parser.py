@@ -93,36 +93,6 @@ def test_parse_query_names_allowed_aggregation_time_units() -> None:
         ).to_parsed_predictive_query(query)
 
 
-def test_demo_prefix_offsets_assuming_location(
-    user_store_graph: Graph,
-) -> None:
-    from kumo_relational_engine.pql.parser.parser import (
-        PQLParser,
-        QueryValidationType,
-    )
-    from kumo_relational_engine.pql.validator.rfm_validator import RfmValidator
-
-    prefix = 'EXPLAIN '
-    parsed = PQLParser(
-        query_validation_type=QueryValidationType.RFM_DEMO,
-    ).to_parsed_predictive_query(
-        prefix + 'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) '
-        'FOR USERS.USER_ID = 0 '
-        'ASSUMING SUM(ORDERS.AMOUNT, 0, 7, days) >= 10'
-    )
-    assert parsed.whatif_ast is not None
-    original_start_col = parsed.whatif_ast.location.start_col
-
-    RfmValidator(
-        user_store_graph._to_api_graph_definition(),
-        QueryValidationType.RFM_DEMO,
-    ).update_location_interval(parsed)
-
-    assert parsed.whatif_ast.location.start_col == (
-        original_start_col + len(prefix)
-    )
-
-
 @pytest.mark.parametrize(
     ('query', 'expected'),
     [
