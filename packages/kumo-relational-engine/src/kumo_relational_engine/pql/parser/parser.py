@@ -240,12 +240,6 @@ class PQLParser:
     ]:
         r"""Parses the input query and returns the errors untranslated.
 
-        :meth:`validate` is the method to reach for. This one exists for the
-        callers that parse something other than a query the user wrote --
-        a feature expression wrapped in a synthetic ``PREDICT ... FOR EACH``,
-        for instance -- and so have to rewrite the line and column of each
-        error before :class:`ErrorTranslator` bakes them into a message.
-
         Args:
             query: The input query.
 
@@ -269,7 +263,8 @@ class PQLParser:
     def _parse_tree(
         self, query: str
     ) -> tuple[antlr4.ParserRuleContext, PQLGrammarParser, ValidationResponse]:
-        tree, parser, errors = self.parse_raw(query)
+        tree, parser, errors = self.parse_raw
+(query)
         translator = ErrorTranslator()
         response = translator.translate_errors(errors, query)
         return tree, parser, response

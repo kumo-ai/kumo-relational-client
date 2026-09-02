@@ -2,22 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-r"""Model input features written as PQL expression fragments.
-
-The tabular pathway lets a caller declare what the model sees as a list of
-PQL expressions rather than as a query::
-
-    SUM(orders.price, -90, 0, days)
-    COUNT(orders.* WHERE orders.status = 'complete', -30, 0, days)
-    users.age
-
-Each of those is a fragment of PQL, not a query: it is the expression that
-would sit between ``PREDICT`` and ``FOR EACH``. This module parses one and
-validates a batch of them against a graph, reusing the query parser and the
-query validators so that a feature and a target are held to the same rules
-about tables, columns, types, time windows and reachability.
-"""
-
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -55,24 +39,6 @@ from kumo_relational_engine.pql.validator.time_range_validator import (
 from kumo_relational_engine.pql.validator.type_validator import TypeValidator
 from kumo_relational_engine.pql.validator.utils import merge
 
-#: The synthetic query a fragment is parsed inside of. The prefix is exactly
-#: eight characters wide, which is the whole of the offset every position in
-#: the parse has to be walked back by to land in the caller's fragment.
-_PREDICT = 'PREDICT '
-_FOR_EACH = ' FOR EACH '
-_PREFIX_WIDTH = len(_PREDICT)
-
-#: What a time range error calls the clause it is complaining about.
-#: :class:`TimeRangeValidator` takes this as a plain string and interpolates
-#: it, so a feature reads as "FEATURE aggregation ... " where a target would
-#: read as "TARGET aggregation ... ".
-_FEATURE = 'FEATURE'
-
-#: :class:`TimeRangeValidator` only consults the problem type to decide
-#: whether a *target* ``LIST_DISTINCT`` without a time range is a ranking
-#: label. A feature is never that target, so the value cannot change a
-#: verdict here; it is passed only because the signature requires one.
-_UNUSED_PROBLEM_TYPE = ProblemType.CLASSIFY
 
 FeatureAST = LogicalOperation | Join | Condition | Column | Aggregation
 
@@ -129,7 +95,7 @@ def parse_feature(expression: str, entity: str) -> ParsedFeature:
         ValueError: If the expression is not a valid PQL expression. The
             message locates the problem within `expression`.
     """
-    query = f'{_PREDICT}{expression}{_FOR_EACH}{entity}'
+    query = f'{'PREDICT '}{expression}{' FOR EACH '}{entity}'
     parser = PQLParser(query_validation_type=QueryValidationType.TABULAR)
     _, _, errors = parser.parse_raw(query)
     if len(errors) > 0:
@@ -222,8 +188,8 @@ def _validate_feature(
         response,
         TimeRangeValidator(graph).validate_tree(
             feature.ast,
-            _FEATURE,
-            _UNUSED_PROBLEM_TYPE,
+            'FEATURE',
+            ProblemType.CLASSIFY,
             # A feature is the entity's history: it may look back as far as
             # it likes, and may not look forward at all, because the data it
             # would need does not exist at prediction time.
@@ -332,7 +298,7 @@ def _in_fragment(row: int, col: int) -> tuple[int, int]:
     are.
     """
     if row == 1:
-        return row, col - _PREFIX_WIDTH
+        return row, col - len('PREDICT ')
     return row, col
 
 
