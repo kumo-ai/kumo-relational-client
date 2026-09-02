@@ -2430,10 +2430,21 @@ class Graph:
         serving whichever was inferred first.
 
         Empty before inference runs, and empty when every edge was declared.
-        An edge stays marked once inference has chosen it: a later call that
-        adds nothing new does not un-guess what an earlier one guessed.
+        An edge stays marked for as long as it is there: a later inference pass
+        that adds nothing new does not un-guess what an earlier one guessed.
+
+        Reported against the edges the graph currently HAS, so an edge that
+        inference chose and the caller then removed stops being reported.
+        Otherwise a graph would carry the mark of a link it no longer has, and
+        fingerprint differently from an identical graph that never had it.
         """
-        return getattr(self, '_inferred_edges', ())
+        marked = getattr(self, '_inferred_edges', ())
+        if not marked:
+            return ()
+        present = {
+            (edge.src_table, edge.fkey, edge.dst_table) for edge in self.edges
+        }
+        return tuple(edge for edge in marked if edge in present)
 
     def _warn_unlinkable_tables(self) -> None:
         r"""Reports a table that ended up with no primary key even though one

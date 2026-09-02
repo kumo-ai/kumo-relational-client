@@ -8,6 +8,7 @@ import math
 import os
 import re
 import time
+import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Generator, Iterator, Mapping, Sequence
@@ -71,7 +72,12 @@ from kumo_relational_engine.rfm.payload import (
     validate_payload_table_rows,
 )
 from kumo_relational_engine.rfm.query_parser import parse_query_locally
-from kumo_relational_engine.rfm.telemetry import PredictionRecord, recorded
+from kumo_relational_engine.rfm.telemetry import (
+    PredictionRecord,
+    describing,
+    pending,
+    recorded,
+)
 from kumo_relational_engine.runmode import RunMode
 from kumo_relational_engine.utils import ProgressLogger, display
 
@@ -627,6 +633,27 @@ def _extract_explanation(
     return prediction.drop(columns=['EXPLANATION']), summary, details, warning
 
 
+def _anchor_of(task: Any) -> str:
+    r"""When the prediction was anchored, as the task table recorded it.
+
+    Two runs of one query at different anchors are different answers, so a
+    record that cannot say which anchor it used cannot explain either.
+    """
+    held = getattr(task, 'time_column', None)
+    column = getattr(held, 'name', held)
+    frame = getattr(task, '_pred_df', None)
+    if (
+        not column
+        or frame is None
+        or column not in getattr(frame, 'columns', [])
+    ):
+        return ''
+    try:
+        return str(frame[column].max())
+    except Exception:
+        return ''
+
+
 def _encode_composite_indices(
     indices: Sequence[Any],
     entity_key: tuple[str, ...],
@@ -876,6 +903,14 @@ class KumoRelational:
                 maximum applicable batch size for the given task.
             num_retries: The maximum number of retries for failed queries due
                 to unexpected server issues.
+
+        Note:
+            The setting is held per execution context, so one model can be
+            shared by concurrent threads and by concurrent asyncio tasks
+            without their blocks overwriting each other. That covers the ways a
+            service dispatches work, but not a process pool: a subprocess
+            starts with a fresh context, so a prediction dispatched into one
+            runs at the default rather than the size set around the call.
 
         Note:
             A multi-batch prediction uploads its context once, into a session
@@ -1138,17 +1173,11 @@ class KumoRelational:
                 msg = f'[bold]PREDICT[/bold] {query_repr}'
             verbose = ProgressLogger.default(msg=msg, verbose=verbose)
 
-        record = PredictionRecord(
-            graph_fingerprint=self._graph_fingerprint(),
-            engine_version=__version__,
+        described = describing(
             query_type=str(getattr(query_def, 'query_type', '')),
             entities=len(indices),
-            run_mode=str(RunMode(run_mode)),
-            batch_size=str(self._batch_size.get()),
-            num_hops=num_hops,
-            explain=explain is not False,
         )
-        with recorded(record), verbose as logger:
+        with described, verbose as logger:
             task_table = self._get_task_table(
                 query=query_def,
                 indices=indices,
@@ -1816,7 +1845,22 @@ class KumoRelational:
                 msg = f'Predicting {task_type_repr} task'
             verbose = ProgressLogger.default(msg=msg, verbose=verbose)
 
-        with verbose as logger:
+        record = PredictionRecord(
+            graph_fingerprint=self._graph_fingerprint(),
+            engine_version=__version__,
+            run_mode=str(RunMode(run_mode)),
+            batch_size=str(self._batch_size.get()),
+            num_hops=num_hops,
+            explain=explain_config is not None,
+            prediction_id=uuid.uuid4().hex,
+            task_type=str(getattr(task, 'task_type', '')),
+            entity_table=','.join(
+                getattr(task, 'entity_table_names', ()) or ()
+            ),
+            anchor_time=_anchor_of(task),
+            **pending(),
+        )
+        with recorded(record), verbose as logger:
             requests = self._iter_task_requests(
                 task,
                 explain=explain_config is not None,

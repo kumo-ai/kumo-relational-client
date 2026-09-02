@@ -46,13 +46,17 @@ def test_two_deployments_configured_at_once_are_never_mixed(
     """
     monkeypatch.setattr(kre, 'NimClient', _slow_client([]))
     mixed: list[tuple[str, str]] = []
+    samples = 0
     done = threading.Event()
 
     def watch() -> None:
+        nonlocal samples
         while not done.is_set():
             url, key = global_state._url, global_state._api_key
-            if url and key and url[len('https://')] != key[-1]:
-                mixed.append((url, key))
+            if url and key:
+                samples += 1
+                if url[len('https://')] != key[-1]:
+                    mixed.append((url, key))
 
     observer = threading.Thread(target=watch)
     observer.start()
@@ -68,6 +72,9 @@ def test_two_deployments_configured_at_once_are_never_mixed(
     observer.join(5)
 
     assert mixed == []
+    # Without this the test passes when the observer never ran during a write,
+    # which is a pass that proves nothing.
+    assert samples > 0, 'the observer never sampled a configured deployment'
     assert global_state._url is not None
 
 
@@ -116,12 +123,15 @@ def test_a_reader_never_sees_half_of_each_deployment(
     """
     monkeypatch.setattr(kre, 'NimClient', _slow_client([]))
     mixed: list[Any] = []
+    samples = 0
     done = threading.Event()
 
     def watch() -> None:
+        nonlocal samples
         while not done.is_set():
             deployment = global_state._deployment
             if deployment.url and deployment.api_key:
+                samples += 1
                 if deployment.url[len('https://')] != deployment.api_key[-1]:
                     mixed.append(deployment)
 
@@ -134,6 +144,7 @@ def test_a_reader_never_sees_half_of_each_deployment(
     observer.join(5)
 
     assert mixed == []
+    assert samples > 0, 'the observer never sampled a configured deployment'
 
 
 def test_a_configuration_is_replaced_whole() -> None:

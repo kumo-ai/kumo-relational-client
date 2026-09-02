@@ -134,3 +134,37 @@ def test_the_mark_reaches_the_fingerprint() -> None:
     graph._inferred_edges = (('orders', 'customer_id', 'customers'),)
 
     assert graph_fingerprint(graph) != declared
+
+
+def test_an_edge_that_was_removed_stops_being_reported() -> None:
+    r"""A mark that outlives its edge fingerprints a link the graph no longer has."""
+    graph = _graph()
+    graph.infer_links()
+    assert graph.inferred_edges
+
+    graph.unlink('orders', 'customer_id', 'customers')
+
+    assert graph.inferred_edges == ()
+
+
+def test_a_graph_that_lost_a_guessed_edge_matches_one_that_never_had_it() -> (
+    None
+):
+    r"""Otherwise removing an edge leaves a graph that cannot equal its own shape."""
+    removed = _graph()
+    removed.infer_links()
+    removed.unlink('orders', 'customer_id', 'customers')
+
+    never = _graph()
+
+    assert graph_fingerprint(removed) == graph_fingerprint(never)
+
+
+def test_dropping_a_table_drops_the_marks_of_its_edges() -> None:
+    graph = _graph()
+    graph.infer_links()
+    assert graph.inferred_edges
+
+    graph.remove_table('orders')
+
+    assert graph.inferred_edges == ()

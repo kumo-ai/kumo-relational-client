@@ -18,6 +18,18 @@ anything a prediction can see changes it.
 The engine version is part of it. Rebuilding the same tables under a version
 that reads them differently is a different graph, and a cache that could not
 tell them apart would serve the older reading indefinitely.
+
+Format
+------
+Every field is written as its length in characters, a colon, then its text, and
+the fields are concatenated. Nothing separates them, because the length says
+where each one ends, so no value can be mistaken for a delimiter.
+
+The order is: the format version, then each table sorted by name, then the
+edges sorted, then the edges inference guessed. A table is its name, its column
+count, then each column in the order the table holds it as name, semantic type
+and storage type; then its declared key columns in order preceded by their
+count; then its primary key, time column and end time column.
 """
 
 from __future__ import annotations
@@ -25,10 +37,14 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Any
 
-from kumo_relational_engine._version import __version__
-
 if TYPE_CHECKING:
     from kumo_relational_engine.rfm.base.graph import Graph
+
+
+# The encoding below, bumped only when THAT changes. Versioning on the package
+# version instead would throw away every downstream cache on a release that had
+# nothing to do with fingerprinting.
+FINGERPRINT_VERSION = 1
 
 
 def _term(value: object) -> str:
@@ -75,7 +91,7 @@ def graph_fingerprint(graph: Graph) -> str:
     names = sorted(graph.tables)
     terms: list[str] = [
         _term('kumo-relational-engine'),
-        _term(__version__),
+        _term(FINGERPRINT_VERSION),
         _term(len(names)),
     ]
 

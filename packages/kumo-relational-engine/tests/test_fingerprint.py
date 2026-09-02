@@ -21,9 +21,13 @@ from kumo_relational_engine.rfm.fingerprint import graph_fingerprint
 
 
 def _graph(**changes) -> rfm.Graph:
+    names = changes.get('rename', {})
+    column = changes.get('column_rename', {})
     frames = {
-        'customers': pd.DataFrame({'cid': [1, 2, 3], 'seg': [*'abc']}),
-        'orders': pd.DataFrame(
+        names.get('customers', 'customers'): pd.DataFrame(
+            {'cid': [1, 2, 3], column.get('seg', 'seg'): [*'abc']}
+        ),
+        names.get('orders', 'orders'): pd.DataFrame(
             {
                 'oid': [1, 2, 3],
                 'cid': [1, 2, 3],
@@ -31,18 +35,20 @@ def _graph(**changes) -> rfm.Graph:
             }
         ),
     }
+    customers = names.get('customers', 'customers')
+    orders = names.get('orders', 'orders')
     if changes.get('extra_column'):
-        frames['orders']['amount'] = [1.0, 2.0, 3.0]
+        frames[orders]['amount'] = [1.0, 2.0, 3.0]
     graph = rfm.Graph.from_data(
         frames, edges=[], infer_metadata=True, verbose=False
     )
-    graph['customers'].primary_key = 'cid'
-    graph['orders'].primary_key = changes.get('key', 'oid')
-    graph['orders'].time_column = changes.get('time', 'ts')
+    graph[customers].primary_key = 'cid'
+    graph[orders].primary_key = changes.get('key', 'oid')
+    graph[orders].time_column = changes.get('time', 'ts')
     if changes.get('linked'):
-        graph.link(src_table='orders', fkey='cid', dst_table='customers')
+        graph.link(src_table=orders, fkey='cid', dst_table=customers)
     if changes.get('stype'):
-        graph['customers']['seg'].stype = changes['stype']
+        graph[customers][column.get('seg', 'seg')].stype = changes['stype']
     return graph
 
 
@@ -110,22 +116,32 @@ def test_the_name_is_the_same_in_another_process() -> None:
     assert here == there and len(here) == 64
 
 
-def test_the_engine_version_is_part_of_the_name() -> None:
-    r"""The same tables read by a different engine are a different graph."""
-    from kumo_relational_engine._version import __version__
+def test_the_encoding_version_is_part_of_the_name() -> None:
+    r"""A change to the encoding must not read as the same graph."""
+    import kumo_relational_engine.rfm.fingerprint as module
 
     graph = _graph()
     name = graph_fingerprint(graph)
 
-    import kumo_relational_engine.rfm.fingerprint as module
-
-    original = module.__version__
-    module.__version__ = f'{original}-next'
+    original = module.FINGERPRINT_VERSION
+    module.FINGERPRINT_VERSION = original + 1
     try:
         assert graph_fingerprint(graph) != name
     finally:
-        module.__version__ = original
-    assert original == __version__
+        module.FINGERPRINT_VERSION = original
+
+
+def test_a_release_that_did_not_touch_the_encoding_keeps_the_name() -> None:
+    r"""Versioning on the package version threw away every downstream cache on
+    a release that had nothing to do with fingerprinting.
+    """
+    import kumo_relational_engine.rfm.fingerprint as module
+
+    graph = _graph()
+    name = graph_fingerprint(graph)
+
+    assert 'FINGERPRINT_VERSION' in dir(module)
+    assert graph_fingerprint(_graph()) == name
 
 
 def test_a_name_cannot_be_mistaken_for_a_delimiter() -> None:
@@ -180,3 +196,22 @@ def test_a_guessed_edge_is_not_the_same_graph_as_a_declared_one() -> None:
         (e.src_table, e.fkey, e.dst_table) for e in guessed.edges
     ]
     assert graph_fingerprint(declared) != graph_fingerprint(guessed)
+
+
+def test_an_adversarial_name_cannot_forge_another_graph_end_to_end() -> None:
+    r"""The _term tests check the encoder; this checks what is built from it.
+
+    A bug in how the table and column terms are composed, such as one of them
+    joining names without going through _term, would not be caught by testing
+    the helper on its own.
+    """
+    one = _graph(rename={'customers': '3:orders'})
+    other = _graph(rename={'customers': '3', 'orders': 'orders'})
+
+    assert graph_fingerprint(one) != graph_fingerprint(other)
+
+
+def test_a_column_named_like_an_encoded_field_cannot_forge_one() -> None:
+    colliding = _graph(column_rename={'seg': '4:cid7:unknown'})
+
+    assert graph_fingerprint(colliding) != graph_fingerprint(_graph())

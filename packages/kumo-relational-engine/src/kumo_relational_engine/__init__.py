@@ -64,6 +64,11 @@ _Configure = TypeVar('_Configure', bound=Callable[..., None])
 
 _configure_lock = threading.RLock()
 
+# Held only for the read-modify-write of the configuration value itself, never
+# across the network. Publishing a timeout should not queue behind another
+# thread's in-flight authentication.
+_publish_lock = threading.RLock()
+
 
 def _config_of(deployment: Deployment) -> tuple[Any, ...]:
     """What a cached client was built from, so a stale one is recognised."""
@@ -74,6 +79,7 @@ def _config_of(deployment: Deployment) -> tuple[Any, ...]:
         deployment.timeout,
         deployment.max_retries,
         deployment.client_factory is not None,
+        deployment.serving_kind,
         deployment.serving_endpoint,
         id(deployment.serving_platform_client),
         tuple(sorted((deployment.serving_overrides or {}).items())),
@@ -108,7 +114,7 @@ class GlobalState(metaclass=Singleton):
         each start from the same value and the second would drop the first's
         change. The assignment itself is what readers rely on being one step.
         """
-        with _configure_lock:
+        with _publish_lock:
             self._deployment = replace(self._deployment, **changes)
 
     @property

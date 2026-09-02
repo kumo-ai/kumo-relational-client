@@ -16,6 +16,7 @@ one model, many concurrent predictions, each with the configuration it asked for
 
 import threading
 
+import pytest
 from kumo_relational_engine.rfm.rfm import KumoRelational
 
 
@@ -150,3 +151,75 @@ def test_two_async_tasks_keep_their_own_retry_counts() -> None:
     asyncio.run(both())
 
     assert seen == {'a': 2, 'b': 7}
+
+
+def test_a_real_predict_uses_the_batch_size_of_its_own_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r"""These tests drive the context managers; this drives predict() itself.
+
+    A regression in how predict resolves ``self._batch_size.get()`` into a
+    batch would not be caught by exercising ``batch_mode`` on its own.
+    """
+    import kumo_relational_engine.rfm as rfm
+    import pandas as pd
+    from kumo_relational_engine.rfm.rfm import KumoRelational
+
+    customers = pd.DataFrame({'customer_id': range(40), 'seg': ['a', 'b'] * 20})
+    orders = pd.DataFrame(
+        {
+            'order_id': range(200),
+            'customer_id': [i % 40 for i in range(200)],
+            'placed_at': pd.to_datetime(
+                [
+                    f'2025-{1 + (i // 17) % 12:02d}-{1 + i % 28:02d}'
+                    for i in range(200)
+                ]
+            ),
+        }
+    )
+    graph = rfm.Graph.from_data(
+        {'customers': customers, 'orders': orders},
+        infer_metadata=True,
+        verbose=False,
+    )
+    graph['customers'].primary_key = 'customer_id'
+    graph['orders'].primary_key = 'order_id'
+    if not graph.edges:
+        graph.link('orders', 'customer_id', 'customers')
+    model = KumoRelational(graph, verbose=False)
+
+    seen: dict[str, object] = {}
+
+    def capture(self: KumoRelational, requests: object, **kw: object) -> tuple:
+        seen[threading.current_thread().name] = (
+            self._resolve_batch_size.__self__._batch_size.get()
+        )
+        return (
+            [pd.DataFrame({'ENTITY': [1], 'TARGET_PRED': [1.0]})],
+            None,
+            None,
+            None,
+        )
+
+    monkeypatch.setattr(KumoRelational, '_predict_batches', capture)
+    query = (
+        'PREDICT COUNT(orders.*, 0, 30) FOR customers.customer_id IN (1, 2, 3)'
+    )
+    gate = threading.Barrier(2, timeout=10)
+
+    def run(size: int) -> None:
+        with model.batch_mode(size):
+            gate.wait()
+            model.predict(query, verbose=False)
+
+    threads = [
+        threading.Thread(target=run, args=(size,), name=str(size))
+        for size in (100, 500)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(30)
+
+    assert seen == {'100': 100, '500': 500}
