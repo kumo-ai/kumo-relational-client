@@ -8,7 +8,6 @@ from kumo_relational_engine.api.common import (
 )
 from kumo_relational_engine.api.pquery import ParsedPredictiveQuery
 from kumo_relational_engine.api.typing import ProblemType, Stype
-from kumo_relational_engine.pql.parser.parser import QueryValidationType
 
 VALID_PROBLEM_TYPES = ['CLASSIFY', 'RANK', 'FORECAST']
 MAX_TIMEFRAMES = 10_000
@@ -19,18 +18,13 @@ class ProblemTypeValidator:
     in `PredictiveQuery` object.
     """
 
-    def validate(
-        self,
-        query: ParsedPredictiveQuery,
-        query_validation_type: QueryValidationType,
-    ) -> ValidationResponse:
+    def validate(self, query: ParsedPredictiveQuery) -> ValidationResponse:
         r"""Validates the `problem_type` field in `PredictiveQuery` object.
         Currently the only supported problem types are `CLASSIFY` and `RANK`.
         And the target should have stype `multicategorical`.
 
         Args:
             query: `ParsedPredictiveQuery` with stypes inferred.
-            query_validation_type: Type of deployment.
 
         Note:
             This validator requires the stypes to be resolved before being
@@ -62,25 +56,6 @@ class ProblemTypeValidator:
                     ]
                 )
 
-        if (
-            target_ast.stype == Stype.multicategorical
-            and problem_type is None
-            and query_validation_type.is_enterprise()
-        ):
-            # If target is multicategorical and problem_type is not specified,
-            # then we respond with an error.
-            return ValidationResponse(
-                errors=[
-                    ValidationError(
-                        'Problem type is required for multicategorical targets.',
-                        f'{query.entity_ast.get_location().message_start}: '
-                        f'Since your target({target_ast}) is multicategorical, '
-                        f'you must specify a problem type (CLASSIFY or RANK). '
-                        f'Please rewrite the query as: PREDICT {target_ast} '
-                        f'CLASSIFY/RANK TOP k',
-                    )
-                ]
-            )
         if problem_type is None:
             return validation_response
         if problem_type == ProblemType.FORECAST:

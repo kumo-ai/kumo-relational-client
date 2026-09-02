@@ -22,7 +22,6 @@ from kumo_relational_engine.api.pquery.AST import (
 )
 from kumo_relational_engine.api.task import TaskType
 from kumo_relational_engine.api.typing import AggregationType, ProblemType
-from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.pql.validator.join_validator import JoinValidator
 from kumo_relational_engine.pql.validator.problem_type_validator import (
     ProblemTypeValidator,
@@ -51,7 +50,6 @@ class PredictiveQueryValidator:
             a "|"-separated string.
         allow_timestamp_arrays: If :obj:`False`, block LIST_DISTINCT on time
             columns. Used for SPCS where timestamps are not handled well.
-        query_validation_type: The rfm validation level flag.
     """
 
     def __init__(
@@ -59,14 +57,10 @@ class PredictiveQueryValidator:
         graph: GraphDefinition,
         allow_array_targets: bool = False,
         allow_timestamp_arrays: bool = True,
-        query_validation_type: QueryValidationType = (
-            QueryValidationType.ENTERPRISE
-        ),
     ) -> None:
         self.graph = graph
         self.allow_array_targets = allow_array_targets
         self.allow_timestamp_arrays = allow_timestamp_arrays
-        self.query_validation_type = query_validation_type
 
     def validate_predictive_query(
         self,
@@ -89,9 +83,7 @@ class PredictiveQueryValidator:
             ValueError: if the query is not valid.
         """
         response = ValidationResponse()
-        self.rfm_validator = RfmValidator(
-            self.graph, self.query_validation_type
-        )
+        self.rfm_validator = RfmValidator(self.graph)
 
         response = merge(response, self.validate_columns(parsed_query))
         response = merge(response, self.validate_wildcard(parsed_query))
@@ -121,9 +113,7 @@ class PredictiveQueryValidator:
         self.problem_type_validator = ProblemTypeValidator()
         response = merge(
             response,
-            self.problem_type_validator.validate(
-                parsed_query, self.query_validation_type
-            ),
+            self.problem_type_validator.validate(parsed_query),
         )
         if not response.ok:
             return None, response

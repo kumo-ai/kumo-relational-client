@@ -73,11 +73,33 @@ def test_parse_query_locally_returns_validated_query(
     assert query.get_rfm_entity_id_list() == [0]
 
 
+def test_every_query_is_validated_as_an_inference_query(
+    user_store_graph: Graph,
+) -> None:
+    r"""The parser has no deployment mode to choose, and naming an entity parses.
+
+    This client only ever asks a question of a model that already exists, so a
+    query that names particular entities is the normal case rather than one a
+    mode has to permit. Reintroducing a mode whose default rejects `FOR` would
+    fail here rather than at a caller.
+    """
+    from kumo_relational_engine.pql.parser.parser import PQLParser
+
+    graph_definition = user_store_graph._to_api_graph_definition()
+    for query in (
+        'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID = 0',
+        'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR USERS.USER_ID IN (0, 1)',
+        'PREDICT SUM(ORDERS.AMOUNT, 0, 7, days) FOR EACH USERS.USER_ID',
+    ):
+        assert PQLParser().to_parsed_predictive_query(query).rfm_query
+        assert isinstance(
+            parse_query_locally(query, graph_definition),
+            ValidatedPredictiveQuery,
+        )
+
+
 def test_parse_query_names_allowed_aggregation_time_units() -> None:
-    from kumo_relational_engine.pql.parser.parser import (
-        PQLParser,
-        QueryValidationType,
-    )
+    from kumo_relational_engine.pql.parser.parser import PQLParser
 
     query = 'PREDICT COUNT(ORDERS.*, 0, 30, fortnights) FOR EACH USERS.USER_ID'
 
@@ -88,9 +110,7 @@ def test_parse_query_names_allowed_aggregation_time_units() -> None:
             r"Expected one of: 'seconds', 'minutes', 'hours', 'days', 'weeks', or 'months'\."
         ),
     ):
-        PQLParser(
-            query_validation_type=QueryValidationType.RFM_SDK,
-        ).to_parsed_predictive_query(query)
+        PQLParser().to_parsed_predictive_query(query)
 
 
 @pytest.mark.parametrize(
