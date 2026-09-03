@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from enum import Enum
 from typing import Any
 
 import antlr4
@@ -34,17 +33,6 @@ from kumo_relational_engine.pql.parser.error_translator import (
     ErrorTranslator,
 )
 from kumo_relational_engine.pql.parser.visitor import PQLVisitor
-
-
-class QueryValidationType(Enum):
-    ENTERPRISE = 'ENTERPRISE'
-    RFM_SDK = 'RFM_SDK'
-
-    def is_enterprise(self) -> bool:
-        return self == QueryValidationType.ENTERPRISE
-
-    def is_rfm(self) -> bool:
-        return self != QueryValidationType.ENTERPRISE
 
 
 class _QuietErrorStrategy(DefaultErrorStrategy):
@@ -175,12 +163,6 @@ class Delegate(ErrorListener):
 
 class PQLParser:
     r"""Parses the input string according to the PQLGrammar.g4 grammar file."""
-
-    def __init__(
-        self,
-        query_validation_type: QueryValidationType = QueryValidationType.ENTERPRISE,
-    ):
-        self.query_validation_type = query_validation_type
 
     def parse_tree(
         self, query: str
@@ -342,5 +324,5 @@ class PQLParser:
             problem_type=problem_type,
             for_each=for_each,
             rfm_entity_ids=rfm_entity_ids,
-            rfm_query=self.query_validation_type.is_rfm(),
+            rfm_query=True,
         )
