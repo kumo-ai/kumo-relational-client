@@ -13,6 +13,20 @@
 # [tool.ruff.lint.per-file-ignores] shadows the block below rather than adding
 # to it, and has to repeat any entry it still wants.
 
+# Every third-party dependency of the three packages, resolved and pinned in
+# `uv.lock`. Nothing installs from it -- each package still declares its own
+# dependencies and is built by setuptools -- but NVIDIA's source-code scanner
+# reads a lock file to build the OSS inventory, and a Python project without
+# one is reported as having zero open-source components. `kumo-relational-engine`
+# resolves its dependencies through `setup.py`, so it is locked here rather
+# than parsed from a static table.
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+kumo-connectors = { workspace = true }
+kumo-relational-engine = { workspace = true }
+
 [tool.ruff]
 line-length = 80
 target-version = "py310"
