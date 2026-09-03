@@ -245,3 +245,7 @@ One third-party component is vendored rather than resolved at install time:
 is itself a bundle, so the components inside it, including DOMPurify under
 Apache-2.0 and MPL-2.0, are enumerated with their copyrights in the third-party
 section of [`LICENSE`](LICENSE).
+
+Everything else is resolved at install time rather than shipped here. This
+project will download and install additional third-party open source software
+projects. Review the license terms of these open source projects before use.
