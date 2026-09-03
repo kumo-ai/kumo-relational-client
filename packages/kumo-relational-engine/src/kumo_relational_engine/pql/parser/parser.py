@@ -2,7 +2,6 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-from enum import Enum
 from typing import Any
 
 import antlr4
@@ -34,31 +33,6 @@ from kumo_relational_engine.pql.parser.error_translator import (
     ErrorTranslator,
 )
 from kumo_relational_engine.pql.parser.visitor import PQLVisitor
-
-
-class QueryValidationType(Enum):
-    ENTERPRISE = 'ENTERPRISE'
-    RFM_SDK = 'RFM_SDK'
-    RFM_DEMO = 'RFM_DEMO'
-    RFM_SDK_V2 = 'RFM_SDK_V2'
-
-    def is_enterprise(self) -> bool:
-        return self == QueryValidationType.ENTERPRISE
-
-    def is_rfm(self) -> bool:
-        return self != QueryValidationType.ENTERPRISE
-
-    def is_sdk(self) -> bool:
-        return self in {
-            QueryValidationType.RFM_SDK,
-            QueryValidationType.RFM_SDK_V2,
-        }
-
-    def is_demo(self) -> bool:
-        return self == QueryValidationType.RFM_DEMO
-
-    def is_sdk_v2(self) -> bool:
-        return self == QueryValidationType.RFM_SDK_V2
 
 
 class _QuietErrorStrategy(DefaultErrorStrategy):
@@ -190,12 +164,6 @@ class Delegate(ErrorListener):
 class PQLParser:
     r"""Parses the input string according to the PQLGrammar.g4 grammar file."""
 
-    def __init__(
-        self,
-        query_validation_type: QueryValidationType = QueryValidationType.ENTERPRISE,
-    ):
-        self.query_validation_type = query_validation_type
-
     def parse_tree(
         self, query: str
     ) -> tuple[antlr4.ParserRuleContext, PQLGrammarParser]:
@@ -306,31 +274,6 @@ class PQLParser:
         Raises:
             ValueError: If the query is not valid
         """
-        prefix = ''
-        if self.query_validation_type.is_demo():
-            # To avoid temporarily including EXPLAIN/EVALUATE in the query
-            # we just drop it here.
-
-            # Remove leading whitespace
-            query = query.lstrip()
-            query_start_index = query.find(' ')
-            prefix = query[:query_start_index]
-            if prefix.upper() in ['EXPLAIN', 'EVALUATE']:
-                # Remove the prefix and leading whitespace
-                query = query[query_start_index + 1 :].lstrip()
-
-                query_index_after_predict = query.find(' ')
-                query_index_after_predict = (
-                    query_index_after_predict
-                    if query_index_after_predict != -1
-                    else len(query)
-                )
-                if query[:query_index_after_predict].upper() != 'PREDICT':
-                    raise ValueError(
-                        f'"{prefix}" should be followed by '
-                        f'"PREDICT", got '
-                        f'"{query[:query_index_after_predict]}".'
-                    )
         ast_dict = self.to_ast(query)
         entity_ast = ast_dict['entity']
         assert isinstance(entity_ast, Filter | Column)
@@ -381,7 +324,5 @@ class PQLParser:
             problem_type=problem_type,
             for_each=for_each,
             rfm_entity_ids=rfm_entity_ids,
-            rfm_query=self.query_validation_type.is_rfm(),
-            evaluate=(prefix.upper() == 'EVALUATE'),
-            explain=(prefix.upper() == 'EXPLAIN'),
+            rfm_query=True,
         )

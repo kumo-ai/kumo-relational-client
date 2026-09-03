@@ -17,9 +17,6 @@ from kumo_relational_engine.api.pquery.AST import (
     Filter,
     Join,
 )
-from kumo_relational_engine.api.pquery.AST.location_interval import (
-    ASTQueryLocationInterval,
-)
 from kumo_relational_engine.api.typing import (
     AggregationType,
     Dtype,
@@ -29,7 +26,6 @@ from kumo_relational_engine.api.typing import (
     StrOp,
     Stype,
 )
-from kumo_relational_engine.pql.parser.parser import QueryValidationType
 from kumo_relational_engine.pql.validator.utils import (
     col_name,
     merge,
@@ -47,16 +43,10 @@ class RfmValidator:
 
     Args:
         graph: The graph that query is written for.
-        query_validation_type: The rfm validation level flag.
     """
 
-    def __init__(
-        self,
-        graph: GraphDefinition,
-        query_validation_type: QueryValidationType = QueryValidationType.ENTERPRISE,
-    ):
+    def __init__(self, graph: GraphDefinition):
         self.graph = graph
-        self.query_validation_type = query_validation_type
 
     def validate(
         self, parsed_query: ParsedPredictiveQuery
@@ -70,37 +60,6 @@ class RfmValidator:
             List of encountered errors/warnings.
         """
         response = ValidationResponse()
-        if parsed_query.rfm_query:
-            # TODO: deprecate the `rfm_query` field. It does not need to be
-            # user-facing
-            assert self.query_validation_type.is_rfm()
-        if self.query_validation_type.is_enterprise():
-            # Ensure that non-RFM queries aren't using RFM syntax
-            if parsed_query.for_each == FOR:
-                response.errors.append(
-                    ValidationError(
-                        title='Invalid query structure',
-                        message=(
-                            '"FOR" clause is only supported for Kumo Relational '
-                            'foundation model, use FOR EACH when '
-                            'training your own model.'
-                        ),
-                    )
-                )
-            if parsed_query.rfm_entity_ids is not None:
-                response.errors.append(
-                    ValidationError(
-                        title='Invalid query structure',
-                        message=(
-                            'Specifying entities is only supported for '
-                            'Kumo Relational foundation model, not when '
-                            'training your own model.'
-                        ),
-                    )
-                )
-            return response
-
-        assert self.query_validation_type.is_rfm()
 
         # Disable multilabel everything
         target_ast = parsed_query.target_ast
@@ -129,19 +88,6 @@ class RfmValidator:
         ):
             aggregated_col_name = target_ast.get_target_column_name()
             _, target_is_fkey = self._is_key_col(aggregated_col_name)
-
-            # Disable link prediction for RFM_SDK_V2
-            if target_is_fkey and self.query_validation_type.is_sdk_v2():
-                response.errors.append(
-                    ValidationError(
-                        title='Unsupported query structure',
-                        message=(
-                            'Link prediction queries are not supported by '
-                            'this version of KumoRelational.'
-                        ),
-                    )
-                )
-                return response
 
             if parsed_query.problem_type == ProblemType.CLASSIFY or (
                 parsed_query.problem_type == ProblemType.RANK
@@ -429,28 +375,9 @@ class RfmValidator:
                         ),
                     )
                 )
-            if (
-                node.target.stype == Stype.ID
-                and any(self._is_key_col(node.target.fqn))
-                and self.query_validation_type.is_demo()
-            ):
-                response.errors.append(
-                    ValidationError(
-                        title='Unsupported operation',
-                        message=(
-                            f'{node.get_location().message_start}: '
-                            f'Operations on primary key and foreign key '
-                            f'columns are not supported in the foundation '
-                            f'model queries.'
-                        ),
-                    )
-                )
-            elif not (
-                node.target.stype in [Stype.numerical, Stype.categorical]
-                or (
-                    node.target.stype == Stype.timestamp
-                    and self.query_validation_type.is_sdk()
-                )
+            if not (
+                node.target.stype
+                in [Stype.numerical, Stype.categorical, Stype.timestamp]
                 or node.target.stype == Stype.ID
             ):
                 response.errors.append(
@@ -575,10 +502,8 @@ class RfmValidator:
             permit_pkey = True
         if isinstance(node, Condition):
             permit_list_distinct = False
-            # DEMO deployment uses GE which cannot serve keys
-            # client deployments have no such limitation
-            permit_fkey = not self.query_validation_type.is_demo()
-            permit_pkey = not self.query_validation_type.is_demo()
+            permit_fkey = True
+            permit_pkey = True
         if isinstance(node, Column) and col_name(node.fqn) != '*':
             target_is_pkey, target_is_fkey = self._is_key_col(node.fqn)
             if (target_is_pkey and not permit_pkey) or (
@@ -628,46 +553,3 @@ class RfmValidator:
                 ),
             )
         return response
-
-    def update_location_interval(
-        self, parsed_query: ParsedPredictiveQuery
-    ) -> None:
-        r"""If `parsed_query` has `self.evaluate` or `self.explain` set to
-        :obj:`True`, updates the interval values across the entire PQuery
-        to adjust for the removed prefix.
-
-        Args:
-            parsed_query (ParsedPredictiveQuery): Query to adjust locations to.
-        """
-        offset = 0
-        if parsed_query.explain:
-            offset += len('EXPLAIN ')
-        if parsed_query.evaluate:
-            offset += len('EVALUATE ')
-        if offset == 0:
-            return
-        self._update_location_interval(parsed_query.target_ast, offset)
-        self._update_location_interval(parsed_query.entity_ast, offset)
-        if parsed_query.rfm_entity_ids is not None:
-            self._update_location_interval(parsed_query.rfm_entity_ids, offset)
-        if parsed_query.whatif_ast is not None:
-            self._update_location_interval(parsed_query.whatif_ast, offset)
-
-    def _update_location_interval(self, node: ASTNode, offset: int) -> None:
-        if node.location.data_available:
-            if node.location.start_row == 1:
-                node.location = ASTQueryLocationInterval(
-                    start_row=node.location.start_row,
-                    start_col=node.location.start_col + offset,
-                    end_row=node.location.end_row,
-                    end_col=node.location.end_col,
-                )
-            if node.location.end_row == 1:
-                node.location = ASTQueryLocationInterval(
-                    start_row=node.location.start_row,
-                    start_col=node.location.start_col,
-                    end_row=node.location.end_row,
-                    end_col=node.location.end_col + offset,
-                )
-        for child in node.children:
-            self._update_location_interval(child, offset)

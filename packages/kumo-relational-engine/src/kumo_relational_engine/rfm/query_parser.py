@@ -43,10 +43,7 @@ def parse_query_locally(
     graph_definition: GraphDefinition,
 ) -> ValidatedPredictiveQuery:
     try:
-        from kumo_relational_engine.pql.parser.parser import (
-            PQLParser,
-            QueryValidationType,
-        )
+        from kumo_relational_engine.pql.parser.parser import PQLParser
         from kumo_relational_engine.pql.validator import (
             PredictiveQueryValidator,
         )
@@ -57,16 +54,10 @@ def parse_query_locally(
             'or pass a ValidatedPredictiveQuery instead.'
         ) from exc
 
-    query_validation_type = QueryValidationType.RFM_SDK
     try:
-        parsed_query = PQLParser(
-            query_validation_type=query_validation_type,
-        ).to_parsed_predictive_query(query)
+        parsed_query = PQLParser().to_parsed_predictive_query(query)
         _name_the_identity(parsed_query, graph_definition)
-        validator = PredictiveQueryValidator(
-            graph=graph_definition,
-            query_validation_type=query_validation_type,
-        )
+        validator = PredictiveQueryValidator(graph=graph_definition)
         validated_query, response = validator.validate_predictive_query(
             parsed_query
         )
