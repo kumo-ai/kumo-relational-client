@@ -71,7 +71,7 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[sqlite,duckdb,s3,test]'
+          './packages/kumo-connectors[sqlite,duckdb,postgres,s3,test]'
       - run: python -m pytest packages/kumo-connectors/tests -q
 
   databricks-contract-tests:
@@ -122,10 +122,10 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[sqlite,duckdb]'
+          './packages/kumo-connectors[sqlite,duckdb,postgres]'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-relational-client[sqlite,duckdb,test]'
+          './packages/kumo-relational-client[sqlite,duckdb,postgres,test]'
       - run: python -c "import kumo_relational_client; from kumo_relational_client import relational"
       - run: >-
           python -m pytest packages/kumo-relational-client/tests
@@ -133,6 +133,21 @@ jobs:
 
   relational-tests:
     runs-on: ubuntu-latest
+    env:
+      KUMO_POSTGRES_TEST_DSN: postgresql://postgres:postgres@127.0.0.1:5432/kumo_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: kumo_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kumo_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -144,10 +159,10 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[databricks,duckdb]'
+          './packages/kumo-connectors[databricks,duckdb,postgres]'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-relational-engine[test,explain,databricks,databricks-serving,duckdb]'
+          './packages/kumo-relational-engine[test,explain,databricks,databricks-serving,duckdb,postgres]'
       - run: >-
           python -c "import kumo_relational_engine.relationallib as relationallib;
           assert hasattr(relationallib.NeighborSampler, 'seed')"
@@ -187,11 +202,11 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[sqlite,duckdb]'
+          './packages/kumo-connectors[sqlite,duckdb,postgres]'
       - run: python -m pip install --editable './packages/kumo-relational-engine'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-relational-client[relational,sqlite,duckdb,test]'
+          './packages/kumo-relational-client[relational,sqlite,duckdb,postgres,test]'
       - run: >-
           python -c "import kumo_relational_client; from kumo_relational_client import relational;
           import kumo_relational_engine.relationallib as k;

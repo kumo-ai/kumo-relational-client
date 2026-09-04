@@ -8,7 +8,7 @@ its graph samplers) don't each carry their own copy.
 It provides:
 
 - `connect(backend, **kwargs)`: open a connection to `sqlite` / `duckdb` /
-  `snowflake` / `databricks` (one driver per backend).
+  `snowflake` / `databricks` / `postgres` (one driver per backend).
 - `read(source, **kwargs) -> DataFrame`: read a table or query as a flat pandas
   DataFrame (also handles `local` DataFrames / CSV / Parquet, and `s3` object
   URIs: `read('s3', path='s3://bucket/table.parquet', storage_options=...)`).
@@ -24,23 +24,28 @@ suffix is rejected with `INVALID_CONNECTOR_ARGS` rather than parsed as CSV; pass
 recognised suffix.
 
 The two file-backed backends, `sqlite` and `duckdb`, accept `database=` and
-`uri=` as aliases for the same argument (supplying both is an error). The two
-warehouse backends, `snowflake` and `databricks`, are addressed by connection
-keywords instead, and reject any their driver does not declare,
+`uri=` as aliases for the same argument (supplying both is an error). The
+remote backends, `snowflake`, `databricks`, and `postgres`, are addressed by
+connection keywords instead, and reject any their driver does not declare;
 `driver_options={...}` passes anything else straight through. The
 `snowflake` backend reuses an active Snowpark session when no authentication
 arguments are given; a borrowed session cannot be reconfigured, so passing
 session-scoped arguments such as `schema=` alongside it is an error.
 
+The `postgres` backend uses psycopg and accepts a PostgreSQL URI, a libpq
+conninfo string, explicit connection keywords, or standard `PG*` environment
+variables. Provider-specific requirements such as TLS must be passed explicitly
+(for example, `sslmode='require'` for a direct Lakebase connection).
+
 `table=` accepts only plain, unquoted, dot-separated ASCII identifiers, and
 interpolates them as written, so they are subject to each backend's default
-case folding (Snowflake upper-cases, Databricks lower-cases). A name that needs
-quoting (spaces, non-ASCII characters, a leading digit) is rejected with
-`INVALID_CONNECTOR_ARGS`. A reserved word such as `select` is a plain
+case folding (Snowflake upper-cases; Databricks and PostgreSQL lower-case). A
+name that needs quoting (spaces, non-ASCII characters, a leading digit) is
+rejected with `INVALID_CONNECTOR_ARGS`. A reserved word such as `select` is a plain
 identifier by that rule, so it is accepted here and instead fails at execution
 as `QUERY_FAILED`. Either way, reach the table through `query=` with
 `quote_ident`, choosing the quote character your backend uses (`"` for
-SQLite/DuckDB/Snowflake, `` ` `` for Databricks):
+SQLite/DuckDB/Snowflake/PostgreSQL, `` ` `` for Databricks):
 
 ```python
 read('duckdb', database='w.db', query=f'SELECT * FROM {quote_ident("café")}')
@@ -58,7 +63,7 @@ kumo-relational-client's `DRIVER_LOAD_FAILED`).
 Pure-python. Database drivers are optional extras:
 
 ```bash
-pip install "kumo-connectors[sqlite]"      # or [duckdb] / [snowflake] / [databricks] / [s3] / [all]
+pip install "kumo-connectors[sqlite]"      # or [duckdb] / [snowflake] / [databricks] / [postgres] / [s3] / [all]
 ```
 
 Consumers depend on it and surface these extras under their own name, e.g.

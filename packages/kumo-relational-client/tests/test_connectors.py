@@ -24,6 +24,7 @@ def test_read_unknown_connector_raises():
     'extra, driver',
     [
         ('snowflake', 'snowflake-connector-python'),
+        ('postgres', 'psycopg[binary]'),
         ('s3', 's3fs'),
     ],
 )

@@ -11,7 +11,7 @@ from typing import Any
 
 from kumo_connectors.sql import ConnectorError, driver_guard
 
-_SQL_BACKENDS = ('sqlite', 'duckdb', 'snowflake', 'databricks')
+_SQL_BACKENDS = ('sqlite', 'duckdb', 'snowflake', 'databricks', 'postgres')
 
 OWNED_ATTR = '_kumo_connectors_owned'
 
@@ -22,8 +22,8 @@ def connect(backend: str, *args: Any, **kwargs: Any) -> Any:
     r"""Opens a connection to one of the supported SQL backends.
 
     Args:
-        backend: One of ``'sqlite'``, ``'duckdb'``, ``'snowflake'`` or
-            ``'databricks'``.
+        backend: One of ``'sqlite'``, ``'duckdb'``, ``'snowflake'``,
+            ``'databricks'`` or ``'postgres'``.
         *args: Positional arguments forwarded to the backend's driver, e.g. the
             database path for ``sqlite`` / ``duckdb``.
         **kwargs: Keyword arguments forwarded to the backend's driver.
