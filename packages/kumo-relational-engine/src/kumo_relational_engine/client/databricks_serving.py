@@ -39,10 +39,7 @@ from kumo_connectors._databricks_telemetry import (
 from kumo_connectors._version import __version__
 
 from kumo_relational_engine.client.endpoints import Endpoint
-from kumo_relational_engine.client.generated.tfm_api import (
-    TFM_MODEL_KUMO_RELATIONAL,
-    TFMOperations,
-)
+from kumo_relational_engine.client.generated.tfm_api import TFMOperations
 from kumo_relational_engine.client.transport import ServingResponse
 from kumo_relational_engine.exceptions import HTTPException
 
@@ -55,12 +52,6 @@ logger = logging.getLogger('kumo_relational_engine')
 # already in production.
 REQUEST_COLUMN = 'request_json'
 RESPONSE_COLUMN = 'response_json'
-
-# Marketplace model versions 1-5 embed the frozen v1 MLflow dispatcher, whose
-# PredictionRequest discriminator is still ``kumo-rfm``. The public SDK calls
-# the model ``kumo-relational``; translate only at this managed-serving seam so
-# direct Universal TFM endpoints keep receiving the current contract value.
-_DATABRICKS_MODEL_ID = 'kumo-rfm'
 
 _PREDICTION_PATH = TFMOperations.run_prediction.endpoint.get_path()
 
@@ -244,13 +235,7 @@ class DatabricksServingClient:
         count. The comparison is ``>`` because the cap is the largest size the
         gateway accepts.
         """
-        wire_request = request
-        if request.get('model') == TFM_MODEL_KUMO_RELATIONAL:
-            wire_request = dict(request)
-            wire_request['model'] = _DATABRICKS_MODEL_ID
-        payload = json.dumps(
-            wire_request, allow_nan=False, separators=(',', ':')
-        )
+        payload = json.dumps(request, allow_nan=False, separators=(',', ':'))
         records = [{REQUEST_COLUMN: payload}]
         body = json.dumps({'dataframe_records': records}, separators=(',', ':'))
         size = len(body)

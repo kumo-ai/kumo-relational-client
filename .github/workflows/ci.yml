@@ -22,7 +22,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SDK_VERSION: '1.0.0'
   LINT_PATHS: >-
     packages/kumo-relational-engine/src packages/kumo-relational-engine/tests
     packages/kumo-relational-engine/examples
@@ -287,6 +286,8 @@ jobs:
     name: wheels
     needs: [engine-wheels-x86, engine-wheel-arm64, pure-wheels]
     runs-on: ubuntu-latest
+    outputs:
+      sdk_version: ${{ steps.sdk_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -304,12 +305,19 @@ jobs:
         with:
           name: pure-wheels
           path: dist
+      - id: sdk_version
+        name: Read the coordinated SDK version from package metadata
+        run: >-
+          echo "version=$(python scripts/release_tag_check.py --print-version)"
+          >> "$GITHUB_OUTPUT"
       - run: python -m pip install 'packaging>=24'
       - name: Validate the coordinated seven-wheel SDK candidate
-        run: python scripts/validate_wheel_bundle.py dist "$SDK_VERSION"
+        run: >-
+          python scripts/validate_wheel_bundle.py dist
+          "${{ steps.sdk_version.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: sdk-${{ env.SDK_VERSION }}-candidate-wheels
+          name: sdk-${{ steps.sdk_version.outputs.version }}-candidate-wheels
           path: dist/*.whl
 
   wheel-imports:
@@ -346,6 +354,8 @@ jobs:
           - runner: ubuntu-24.04-arm
             architecture: aarch64
     runs-on: ${{ matrix.runner }}
+    env:
+      SDK_VERSION: ${{ needs.candidate-wheel-bundle.outputs.sdk_version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -353,7 +363,7 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: sdk-${{ env.SDK_VERSION }}-candidate-wheels
+          name: sdk-${{ needs.candidate-wheel-bundle.outputs.sdk_version }}-candidate-wheels
           path: dist
       - name: Install the public Databricks SDK surface from wheels only
         run: |

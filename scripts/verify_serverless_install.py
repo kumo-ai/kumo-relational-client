@@ -142,6 +142,8 @@ def main() -> None:
     assert call['name'] == 'kumo-relational-candidate'
     assert len(call['dataframe_records']) == 1
     assert 'request_json' in call['dataframe_records'][0]
+    request = json.loads(call['dataframe_records'][0]['request_json'])
+    assert request['model'] == 'kumo-relational', request
 
     print(
         f'verified SDK {options.version} on Python '
