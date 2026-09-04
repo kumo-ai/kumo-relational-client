@@ -284,6 +284,7 @@ jobs:
           path: dist/*.whl
 
   candidate-wheel-bundle:
+    name: wheels
     needs: [engine-wheels-x86, engine-wheel-arm64, pure-wheels]
     runs-on: ubuntu-latest
     steps:
