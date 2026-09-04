@@ -8,7 +8,14 @@ import inspect
 import os
 from typing import Any, TypeAlias
 
+from kumo_connectors._databricks_telemetry import (
+    DatabricksTelemetryVersionError,
+    DatabricksUserAgentEntryError,
+    databricks_user_agent,
+)
+from kumo_connectors._version import __version__
 from kumo_connectors.sql import (
+    ConnectorError,
     check_connect_args,
     merge_driver_options,
     require_driver,
@@ -97,4 +104,26 @@ def connect(
         if kwargs.get(arg) is None:
             kwargs[arg] = os.getenv(env)
     kwargs = {key: value for key, value in kwargs.items() if value is not None}
+    # Databricks requires partner products to identify every connection they
+    # create. This is the SDK release, never a model or serving-endpoint
+    # version. Assign after caller options are merged so SDK-owned connections
+    # cannot silently lose the required attribution. Preserve any caller tag
+    # after the mandatory partner identifier.
+    try:
+        kwargs['user_agent_entry'] = databricks_user_agent(
+            __version__, kwargs.get('user_agent_entry')
+        )
+    except DatabricksTelemetryVersionError as error:
+        raise ConnectorError(
+            f'installed SDK version {__version__!r} cannot provide required '
+            f'Databricks telemetry: {error}',
+            code='INVALID_CONNECTOR_ARGS',
+            details={'package_version': __version__},
+        ) from error
+    except (DatabricksUserAgentEntryError, TypeError) as error:
+        raise ConnectorError(
+            f'invalid Databricks user_agent_entry: {error}',
+            code='INVALID_CONNECTOR_ARGS',
+            details={'arguments': ['user_agent_entry']},
+        ) from error
     return databricks_sql.connect(**kwargs)

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (c) 2026, NVIDIA CORPORATION & AFFILIATES.
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
-r"""Behaviour the four SQL samplers must share.
+r"""Behaviour the SQL samplers must share.
 
 Each test here covers a fix that had landed on some of the backends but not
 all of them. They are written against the whole family, not one member, so a
@@ -11,7 +11,9 @@ future fix cannot be applied to one file and forgotten in the other three.
 column seeded from it detects the widening the moment it happens.
 """
 
+import os
 import sqlite3
+import uuid
 
 import kumo_relational_engine.rfm as rfm
 import numpy as np
@@ -96,8 +98,62 @@ def _write_sqlite(path: str, users: pd.DataFrame, orders: pd.DataFrame) -> None:
     connection.close()
 
 
-def _graph(backend: str, path: str) -> rfm.Graph:
-    graph = getattr(rfm.Graph, f'from_{backend}')(path, verbose=False)
+def _write_postgres(
+    dsn: str,
+    schema: str,
+    users: pd.DataFrame,
+    orders: pd.DataFrame,
+) -> None:
+    psycopg = pytest.importorskip('psycopg')
+    connection = psycopg.connect(dsn)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(f'CREATE SCHEMA "{schema}"')
+            cursor.execute(
+                f'CREATE TABLE "{schema}".users ('
+                'user_id BIGINT PRIMARY KEY, age BIGINT)'
+            )
+            cursor.execute(
+                f'CREATE TABLE "{schema}".orders ('
+                'order_id BIGINT PRIMARY KEY, '
+                'user_id BIGINT REFERENCES '
+                f'"{schema}".users(user_id), '
+                'date TIMESTAMP, amount DOUBLE PRECISION, ext_id BIGINT)'
+            )
+            cursor.executemany(
+                f'INSERT INTO "{schema}".users VALUES (%s, %s)',
+                [
+                    (int(row.user_id), int(row.age))
+                    for row in users.itertuples(index=False)
+                ],
+            )
+            cursor.executemany(
+                f'INSERT INTO "{schema}".orders VALUES (%s, %s, %s, %s, %s)',
+                [
+                    (
+                        int(row.order_id),
+                        int(row.user_id),
+                        row.date.to_pydatetime(),
+                        float(row.amount),
+                        None if pd.isna(row.ext_id) else int(row.ext_id),
+                    )
+                    for row in orders.itertuples(index=False)
+                ],
+            )
+            cursor.execute(
+                f'CREATE INDEX orders_user_time_idx ON "{schema}".orders '
+                '(user_id, date DESC, order_id)'
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def _graph(backend: str, path: str, schema: str | None = None) -> rfm.Graph:
+    if backend == 'postgres':
+        graph = rfm.Graph.from_postgres(path, schema=schema, verbose=False)
+    else:
+        graph = getattr(rfm.Graph, f'from_{backend}')(path, verbose=False)
     graph['orders'].remove_column('ext_id')
     graph['orders'].add_column({'name': 'ext_id', 'stype': 'numerical'})
     edges = {
@@ -109,18 +165,47 @@ def _graph(backend: str, path: str) -> rfm.Graph:
     return graph
 
 
-@pytest.fixture(params=['duckdb', 'sqlite'])
-def sql_graph(request, tmp_path) -> rfm.Graph:
+@pytest.fixture(params=['duckdb', 'sqlite', 'postgres'])
+def sql_graph(request, tmp_path):
     backend = request.param
+    users, orders = _frames()
+    if backend == 'postgres':
+        dsn = os.getenv('KUMO_POSTGRES_TEST_DSN')
+        if not dsn:
+            pytest.skip('KUMO_POSTGRES_TEST_DSN is not set')
+        schema = f'kumo_parity_{uuid.uuid4().hex}'
+        _write_postgres(dsn, schema, users, orders)
+        graph = _graph(backend, dsn, schema)
+        try:
+            yield graph
+        finally:
+            assert graph._connection is not None
+            graph._connection.close()
+            graph._connection = None
+            psycopg = pytest.importorskip('psycopg')
+            connection = psycopg.connect(dsn)
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute(f'DROP SCHEMA "{schema}" CASCADE')
+                connection.commit()
+            finally:
+                connection.close()
+        return
+
     driver = 'duckdb' if backend == 'duckdb' else 'adbc_driver_sqlite'
     pytest.importorskip(driver)
-    users, orders = _frames()
     path = str(tmp_path / f'db.{backend}')
     if backend == 'duckdb':
         _write_duckdb(path, users, orders)
     else:
         _write_sqlite(path, users, orders)
-    return _graph(backend, path)
+    graph = _graph(backend, path)
+    try:
+        yield graph
+    finally:
+        if graph._connection is not None:
+            graph._connection.close()
+            graph._connection = None
 
 
 def _related_payload(graph: rfm.Graph) -> tuple[dict, dict]:

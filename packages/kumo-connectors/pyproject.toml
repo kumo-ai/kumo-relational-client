@@ -49,13 +49,19 @@ snowflake = [
     "snowflake-connector-python",
 ]
 databricks = [
-    "databricks-sql-connector>=3.0.0",
+    # `user_agent_entry` became the public partner-attribution parameter in
+    # 4.0.1. Versions through 4.0.2 import an undeclared dependency, so use
+    # the first release that both supports attribution and imports cleanly.
+    "databricks-sql-connector>=4.0.3,<5",
+]
+postgres = [
+    "psycopg[binary]>=3.1",
 ]
 s3 = [
     "s3fs>=2023.12.0",
 ]
 all = [
-    "kumo-connectors[sqlite,duckdb,snowflake,databricks,s3]",
+    "kumo-connectors[sqlite,duckdb,snowflake,databricks,postgres,s3]",
 ]
 test = [
     "pytest",
@@ -74,7 +80,7 @@ include = ["kumo_connectors*"]
 "kumo_connectors" = ["py.typed"]
 
 [tool.setuptools.dynamic]
-version = {attr = "kumo_connectors.__version__"}
+version = {attr = "kumo_connectors._version.__version__"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -5,7 +5,7 @@ The Kumo Relational driver for the [`kumo-relational-client`](../kumo-relational
 This distribution provides the heavy, client-side machinery a Kumo Relational prediction
 needs before a request reaches a NIM: the relational `Graph`/`Table` abstractions,
 the neighbor samplers (local native `relationallib`, plus DuckDB / SQLite / Snowflake /
-Databricks backends), the PQL parser, and the HTTP client that talks to a Universal
+Databricks / PostgreSQL backends), the PQL parser, and the HTTP client that talks to a Universal
 TFM NIM.
 
 It is imported as `kumo_relational_engine` and is normally installed transitively via the client's
@@ -22,12 +22,41 @@ call, so a prediction has to go through `kumo-relational-client`.
 ```bash
 pip install kumo-relational-engine
 # optional data backends:
-pip install "kumo-relational-engine[duckdb]"      # or [sqlite] / [snowflake] / [databricks]
+pip install "kumo-relational-engine[duckdb]"      # or [sqlite] / [snowflake] / [databricks] / [postgres]
 # optional features:
 pip install "kumo-relational-engine[explain]"     # natural-language explanation summaries
 pip install "kumo-relational-engine[relbench]"    # Graph.from_relbench() dataset loading
 pip install "kumo-relational-engine[codegen]"     # regenerate the TFM API client (see scripts/)
 ```
+
+`Graph.from_postgres()` reads existing PostgreSQL tables:
+
+```python
+import psycopg
+from kumo_relational_client import relational
+
+connection = psycopg.connect(
+    host=host,
+    dbname=database,
+    user=user,
+    password=credential,
+    sslmode='require',
+)
+graph = relational.Graph.from_postgres(connection, schema='public')
+```
+
+`schema` is the table namespace; omit it to use `current_schema()` (`public` is
+the usual default). `connection` may instead be a PostgreSQL URI/libpq string
+or a dictionary of psycopg arguments; if omitted, psycopg uses `PG*` environment
+variables. See [`postgres.py`](examples/rfm/postgres.py). Lakebase uses this same
+API through its PostgreSQL endpoint with TLS and either an OAuth token or an
+enabled native Postgres password. It reads existing tables directly—without
+Unity Catalog registration, copying data, or DDL.
+
+Temporal sampling returns at most the requested latest N rows at or before each
+anchor, ordered by time descending then primary key ascending. For large fact
+tables, an index on `(foreign_key, time_column DESC, primary_key)` improves this
+pushed-down query; the SDK never creates indexes or modifies source tables.
 
 Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
 (`manylinux_2_28` x86-64), plus CPython 3.12 on Linux ARM64. No source

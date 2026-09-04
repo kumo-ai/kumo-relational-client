@@ -32,7 +32,7 @@ Add extras in brackets to install additional capabilities.
 | --- | --- |
 | `pip install "kumo-relational-client"` | The client on its own. |
 | `pip install "kumo-relational-client[relational]"` | Adds the Kumo Relational driver (native graph sampler and PQL). |
-| `pip install "kumo-relational-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
+| `pip install "kumo-relational-client[sqlite]"` | Adds the SQLite data-source connector. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[postgres]`, `[s3]`. |
 | `pip install "kumo-relational-client[databricks-serving]"` | Reaches a Kumo Relational model served by name on Databricks Model Serving, rather than a NIM addressed by URL. |
 | `pip install "kumo-relational-client[all]"` | Kumo Relational, every data-source connector, and `[databricks-serving]`. |
 
@@ -60,6 +60,9 @@ python -m pip install --only-binary=:all: \
   "kumo-relational-engine==1.0.1" \
   "kumo-connectors==1.0.1"
 ```
+
+Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
+direct PostgreSQL connection, including a direct connection to Lakebase.
 
 ## Additional Setup
 

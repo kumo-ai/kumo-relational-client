@@ -4,9 +4,13 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from kumo_connectors import connect
+from kumo_connectors._databricks_telemetry import databricks_user_agent
+from kumo_connectors._version import __version__ as sdk_version
 from kumo_connectors.backends import mark_owned, owns_connection
 from kumo_connectors.sql import (
     ConnectorError,
@@ -23,6 +27,11 @@ class _SlottedConn:
     Snowpark session that only exposes a fixed API)."""
 
     __slots__ = ('__weakref__',)
+
+
+def _clear_databricks_env(monkeypatch, backend):
+    for name in backend._ENV_BY_ARG.values():
+        monkeypatch.delenv(name, raising=False)
 
 
 def test_unmarked_connection_is_treated_as_owned():
@@ -64,6 +73,7 @@ def test_check_connect_args_accepts_known_arguments():
     [
         ('snowflake', 'snowflake.connector', 'shema', 'schema'),
         ('databricks', 'databricks.sql', 'catalg', 'catalog'),
+        ('postgres', 'psycopg', 'hst', 'host'),
     ],
 )
 def test_connect_rejects_unknown_kwargs(backend, module, typo, intended):
@@ -87,11 +97,126 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
         'connect',
         lambda **kwargs: seen.update(kwargs) or _Conn(),
     )
-    monkeypatch.setattr(backend.os, 'getenv', lambda name: None)
+    _clear_databricks_env(monkeypatch, backend)
 
     backend.connect(catalog='c', driver_options={'use_cloud_fetch': True})
 
-    assert seen == {'catalog': 'c', 'use_cloud_fetch': True}
+    assert seen == {
+        'catalog': 'c',
+        'use_cloud_fetch': True,
+        'user_agent_entry': databricks_user_agent(sdk_version),
+    }
+
+
+def test_databricks_sdk_attribution_preserves_a_caller_entry(monkeypatch):
+    pytest.importorskip('databricks.sql')
+    from kumo_connectors.backends import databricks as backend
+
+    seen = {}
+    monkeypatch.setattr(
+        backend.databricks_sql,
+        'connect',
+        lambda **kwargs: seen.update(kwargs) or _Conn(),
+    )
+    _clear_databricks_env(monkeypatch, backend)
+
+    backend.connect(user_agent_entry='customer_product/9.9.9')
+
+    assert seen['user_agent_entry'] == databricks_user_agent(
+        sdk_version, 'customer_product/9.9.9'
+    )
+
+
+def test_real_databricks_driver_renders_sdk_attribution(monkeypatch):
+    pytest.importorskip('databricks.sql')
+    from kumo_connectors.backends import databricks as backend
+
+    seen = {}
+
+    class _FakeThriftBackend:
+        def __init__(
+            self,
+            host,
+            port,
+            http_path,
+            http_headers,
+            auth_provider,
+            **kwargs,
+        ):
+            seen['headers'] = dict(http_headers)
+
+        def open_session(self, session_configuration, catalog, schema):
+            handle = SimpleNamespace(serverProtocolVersion=None)
+            return SimpleNamespace(
+                sessionHandle=handle, serverProtocolVersion=None
+            )
+
+        def handle_to_hex_id(self, handle):
+            return '00'
+
+    _clear_databricks_env(monkeypatch, backend)
+
+    kwargs = {
+        'server_hostname': 'example.invalid',
+        'http_path': '/sql/1.0/warehouses/test',
+        'access_token': 'unused-test-token',
+        'user_agent_entry': 'customer_product/9.9.9',
+    }
+    if hasattr(backend._client, 'ThriftBackend'):
+        monkeypatch.setattr(
+            backend._client, 'ThriftBackend', _FakeThriftBackend
+        )
+        connection = backend.connect(**kwargs)
+        connection.open = False
+    else:
+
+        class _HeaderCapturedError(Exception):
+            pass
+
+        def _capture_header(session):
+            seen['headers'] = {'User-Agent': session.useragent_header}
+            raise _HeaderCapturedError
+
+        monkeypatch.setattr(backend._client.Session, 'open', _capture_header)
+        monkeypatch.setattr(
+            backend._client.TelemetryClientFactory,
+            'connection_failure_log',
+            lambda **kwargs: None,
+        )
+        with pytest.raises(_HeaderCapturedError):
+            backend.connect(**kwargs)
+
+    header = seen['headers']['User-Agent']
+    assert f'nvidia_kumo-relational-client/{sdk_version}' in header
+    assert 'customer_product/9.9.9' in header
+
+
+@pytest.mark.parametrize(
+    'entry', ['', '   ', 'product/1\r\nInjected: yes', object()]
+)
+def test_databricks_rejects_an_invalid_caller_entry(monkeypatch, entry):
+    pytest.importorskip('databricks.sql')
+    from kumo_connectors.backends import databricks as backend
+
+    _clear_databricks_env(monkeypatch, backend)
+    with pytest.raises(ConnectorError) as excinfo:
+        backend.connect(user_agent_entry=entry)
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert excinfo.value.details['arguments'] == ['user_agent_entry']
+
+
+def test_an_invalid_sdk_version_is_not_reported_as_a_connection_failure(
+    monkeypatch,
+):
+    pytest.importorskip('databricks.sql')
+    from kumo_connectors.backends import databricks as backend
+
+    monkeypatch.setattr(backend, '__version__', '1.0.0.dev')
+    _clear_databricks_env(monkeypatch, backend)
+    with pytest.raises(ConnectorError) as excinfo:
+        backend.connect()
+    assert excinfo.value.code == 'INVALID_CONNECTOR_ARGS'
+    assert excinfo.value.details['package_version'] == '1.0.0.dev'
 
 
 @pytest.mark.parametrize(
@@ -99,6 +224,7 @@ def test_databricks_driver_options_bypass_the_allow_list(monkeypatch):
     [
         ('snowflake', 'snowflake.connector', 'password'),
         ('databricks', 'databricks.sql', 'catalog'),
+        ('postgres', 'psycopg', 'host'),
     ],
 )
 def test_driver_options_cannot_restate_a_validated_argument(
@@ -256,6 +382,57 @@ def test_databricks_allows_kwargs_routed_arguments(argument):
     """
     databricks = pytest.importorskip('kumo_connectors.backends.databricks')
     check_connect_args('databricks', {argument: 'x'}, databricks._CONNECT_ARGS)
+
+
+def test_postgres_forwards_pg_environment(monkeypatch):
+    postgres = pytest.importorskip('kumo_connectors.backends.postgres')
+    seen = {}
+    monkeypatch.setattr(
+        postgres.psycopg,
+        'connect',
+        lambda **kwargs: seen.update(kwargs) or _Conn(),
+    )
+    values = {
+        'PGHOST': 'postgres.example.com',
+        'PGPORT': '5432',
+        'PGDATABASE': 'analytics',
+        'PGUSER': 'analyst',
+        'PGPASSWORD': 'secret',
+        'PGSSLMODE': 'require',
+    }
+    monkeypatch.setattr(postgres.os, 'getenv', values.get)
+
+    postgres.connect()
+
+    assert seen == {
+        'host': 'postgres.example.com',
+        'port': '5432',
+        'dbname': 'analytics',
+        'user': 'analyst',
+        'password': 'secret',
+        'sslmode': 'require',
+    }
+
+
+def test_postgres_conninfo_is_positional(monkeypatch):
+    postgres = pytest.importorskip('kumo_connectors.backends.postgres')
+    seen = {}
+
+    def fake_connect(*args, **kwargs):
+        seen['args'] = args
+        seen['kwargs'] = kwargs
+        return _Conn()
+
+    monkeypatch.setattr(postgres.psycopg, 'connect', fake_connect)
+
+    postgres.connect(
+        'postgresql://user:password@host/database', sslmode='require'
+    )
+
+    assert seen == {
+        'args': ('postgresql://user:password@host/database',),
+        'kwargs': {'sslmode': 'require'},
+    }
 
 
 def test_databricks_still_rejects_a_misspelled_argument():

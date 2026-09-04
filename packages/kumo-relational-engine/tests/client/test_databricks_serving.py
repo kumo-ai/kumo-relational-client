@@ -13,9 +13,17 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 import pytest
+from kumo_connectors._databricks_telemetry import (
+    DATABRICKS_PARTNER,
+    DATABRICKS_PRODUCT,
+    DatabricksTelemetryVersionError,
+    databricks_product_version,
+)
+from kumo_connectors._version import __version__ as sdk_version
 from kumo_relational_engine.client.databricks_serving import (
     REQUEST_COLUMN,
     RESPONSE_COLUMN,
@@ -528,9 +536,93 @@ def test_the_timeout_reaches_a_self_constructed_workspace_client(
 
     monkeypatch.setattr(core, 'Config', _FakeConfig)
     monkeypatch.setattr(sdk, 'WorkspaceClient', _fake_workspace_client)
+    monkeypatch.setattr(sdk.useragent, 'to_string', lambda: '')
+    monkeypatch.setattr(
+        sdk.useragent,
+        'with_partner',
+        lambda partner: seen.setdefault('partner', partner),
+    )
+    monkeypatch.setattr(
+        sdk.useragent,
+        'with_product',
+        lambda product, version: seen.setdefault(
+            'registered_product', (product, version)
+        ),
+    )
     DatabricksServingClient('kumo-relational', timeout=123.0)
     assert seen['http_timeout_seconds'] == 123.0
+    assert seen['product'] == DATABRICKS_PRODUCT
+    assert seen['product_version'] == databricks_product_version(sdk_version)
+    assert seen['partner'] == DATABRICKS_PARTNER
+    assert seen['registered_product'] == (
+        DATABRICKS_PRODUCT,
+        databricks_product_version(sdk_version),
+    )
     assert isinstance(seen['config'], _FakeConfig)
+
+
+def test_the_real_sdk_renders_partner_attribution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in tuple(os.environ):
+        if name.startswith('DATABRICKS_'):
+            monkeypatch.delenv(name)
+    sdk = pytest.importorskip('databricks.sdk', reason='databricks-sdk absent')
+    core = pytest.importorskip(
+        'databricks.sdk.core', reason='databricks-sdk absent'
+    )
+    monkeypatch.setenv('DATABRICKS_HOST', 'https://example.invalid')
+    monkeypatch.setenv('DATABRICKS_TOKEN', 'unused-test-token')
+
+    # Isolate the SDK's documented process-wide registration from other tests.
+    for name in ('_product_name', '_product_version'):
+        if hasattr(sdk.useragent, name):
+            monkeypatch.setattr(
+                sdk.useragent, name, getattr(sdk.useragent, name)
+            )
+    if hasattr(sdk.useragent, '_extra'):
+        monkeypatch.setattr(sdk.useragent, '_extra', list(sdk.useragent._extra))
+
+    initial_user_agents = []
+    if hasattr(core, '_BaseClient'):
+
+        def _host_metadata(client, *args, **kwargs):
+            initial_user_agents.append(client._user_agent_base)
+            return {}
+
+        monkeypatch.setattr(core._BaseClient, 'do', _host_metadata)
+
+    seen = {}
+
+    def _fake_workspace_client(*, config: Any) -> Any:
+        seen['config'] = config
+        return _Workspace()
+
+    monkeypatch.setattr(sdk, 'WorkspaceClient', _fake_workspace_client)
+    DatabricksServingClient('kumo-relational')
+    DatabricksServingClient('kumo-relational')
+
+    version = databricks_product_version(sdk_version)
+    config = seen['config']
+    assert f'{DATABRICKS_PRODUCT}/{version}' in config.user_agent
+    assert f'partner/{DATABRICKS_PARTNER}' in config.user_agent
+    assert config.user_agent.split().count(f'partner/{DATABRICKS_PARTNER}') == 1
+    for user_agent in initial_user_agents:
+        assert f'{DATABRICKS_PRODUCT}/{version}' in user_agent
+        assert f'partner/{DATABRICKS_PARTNER}' in user_agent
+
+
+def test_an_invalid_sdk_version_is_not_reported_as_an_auth_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pytest.importorskip('databricks.sdk', reason='databricks-sdk absent')
+    from kumo_relational_engine.client import databricks_serving
+
+    monkeypatch.setattr(databricks_serving, '__version__', '1.0.0.dev')
+    with pytest.raises(
+        DatabricksTelemetryVersionError, match='cannot be represented'
+    ):
+        DatabricksServingClient('kumo-relational')
 
 
 def test_the_default_timeout_allows_for_a_cold_start() -> None:

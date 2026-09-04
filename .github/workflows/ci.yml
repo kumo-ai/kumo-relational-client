@@ -72,8 +72,47 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[sqlite,duckdb,s3,test]'
+          './packages/kumo-connectors[sqlite,duckdb,postgres,s3,test]'
       - run: python -m pytest packages/kumo-connectors/tests -q
+
+  databricks-contract-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sql-connector: '==4.0.3'
+            sdk: '==0.68.0'
+          - sql-connector: '>=4,<5'
+            sdk: '>=0.68,<1.0'
+    env:
+      WITH_RELATIONALLIB: '0'
+      DATABRICKS_SQL_CONNECTOR_SPEC: ${{ matrix.sql-connector }}
+      DATABRICKS_SDK_SPEC: ${{ matrix.sdk }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      # Exercise both declared floors and the latest supported dependencies.
+      - run: >-
+          python -m pip install
+          "databricks-sql-connector${DATABRICKS_SQL_CONNECTOR_SPEC}"
+          "databricks-sdk${DATABRICKS_SDK_SPEC}"
+      - run: python -m pip install --editable './packages/kumo-connectors'
+      # Prove the base connector and selected driver versions import cleanly
+      # before the broader test dependency set is installed.
+      - run: python -c "import kumo_connectors.backends.databricks"
+      - run: >-
+          python -m pip install --editable
+          './packages/kumo-connectors[sqlite,duckdb,databricks,s3,test]'
+      - run: python -m pytest packages/kumo-connectors/tests -q
+      - run: >-
+          python -m pip install --editable
+          './packages/kumo-relational-engine[test]'
+      - run: >-
+          python -m pytest tests/client/test_databricks_serving.py -q
+        working-directory: packages/kumo-relational-engine
 
   client-tests:
     runs-on: ubuntu-latest
@@ -84,10 +123,10 @@ jobs:
           python-version: '3.12'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[sqlite,duckdb]'
+          './packages/kumo-connectors[sqlite,duckdb,postgres]'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-relational-client[sqlite,duckdb,test]'
+          './packages/kumo-relational-client[sqlite,duckdb,postgres,test]'
       - run: python -c "import kumo_relational_client; from kumo_relational_client import relational"
       - run: >-
           python -m pytest packages/kumo-relational-client/tests
@@ -95,6 +134,21 @@ jobs:
 
   relational-tests:
     runs-on: ubuntu-latest
+    env:
+      KUMO_POSTGRES_TEST_DSN: postgresql://postgres:postgres@127.0.0.1:5432/kumo_test
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: kumo_test
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kumo_test"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -106,10 +160,10 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[databricks,duckdb]'
+          './packages/kumo-connectors[databricks,duckdb,postgres]'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-relational-engine[test,explain,databricks,databricks-serving,duckdb]'
+          './packages/kumo-relational-engine[test,explain,databricks,databricks-serving,duckdb,postgres]'
       - run: >-
           python -c "import kumo_relational_engine.relationallib as relationallib;
           assert hasattr(relationallib.NeighborSampler, 'seed')"
@@ -127,7 +181,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install --editable './packages/kumo-connectors'
       - run: >-
-          WITH_RELATIONALLIB=0 python -m pip install --editable
+          python -m pip install --editable
           './packages/kumo-relational-engine[test]'
       - run: >-
           python -m pytest tests/client/test_rfm_nim_contract.py
@@ -149,11 +203,11 @@ jobs:
             build-essential cmake ninja-build
       - run: >-
           python -m pip install --editable
-          './packages/kumo-connectors[sqlite,duckdb]'
+          './packages/kumo-connectors[sqlite,duckdb,postgres]'
       - run: python -m pip install --editable './packages/kumo-relational-engine'
       - run: >-
           python -m pip install --editable
-          './packages/kumo-relational-client[relational,sqlite,duckdb,test]'
+          './packages/kumo-relational-client[relational,sqlite,duckdb,postgres,test]'
       - run: >-
           python -c "import kumo_relational_client; from kumo_relational_client import relational;
           import kumo_relational_engine.relationallib as k;

@@ -96,7 +96,7 @@ environment. For what the models do and how to size a deployment, see the
 | --- | --- |
 | `pip install kumo-relational-client` | The client on its own. |
 | `pip install kumo-relational-client[relational]` | Adds Kumo Relational, pulling in the native driver. |
-| `pip install kumo-relational-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[s3]`. |
+| `pip install kumo-relational-client[sqlite]` | Reads source tables from a warehouse. Also `[duckdb]`, `[snowflake]`, `[databricks]`, `[postgres]`, `[s3]`. |
 | `pip install kumo-relational-client[all]` | Kumo Relational, every warehouse backend, and `[databricks-serving]`. |
 
 What ships in the base wheel is decided by dependency weight, not by
@@ -200,7 +200,7 @@ with 1.0.0:
 | Package | Import | What it is |
 | --- | --- | --- |
 | `kumo-relational-client` | `kumo_relational_client` | the client and its model handles |
-| `kumo-connectors` | `kumo_connectors` | reads source tables from sqlite, duckdb, Snowflake, Databricks and S3 |
+| `kumo-connectors` | `kumo_connectors` | reads source tables from SQLite, DuckDB, Snowflake, Databricks, PostgreSQL, and S3 |
 | `kumo-relational-engine` | `kumo_relational_engine` | the relational driver: graph building, PQL, and a native neighbor sampler |
 
 Release history is in [`CHANGELOG.md`](CHANGELOG.md).
@@ -245,3 +245,7 @@ One third-party component is vendored rather than resolved at install time:
 is itself a bundle, so the components inside it, including DOMPurify under
 Apache-2.0 and MPL-2.0, are enumerated with their copyrights in the third-party
 section of [`LICENSE`](LICENSE).
+
+Everything else is resolved at install time rather than shipped here. This
+project will download and install additional third-party open source software
+projects. Review the license terms of these open source projects before use.

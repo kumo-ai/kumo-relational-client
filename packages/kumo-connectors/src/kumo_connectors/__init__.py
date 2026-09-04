@@ -2,6 +2,7 @@
 # All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
 
+from kumo_connectors._version import __version__
 from kumo_connectors.backends import connect
 from kumo_connectors.reader import read, read_table
 from kumo_connectors.sql import (
@@ -10,8 +11,6 @@ from kumo_connectors.sql import (
     quote_ident,
     resolve_sql,
 )
-
-__version__ = '1.0.1'
 
 __all__ = [
     'ConnectorError',
