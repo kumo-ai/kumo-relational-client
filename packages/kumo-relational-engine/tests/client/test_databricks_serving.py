@@ -87,7 +87,11 @@ def _wire_size(request: Any) -> int:
     Deliberately not a call into the transport: if both used the same helper a
     wrong measurement would agree with itself.
     """
-    payload = json.dumps(request, allow_nan=False, separators=(',', ':'))
+    wire_request = request
+    if request.get('model') == 'kumo-relational':
+        wire_request = dict(request)
+        wire_request['model'] = 'kumo-rfm'
+    payload = json.dumps(wire_request, allow_nan=False, separators=(',', ':'))
     body = json.dumps(
         {'dataframe_records': [{REQUEST_COLUMN: payload}]},
         separators=(',', ':'),
@@ -212,7 +216,11 @@ def test_sends_one_request_json_row() -> None:
     records = workspace.serving_endpoints.calls[0]['dataframe_records']
     assert len(records) == 1
     assert list(records[0]) == [REQUEST_COLUMN]
-    assert json.loads(records[0][REQUEST_COLUMN]) == request
+    assert json.loads(records[0][REQUEST_COLUMN]) == {
+        'model': 'kumo-rfm',
+        'task': {'kind': 'binary_classification'},
+    }
+    assert request['model'] == 'kumo-relational'
 
 
 def test_reads_one_response_json_row() -> None:
