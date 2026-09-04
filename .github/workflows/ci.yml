@@ -22,7 +22,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  SDK_VERSION: '1.0.1'
+  SDK_VERSION: '1.0.0'
   LINT_PATHS: >-
     packages/kumo-relational-engine/src packages/kumo-relational-engine/tests
     packages/kumo-relational-engine/examples

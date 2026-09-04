@@ -56,9 +56,9 @@ the serverless host:
 
 ```bash
 python -m pip install --only-binary=:all: \
-  "kumo-relational-client[databricks,databricks-serving]==1.0.1" \
-  "kumo-relational-engine==1.0.1" \
-  "kumo-connectors==1.0.1"
+  "kumo-relational-client[databricks,databricks-serving]==1.0.0" \
+  "kumo-relational-engine==1.0.0" \
+  "kumo-connectors==1.0.0"
 ```
 
 Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
