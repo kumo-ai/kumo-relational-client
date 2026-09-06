@@ -88,7 +88,7 @@ jobs:
 
   # No sdist: the C++ sources are not distributed, so one would be an
   # uninstallable placeholder that pip still prefers where no wheel matches.
-  build-engine:
+  build-engine-x86:
     needs: guard
     if: needs.guard.outputs.distribution == 'kumo-relational-engine'
     runs-on: ubuntu-latest
@@ -118,8 +118,71 @@ jobs:
           test "$(find dist -name '*.whl' | wc -l)" -eq 4
       - uses: actions/upload-artifact@v4
         with:
+          name: dist-engine-x86
+          path: dist/*.whl
+
+  build-engine-arm64:
+    needs: guard
+    if: needs.guard.outputs.distribution == 'kumo-relational-engine'
+    runs-on: ubuntu-24.04-arm
+    container: quay.io/pypa/manylinux_2_28_aarch64
+    env:
+      WITH_RELATIONALLIB: '1'
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - run: |
+          /opt/python/cp312-cp312/bin/python -m pip install --upgrade pip build
+          /opt/python/cp312-cp312/bin/python -m build --wheel \
+            --outdir wheelhouse packages/kumo-relational-engine
+          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
+            auditwheel repair "$wheel" --wheel-dir dist
+          done
+          /opt/python/cp312-cp312/bin/python -m pip install twine
+          /opt/python/cp312-cp312/bin/python -m twine check dist/*
+      - name: Refuse anything but the CPython 3.12 ARM64 wheel
+        run: |
+          test "$(find dist -name "kumo_relational_engine-${VERSION}-cp312-cp312-*aarch64.whl" | wc -l)" -eq 1
+          test "$(find dist -name '*.whl' | wc -l)" -eq 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-engine-arm64
+          path: dist/*.whl
+
+  assemble-engine:
+    needs: [guard, build-engine-x86, build-engine-arm64]
+    if: >-
+      !cancelled() && needs.guard.result == 'success'
+      && needs.guard.outputs.distribution == 'kumo-relational-engine'
+      && needs.build-engine-x86.result == 'success'
+      && needs.build-engine-arm64.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-engine-x86
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist-engine-arm64
+          path: dist
+      - run: python -m pip install 'packaging>=24' twine
+      - name: Validate the five-wheel engine release
+        run: >-
+          python scripts/validate_wheel_bundle.py dist "$VERSION"
+          --engine-only
+      - run: python -m twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
           name: dist
-          path: dist/*
+          path: dist/*.whl
 
   build-pure:
     needs: guard
@@ -146,14 +209,55 @@ jobs:
           name: dist
           path: dist/*
 
+  verify-engine-builds:
+    needs: [guard, assemble-engine]
+    if: >-
+      !cancelled() && needs.guard.result == 'success'
+      && needs.guard.outputs.distribution == 'kumo-relational-engine'
+      && needs.assemble-engine.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            architecture: x86_64
+          - runner: ubuntu-24.04-arm
+            architecture: aarch64
+    runs-on: ${{ matrix.runner }}
+    env:
+      ARCHITECTURE: ${{ matrix.architecture }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Install and import the exact tag-built native wheel
+        run: |
+          python -m venv /tmp/tag-engine
+          /tmp/tag-engine/bin/python -m pip install --upgrade pip
+          /tmp/tag-engine/bin/python -m pip install --no-cache-dir \
+            --only-binary=:all: \
+            dist/kumo_relational_engine-${VERSION}-cp312-cp312-*${ARCHITECTURE}.whl
+          /tmp/tag-engine/bin/python -c \
+            'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+
   publish:
-    needs: [guard, build-engine, build-pure]
+    needs: [guard, assemble-engine, verify-engine-builds, build-pure]
     # One build job is always skipped, so the default "all needs succeeded"
     # would never run this. `!cancelled()` not `always()`: never upload from a
     # cancelled run.
     if: >-
       !cancelled() && needs.guard.result == 'success'
-      && (needs.build-engine.result == 'success' || needs.build-pure.result == 'success')
+      && (
+        (needs.assemble-engine.result == 'success'
+          && needs.verify-engine-builds.result == 'success')
+        || needs.build-pure.result == 'success'
+      )
     runs-on: ubuntu-latest
     environment:
       name: pypi
@@ -196,15 +300,17 @@ jobs:
           # The pins are major-range, so a plain install would resolve older
           # siblings and pass. The extra plus the three-way assert is the only
           # proof that the set released together installs together.
-          if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
-            SPEC="${DISTRIBUTION}[relational]==${VERSION}"
-          else
-            SPEC="${DISTRIBUTION}==${VERSION}"
-          fi
-
           python -m venv /tmp/from-index
           /tmp/from-index/bin/python -m pip install --upgrade pip
-          /tmp/from-index/bin/python -m pip install "$SPEC"
+          if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
+            /tmp/from-index/bin/python -m pip install --only-binary=:all: \
+              "${DISTRIBUTION}[databricks,databricks-serving]==${VERSION}" \
+              "kumo-relational-engine==${VERSION}" \
+              "kumo-connectors==${VERSION}"
+          else
+            /tmp/from-index/bin/python -m pip install --only-binary=:all: \
+              "${DISTRIBUTION}==${VERSION}"
+          fi
           /tmp/from-index/bin/python -c '
           import importlib, os
           want = os.environ["VERSION"]
@@ -217,3 +323,53 @@ jobs:
               assert found == want, f"{name} installed as {found}, expected {want}"
               print("installed from the index:", name, found)
           '
+          if [ "$DISTRIBUTION" = 'kumo-relational-engine' ]; then
+            /tmp/from-index/bin/python -c \
+              'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+          fi
+          if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
+            /tmp/from-index/bin/python scripts/verify_serverless_install.py \
+              "$VERSION" x86_64
+          fi
+
+  verify-arm64:
+    needs: [guard, publish]
+    if: >-
+      needs.guard.outputs.distribution == 'kumo-relational-engine'
+      || needs.guard.outputs.distribution == 'kumo-relational-client'
+    runs-on: ubuntu-24.04-arm
+    env:
+      DISTRIBUTION: ${{ needs.guard.outputs.distribution }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Wait for the index to serve the release
+        run: |
+          if [ "$DISTRIBUTION" = 'kumo-relational-engine' ]; then
+            set -- --require-wheel-only
+          else
+            set --
+          fi
+          python scripts/verify_release.py "$DISTRIBUTION" "$VERSION" \
+            --index https://pypi.org/simple "$@"
+      - name: Install and verify on native ARM64
+        run: |
+          python -m venv /tmp/from-index-arm64
+          /tmp/from-index-arm64/bin/python -m pip install --upgrade pip
+          if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
+            /tmp/from-index-arm64/bin/python -m pip install \
+              --only-binary=:all: \
+              "${DISTRIBUTION}[databricks,databricks-serving]==${VERSION}" \
+              "kumo-relational-engine==${VERSION}" \
+              "kumo-connectors==${VERSION}"
+            /tmp/from-index-arm64/bin/python \
+              scripts/verify_serverless_install.py "$VERSION" aarch64
+          else
+            /tmp/from-index-arm64/bin/python -m pip install \
+              --only-binary=:all: "${DISTRIBUTION}==${VERSION}"
+            /tmp/from-index-arm64/bin/python -c \
+              'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+          fi

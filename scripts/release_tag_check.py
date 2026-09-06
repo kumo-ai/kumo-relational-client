@@ -9,7 +9,9 @@ Release tags have the form ``<distribution>/v<version>`` (for example
 files declare, so a tag that disagrees with ``__version__`` would publish a
 release under the wrong name. This check fails the pipeline first.
 
-Usage: release_tag_check.py [tag]   (defaults to $CI_COMMIT_TAG)
+Usage:
+    release_tag_check.py [tag]   (defaults to $CI_COMMIT_TAG)
+    release_tag_check.py --print-version
 """
 
 from __future__ import annotations
@@ -41,6 +43,19 @@ def declared_version(distribution: str) -> str:
     return match.group(1)
 
 
+def coordinated_version() -> str:
+    versions = {name: declared_version(name) for name in sorted(VERSION_FILES)}
+    if len(set(versions.values())) != 1:
+        rendered = ', '.join(
+            f'{name}={version}' for name, version in versions.items()
+        )
+        raise SystemExit(
+            'the three packages must be released at one shared version; '
+            f'found {rendered}'
+        )
+    return next(iter(versions.values()))
+
+
 def check(tag: str) -> str:
     distribution, separator, version = tag.partition('/v')
     if not separator or not version:
@@ -53,16 +68,7 @@ def check(tag: str) -> str:
             f'unknown distribution {distribution!r} in tag {tag!r}; known '
             f'distributions: {sorted(VERSION_FILES)}'
         )
-    versions = {name: declared_version(name) for name in sorted(VERSION_FILES)}
-    if len(set(versions.values())) != 1:
-        rendered = ', '.join(
-            f'{name}={version}' for name, version in versions.items()
-        )
-        raise SystemExit(
-            'the three packages must be released at one shared version; '
-            f'found {rendered}'
-        )
-    declared = versions[distribution]
+    declared = coordinated_version()
     if version != declared:
         raise SystemExit(
             f'tag {tag!r} says {version!r} but {VERSION_FILES[distribution]} '
@@ -72,6 +78,9 @@ def check(tag: str) -> str:
 
 
 def main() -> None:
+    if sys.argv[1:] == ['--print-version']:
+        print(coordinated_version())
+        return
     tag = sys.argv[1] if len(sys.argv) > 1 else os.environ.get('CI_COMMIT_TAG')
     if not tag:
         raise SystemExit('no tag given and CI_COMMIT_TAG is not set')

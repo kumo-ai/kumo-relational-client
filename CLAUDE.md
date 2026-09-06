@@ -12,10 +12,10 @@ serve models itself: every prediction is an HTTP call to a NIM you point it at.
 | `kumo-connectors` | `kumo_connectors` | Reads source tables from sqlite, duckdb, Snowflake, Databricks, S3. |
 | `kumo-relational-engine` | `kumo_relational_engine` | The relational driver: graph building, PQL, and a compiled neighbor sampler. |
 
-`kumo-relational-engine` ships prebuilt wheels for Linux x86_64 (`manylinux_2_28`)
-on CPython 3.10-3.13 only, and no source distribution. It does not install on
-macOS, Windows, or arm64. The client and connectors are pure Python and install
-anywhere.
+`kumo-relational-engine` ships prebuilt Linux wheels (`manylinux_2_28`) for
+x86_64 on CPython 3.10-3.13 and ARM64 on CPython 3.12, and no source
+distribution. It does not install on macOS, Windows, or other Linux/Python
+combinations. The client and connectors are pure Python and install anywhere.
 
 ## One model, one client
 

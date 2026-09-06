@@ -62,6 +62,17 @@ published under distribution names that no longer exist.
 
 ### Added
 
+- Added a `manylinux_2_28_aarch64` engine wheel for CPython 3.12 while keeping
+  the existing CPython 3.10–3.13 x86_64 wheel matrix.
+- CI now assembles the three packages as one seven-wheel release candidate and
+  installs the public `[databricks,databricks-serving]` SDK surface from binary
+  wheels on native ARM64 and x86_64 Python 3.12 runners.
+- Release publishing now validates all wheel names, versions, metadata, and
+  compatibility tags before upload, then verifies the published ARM64 wheel.
+- Regenerated the PQL parser with ANTLR 4.13.2 and moved to its wheel-backed
+  Python runtime so a binary-only serverless install has no source-only ANTLR
+  dependency.
+
 - The generated TFM bindings now carry a `PROVENANCE.json` recording their own
   SHA-256 alongside the contract revision and spec hash they were built from,
   and a test asserts it. The drift tests need a checkout of the contract, which
