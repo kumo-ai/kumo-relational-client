@@ -212,7 +212,7 @@ Contributions are welcome under the Developer Certificate of Origin. Start with
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 
 ```bash
-git clone https://github.com/NVIDIA/kumo-relational-client.git
+git clone https://github.com/kumo-ai/kumo-relational-client.git
 cd kumo-relational-client
 python -m pip install -e './packages/kumo-relational-client[test]'
 python -m pytest packages/kumo-relational-client/tests -m 'not live_nim' -q

@@ -35,9 +35,9 @@ classifiers=[
 ]
 
 [project.urls]
-Homepage = "https://github.com/NVIDIA/kumo-relational-client"
-Source = "https://github.com/NVIDIA/kumo-relational-client"
-Issues = "https://github.com/NVIDIA/kumo-relational-client/issues"
+Homepage = "https://github.com/kumo-ai/kumo-relational-client"
+Source = "https://github.com/kumo-ai/kumo-relational-client"
+Issues = "https://github.com/kumo-ai/kumo-relational-client/issues"
 
 [project.optional-dependencies]
 # Invoking a served model. Separate from the `databricks` extra below, which

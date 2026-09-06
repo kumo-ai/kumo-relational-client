@@ -29,7 +29,7 @@ matrix alone. The extension also builds from a source checkout on macOS
 * macOS (x86_64), Windows (arm64)
 * glibc versions: <2.28
 
-Please create a feature request at 'https://github.com/NVIDIA/kumo-relational-client'."""
+Please create a feature request at 'https://github.com/kumo-ai/kumo-relational-client'."""
 
     raise RuntimeError(_msg) from e
 

@@ -14,9 +14,9 @@ Apache-2.0 licence the code is released under.
 
 | What you have | Where to take it |
 | --- | --- |
-| A bug, or behaviour that contradicts the documentation | [GitHub issue](https://github.com/NVIDIA/kumo-relational-client/issues) |
-| A question about usage | [GitHub issue](https://github.com/NVIDIA/kumo-relational-client/issues) with the `question` label |
-| A feature request | [GitHub issue](https://github.com/NVIDIA/kumo-relational-client/issues) describing the problem, not only the proposed fix |
+| A bug, or behaviour that contradicts the documentation | [GitHub issue](https://github.com/kumo-ai/kumo-relational-client/issues) |
+| A question about usage | [GitHub issue](https://github.com/kumo-ai/kumo-relational-client/issues) with the `question` label |
+| A feature request | [GitHub issue](https://github.com/kumo-ai/kumo-relational-client/issues) describing the problem, not only the proposed fix |
 | A suspected security vulnerability | **Not GitHub.** Follow [SECURITY.md](SECURITY.md) |
 | A problem with the NIM itself rather than the client | Your NVIDIA support channel for that NIM |
 
