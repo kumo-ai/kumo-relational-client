@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA Kumo Relational Client Architecture"
 description: "How the NVIDIA Kumo Relational Client is structured: a thin client, one model adapter, an optional model driver, and shared data-source connectors."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # NVIDIA Kumo Relational Client Architecture

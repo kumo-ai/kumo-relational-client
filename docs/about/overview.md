@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA Kumo Relational Client Documentation"
 description: "Overview of the NVIDIA Kumo Relational Client, the Python client for structured-data foundation model NIMs served behind the Universal TFM API."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # NVIDIA Kumo Relational Client Documentation

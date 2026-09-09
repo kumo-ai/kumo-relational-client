@@ -195,8 +195,8 @@ Full documentation is under [`docs/`](docs/index.md):
 
 ## Releases
 
-Three packages are released together and share one version, so 1.0.0 works
-with 1.0.0:
+Three packages are released together and share one version, and a given
+version of one is only tested against the same version of the others:
 
 | Package | Import | What it is |
 | --- | --- | --- |

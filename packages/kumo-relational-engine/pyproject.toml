@@ -143,6 +143,11 @@ environment = { WITH_RELATIONALLIB = "1" }
 environment = { WITH_RELATIONALLIB = "1", MACOSX_DEPLOYMENT_TARGET = "11.0" }
 
 [tool.cibuildwheel.windows]
+# `auto` means AMD64 *and* 32-bit x86 on Windows, unlike every other platform,
+# where it is the runner's own architecture. Nothing here is 32-bit: the
+# dependencies publish no win32 wheels, so the test step falls back to building
+# pandas from source and fails.
+archs = "AMD64"
 environment = { WITH_RELATIONALLIB = "1" }
 
 [tool.pytest.ini_options]

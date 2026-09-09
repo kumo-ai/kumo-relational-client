@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA Kumo Relational Client Environment Variables"
 description: "Reference for the environment variables that configure the NVIDIA Kumo Relational Client, the Kumo Relational driver, and the data-source connectors."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # NVIDIA Kumo Relational Client Environment Variables

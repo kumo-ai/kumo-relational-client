@@ -89,10 +89,10 @@ jobs:
   # No sdist: the C++ sources are not distributed, so one would be an
   # uninstallable placeholder that pip still prefers where no wheel matches.
   #
-  # Windows on ARM64 is the one gap. GitHub offers `windows-11-arm` to private
-  # repositories only, so there is no runner here that can build it, and an
-  # `[relational]` install on that platform still resolves nothing. The docs
-  # say so rather than implying every OS is covered.
+  # Windows on ARM64 is the one gap: nothing in this matrix builds it, so an
+  # `[relational]` install there still resolves nothing. The README, the
+  # platform table and the driver's own import error say so, rather than
+  # implying every OS is covered.
   #
   # `macos-15-intel` is the last x86-64 macOS image GitHub will offer; it is
   # supported until August 2027, after which Intel Macs need another builder.
@@ -361,11 +361,12 @@ jobs:
               'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
           fi
 
-  # The platforms the first release had no wheel for. `verify` and
-  # `verify-arm64` above cover Linux; this is the `[relational]` install a
-  # macOS or Windows user actually runs, made against the live index rather
-  # than a local directory, because a wheel that was built but never uploaded
-  # fails here and nowhere else.
+  # The `[relational]` install a user actually runs, on every platform and
+  # interpreter the release claims, made against the live index rather than a
+  # local directory: a wheel that was built but never uploaded fails here and
+  # nowhere else. `verify` and `verify-arm64` above cover the client's wider
+  # surface on Linux, but only on 3.12, which leaves the other three
+  # interpreters unproven on the index without this.
   verify-relational-extra:
     needs: [guard, publish]
     if: >-
@@ -374,7 +375,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        runner: [macos-15-intel, macos-15, windows-latest]
+        runner:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-15-intel
+          - macos-15
+          - windows-latest
         python: ['3.10', '3.11', '3.12', '3.13']
     runs-on: ${{ matrix.runner }}
     env:

@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA Kumo Relational Client Prediction Output"
 description: "Reference for the shape and columns of the DataFrame returned by Kumo Relational predictions, which vary by task type."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # NVIDIA Kumo Relational Client Prediction Output
