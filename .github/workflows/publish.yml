@@ -401,14 +401,19 @@ jobs:
           fi
           python scripts/verify_release.py "$DISTRIBUTION" "$VERSION" \
             --index https://pypi.org/simple "$@"
+      # The client branch names only the client. Adding the engine by hand
+      # would let this pass even if `[relational]` stopped declaring it, which
+      # is the one thing the job exists to prove. Asserting the resolved engine
+      # version then also catches the release tags being pushed out of order,
+      # because the extra's `>=1.0,<2` would otherwise happily settle for the
+      # previous release.
       - name: Install the relational extra and import the native sampler
         shell: bash
         run: |
           python -m pip install --upgrade pip
           if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
             python -m pip install --only-binary=:all: \
-              "kumo-relational-client[relational]==${VERSION}" \
-              "kumo-relational-engine==${VERSION}"
+              "kumo-relational-client[relational]==${VERSION}"
           else
             python -m pip install --only-binary=:all: \
               "kumo-relational-engine==${VERSION}"
@@ -416,3 +421,11 @@ jobs:
           python -c \
             'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
           python -c 'from kumo_relational_engine.rfm import Graph, KumoRelational'
+          python -c '
+          import os
+          import kumo_relational_engine
+          want = os.environ["VERSION"]
+          found = kumo_relational_engine.__version__
+          assert found == want, f"the relational extra resolved engine {found}, expected {want}"
+          print("relational extra resolved engine", found)
+          '

@@ -31,7 +31,7 @@ The Kumo Relational driver ships prebuilt binary wheels for the following platfo
 | macOS 11+ Intel (x86_64) | Yes |
 | macOS 11+ Apple silicon (arm64) | Yes |
 | Windows x64 | Yes |
-| Windows ARM64 | No wheel; builds from a source checkout |
+| Windows ARM64 | No |
 
 Every supported platform carries a wheel for each of CPython 3.10, 3.11, 3.12
 and 3.13. No source distribution is published, so on Windows ARM64 `pip install

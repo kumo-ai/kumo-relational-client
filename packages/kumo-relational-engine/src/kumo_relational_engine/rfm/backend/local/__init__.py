@@ -22,12 +22,12 @@ glibc version: {platform.libc_ver()[1]}
 * Windows (x86_64)
 
 No source distribution is published, so `pip install kumo-relational-engine` resolves on that
-matrix alone. The extension also builds from a source checkout on Windows
-(arm64).
+matrix alone.
 
 ❌ Not supported:
 * Python versions below 3.10, or 3.14 and later
-* Windows (arm64)
+* Windows (arm64). The extension does build from a source checkout there, but
+  that path is not tested and not supported.
 * macOS below 11
 * glibc versions: <2.28
 
