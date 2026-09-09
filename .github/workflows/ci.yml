@@ -294,11 +294,17 @@ jobs:
         run: >-
           echo "version=$(python scripts/release_tag_check.py --print-version)"
           >> "$GITHUB_OUTPUT"
-      - run: python -m pip install 'packaging>=24'
+      - run: python -m pip install 'packaging>=24' twine
       - name: Validate the coordinated SDK candidate
         run: >-
           python scripts/validate_wheel_bundle.py dist
           "${{ steps.sdk_version.outputs.version }}"
+      # The build jobs check their own wheel counts but not their metadata,
+      # and the validator reads names, versions and tags rather than whether
+      # the long description renders. Every wheel in the release is already
+      # downloaded here, so this is the one place all 22 are checked at
+      # pull-request time instead of mid-release.
+      - run: python -m twine check dist/*
       - uses: actions/upload-artifact@v4
         with:
           name: sdk-${{ steps.sdk_version.outputs.version }}-candidate-wheels
