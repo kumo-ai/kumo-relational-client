@@ -19,8 +19,8 @@ graph-aware in-context learning).
   model through a handle, `client.relational(...).predict(...)`, returning a
   pandas DataFrame.
 - **Pay only for what you use.** The base install is pure Python and works on
-  every platform. Heavy drivers, such as Kumo Relational's native graph sampler, are
-  opt-in extras.
+  every supported platform. Heavy drivers, such as Kumo Relational's native
+  graph sampler, are opt-in extras.
 - **NIM-first and secure by default.** The client talks to a NIM you control;
   your data stays on your infrastructure, and authentication is owned by the
   deployment rather than the API contract.

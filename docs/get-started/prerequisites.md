@@ -35,10 +35,15 @@ The Kumo Relational driver ships prebuilt binary wheels for the following platfo
 
 Every supported platform carries a wheel for each of CPython 3.10, 3.11, 3.12
 and 3.13. No source distribution is published, so on Windows ARM64 `pip install
-"kumo-relational-client[relational]"` has nothing to resolve; install the base
-`kumo-relational-client` there and run Kumo Relational from a supported host.
-The base client is pure Python, as are the connectors, so it installs on
-anything running Python 3.10 or later.
+"kumo-relational-client[relational]"` has nothing to resolve.
+
+Falling back to the base `kumo-relational-client` does not help on Windows
+ARM64 either. The connectors require `pyarrow`, which publishes no Windows
+ARM64 wheel, so `pip` reaches that dependency and fails before it gets to
+anything of ours. Run Kumo Relational from a supported host instead.
+
+On every other platform in the table, the client and the connectors are pure
+Python and install on anything running Python 3.10 or later.
 
 ### Runtime Dependencies
 

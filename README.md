@@ -61,11 +61,16 @@ live endpoint.
 - **A reachable NIM** serving `kumo-relational`. See
   [Getting a NIM](#getting-a-nim).
 - **No GPU** on the client. The NIM owns that.
-- **OS and architecture.** The client and connectors are pure Python and
-  install anywhere. The `[relational]` extra is a native build, published for
-  CPython 3.10 to 3.13 on Linux x86-64 and ARM64 (`manylinux_2_28`), macOS 11
-  and later on Intel and Apple silicon, and Windows x64. Windows on ARM64 is
-  the one gap, and there is no source distribution to fall back on.
+- **OS and architecture.** Supported on CPython 3.10 to 3.13 on Linux x86-64
+  and ARM64 (`manylinux_2_28`), macOS 11 and later on Intel and Apple silicon,
+  and Windows x64. The client and connectors are pure Python; the
+  `[relational]` extra is a native build, published as wheels with no source
+  distribution.
+
+  Windows on ARM64 is the one gap, and it applies to the whole client rather
+  than just the extra: the connectors require `pyarrow`, which publishes no
+  Windows ARM64 wheel, so the install fails there before it reaches anything
+  of ours.
 
 ## Getting a NIM
 

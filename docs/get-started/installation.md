@@ -108,8 +108,13 @@ True
   ships prebuilt wheels for Python 3.10–3.13 on Linux x86_64 and ARM64
   (`manylinux_2_28`), macOS Intel and Apple silicon, and Windows x64. Windows
   on ARM64 has none, and no source distribution is published, so there is
-  nothing to fall back to there. Install the base `kumo-relational-client`, use
-  a supported host, or build the driver from source.
+  nothing to fall back to there. Use a supported host, or build the driver
+  from source.
+- **A `pyarrow` build failure on Windows ARM64.** `pyarrow` publishes no
+  Windows ARM64 wheel, so `pip` falls back to its source distribution and tries
+  to compile Apache Arrow's C++ library. The connectors require `pyarrow`,
+  which makes this the first thing that fails on that platform, before any
+  Kumo package is reached. There is no workaround short of a supported host.
 - **The native extension fails to import after installing `[relational]`.**
   Reinstall the `kumo_relational_engine` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.

@@ -15,9 +15,11 @@ changes is how many machines can install it.
   Windows x64. Linux ARM64 gains 3.10, 3.11 and 3.13, which 1.0.0 built only
   for 3.12.
 - Windows on ARM64 is still not covered, and is now said so plainly in the
-  README, the platform table and the import error the driver raises. No
-  runner builds it and there is no source distribution, so the extra has
-  nothing to resolve there.
+  README, the platform table and the import error the driver raises. The
+  blocker is upstream rather than ours: `pyarrow`, which the connectors
+  require, publishes no Windows ARM64 wheel, so `pip` fails on that dependency
+  before it reaches a Kumo package. Falling back to the base client does not
+  help, and the documentation no longer suggests it does.
 - Every release now builds, imports and installs the driver on each supported
   platform and interpreter before it uploads, and again from the index
   afterwards. A failure on any one of them blocks the release.
