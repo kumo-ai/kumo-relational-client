@@ -15,8 +15,15 @@ if(NOT pybind11_FOUND)
   FetchContent_MakeAvailable(pybind11)
 endif()
 
-set(CMAKE_CXX_FLAGS "-O3")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum macOS deployment version" FORCE)
+# Optimisation comes from the Release build type above, which is -O3 on GCC
+# and Clang and /O2 on MSVC. Assigning CMAKE_CXX_FLAGS directly would replace
+# the toolchain's own defaults rather than add to them, and on MSVC that
+# drops /EHsc, which pybind11 needs to propagate C++ exceptions.
+
+# The macOS deployment target is deliberately left to the environment. It
+# decides both what the compiler targets and what platform tag the wheel
+# carries, so pinning it here while the build environment says otherwise
+# would produce a wheel whose tag promises more than the binary delivers.
 
 pybind11_add_module(relationallib src/kumo_relational_engine/csrc/neighbor_sampler.cpp)
 

@@ -88,75 +88,62 @@ jobs:
 
   # No sdist: the C++ sources are not distributed, so one would be an
   # uninstallable placeholder that pip still prefers where no wheel matches.
-  build-engine-x86:
+  #
+  # Windows on ARM64 is the one gap. GitHub offers `windows-11-arm` to private
+  # repositories only, so there is no runner here that can build it, and an
+  # `[relational]` install on that platform still resolves nothing. The docs
+  # say so rather than implying every OS is covered.
+  #
+  # `macos-15-intel` is the last x86-64 macOS image GitHub will offer; it is
+  # supported until August 2027, after which Intel Macs need another builder.
+  #
+  # What gets built for each interpreter and platform is decided in the
+  # engine's `[tool.cibuildwheel]`, so CI and the release tag cannot drift.
+  build-engine:
     needs: guard
     if: needs.guard.outputs.distribution == 'kumo-relational-engine'
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux_2_28_x86_64
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - runner: macos-15-intel
+            platform: macos-x86_64
+          - runner: macos-15
+            platform: macos-arm64
+          - runner: windows-latest
+            platform: windows-amd64
+    runs-on: ${{ matrix.runner }}
     env:
-      WITH_RELATIONALLIB: '1'
       VERSION: ${{ needs.guard.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - run: |
-          for PYTAG in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313; do
-            "/opt/python/${PYTAG}/bin/python" -m pip install --upgrade pip build
-            "/opt/python/${PYTAG}/bin/python" -m build --wheel \
-              --outdir wheelhouse packages/kumo-relational-engine
-          done
-          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
-            auditwheel repair "$wheel" --wheel-dir dist
-          done
-          /opt/python/cp312-cp312/bin/python -m pip install twine
-          /opt/python/cp312-cp312/bin/python -m twine check dist/*
+      - uses: pypa/cibuildwheel@v4.2.1
+        with:
+          package-dir: packages/kumo-relational-engine
+          output-dir: dist
       - name: Refuse an sdist
+        shell: bash
         run: test "$(find dist -name '*.tar.gz' | wc -l)" -eq 0
       - name: Refuse anything but four wheels of the tagged version
+        shell: bash
         run: |
           test "$(find dist -name "kumo_relational_engine-${VERSION}-*.whl" | wc -l)" -eq 4
           test "$(find dist -name '*.whl' | wc -l)" -eq 4
       - uses: actions/upload-artifact@v4
         with:
-          name: dist-engine-x86
-          path: dist/*.whl
-
-  build-engine-arm64:
-    needs: guard
-    if: needs.guard.outputs.distribution == 'kumo-relational-engine'
-    runs-on: ubuntu-24.04-arm
-    container: quay.io/pypa/manylinux_2_28_aarch64
-    env:
-      WITH_RELATIONALLIB: '1'
-      VERSION: ${{ needs.guard.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - run: |
-          /opt/python/cp312-cp312/bin/python -m pip install --upgrade pip build
-          /opt/python/cp312-cp312/bin/python -m build --wheel \
-            --outdir wheelhouse packages/kumo-relational-engine
-          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
-            auditwheel repair "$wheel" --wheel-dir dist
-          done
-          /opt/python/cp312-cp312/bin/python -m pip install twine
-          /opt/python/cp312-cp312/bin/python -m twine check dist/*
-      - name: Refuse anything but the CPython 3.12 ARM64 wheel
-        run: |
-          test "$(find dist -name "kumo_relational_engine-${VERSION}-cp312-cp312-*aarch64.whl" | wc -l)" -eq 1
-          test "$(find dist -name '*.whl' | wc -l)" -eq 1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-engine-arm64
+          name: dist-engine-${{ matrix.platform }}
           path: dist/*.whl
 
   assemble-engine:
-    needs: [guard, build-engine-x86, build-engine-arm64]
+    needs: [guard, build-engine]
     if: >-
       !cancelled() && needs.guard.result == 'success'
       && needs.guard.outputs.distribution == 'kumo-relational-engine'
-      && needs.build-engine-x86.result == 'success'
-      && needs.build-engine-arm64.result == 'success'
+      && needs.build-engine.result == 'success'
     runs-on: ubuntu-latest
     env:
       VERSION: ${{ needs.guard.outputs.version }}
@@ -167,14 +154,11 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: dist-engine-x86
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          name: dist-engine-arm64
+          pattern: dist-engine-*
+          merge-multiple: true
           path: dist
       - run: python -m pip install 'packaging>=24' twine
-      - name: Validate the five-wheel engine release
+      - name: Validate the engine wheel set
         run: >-
           python scripts/validate_wheel_bundle.py dist "$VERSION"
           --engine-only
@@ -218,33 +202,36 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - runner: ubuntu-latest
-            architecture: x86_64
-          - runner: ubuntu-24.04-arm
-            architecture: aarch64
+        runner:
+          - ubuntu-latest
+          - ubuntu-24.04-arm
+          - macos-15-intel
+          - macos-15
+          - windows-latest
+        python: ['3.10', '3.11', '3.12', '3.13']
     runs-on: ${{ matrix.runner }}
     env:
-      ARCHITECTURE: ${{ matrix.architecture }}
       VERSION: ${{ needs.guard.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: ${{ matrix.python }}
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist
-      - name: Install and import the exact tag-built native wheel
+      # No wheel filename appears here on purpose. Letting pip choose from the
+      # directory is what proves each interpreter and platform in the support
+      # matrix has a wheel it will actually select.
+      - name: Install the tag-built engine the way a user would
+        shell: bash
         run: |
-          python -m venv /tmp/tag-engine
-          /tmp/tag-engine/bin/python -m pip install --upgrade pip
-          /tmp/tag-engine/bin/python -m pip install --no-cache-dir \
-            --only-binary=:all: \
-            dist/kumo_relational_engine-${VERSION}-cp312-cp312-*${ARCHITECTURE}.whl
-          /tmp/tag-engine/bin/python -c \
+          python -m pip install --upgrade pip
+          python -m pip install --no-cache-dir --only-binary=:all: \
+            --find-links dist "kumo-relational-engine==${VERSION}"
+          python -c \
             'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+          python -c 'from kumo_relational_engine.rfm import Graph, KumoRelational'
 
   publish:
     needs: [guard, assemble-engine, verify-engine-builds, build-pure]
@@ -373,3 +360,53 @@ jobs:
             /tmp/from-index-arm64/bin/python -c \
               'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
           fi
+
+  # The platforms the first release had no wheel for. `verify` and
+  # `verify-arm64` above cover Linux; this is the `[relational]` install a
+  # macOS or Windows user actually runs, made against the live index rather
+  # than a local directory, because a wheel that was built but never uploaded
+  # fails here and nowhere else.
+  verify-relational-extra:
+    needs: [guard, publish]
+    if: >-
+      needs.guard.outputs.distribution == 'kumo-relational-engine'
+      || needs.guard.outputs.distribution == 'kumo-relational-client'
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-15-intel, macos-15, windows-latest]
+        python: ['3.10', '3.11', '3.12', '3.13']
+    runs-on: ${{ matrix.runner }}
+    env:
+      DISTRIBUTION: ${{ needs.guard.outputs.distribution }}
+      VERSION: ${{ needs.guard.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Wait for the index to serve the release
+        shell: bash
+        run: |
+          if [ "$DISTRIBUTION" = 'kumo-relational-engine' ]; then
+            set -- --require-wheel-only
+          else
+            set --
+          fi
+          python scripts/verify_release.py "$DISTRIBUTION" "$VERSION" \
+            --index https://pypi.org/simple "$@"
+      - name: Install the relational extra and import the native sampler
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          if [ "$DISTRIBUTION" = 'kumo-relational-client' ]; then
+            python -m pip install --only-binary=:all: \
+              "kumo-relational-client[relational]==${VERSION}" \
+              "kumo-relational-engine==${VERSION}"
+          else
+            python -m pip install --only-binary=:all: \
+              "kumo-relational-engine==${VERSION}"
+          fi
+          python -c \
+            'import kumo_relational_engine.relationallib as r; assert hasattr(r.NeighborSampler, "seed")'
+          python -c 'from kumo_relational_engine.rfm import Graph, KumoRelational'

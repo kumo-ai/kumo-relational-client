@@ -216,52 +216,39 @@ jobs:
           python -m pytest packages/kumo-relational-client/tests
           -m 'not live_nim' -q
 
-  engine-wheels-x86:
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux_2_28_x86_64
-    env:
-      WITH_RELATIONALLIB: '1'
+  # Every platform the release publishes for is built here too, so a change
+  # that only breaks Windows or macOS fails on the pull request rather than
+  # halfway through a release that can never re-upload the version it burned.
+  # The build matrix itself lives in the engine's `[tool.cibuildwheel]`.
+  engine-wheels:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x86_64
+          - runner: ubuntu-24.04-arm
+            platform: linux-aarch64
+          - runner: macos-15-intel
+            platform: macos-x86_64
+          - runner: macos-15
+            platform: macos-arm64
+          - runner: windows-latest
+            platform: windows-amd64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - run: |
-          for PYTAG in cp310-cp310 cp311-cp311 cp312-cp312 cp313-cp313; do
-            "/opt/python/${PYTAG}/bin/python" -m pip install --upgrade pip build
-            "/opt/python/${PYTAG}/bin/python" -m build --wheel \
-              --outdir wheelhouse packages/kumo-relational-engine
-          done
-          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
-            auditwheel repair "$wheel" --wheel-dir dist
-          done
-          /opt/python/cp312-cp312/bin/python -m pip install twine
-          /opt/python/cp312-cp312/bin/python -m twine check dist/*
-      - run: test "$(find dist -name '*.tar.gz' | wc -l)" -eq 0
+      - uses: pypa/cibuildwheel@v4.2.1
+        with:
+          package-dir: packages/kumo-relational-engine
+          output-dir: dist
+      - shell: bash
+        run: |
+          test "$(find dist -name '*.tar.gz' | wc -l)" -eq 0
+          test "$(find dist -name '*.whl' | wc -l)" -eq 4
       - uses: actions/upload-artifact@v4
         with:
-          name: engine-wheels-x86
-          path: dist/*.whl
-
-  engine-wheel-arm64:
-    runs-on: ubuntu-24.04-arm
-    container: quay.io/pypa/manylinux_2_28_aarch64
-    env:
-      WITH_RELATIONALLIB: '1'
-    steps:
-      - uses: actions/checkout@v4
-      - run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
-      - run: |
-          /opt/python/cp312-cp312/bin/python -m pip install --upgrade pip build
-          /opt/python/cp312-cp312/bin/python -m build --wheel \
-            --outdir wheelhouse packages/kumo-relational-engine
-          for wheel in wheelhouse/kumo_relational_engine-*.whl; do
-            auditwheel repair "$wheel" --wheel-dir dist
-          done
-          /opt/python/cp312-cp312/bin/python -m pip install twine
-          /opt/python/cp312-cp312/bin/python -m twine check dist/*
-      - run: test "$(find dist -name '*.whl' | wc -l)" -eq 1
-      - uses: actions/upload-artifact@v4
-        with:
-          name: engine-wheel-arm64
+          name: engine-wheels-${{ matrix.platform }}
           path: dist/*.whl
 
   pure-wheels:
@@ -284,7 +271,7 @@ jobs:
 
   candidate-wheel-bundle:
     name: wheels
-    needs: [engine-wheels-x86, engine-wheel-arm64, pure-wheels]
+    needs: [engine-wheels, pure-wheels]
     runs-on: ubuntu-latest
     outputs:
       sdk_version: ${{ steps.sdk_version.outputs.version }}
@@ -295,11 +282,8 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: engine-wheels-x86
-          path: dist
-      - uses: actions/download-artifact@v4
-        with:
-          name: engine-wheel-arm64
+          pattern: engine-wheels-*
+          merge-multiple: true
           path: dist
       - uses: actions/download-artifact@v4
         with:
@@ -311,7 +295,7 @@ jobs:
           echo "version=$(python scripts/release_tag_check.py --print-version)"
           >> "$GITHUB_OUTPUT"
       - run: python -m pip install 'packaging>=24'
-      - name: Validate the coordinated seven-wheel SDK candidate
+      - name: Validate the coordinated SDK candidate
         run: >-
           python scripts/validate_wheel_bundle.py dist
           "${{ steps.sdk_version.outputs.version }}"
@@ -321,7 +305,7 @@ jobs:
           path: dist/*.whl
 
   wheel-imports:
-    needs: engine-wheels-x86
+    needs: engine-wheels
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -334,7 +318,7 @@ jobs:
           python-version: ${{ matrix.python }}
       - uses: actions/download-artifact@v4
         with:
-          name: engine-wheels-x86
+          name: engine-wheels-linux-x86_64
           path: dist
       - run: python -m pip install ./packages/kumo-connectors
       - run: python -m pip install dist/kumo_relational_engine-*-cp$(echo "${{ matrix.python }}" | tr -d .)-*.whl

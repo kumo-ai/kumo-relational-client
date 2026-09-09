@@ -1,5 +1,44 @@
 # Changelog
 
+## 1.0.1: all three packages
+
+A packaging release. The driver behaves exactly as it did in 1.0.0; what
+changes is how many machines can install it.
+
+### Added
+
+- `kumo-relational-client[relational]` now installs on macOS and Windows.
+  1.0.0 published Linux wheels only, so the extra resolved to nothing on any
+  other platform, and with no source distribution to fall back on the install
+  simply failed. The engine now ships wheels for CPython 3.10 through 3.13 on
+  Linux x86-64 and ARM64, macOS 11 and later on Intel and Apple silicon, and
+  Windows x64. Linux ARM64 gains 3.10, 3.11 and 3.13, which 1.0.0 built only
+  for 3.12.
+- Windows on ARM64 is still not covered, and is now said so plainly in the
+  README, the platform table and the import error the driver raises. No
+  runner builds it and there is no source distribution, so the extra has
+  nothing to resolve there.
+- Every release now builds, imports and installs the driver on each supported
+  platform and interpreter before it uploads, and again from the index
+  afterwards. A failure on any one of them blocks the release.
+
+### Fixed
+
+- The native extension was compiled with no optimisation settings of its own
+  on MSVC, and without the exception-handling flags pybind11 needs, because
+  the build assigned `-O3` over the toolchain's defaults rather than leaving
+  the Release configuration to supply them.
+- The pair hash used by the neighbour sampler performed signed 64-bit
+  multiplications and shifts that overflowed, which is undefined behaviour and
+  something an optimiser is entitled to act on. The arithmetic is now
+  unsigned, which is the same operation with defined semantics. Sampler output
+  is unchanged: the hash is never iterated over, so it never reached a result.
+- `<vector>` and `<unordered_set>` were used but not included, and compiled
+  only because another header happened to pull them in.
+- The sampler's index tracker bound a reference member to a temporary, leaving
+  it dangling as soon as the constructor returned. Nothing read it afterwards,
+  so no behaviour changed; it is stored by value now.
+
 ## 1.0.0: all three packages
 
 The first release. Three packages are released together and share one version:

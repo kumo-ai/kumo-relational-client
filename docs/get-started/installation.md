@@ -104,11 +104,12 @@ True
 
 - **`No matching distribution found for kumo-relational-client`.** Confirm your Python is
   3.10 or newer and that `pip` can reach your configured package index.
-- **`No matching distribution found for kumo_relational_engine`.** The `[relational]` extra has
-  prebuilt Linux wheels for x86_64 (`manylinux_2_28`) on Python 3.10–3.13 and
-  ARM64 on Python 3.12. No source distribution is published, so there is
-  nothing to fall back to on another platform, macOS included. Install the
-  base `kumo-relational-client`, use a supported host, or build the driver from source.
+- **`No matching distribution found for kumo_relational_engine`.** The `[relational]` extra
+  ships prebuilt wheels for Python 3.10–3.13 on Linux x86_64 and ARM64
+  (`manylinux_2_28`), macOS Intel and Apple silicon, and Windows x64. Windows
+  on ARM64 has none, and no source distribution is published, so there is
+  nothing to fall back to there. Install the base `kumo-relational-client`, use
+  a supported host, or build the driver from source.
 - **The native extension fails to import after installing `[relational]`.**
   Reinstall the `kumo_relational_engine` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.

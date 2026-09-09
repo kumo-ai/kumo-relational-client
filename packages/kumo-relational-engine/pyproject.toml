@@ -8,8 +8,8 @@ license = "Apache-2.0"
 license-files=["LICENSE", "NOTICE"]
 description="Relational driver (graph building, samplers, PQL, native neighbor-sampler) for the NVIDIA Kumo Relational Client"
 readme="README.md"
-# Upper bound matches the interpreters CI builds and imports wheels for
-# (cp310..cp313 on manylinux_2_28 x86-64 and cp312 on aarch64): this package
+# Upper bound matches the interpreters `[tool.cibuildwheel]` below builds and
+# imports wheels for (cp310..cp313 on every supported platform): this package
 # ships binary wheels only (no sdist), so a version with no wheel must fail
 # resolution rather than fail to find a distribution. Move both together.
 requires-python=">=3.10,<3.14"
@@ -19,7 +19,7 @@ keywords=[
     "relational-foundation-model",
     "predictive-query",
 ]
-# Only the interpreter versions `build_kumo_relational_engine_wheels` actually builds.
+# Only the interpreter versions `[tool.cibuildwheel]` below actually builds.
 classifiers=[
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
@@ -113,9 +113,34 @@ version = {attr = "kumo_relational_engine._version.__version__"}
 cmake.build-type = "Release"
 editable.verbose=false
 
-# https://cibuildwheel.pypa.io/en/stableoptions/
+# https://cibuildwheel.pypa.io/en/stable/options/
+# Both workflows drive cibuildwheel from here so the wheel set CI proves is the
+# same one the release tag uploads.
 [tool.cibuildwheel]
 build-frontend = "build[uv]"
+build = "cp310-* cp311-* cp312-* cp313-*"
+# musllinux is not a libc this project has ever built or tested against, and
+# leaving it on would silently double the Linux wheel count.
+skip = "*-musllinux_*"
+# Proof per wheel, on the machine that built it: the compiled sampler loads and
+# the public graph surface imports. A wheel that cannot do both never leaves
+# the runner.
+test-command = "python -c \"from kumo_relational_engine.rfm import Graph, KumoRelational; import kumo_relational_engine.relationallib as relationallib; assert hasattr(relationallib.NeighborSampler, 'seed')\""
+
+[tool.cibuildwheel.linux]
+# The published wheels carry a glibc 2.28 baseline; cibuildwheel would
+# otherwise pick its own default and move it out from under us.
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+environment = { WITH_RELATIONALLIB = "1" }
+
+[tool.cibuildwheel.macos]
+# Set here rather than in CMake: this variable decides both what the compiler
+# targets and what platform tag the wheel carries, and the two have to agree.
+environment = { WITH_RELATIONALLIB = "1", MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+[tool.cibuildwheel.windows]
+environment = { WITH_RELATIONALLIB = "1" }
 
 [tool.pytest.ini_options]
 xfail_strict = true

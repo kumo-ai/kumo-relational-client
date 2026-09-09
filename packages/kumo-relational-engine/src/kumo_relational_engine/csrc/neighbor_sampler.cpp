@@ -8,11 +8,14 @@
 #include <string>
 #include <tuple>
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 #include <random>
 
-#define PHMAP_HASH_ROTL32(x, r) (x << r) | (x >> (32 - r))
+#define PHMAP_HASH_ROTL32(x, r) (((x) << (r)) | ((x) >> (32 - (r))))
 
 namespace py = pybind11;
 
@@ -32,9 +35,9 @@ struct hash_pair {
   size_t operator()(const std::pair<T1, T2>& p) const
   {
     // taken from boost
-    const int64_t hash_const = 0xd989bcacc137dcd5ull;
-    int64_t hash1 = std::hash<T1>{}(p.first) * hash_const >> 32u;
-    int64_t hash2 = std::hash<T2>{}(p.second) * hash_const >> 32u;
+    const uint64_t hash_const = 0xd989bcacc137dcd5ull;
+    uint64_t hash1 = std::hash<T1>{}(p.first) * hash_const >> 32u;
+    uint64_t hash2 = std::hash<T2>{}(p.second) * hash_const >> 32u;
 
     const uint32_t c1 = 0xcc9e2d51;
     const uint32_t c2 = 0x1b873593;
@@ -71,7 +74,7 @@ class IndexTracker {
   // A simplified implementation of pyg_lib/csrc/sampler/cpu/index_tracker.h
   // It keeps track of a set, used for sampling without replacement
  public:
-  IndexTracker(const size_t& size) : size_(size) {
+  IndexTracker(size_t size) : size_(size) {
     use_vec_ = (size < 100000);
 
     if (use_vec_)
@@ -97,7 +100,7 @@ class IndexTracker {
   }
 
  private:
-  const size_t& size_;
+  size_t size_;
   bool use_vec_;
   std::vector<char> vec_;
   std::unordered_set<int64_t> set_;

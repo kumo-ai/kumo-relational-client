@@ -62,9 +62,10 @@ live endpoint.
   [Getting a NIM](#getting-a-nim).
 - **No GPU** on the client. The NIM owns that.
 - **OS and architecture.** The client and connectors are pure Python and
-  install anywhere. The `[relational]` extra is a native build, published as
-  `manylinux_2_28` wheels for Linux x86-64 on CPython 3.10 to 3.13 and Linux
-  ARM64 on CPython 3.12, with no source distribution.
+  install anywhere. The `[relational]` extra is a native build, published for
+  CPython 3.10 to 3.13 on Linux x86-64 and ARM64 (`manylinux_2_28`), macOS 11
+  and later on Intel and Apple silicon, and Windows x64. Windows on ARM64 is
+  the one gap, and there is no source distribution to fall back on.
 
 ## Getting a NIM
 
