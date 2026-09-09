@@ -117,7 +117,10 @@ editable.verbose=false
 # Both workflows drive cibuildwheel from here so the wheel set CI proves is the
 # same one the release tag uploads.
 [tool.cibuildwheel]
-build-frontend = "build[uv]"
+# The default `build` frontend, not `build[uv]`: uv ships inside the manylinux
+# containers but not on the macOS and Windows runners, where cibuildwheel then
+# fails outright. The wall clock here is C++ compilation, not dependency
+# resolution, so there is nothing to win by requiring it.
 build = "cp310-* cp311-* cp312-* cp313-*"
 # musllinux is not a libc this project has ever built or tested against, and
 # leaving it on would silently double the Linux wheel count.
