@@ -14,8 +14,12 @@ serve models itself: every prediction is an HTTP call to a NIM you point it at.
 
 `kumo-relational-engine` ships prebuilt wheels for CPython 3.10-3.13 on Linux
 x86_64 and ARM64 (`manylinux_2_28`), macOS 11+ on Intel and Apple silicon, and
-Windows x64, and no source distribution. It does not install on Windows ARM64.
-The client and connectors are pure Python and install anywhere.
+Windows x64, and no source distribution.
+
+Nothing in this repository installs on Windows ARM64, including the base
+client. `kumo-relational-client` requires `kumo-connectors`, which requires
+`pyarrow`, and `pyarrow` publishes no Windows ARM64 wheel. The client and the
+connectors are pure Python, but that is not the same as installing anywhere.
 
 ## One model, one client
 

@@ -92,9 +92,10 @@ Before you continue to installation, confirm the following:
 
 - **`No matching distribution found for kumo_relational_engine`.** Your platform or Python
   version is outside the wheel matrix in the table above, and no source
-  distribution is published to fall back to. Install the base
-  `kumo-relational-client` without the `[relational]` extra, or use a supported
-  host and interpreter.
+  distribution is published to fall back to. If the platform is supported and
+  only the interpreter is not, install the base `kumo-relational-client`
+  without the `[relational]` extra. On Windows ARM64 that does not help, for
+  the reason given above, and a supported host is the only route.
 - **Cannot reach the package index.** Confirm `pip` can reach PyPI, including
   through any proxy or mirror your environment requires, then retry.
 
