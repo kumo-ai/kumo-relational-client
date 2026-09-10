@@ -259,8 +259,21 @@ jobs:
       - run: ls -l dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 
+  # Every job below `publish` needs `!cancelled()`, and the reason is easy to
+  # lose. `publish` depends on both the engine and the pure build path, one of
+  # which is always skipped, so `publish` itself only runs through its own
+  # override. GitHub carries that skip down the graph, so a job that just
+  # declares `needs: publish` is skipped even when the upload succeeded.
+  #
+  # That is not theoretical. It silently skipped this job, `verify-arm64` and
+  # `verify-relational-extra` on all three 1.0.0 tags and all three 1.0.1 tags,
+  # so no release has ever been checked against the index it was published to.
+  # `needs.publish.result` is what keeps this honest: `!cancelled()` alone would
+  # let it run after a failed or skipped upload.
   verify:
     needs: [guard, publish]
+    if: >-
+      !cancelled() && needs.publish.result == 'success'
     runs-on: ubuntu-latest
     env:
       DISTRIBUTION: ${{ needs.guard.outputs.distribution }}
@@ -322,8 +335,11 @@ jobs:
   verify-arm64:
     needs: [guard, publish]
     if: >-
-      needs.guard.outputs.distribution == 'kumo-relational-engine'
-      || needs.guard.outputs.distribution == 'kumo-relational-client'
+      !cancelled() && needs.publish.result == 'success'
+      && (
+        needs.guard.outputs.distribution == 'kumo-relational-engine'
+        || needs.guard.outputs.distribution == 'kumo-relational-client'
+      )
     runs-on: ubuntu-24.04-arm
     env:
       DISTRIBUTION: ${{ needs.guard.outputs.distribution }}
@@ -370,8 +386,11 @@ jobs:
   verify-relational-extra:
     needs: [guard, publish]
     if: >-
-      needs.guard.outputs.distribution == 'kumo-relational-engine'
-      || needs.guard.outputs.distribution == 'kumo-relational-client'
+      !cancelled() && needs.publish.result == 'success'
+      && (
+        needs.guard.outputs.distribution == 'kumo-relational-engine'
+        || needs.guard.outputs.distribution == 'kumo-relational-client'
+      )
     strategy:
       fail-fast: false
       matrix:
