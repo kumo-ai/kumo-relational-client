@@ -58,8 +58,9 @@ anchor, ordered by time descending then primary key ascending. For large fact
 tables, an index on `(foreign_key, time_column DESC, primary_key)` improves this
 pushed-down query; the SDK never creates indexes or modifies source tables.
 
-Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13
-(`manylinux_2_28` x86-64), plus CPython 3.12 on Linux ARM64. No source
+Release wheels are built for CPython 3.10, 3.11, 3.12 and 3.13 on Linux
+x86-64 and ARM64 (`manylinux_2_28`), macOS 11 and later on Intel and Apple
+silicon, and Windows x64. Windows on ARM64 has no wheel, and no source
 distribution is published.
 
 Application code should import the client's neutral surface, not this package

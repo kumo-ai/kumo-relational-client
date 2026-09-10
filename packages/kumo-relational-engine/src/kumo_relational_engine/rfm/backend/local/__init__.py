@@ -15,18 +15,20 @@ Operating system: {platform.system()}
 CPU architecture: {platform.machine()}
 glibc version: {platform.libc_ver()[1]}
 
-✅ Prebuilt wheels are published for:
-* Linux (x86_64), glibc >=2.28: Python 3.10, 3.11, 3.12, 3.13
-* Linux (arm64), glibc >=2.28: Python 3.12
+✅ Prebuilt wheels are published for Python 3.10, 3.11, 3.12 and 3.13 on:
+* Linux (x86_64), glibc >=2.28
+* Linux (arm64), glibc >=2.28
+* macOS 11+ (x86_64 and arm64)
+* Windows (x86_64)
 
 No source distribution is published, so `pip install kumo-relational-engine` resolves on that
-matrix alone. The extension also builds from a source checkout on macOS
-(arm64) and Windows (x86_64).
+matrix alone.
 
 ❌ Not supported:
 * Python versions below 3.10, or 3.14 and later
-* Linux (arm64) on Python versions other than 3.12
-* macOS (x86_64), Windows (arm64)
+* Windows (arm64). The extension does build from a source checkout there, but
+  that path is not tested and not supported.
+* macOS below 11
 * glibc versions: <2.28
 
 Please create a feature request at 'https://github.com/kumo-ai/kumo-relational-client'."""

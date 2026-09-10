@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA Kumo Relational Client Documentation"
 description: "Documentation home for the NVIDIA Kumo Relational Client: overview, architecture, get-started guides, and reference."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # NVIDIA Kumo Relational Client Documentation

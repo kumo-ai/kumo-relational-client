@@ -1,7 +1,7 @@
 ---
 title: "NVIDIA Kumo Relational Client Prerequisites"
 description: "Hardware, software, and network prerequisites for installing and using the NVIDIA Kumo Relational Client."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # NVIDIA Kumo Relational Client Prerequisites
@@ -27,15 +27,23 @@ The Kumo Relational driver ships prebuilt binary wheels for the following platfo
 | Platform | Supported |
 | --- | --- |
 | Linux x86_64 (glibc 2.28+, `manylinux_2_28`) | Yes |
-| Linux ARM64 (glibc 2.28+, `manylinux_2_28`) | Python 3.12 only |
-| Everything else, including macOS | No, build from source |
+| Linux ARM64 (glibc 2.28+, `manylinux_2_28`) | Yes |
+| macOS 11+ Intel (x86_64) | Yes |
+| macOS 11+ Apple silicon (arm64) | Yes |
+| Windows x64 | Yes |
+| Windows ARM64 | No |
 
-No source distribution is published either, so `pip install
-"kumo-relational-client[relational]"` resolves only for a supported Linux and
-Python combination. On any other platform, install the base
-`kumo-relational-client` and run Kumo Relational from a supported host. The
-base client is pure Python, as are the connectors, so it installs on anything
-running Python 3.10 or later.
+Every supported platform carries a wheel for each of CPython 3.10, 3.11, 3.12
+and 3.13. No source distribution is published, so on Windows ARM64 `pip install
+"kumo-relational-client[relational]"` has nothing to resolve.
+
+Falling back to the base `kumo-relational-client` does not help on Windows
+ARM64 either. The connectors require `pyarrow`, which publishes no Windows
+ARM64 wheel, so `pip` reaches that dependency and fails before it gets to
+anything of ours. Run Kumo Relational from a supported host instead.
+
+On every other platform in the table, the client and the connectors are pure
+Python and install on anything running Python 3.10 or later.
 
 ### Runtime Dependencies
 
@@ -49,10 +57,15 @@ install only when you request the matching extra.
 
 ## Verified Configurations
 
-- Python 3.12 on Linux x86_64, installing `kumo-relational-client[relational]`.
+Each release installs `kumo-relational-client[relational]` and imports the
+native driver on every platform in the table above, on each of Python 3.10,
+3.11, 3.12 and 3.13. A failure on any one of them blocks the release.
+
+Verified in addition:
+
 - Python 3.12 on Linux ARM64, installing
-  `kumo-relational-client[databricks,databricks-serving]`.
-- Python 3.12 on macOS arm64, installing the base `kumo-relational-client`.
+  `kumo-relational-client[databricks,databricks-serving]` for Databricks
+  serverless.
 
 ## Network Access
 
@@ -78,10 +91,11 @@ Before you continue to installation, confirm the following:
 ## Troubleshoot Prerequisites
 
 - **`No matching distribution found for kumo_relational_engine`.** Your platform or Python
-  version is outside the wheel matrix (Linux x86_64 on Python 3.10–3.13, or
-  Linux ARM64 on Python 3.12), and no source distribution is published to fall
-  back to. Install the base `kumo-relational-client` without the `[relational]`
-  extra, or use a supported host and interpreter.
+  version is outside the wheel matrix in the table above, and no source
+  distribution is published to fall back to. If the platform is supported and
+  only the interpreter is not, install the base `kumo-relational-client`
+  without the `[relational]` extra. On Windows ARM64 that does not help, for
+  the reason given above, and a supported host is the only route.
 - **Cannot reach the package index.** Confirm `pip` can reach PyPI, including
   through any proxy or mirror your environment requires, then retry.
 

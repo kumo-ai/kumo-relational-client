@@ -1,7 +1,7 @@
 ---
 title: "Installation Guide for the NVIDIA Kumo Relational Client"
 description: "Install the NVIDIA Kumo Relational Client and its optional model drivers and data-source connectors with pip."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # Installation Guide for the NVIDIA Kumo Relational Client
@@ -56,9 +56,9 @@ the serverless host:
 
 ```bash
 python -m pip install --only-binary=:all: \
-  "kumo-relational-client[databricks,databricks-serving]==1.0.0" \
-  "kumo-relational-engine==1.0.0" \
-  "kumo-connectors==1.0.0"
+  "kumo-relational-client[databricks,databricks-serving]==1.0.1" \
+  "kumo-relational-engine==1.0.1" \
+  "kumo-connectors==1.0.1"
 ```
 
 Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
@@ -104,11 +104,17 @@ True
 
 - **`No matching distribution found for kumo-relational-client`.** Confirm your Python is
   3.10 or newer and that `pip` can reach your configured package index.
-- **`No matching distribution found for kumo_relational_engine`.** The `[relational]` extra has
-  prebuilt Linux wheels for x86_64 (`manylinux_2_28`) on Python 3.10–3.13 and
-  ARM64 on Python 3.12. No source distribution is published, so there is
-  nothing to fall back to on another platform, macOS included. Install the
-  base `kumo-relational-client`, use a supported host, or build the driver from source.
+- **`No matching distribution found for kumo_relational_engine`.** The `[relational]` extra
+  ships prebuilt wheels for Python 3.10–3.13 on Linux x86_64 and ARM64
+  (`manylinux_2_28`), macOS Intel and Apple silicon, and Windows x64. Windows
+  on ARM64 has none, and no source distribution is published, so there is
+  nothing to fall back to there. Use a supported host, or build the driver
+  from source.
+- **A `pyarrow` build failure on Windows ARM64.** `pyarrow` publishes no
+  Windows ARM64 wheel, so `pip` falls back to its source distribution and tries
+  to compile Apache Arrow's C++ library. The connectors require `pyarrow`,
+  which makes this the first thing that fails on that platform, before any
+  Kumo package is reached. There is no workaround short of a supported host.
 - **The native extension fails to import after installing `[relational]`.**
   Reinstall the `kumo_relational_engine` wheel for your exact Python version, and confirm your
   platform matches the supported wheel matrix.

@@ -1,7 +1,7 @@
 ---
 title: "Quickstart for the NVIDIA Kumo Relational Client"
 description: "Run your first Kumo Relational prediction against a Universal TFM API NIM using the NVIDIA Kumo Relational Client."
-template-library-version: "1.0.0"
+template-library-version: "1.0.1"
 ---
 
 # Quickstart for the NVIDIA Kumo Relational Client

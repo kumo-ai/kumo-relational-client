@@ -7,9 +7,12 @@
 Usage:
     validate_wheel_bundle.py <wheel-directory> <version> [--engine-only]
 
-The full candidate consists of seven wheels: four x86_64 engine wheels for
-CPython 3.10 through 3.13, one aarch64 engine wheel for CPython 3.12, and one
+The full candidate consists of twenty-two wheels: an engine wheel for each of
+CPython 3.10 through 3.13 on each of the five supported platforms, and one
 platform-independent wheel for each of the client and connectors packages.
+
+Windows on ARM64 is deliberately absent. No wheel is built for it, so an
+`[relational]` install there still has nothing to resolve.
 """
 
 from __future__ import annotations
@@ -29,13 +32,27 @@ ENGINE = 'kumo-relational-engine'
 CLIENT = 'kumo-relational-client'
 CONNECTORS = 'kumo-connectors'
 
+ENGINE_PYTHONS = ('cp310', 'cp311', 'cp312', 'cp313')
+# The exact platform tag each wheel must carry. `manylinux_2_28` is the glibc
+# baseline the first release shipped, and `macosx_11_0` matches the deployment
+# target set in the engine's cibuildwheel configuration; a wheel built against
+# a newer floor than either would install on fewer machines than the docs
+# promise, so it is rejected rather than published.
+ENGINE_PLATFORMS = (
+    'manylinux_2_28_x86_64',
+    'manylinux_2_28_aarch64',
+    'macosx_11_0_x86_64',
+    'macosx_11_0_arm64',
+    'win_amd64',
+)
 ENGINE_TARGETS = {
-    (python, python, 'x86_64')
-    for python in ('cp310', 'cp311', 'cp312', 'cp313')
+    (python, python, platform)
+    for python in ENGINE_PYTHONS
+    for platform in ENGINE_PLATFORMS
 }
-ENGINE_TARGETS.add(('cp312', 'cp312', 'aarch64'))
 PURE_TAGS = {Tag('py3', 'none', 'any')}
 _MANYLINUX = re.compile(r'manylinux_2_(\d+)_(x86_64|aarch64)')
+_MACOS = re.compile(r'macosx_(\d+)_(\d+)_(x86_64|arm64)')
 
 
 def _metadata(wheel: Path) -> tuple[str, str, set[Tag]]:
@@ -68,33 +85,49 @@ def _metadata(wheel: Path) -> tuple[str, str, set[Tag]]:
     return metadata['Name'], metadata['Version'], tags
 
 
+def _linux_platform(platforms: set[str]) -> str:
+    # auditwheel emits the wheel's own tag alongside every older alias it also
+    # satisfies, so a manylinux wheel legitimately carries several.
+    parsed = []
+    for platform in platforms:
+        match = _MANYLINUX.fullmatch(platform)
+        if match is None:
+            raise ValueError(f'engine wheel mixes {platform} with manylinux')
+        parsed.append((int(match.group(1)), match.group(2)))
+    architectures = {architecture for _minor, architecture in parsed}
+    if len(architectures) != 1:
+        raise ValueError(f'engine wheel mixes architectures: {architectures}')
+    if any(minor > 28 for minor, _architecture in parsed):
+        raise ValueError(
+            'engine wheel requires a glibc baseline newer than 2.28'
+        )
+    (architecture,) = architectures
+    required = f'manylinux_2_28_{architecture}'
+    if required not in platforms:
+        raise ValueError(f'engine wheel is missing tag {required}')
+    return required
+
+
 def _engine_target(tags: frozenset[Tag]) -> tuple[str, str, str]:
     python_abis = {(tag.interpreter, tag.abi) for tag in tags}
     if len(python_abis) != 1:
         raise ValueError(f'engine wheel mixes Python/ABI tags: {python_abis}')
-
-    parsed_platforms = []
-    for tag in tags:
-        match = _MANYLINUX.fullmatch(tag.platform)
-        if match is None:
-            raise ValueError(
-                f'engine wheel has unexpected platform {tag.platform}'
-            )
-        parsed_platforms.append((int(match.group(1)), match.group(2)))
-    architectures = {architecture for _minor, architecture in parsed_platforms}
-    if len(architectures) != 1:
-        raise ValueError(f'engine wheel mixes architectures: {architectures}')
-    if any(minor > 28 for minor, _architecture in parsed_platforms):
-        raise ValueError(
-            'engine wheel requires a glibc baseline newer than 2.28'
-        )
-
     (python_abi,) = python_abis
-    (architecture,) = architectures
-    required_platform = f'manylinux_2_28_{architecture}'
-    if not any(tag.platform == required_platform for tag in tags):
-        raise ValueError(f'engine wheel is missing tag {required_platform}')
-    return (*python_abi, architecture)
+
+    platforms = {tag.platform for tag in tags}
+    if any(_MANYLINUX.fullmatch(platform) for platform in platforms):
+        return (*python_abi, _linux_platform(platforms))
+
+    if len(platforms) != 1:
+        raise ValueError(f'engine wheel carries several platforms: {platforms}')
+    (platform,) = platforms
+
+    # A macOS or Windows wheel names exactly one platform, so the tag it
+    # carries is the whole claim it makes and is compared literally.
+    if _MACOS.fullmatch(platform) or platform == 'win_amd64':
+        return (*python_abi, platform)
+
+    raise ValueError(f'engine wheel has unexpected platform {platform}')
 
 
 def validate(directory: Path, version: str, engine_only: bool) -> None:
@@ -105,7 +138,7 @@ def validate(directory: Path, version: str, engine_only: bool) -> None:
     found_pure: set[str] = set()
     wheels = sorted(directory.glob('*.whl'))
 
-    expected_count = 5 if engine_only else 7
+    expected_count = len(ENGINE_TARGETS) + (0 if engine_only else 2)
     if len(wheels) != expected_count:
         raise ValueError(
             f'expected {expected_count} wheels, found {len(wheels)}: '
