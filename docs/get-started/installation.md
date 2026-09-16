@@ -56,10 +56,15 @@ the serverless host:
 
 ```bash
 python -m pip install --only-binary=:all: \
-  "kumo-relational-client[databricks,databricks-serving]==1.0.1" \
-  "kumo-relational-engine==1.0.1" \
-  "kumo-connectors==1.0.1"
+  "kumo-relational-client[databricks,databricks-serving]==1.0.2" \
+  "kumo-relational-engine==1.0.2" \
+  "kumo-connectors==1.0.2"
 ```
+
+No explicit `numpy` or `pyarrow` pin belongs on this command: as of 1.0.2,
+`kumo-connectors` itself floors `pyarrow>=14` and `kumo-relational-engine`'s
+`databricks`/`databricks-serving` extras pin `numpy<2.0`, so `pip` resolves
+both automatically from the extras above.
 
 Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
 direct PostgreSQL connection, including a direct connection to Lakebase.
