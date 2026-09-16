@@ -2,28 +2,21 @@
 
 ## 1.0.2: all three packages
 
-A dependency-bound fix for Databricks and Snowflake, found by installing
-`kumo-relational-client[databricks,databricks-serving]` into a real Databricks
-notebook and watching the kernel die on restart. The fixes land in
-`kumo-connectors` and `kumo-relational-engine`; `kumo-relational-client` has
-no code change but bumps to match, per this repository's release policy.
+A dependency-bound fix, found by installing
+`kumo-relational-client[databricks,databricks-serving]` into a real
+Databricks notebook and watching the kernel die on restart.
+`kumo-relational-client` has no code change but bumps to match, per this
+repository's release policy.
 
 ### Fixed
 
-- Installing a `databricks` or `databricks-serving` extra could let `pip`
-  resolve numpy 2.x, which crashes the Databricks Python kernel on restart
-  (`_ARRAY_API not found`): Databricks' bundled pyarrow is built against the
-  numpy-1 ABI. `kumo-relational-engine`'s `snowflake` extra already pinned
-  `numpy<2.0` for the identical problem there; both Databricks extras now
-  carry it too. This isn't a complete fix -- a bare client install, or an
-  unrelated dependency that wants numpy 2, is still unconstrained -- but it
-  closes the two paths this repository controls.
-- `kumo-connectors`' `pyarrow` dependency had no floor at all, so even with
-  numpy pinned, a stale enough pyarrow could still fail pandas' `ArrowDtype`
-  check with `pyarrow>=10.0.1 is required`. Floored at `>=14` on the base
-  dependency: every backend shares the same read path, so scoping it to
-  `databricks`/`snowflake` would have left `sqlite`/`duckdb`/`postgres`/`s3`
-  exposed to the same failure.
+- An unbounded `numpy` let `pip` resolve 2.x on Databricks, crashing the
+  kernel (`_ARRAY_API not found`) against Databricks' numpy-1-built pyarrow.
+  `numpy<2.0`, already pinned on `kumo-relational-engine`'s `snowflake`
+  extra, now also covers `databricks` and `databricks-serving`.
+- `kumo-connectors`' `pyarrow` had no floor, so a stale one could separately
+  fail pandas' `ArrowDtype` support. Floored at `>=14` on the base
+  dependency, so every backend is covered, not just Databricks/Snowflake.
 
 ## 1.0.1: all three packages
 

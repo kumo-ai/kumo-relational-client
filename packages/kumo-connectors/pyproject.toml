@@ -30,10 +30,12 @@ classifiers = [
 ]
 dependencies = [
     "pandas>=2.0",
-    # Floored so pandas' ArrowDtype support doesn't fail with
-    # "pyarrow>=10.0.1 is required" against a stale pyarrow already in the
-    # environment (notably Databricks' bundled one). On the base dependency,
-    # not an extra, since every backend shares the same read() path.
+    # Pandas' ArrowDtype support needs pyarrow>=10.0.1; unbounded, this
+    # dependency left whatever stale pyarrow a host already had (notably
+    # Databricks' bundled one) unfixed. Floored at >=14, not 10, because
+    # that's what DBR 15.4 LTS ships by default -- so it costs that runtime
+    # nothing while giving headroom elsewhere. On the base dependency, not
+    # an extra, since every backend shares the same read() path.
     "pyarrow>=14",
 ]
 
