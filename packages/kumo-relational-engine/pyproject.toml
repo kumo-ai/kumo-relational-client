@@ -42,7 +42,18 @@ Issues = "https://github.com/kumo-ai/kumo-relational-client/issues"
 [project.optional-dependencies]
 # Invoking a served model. Separate from the `databricks` extra below, which
 # reads Unity Catalog over SQL; either is useful without the other.
+#
+# `numpy<2.0` is here for the same reason it is on `databricks` below: the
+# kernel that crashes on a numpy-2 upgrade is Databricks' own, started by
+# dbutils/pyspark at notebook boot, before this package's code ever runs, and
+# it crashes whether the notebook reads Unity Catalog or only invokes a served
+# model. An extras-level pin cannot fully solve this -- a user who installs
+# `kumo-relational-client` unadorned, or adds a completely unrelated
+# dependency that itself wants numpy 2, still leaves the interpreter that
+# `pip` resolved for *this* install unconstrained -- but pinning it on both
+# Databricks-facing extras closes the two paths this repository controls.
 databricks-serving=[
+    "numpy<2.0",
     "databricks-sdk>=0.68.0,<1.0",
 ]
 # The Snowflake counterpart, separate from the `snowflake` extra below for the
@@ -78,6 +89,9 @@ snowflake=[
     "pyyaml",
 ]
 databricks=[
+    # See `databricks-serving` above for why this extra also carries the pin,
+    # not just `snowflake` below, where the identical constraint originated.
+    "numpy<2.0",
     "kumo-connectors[databricks]",
     "pyyaml",
 ]

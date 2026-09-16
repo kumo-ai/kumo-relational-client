@@ -30,7 +30,20 @@ classifiers = [
 ]
 dependencies = [
     "pandas>=2.0",
-    "pyarrow",
+    # Floored, not just present: `reader.py`'s pyarrow -> pandas dtype mapping
+    # runs for every backend (sqlite, duckdb, postgres, s3, snowflake,
+    # databricks alike), and pandas' own ArrowDtype support raises
+    # "pyarrow>=10.0.1 is required" under an old enough pyarrow. An unbounded
+    # floor left that failure to whatever pyarrow a host environment already
+    # had lying around -- notably a stale one bundled by a Databricks runtime
+    # -- rather than to anything this package actually exercises. 14 sits
+    # comfortably above pandas' own floor, so a working install stays working
+    # as pandas' requirement rises. This belongs on the base dependency, not
+    # scoped to the `databricks`/`snowflake` extras: the shared `read()` path
+    # is what raises, regardless of which backend called it, so scoping the
+    # floor would leave the same failure for `sqlite`/`duckdb`/`postgres`/`s3`
+    # users who happen to share an environment with an old pyarrow.
+    "pyarrow>=14",
 ]
 
 [project.urls]
