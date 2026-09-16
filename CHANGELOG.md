@@ -4,44 +4,26 @@
 
 A dependency-bound fix for Databricks and Snowflake, found by installing
 `kumo-relational-client[databricks,databricks-serving]` into a real Databricks
-notebook (DBR 15.4 LTS, classic and serverless compute) and watching the
-kernel die on restart. The code fixes below land in `kumo-connectors` and
-`kumo-relational-engine`; `kumo-relational-client` carries no code change but
-is bumped to the same version, per this repository's policy that the three
-packages are versioned and released together.
+notebook and watching the kernel die on restart. The fixes land in
+`kumo-connectors` and `kumo-relational-engine`; `kumo-relational-client` has
+no code change but bumps to match, per this repository's release policy.
 
 ### Fixed
 
-- Installing any `databricks` or `databricks-serving` extra could upgrade
-  numpy to 2.x, which crashes the Databricks Python kernel on restart with
-  `_ARRAY_API not found`: Databricks' own bundled pyarrow is built against the
-  numpy-1 C ABI, and nothing in this repository stopped `pip` from resolving
-  numpy 2 for the `numpy>=1.24` the base client declares. `kumo-relational-engine`'s
-  `snowflake` extra already carried a `numpy<2.0` pin for what was presumably
-  the identical problem on Snowflake; it now also sits on `databricks` and,
-  separately, on `databricks-serving`. The two extras are pinned independently
-  rather than through a shared base dependency because they are meant to be
-  installable without each other, and the crash is Databricks' own notebook
-  runtime, not something reading Unity Catalog specifically -- a
-  `databricks-serving`-only install, invoking a served model with no SQL
-  access at all, hits the exact same kernel death if it runs inside a
-  Databricks notebook. Pinning both extras is not a complete fix: a bare
-  `kumo-relational-client` install, or an unrelated dependency in the same
-  environment that wants numpy 2, is still outside what an extras-level pin
-  can constrain. It closes the two paths this repository controls.
-- Even with numpy pinned below 2, `kumo-connectors` could still fail with
-  `pyarrow>=10.0.1 is required`, raised by pandas' own `ArrowDtype` support,
-  because `kumo-connectors`' base dependency on `pyarrow` carried no floor at
-  all and nothing in the dependency graph forced an upgrade away from
-  whatever pyarrow a runtime already had lying around --
-  `databricks-sql-connector`'s own pyarrow requirement sits behind its own
-  opt-in `[pyarrow]` extra, which the `databricks` extra here never requests.
-  `pyarrow` is now floored at `>=14` on the base dependency, not scoped to the
-  `databricks` or `snowflake` extras: every backend's reads run through the
-  same `reader.py` conversion path that raises this error, so scoping the
-  floor would have left `sqlite`, `duckdb`, `postgres` and `s3` users exposed
-  to the identical failure whenever their environment's pyarrow happened to be
-  old enough.
+- Installing a `databricks` or `databricks-serving` extra could let `pip`
+  resolve numpy 2.x, which crashes the Databricks Python kernel on restart
+  (`_ARRAY_API not found`): Databricks' bundled pyarrow is built against the
+  numpy-1 ABI. `kumo-relational-engine`'s `snowflake` extra already pinned
+  `numpy<2.0` for the identical problem there; both Databricks extras now
+  carry it too. This isn't a complete fix -- a bare client install, or an
+  unrelated dependency that wants numpy 2, is still unconstrained -- but it
+  closes the two paths this repository controls.
+- `kumo-connectors`' `pyarrow` dependency had no floor at all, so even with
+  numpy pinned, a stale enough pyarrow could still fail pandas' `ArrowDtype`
+  check with `pyarrow>=10.0.1 is required`. Floored at `>=14` on the base
+  dependency: every backend shares the same read path, so scoping it to
+  `databricks`/`snowflake` would have left `sqlite`/`duckdb`/`postgres`/`s3`
+  exposed to the same failure.
 
 ## 1.0.1: all three packages
 

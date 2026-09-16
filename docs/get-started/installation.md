@@ -62,14 +62,10 @@ python -m pip install --only-binary=:all: \
   "kumo-connectors==1.0.2"
 ```
 
-No explicit `numpy` pin belongs on this command: as of 1.0.2,
-`kumo-relational-engine`'s `databricks`/`databricks-serving` extras pin
-`numpy<2.0`, so `pip` resolves it automatically from the extras above. The
-`pyarrow<19` upper bound stays explicit, though: `kumo-connectors` only
-floors `pyarrow>=14` now, and nothing in this dependency graph caps it, but
-this command was verified against a live Databricks workspace (DBR 15.4 LTS)
-with `pyarrow<19` in place, not with pyarrow left unbounded, so the ceiling
-is kept until an unbounded install is verified on that runtime too.
+No explicit `numpy` pin belongs on this command: `databricks-serving`
+resolves `numpy<2.0` on its own as of 1.0.2. `pyarrow<19` stays explicit,
+since `kumo-connectors` only floors it at `>=14` and this exact ceiling is
+what was verified against a live DBR 15.4 LTS workspace.
 
 Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
 direct PostgreSQL connection, including a direct connection to Lakebase.
