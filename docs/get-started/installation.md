@@ -56,15 +56,20 @@ the serverless host:
 
 ```bash
 python -m pip install --only-binary=:all: \
+  "pyarrow>=14,<19" \
   "kumo-relational-client[databricks,databricks-serving]==1.0.2" \
   "kumo-relational-engine==1.0.2" \
   "kumo-connectors==1.0.2"
 ```
 
-No explicit `numpy` or `pyarrow` pin belongs on this command: as of 1.0.2,
-`kumo-connectors` itself floors `pyarrow>=14` and `kumo-relational-engine`'s
-`databricks`/`databricks-serving` extras pin `numpy<2.0`, so `pip` resolves
-both automatically from the extras above.
+No explicit `numpy` pin belongs on this command: as of 1.0.2,
+`kumo-relational-engine`'s `databricks`/`databricks-serving` extras pin
+`numpy<2.0`, so `pip` resolves it automatically from the extras above. The
+`pyarrow<19` upper bound stays explicit, though: `kumo-connectors` only
+floors `pyarrow>=14` now, and nothing in this dependency graph caps it, but
+this command was verified against a live Databricks workspace (DBR 15.4 LTS)
+with `pyarrow<19` in place, not with pyarrow left unbounded, so the ceiling
+is kept until an unbounded install is verified on that runtime too.
 
 Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
 direct PostgreSQL connection, including a direct connection to Lakebase.
