@@ -1,13 +1,14 @@
 # Changelog
 
-## 1.0.2: kumo-connectors, kumo-relational-engine
+## 1.0.2: all three packages
 
 A dependency-bound fix for Databricks and Snowflake, found by installing
 `kumo-relational-client[databricks,databricks-serving]` into a real Databricks
 notebook (DBR 15.4 LTS, classic and serverless compute) and watching the
-kernel die on restart. `kumo-relational-client` itself is unchanged and stays
-at 1.0.1; only the two packages whose dependency bounds moved get a new
-version.
+kernel die on restart. The code fixes below land in `kumo-connectors` and
+`kumo-relational-engine`; `kumo-relational-client` carries no code change but
+is bumped to the same version, per this repository's policy that the three
+packages are versioned and released together.
 
 ### Fixed
 
