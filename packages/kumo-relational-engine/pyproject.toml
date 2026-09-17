@@ -42,7 +42,12 @@ Issues = "https://github.com/kumo-ai/kumo-relational-client/issues"
 [project.optional-dependencies]
 # Invoking a served model. Separate from the `databricks` extra below, which
 # reads Unity Catalog over SQL; either is useful without the other.
+#
+# `numpy<2.0` guards against Databricks' own kernel crash on notebook boot
+# (numpy 2 breaks its bundled pyarrow) -- pinned here too, not just below,
+# since it crashes regardless of which Databricks extra triggered the install.
 databricks-serving=[
+    "numpy<2.0",
     "databricks-sdk>=0.68.0,<1.0",
 ]
 # The Snowflake counterpart, separate from the `snowflake` extra below for the
@@ -78,6 +83,8 @@ snowflake=[
     "pyyaml",
 ]
 databricks=[
+    # See `databricks-serving` above: same numpy<2.0 pin, same reason.
+    "numpy<2.0",
     "kumo-connectors[databricks]",
     "pyyaml",
 ]

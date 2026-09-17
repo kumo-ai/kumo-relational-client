@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.0.2: all three packages
+
+A dependency-bound fix, found by installing
+`kumo-relational-client[databricks,databricks-serving]` into a real
+Databricks notebook and watching the kernel die on restart.
+`kumo-relational-client` has no code change but bumps to match, per this
+repository's release policy.
+
+### Fixed
+
+- An unbounded `numpy` let `pip` resolve 2.x on Databricks, crashing the
+  kernel (`_ARRAY_API not found`) against Databricks' numpy-1-built pyarrow.
+  `numpy<2.0`, already pinned on `kumo-relational-engine`'s `snowflake`
+  extra, now also covers `databricks` and `databricks-serving`.
+- `kumo-connectors`' `pyarrow` had no floor, so a stale one could separately
+  fail pandas' `ArrowDtype` support. Floored at `>=14` on the base
+  dependency, so every backend is covered, not just Databricks/Snowflake.
+
 ## 1.0.1: all three packages
 
 A packaging release. The driver behaves exactly as it did in 1.0.0; what
