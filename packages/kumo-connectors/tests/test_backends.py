@@ -187,7 +187,7 @@ def test_real_databricks_driver_renders_sdk_attribution(monkeypatch):
             backend.connect(**kwargs)
 
     header = seen['headers']['User-Agent']
-    assert f'nvidia_kumo-relational-client/{sdk_version}' in header
+    assert f'nvidia_kumo-sdm-client/{sdk_version}' in header
     assert 'customer_product/9.9.9' in header
 
 

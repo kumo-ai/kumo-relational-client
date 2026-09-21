@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 
 DATABRICKS_PARTNER = 'nvidia'
-DATABRICKS_PRODUCT = 'kumo-relational-client'
+DATABRICKS_PRODUCT = 'kumo-sdm-client'
 
 _PACKAGE_VERSION_RE = re.compile(
     r'^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)'

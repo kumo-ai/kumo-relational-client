@@ -49,14 +49,12 @@ def test_unsupported_sdk_version_is_not_misattributed(sdk_version):
 
 
 def test_user_agent_identifies_the_sdk_not_a_model_release():
-    assert databricks_user_agent('1.2.3') == (
-        'nvidia_kumo-relational-client/1.2.3'
-    )
+    assert databricks_user_agent('1.2.3') == 'nvidia_kumo-sdm-client/1.2.3'
 
 
 def test_user_agent_preserves_an_additional_caller_entry():
     assert databricks_user_agent('1.2.3', 'customer_product/4.5.6') == (
-        'nvidia_kumo-relational-client/1.2.3 customer_product/4.5.6'
+        'nvidia_kumo-sdm-client/1.2.3 customer_product/4.5.6'
     )
 
 
