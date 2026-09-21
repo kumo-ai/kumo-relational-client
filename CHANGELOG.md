@@ -10,24 +10,15 @@ repository's release policy.
 
 ### Fixed
 
-- `kumo-connectors`' `pyarrow` had no floor, so a stale one could fail
-  pandas' `ArrowDtype` support (`_ARRAY_API not found`-adjacent failures on
-  Databricks' own bundled pyarrow). Floored at `>=14` on the base
-  dependency, so every backend is covered, not just Databricks/Snowflake.
-  `>=14` rather than a higher floor because that's what DBR 15.4 LTS ships
-  by default, so it costs that runtime nothing while giving headroom
-  elsewhere.
+- `kumo-connectors`' `pyarrow` had no floor, so a stale one (notably
+  Databricks' bundled pyarrow) could fail pandas' `ArrowDtype` support.
+  Floored at `>=14` on the base dependency, covering every backend.
 
-An unbounded `numpy` on `kumo-relational-engine`'s `databricks`/
-`databricks-serving` extras was briefly considered as a companion fix for a
-related numpy-2-vs-Databricks'-bundled-pyarrow kernel crash, matching the
-pin already on the `snowflake` extra. Reverted before release: DBR 17.3
-LTS, 18, and serverless environment_version 4+ all ship numpy 2.x by
-default, so a package-level `numpy<2.0` would force a *downgrade* on those
-runtimes and reproduce the same crash in reverse. Fixed at the notebook
-level instead, scoped to the one runtime (DBR 15.4 LTS) that actually needs
-it -- see the Databricks AdventureWorks notebook's own install cell and
-support-matrix note.
+A `numpy<2.0` pin on `kumo-relational-engine`'s `databricks`/
+`databricks-serving` extras was tried and reverted before release: DBR 17.3
+LTS+ and serverless env 4+ ship numpy 2.x by default, so the pin would
+force a downgrade there. Fixed at the notebook level instead, scoped to
+DBR 15.4 LTS, the one runtime that needs it.
 
 ## 1.0.1: all three packages
 
