@@ -346,6 +346,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     env:
       SDK_VERSION: ${{ needs.candidate-wheel-bundle.outputs.sdk_version }}
+      ARCHITECTURE: ${{ matrix.architecture }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -355,16 +356,25 @@ jobs:
         with:
           name: sdk-${{ needs.candidate-wheel-bundle.outputs.sdk_version }}-candidate-wheels
           path: dist
+      # Named by path, not by requirement. `--find-links dist` only wins while
+      # the version is unpublished; the moment it reaches PyPI the index
+      # satisfies the same pin and pip stops choosing the wheels this run just
+      # built, which is the one thing the job exists to check. Paths cannot be
+      # resolved anywhere else, and dependencies still come from the index.
       - name: Install the public Databricks SDK surface from wheels only
         run: |
           python -m venv /tmp/serverless-sdk
           /tmp/serverless-sdk/bin/python -m pip install --upgrade pip
+          # dist holds all twenty engine wheels, so the glob has to name the
+          # interpreter, the libc and the architecture to land on exactly one.
+          engine=(dist/kumo_relational_engine-"${SDK_VERSION}"-cp312-cp312-*manylinux*"${ARCHITECTURE}".whl)
+          test "${#engine[@]}" -eq 1
           /tmp/serverless-sdk/bin/python -m pip install \
-            --only-binary=:all: --no-cache-dir --find-links dist \
+            --only-binary=:all: --no-cache-dir \
             --report /tmp/serverless-sdk-install.json \
-            "kumo-relational-client[databricks,databricks-serving]==${SDK_VERSION}" \
-            "kumo-relational-engine==${SDK_VERSION}" \
-            "kumo-connectors==${SDK_VERSION}"
+            "dist/kumo_relational_client-${SDK_VERSION}-py3-none-any.whl[databricks,databricks-serving]" \
+            "${engine[0]}" \
+            "dist/kumo_connectors-${SDK_VERSION}-py3-none-any.whl"
       - name: Exercise native graph and Databricks dispatcher imports
         run: >-
           /tmp/serverless-sdk/bin/python scripts/verify_serverless_install.py
