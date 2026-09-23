@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.2: all three packages
+
+A dependency-bound fix, found by installing
+`kumo-relational-client[databricks,databricks-serving]` into a real
+Databricks notebook and watching the kernel die on restart.
+`kumo-relational-client` has no code change but bumps to match, per this
+repository's release policy.
+
+### Fixed
+
+- `kumo-connectors`' `pyarrow` had no floor, so a stale one (notably
+  Databricks' bundled pyarrow) could fail pandas' `ArrowDtype` support.
+  Floored at `>=14` on the base dependency, covering every backend.
+
+A `numpy<2.0` pin on `kumo-relational-engine`'s `databricks`/
+`databricks-serving` extras was tried and reverted before release: DBR 17.3
+LTS+ and serverless env 4+ ship numpy 2.x by default, so the pin would
+force a downgrade there. Fixed at the notebook level instead, scoped to
+DBR 15.4 LTS, the one runtime that needs it.
+
 ## 1.0.1: all three packages
 
 A packaging release. The driver behaves exactly as it did in 1.0.0; what

@@ -56,10 +56,15 @@ the serverless host:
 
 ```bash
 python -m pip install --only-binary=:all: \
-  "kumo-relational-client[databricks,databricks-serving]==1.0.1" \
-  "kumo-relational-engine==1.0.1" \
-  "kumo-connectors==1.0.1"
+  "pyarrow>=14,<19" \
+  "kumo-relational-client[databricks,databricks-serving]==1.0.2" \
+  "kumo-relational-engine==1.0.2" \
+  "kumo-connectors==1.0.2"
 ```
+
+`pyarrow<19` is pinned above `kumo-connectors`' own `>=14` floor because
+that exact range is what was verified against a live DBR 15.4 LTS
+workspace; an unbounded pyarrow hasn't been tried there.
 
 Use `[databricks]` for a Databricks SQL Warehouse and `[postgres]` for a
 direct PostgreSQL connection, including a direct connection to Lakebase.
